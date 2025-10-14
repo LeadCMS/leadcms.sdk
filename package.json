@@ -1,6 +1,6 @@
 {
   "name": "@leadcms/sdk",
-  "version": "1.2.85-pre",
+  "version": "1.2.85",
   "description": "Official SDK and CLI tools for LeadCMS - framework-agnostic content management",
   "main": "dist/lib/cms.js",
   "types": "dist/lib/cms.d.ts",
