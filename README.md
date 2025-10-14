@@ -71,6 +71,12 @@ npx leadcms init
 # Creates leadcms.config.json with sample configuration
 ```
 
+### Generate Docker deployment templates
+```bash
+npx leadcms docker
+# Creates Docker files for production and preview deployments
+```
+
 ### Fetch content from LeadCMS
 ```bash
 npx leadcms fetch
@@ -158,13 +164,94 @@ export function getStaticPaths() {
 }
 ```
 
-## Docker Support
+## Docker Deployment
 
-The SDK includes Docker templates for:
-- Production deployment
-- Preview environment with live updates
+LeadCMS SDK includes framework-agnostic Docker templates for easy deployment:
 
-Copy the Docker files from the package and customize as needed.
+### Generate Templates
+
+```bash
+npx leadcms docker
+```
+
+This creates:
+- `Dockerfile` - Production static site deployment
+- `nginx.conf` - Optimized nginx configuration
+- `scripts/inject-runtime-env.sh` - Runtime environment injection
+- `preview/Dockerfile` - Development/preview environment
+- `preview/nginx.conf` - Development proxy configuration  
+- `preview/supervisord.conf` - Multi-service management
+
+### Production Deployment
+
+```bash
+# 1. Build your static site (framework-specific)
+npm run build        # Next.js: creates 'out' directory
+# npm run build      # Astro: creates 'dist' directory
+# npm run build      # Gatsby: creates 'public' directory
+
+# 2. Build Docker image
+docker build -t my-leadcms-site .
+
+# 3. Run container
+docker run -p 80:80 \
+  -e LEADCMS_URL=https://your-instance.com \
+  -e LEADCMS_DEFAULT_LANGUAGE=en \
+  my-leadcms-site
+```
+
+### Preview/Development Mode
+
+```bash
+# 1. Add livepreview script to package.json
+{
+  "scripts": {
+    "livepreview": "next dev",     // Next.js
+    // "livepreview": "astro dev", // Astro
+    // "livepreview": "gatsby develop", // Gatsby
+    // "livepreview": "nuxt dev"   // Nuxt
+  }
+}
+
+# 2. Build preview image
+docker build -f preview/Dockerfile -t my-leadcms-site-preview .
+
+# 3. Run with live updates
+docker run -p 80:80 \
+  -e LEADCMS_URL=https://your-instance.com \
+  -e LEADCMS_API_KEY=your-api-key \
+  -e LEADCMS_DEFAULT_LANGUAGE=en \
+  my-leadcms-site-preview
+```
+
+### Template Features
+
+✅ **Framework-agnostic** - Works with any static site generator  
+✅ **Production optimized** - Nginx with proper caching headers  
+✅ **Live preview** - Development mode with hot reload support  
+✅ **Multi-service** - Nginx proxy + dev server + LeadCMS watcher  
+✅ **Runtime configuration** - Environment variables injected at startup  
+✅ **Health checks** - Built-in container health monitoring  
+
+### Customizing Templates
+
+After generating templates with `npx leadcms docker`, you can customize:
+
+1. **Source directory** in `Dockerfile`:
+   ```dockerfile
+   # Change 'out' to your framework's build output:
+   COPY dist /usr/share/nginx/html    # Astro
+   COPY public /usr/share/nginx/html  # Gatsby
+   COPY .output/public /usr/share/nginx/html  # Nuxt
+   ```
+
+2. **Nginx configuration** in `nginx.conf` for custom routing rules
+
+3. **Development command** in `preview/supervisord.conf`:
+   ```ini
+   [program:dev-server]
+   command=npm run livepreview    # Your development command
+   ```  
 
 ## Development
 

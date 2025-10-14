@@ -14,7 +14,7 @@
   "scripts": {
     "build": "npm run clean && tsc && npm run copy-assets",
     "clean": "rm -rf dist",
-    "copy-assets": "cp -r src/scripts dist/ && cp src/*.conf dist/ && cp src/Dockerfile dist/",
+    "copy-assets": "cp -r src/scripts dist/ && cp -r src/templates dist/",
     "dev": "tsc --watch",
     "prepublishOnly": "npm run build",
     "leadcms:fetch": "node src/scripts/fetch-leadcms-content.mjs",

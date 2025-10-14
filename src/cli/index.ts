@@ -31,12 +31,17 @@ switch (command) {
   case 'config':
     initializeConfig();
     break;
+  case 'docker':
+  case 'templates':
+    generateDockerTemplates();
+    break;
   default:
     console.log(`
 LeadCMS SDK CLI
 
 Usage:
   leadcms init           - Initialize LeadCMS configuration
+  leadcms docker         - Generate Docker deployment templates
   leadcms fetch          - Fetch content from LeadCMS
   leadcms watch          - Watch for real-time updates
   leadcms generate-env   - Generate environment variables file
@@ -102,5 +107,75 @@ function createConfigFile(configPath: string) {
     console.log(`✅ Created ${configPath}`);
     console.log('📝 Please edit the configuration file with your LeadCMS details.');
     console.log('ℹ️  Content types are automatically detected from your LeadCMS API.');
+  });
+}
+
+function generateDockerTemplates() {
+  Promise.all([import('fs'), import('path')]).then(([fs, pathModule]) => {
+    const templateDir = pathModule.join(__dirname, '../templates');
+
+    // Check if templates directory exists
+    if (!fs.existsSync(templateDir)) {
+      console.error('❌ Docker templates not found in SDK. Please update to the latest version.');
+      return;
+    }
+
+    console.log('🐳 Generating Docker deployment templates...');
+
+    try {
+      // Create directories
+      const dirs = ['scripts', 'preview'];
+      dirs.forEach(dir => {
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+          console.log(`📁 Created directory: ${dir}/`);
+        }
+      });
+
+      // Copy production files
+      const productionFiles = [
+        { src: 'docker/Dockerfile', dest: 'Dockerfile' },
+        { src: 'docker/nginx.conf', dest: 'nginx.conf' },
+        { src: 'scripts/inject-runtime-env.sh', dest: 'scripts/inject-runtime-env.sh' }
+      ];
+
+      // Copy preview files
+      const previewFiles = [
+        { src: 'docker/preview/Dockerfile', dest: 'preview/Dockerfile' },
+        { src: 'docker/preview/nginx.conf', dest: 'preview/nginx.conf' },
+        { src: 'docker/preview/supervisord.conf', dest: 'preview/supervisord.conf' }
+      ];
+
+      [...productionFiles, ...previewFiles].forEach(({ src, dest }) => {
+        const srcPath = pathModule.join(templateDir, src);
+        const destPath = dest;
+
+        if (fs.existsSync(srcPath)) {
+          const content = fs.readFileSync(srcPath, 'utf-8');
+          fs.writeFileSync(destPath, content, 'utf-8');
+
+          // Make shell scripts executable
+          if (dest.endsWith('.sh')) {
+            fs.chmodSync(destPath, '755');
+          }
+
+          console.log(`✅ Created ${destPath}`);
+        } else {
+          console.warn(`⚠️  Template not found: ${srcPath}`);
+        }
+      });
+
+      console.log('\\n🎉 Docker templates generated successfully!');
+      console.log('\\n📖 Usage:');
+      console.log('  Production build:  docker build -t my-site .');
+      console.log('  Preview mode:      docker build -f preview/Dockerfile -t my-site-preview .');
+      console.log('\\n💡 Next steps:');
+      console.log('  1. Add "livepreview": "your-dev-command" to package.json scripts');
+      console.log('  2. Adjust the COPY source directory in Dockerfile if needed');
+      console.log('  3. Set LEADCMS_URL and LEADCMS_API_KEY environment variables');
+
+    } catch (error) {
+      console.error('❌ Failed to generate Docker templates:', error);
+    }
   });
 }
