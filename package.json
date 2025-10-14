@@ -1,9 +1,9 @@
 {
   "name": "@leadcms/sdk",
-  "version": "1.2.85",
-  "description": "Official SDK and CLI tools for LeadCMS - framework-agnostic content management",
-  "main": "dist/lib/cms.js",
-  "types": "dist/lib/cms.d.ts",
+  "version": "1.2.86-pre",
+  "description": "Official SDK and CLI tools for LeadCMS - framework-agnostic content management for static site generators",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "leadcms": "dist/cli/index.js"
   },
@@ -58,7 +58,13 @@
     "i18n",
     "localization",
     "static-content",
-    "framework-agnostic"
+    "framework-agnostic",
+    "static-site-generator",
+    "build-time",
+    "nextjs",
+    "astro",
+    "gatsby",
+    "nuxt"
   ],
   "repository": {
     "type": "git",

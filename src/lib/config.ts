@@ -25,6 +25,19 @@ export interface LeadCMSConfigOptions extends Partial<LeadCMSConfig> {
 
 let globalConfig: Partial<LeadCMSConfig> | null = null;
 
+// Configuration cache to avoid repeated file reads
+interface ConfigCache {
+  config: Partial<LeadCMSConfig>;
+  timestamp: number;
+  filePath: string;
+}
+
+const configCache = new Map<string, ConfigCache>();
+const CACHE_TTL = 60000; // 1 minute cache TTL
+
+// Debug logging control
+const DEBUG_LOGGING = process.env.LEADCMS_DEBUG === 'true' || process.env.NODE_ENV === 'development';
+
 /**
  * Default configuration values
  */
@@ -52,12 +65,13 @@ export function loadConfig(options: LeadCMSConfigOptions = {}): LeadCMSConfig {
   const configFromEnv = loadConfigFromEnv();
 
   // 3. Merge all sources with proper precedence
+  // Environment variables override config file (for security-sensitive data)
   const mergedConfig = {
     ...DEFAULT_CONFIG,
-    ...configFromEnv,
-    ...configFromFile,
-    ...globalConfig, // Programmatic config takes precedence
-    ...options, // Options passed to this function take highest precedence
+    ...configFromFile,     // Config file settings
+    ...configFromEnv,      // Environment variables override config file
+    ...globalConfig,       // Programmatic config takes precedence
+    ...options,           // Options passed to this function take highest precedence
   };
 
   // Remove undefined values and ensure required fields
@@ -86,6 +100,7 @@ export function configure(config: Partial<LeadCMSConfig>): void {
  */
 export function resetConfig(): void {
   globalConfig = null;
+  configCache.clear();
 }
 
 /**
@@ -96,7 +111,7 @@ export function getConfig(options?: LeadCMSConfigOptions): LeadCMSConfig {
 }
 
 /**
- * Load configuration from file
+ * Load configuration from file with caching
  */
 function loadConfigFile(configPath?: string, cwd: string = process.cwd()): Partial<LeadCMSConfig> {
   const possiblePaths = [
@@ -111,6 +126,16 @@ function loadConfigFile(configPath?: string, cwd: string = process.cwd()): Parti
   for (const configFilePath of possiblePaths) {
     try {
       if (!fs.existsSync(configFilePath)) continue;
+
+      // Check cache first
+      const cacheKey = `${configFilePath}:${cwd}`;
+      const cached = configCache.get(cacheKey);
+      const now = Date.now();
+
+      if (cached && (now - cached.timestamp) < CACHE_TTL) {
+        // Return cached config without logging to reduce noise
+        return cached.config;
+      }
 
       const ext = path.extname(configFilePath);
       let config: Partial<LeadCMSConfig>;
@@ -133,7 +158,18 @@ function loadConfigFile(configPath?: string, cwd: string = process.cwd()): Parti
         continue;
       }
 
-      console.log(`[LeadCMS] Loaded configuration from: ${configFilePath}`);
+      // Cache the loaded config
+      configCache.set(cacheKey, {
+        config,
+        timestamp: now,
+        filePath: configFilePath,
+      });
+
+      // Only log once when actually loading from file, and only in debug mode
+      if (!cached && DEBUG_LOGGING) {
+        console.log(`[LeadCMS] Loaded configuration from: ${configFilePath}`);
+      }
+
       return config;
     } catch (error) {
       console.warn(`[LeadCMS] Failed to load config from ${configFilePath}:`, error);

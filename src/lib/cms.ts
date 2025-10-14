@@ -10,6 +10,16 @@ export interface FooterConfig { [key: string]: any; }
 // Default language - now configurable via configuration system
 export const DEFAULT_LANGUAGE = "en";
 
+// Content cache to avoid repeated file reads
+interface ContentCache<T> {
+  content: T | null;
+  timestamp: number;
+  filePath: string;
+}
+
+const contentCache = new Map<string, ContentCache<any>>();
+const CONTENT_CACHE_TTL = 30000; // 30 seconds cache TTL for content files
+
 /**
  * Helper to get configuration with fallbacks
  */
@@ -545,27 +555,140 @@ function loadConfigWithDraftSupport<T>(
 ): T | null {
   try {
     const localeContentDir = getContentDirForLocale(contentDir, locale);
+    let targetPath: string;
+    let cacheKey: string;
 
     // If userUid is provided, try draft version first
     if (userUid) {
       const draftConfigPath = path.join(localeContentDir, `${configName}-${userUid}.json`);
+      cacheKey = `${draftConfigPath}:${locale}:${configName}:${userUid}`;
+
+      // Check cache first for draft
+      const cached = contentCache.get(cacheKey);
+      const now = Date.now();
+
+      if (cached && (now - cached.timestamp) < CONTENT_CACHE_TTL) {
+        return cached.content;
+      }
+
       if (fs.existsSync(draftConfigPath)) {
         const draftConfigContent = fs.readFileSync(draftConfigPath, "utf-8");
-        return JSON.parse(draftConfigContent) as T;
+        const parsed = JSON.parse(draftConfigContent) as T;
+
+        // Cache the result
+        contentCache.set(cacheKey, {
+          content: parsed,
+          timestamp: now,
+          filePath: draftConfigPath,
+        });
+
+        return parsed;
       }
     }
 
     // Fall back to regular config file
     const configPath = path.join(localeContentDir, `${configName}.json`);
+    cacheKey = `${configPath}:${locale}:${configName}`;
+
+    // Check cache for regular config
+    const cached = contentCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && (now - cached.timestamp) < CONTENT_CACHE_TTL) {
+      return cached.content;
+    }
+
     if (!fs.existsSync(configPath)) {
-      return null;
+      // Cache the null result too to avoid repeated file system checks
+      contentCache.set(cacheKey, {
+        content: null,
+        timestamp: now,
+        filePath: configPath,
+      });
+
+      // Provide detailed error information about what's missing
+      const error = new Error(`Missing configuration file: '${configName}' for locale '${locale}' at path: ${configPath}`);
+      error.name = 'MissingConfigurationFile';
+      (error as any).configName = configName;
+      (error as any).locale = locale;
+      (error as any).filePath = configPath;
+
+      throw error;
     }
 
     const configContent = fs.readFileSync(configPath, "utf-8");
-    return JSON.parse(configContent) as T;
+    const parsed = JSON.parse(configContent) as T;
+
+    // Cache the result
+    contentCache.set(cacheKey, {
+      content: parsed,
+      timestamp: now,
+      filePath: configPath,
+    });
+
+    return parsed;
   } catch (error) {
-    console.error(`Error loading ${configName} config for locale ${locale}:`, error);
+    // If it's our custom MissingConfigurationFile error, provide more context
+    if (error instanceof Error && error.name === 'MissingConfigurationFile') {
+      console.error(`[LeadCMS] ${error.message}`);
+      // Re-throw with more context for debugging
+      const detailedError = new Error(`Missing configuration files - configName: '${configName}', locale: '${locale}', expected path: ${path.join(getContentDirForLocale(contentDir, locale), `${configName}.json`)}`);
+      detailedError.name = 'MissingConfigurationFile';
+      (detailedError as any).configName = configName;
+      (detailedError as any).locale = locale;
+      (detailedError as any).originalError = error;
+      throw detailedError;
+    }
+
+    // For other errors (JSON parsing, file system, etc.)
+    console.error(`[LeadCMS] Error loading ${configName} config for locale ${locale}:`, error);
+    const wrappedError = new Error(`Failed to load configuration '${configName}' for locale '${locale}': ${error instanceof Error ? error.message : String(error)}`);
+    wrappedError.name = 'ConfigurationLoadError';
+    (wrappedError as any).configName = configName;
+    (wrappedError as any).locale = locale;
+    (wrappedError as any).originalError = error;
+    throw wrappedError;
+  }
+}
+
+/**
+ * Convenience function to load configuration with automatic contentDir resolution
+ * Uses the configured contentDir from the LeadCMS configuration system
+ * @param configName - Name of the config file (e.g., 'header', 'footer', 'contact', 'navigation')
+ * @param locale - Locale code (optional, uses default language from config if not provided)
+ * @param userUid - Optional user UID for draft content
+ * @param configOptions - Optional LeadCMS configuration options
+ * @returns Parsed config object or null if not found
+ */
+export function loadContentConfig<T>(
+  configName: string,
+  locale?: string,
+  userUid?: string | null,
+  configOptions?: LeadCMSConfigOptions
+): T | null {
+  const config = getConfigWithDefaults(configOptions);
+  const actualLocale = locale || config.defaultLanguage || DEFAULT_LANGUAGE;
+  const contentDir = config.contentDir;
+
+  if (!contentDir) {
+    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
     return null;
+  }
+
+  try {
+    return loadConfigWithDraftSupport<T>(contentDir, actualLocale, configName, userUid);
+  } catch (error) {
+    // Handle missing configuration files gracefully
+    if (error instanceof Error && error.name === 'MissingConfigurationFile') {
+      // In debug mode, provide helpful message for any missing config
+      if (process.env.LEADCMS_DEBUG === 'true' || process.env.NODE_ENV === 'development') {
+        console.warn(`[LeadCMS] Configuration '${configName}' not found for locale '${actualLocale}'. If you don't use this config, you can ignore this warning.`);
+      }
+      return null;
+    }
+
+    // For other errors, re-throw to provide debugging info
+    throw error;
   }
 }
 
@@ -574,9 +697,18 @@ function loadConfigWithDraftSupport<T>(
  * @param contentDir - Content directory path
  * @param locale - Locale code
  * @param userUid - Optional user UID for draft content
+ * @internal
  */
-export function getHeaderConfig(contentDir: string, locale: string, userUid?: string | null): HeaderConfig | null {
-  return loadConfigWithDraftSupport<HeaderConfig>(contentDir, locale, 'header', userUid);
+function getHeaderConfigInternal(contentDir: string, locale: string, userUid?: string | null): HeaderConfig | null {
+  try {
+    return loadConfigWithDraftSupport<HeaderConfig>(contentDir, locale, 'header', userUid);
+  } catch (error) {
+    // Handle missing configuration files gracefully for internal functions
+    if (error instanceof Error && error.name === 'MissingConfigurationFile') {
+      return null;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -584,9 +716,38 @@ export function getHeaderConfig(contentDir: string, locale: string, userUid?: st
  * @param contentDir - Content directory path
  * @param locale - Locale code
  * @param userUid - Optional user UID for draft content
+ * @internal
  */
-export function getFooterConfig(contentDir: string, locale: string, userUid?: string | null): FooterConfig | null {
-  return loadConfigWithDraftSupport<FooterConfig>(contentDir, locale, 'footer', userUid);
+function getFooterConfigInternal(contentDir: string, locale: string, userUid?: string | null): FooterConfig | null {
+  try {
+    return loadConfigWithDraftSupport<FooterConfig>(contentDir, locale, 'footer', userUid);
+  } catch (error) {
+    // Handle missing configuration files gracefully for internal functions
+    if (error instanceof Error && error.name === 'MissingConfigurationFile') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Load header configuration using configured contentDir
+ * @param locale - Locale code (optional, uses default language from config if not provided)
+ * @param userUid - Optional user UID for draft content
+ * @param configOptions - Optional LeadCMS configuration options
+ */
+export function getHeaderConfig(locale?: string, userUid?: string | null, configOptions?: LeadCMSConfigOptions): HeaderConfig | null {
+  return loadContentConfig<HeaderConfig>('header', locale, userUid, configOptions);
+}
+
+/**
+ * Load footer configuration using configured contentDir
+ * @param locale - Locale code (optional, uses default language from config if not provided)
+ * @param userUid - Optional user UID for draft content
+ * @param configOptions - Optional LeadCMS configuration options
+ */
+export function getFooterConfig(locale?: string, userUid?: string | null, configOptions?: LeadCMSConfigOptions): FooterConfig | null {
+  return loadContentConfig<FooterConfig>('footer', locale, userUid, configOptions);
 }
 
 /**
@@ -626,5 +787,49 @@ export function makeLocaleAwareLink(href: string, currentLocale: string): string
 
   // Add locale prefix
   return `/${currentLocale}${href.startsWith("/") ? "" : "/"}${href}`;
+}
+
+/**
+ * Load layout configuration using configured contentDir
+ * Uses the configured contentDir automatically
+ * @param locale - Locale code (optional, uses default language from config if not provided)
+ * @param userUid - Optional user UID for draft content
+ * @param configOptions - Optional LeadCMS configuration options
+ * @returns Parsed layout config object or null if not found
+ */
+export function getLayoutConfig(
+  locale?: string,
+  userUid?: string | null,
+  configOptions?: LeadCMSConfigOptions
+): any | null {
+  return loadContentConfig('layout', locale, userUid, configOptions);
+}
+
+/**
+ * Load configuration with detailed error information for debugging
+ * Unlike loadContentConfig, this throws descriptive errors instead of returning null
+ * @param configName - Name of the config file
+ * @param locale - Locale code (optional, uses default language from config if not provided)
+ * @param userUid - Optional user UID for draft content
+ * @param configOptions - Optional LeadCMS configuration options
+ * @returns Parsed config object (never returns null)
+ * @throws {Error} With detailed information about missing files including configName, locale, and expected path
+ */
+export function loadContentConfigStrict<T>(
+  configName: string,
+  locale?: string,
+  userUid?: string | null,
+  configOptions?: LeadCMSConfigOptions
+): T {
+  const config = getConfigWithDefaults(configOptions);
+  const actualLocale = locale || config.defaultLanguage || DEFAULT_LANGUAGE;
+  const contentDir = config.contentDir;
+
+  if (!contentDir) {
+    throw new Error('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
+  }
+
+  // This will throw detailed errors with configName, locale, and path information
+  return loadConfigWithDraftSupport<T>(contentDir, actualLocale, configName, userUid) as T;
 }
 
