@@ -1,12 +1,10 @@
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
+
 // Type definitions for configuration objects
 export interface HeaderConfig { [key: string]: any; }
 export interface FooterConfig { [key: string]: any; }
-export interface ContactConfig { [key: string]: any; }
-export interface DashedCardConfig { [key: string]: any; }
-
 
 // Default language from environment or fallback to 'en'
 export const DEFAULT_LANGUAGE = process.env.NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE || "en";
@@ -553,26 +551,6 @@ export function getHeaderConfig(contentDir: string, locale: string, userUid?: st
  */
 export function getFooterConfig(contentDir: string, locale: string, userUid?: string | null): FooterConfig | null {
   return loadConfigWithDraftSupport<FooterConfig>(contentDir, locale, 'footer', userUid);
-}
-
-/**
- * Load contact configuration for a specific locale with optional draft support
- * @param contentDir - Content directory path
- * @param locale - Locale code
- * @param userUid - Optional user UID for draft content
- */
-export function getContactConfig(contentDir: string, locale: string, userUid?: string | null): ContactConfig | null {
-  return loadConfigWithDraftSupport<ContactConfig>(contentDir, locale, 'contact', userUid);
-}
-
-/**
- * Load dashed card configuration for a specific locale with optional draft support
- * @param contentDir - Content directory path
- * @param locale - Locale code
- * @param userUid - Optional user UID for draft content
- */
-export function getDashedCardConfig(contentDir: string, locale: string, userUid?: string | null): DashedCardConfig | null {
-  return loadConfigWithDraftSupport<DashedCardConfig>(contentDir, locale, 'dashed-card', userUid);
 }
 
 /**
