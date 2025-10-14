@@ -1,0 +1,65 @@
+# Source files
+src/
+*.ts
+*.tsx
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Development files
+tsconfig.json
+.eslintrc*
+.prettierrc*
+.editorconfig
+.nvmrc
+
+# Documentation (if using external docs)
+docs/
+*.md
+!README.md
+
+# Configuration files
+.gitignore
+.npmignore
+
+# Development dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build cache
+.tsbuildinfo
+*.tsbuildinfo
+
+# Coverage
+coverage/
+*.lcov
+.nyc_output
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+tmp/
+temp/
+
+# Examples (if not needed in package)
+examples/
+
+# Scripts that are copied during build
+src/scripts/
+src/*.conf
+src/Dockerfile
+
+# Logs
+*.log
