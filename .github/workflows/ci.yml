@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run build
+        run: npm run build
+
+      - name: Run tests
+        run: npm test --if-present
+
+      - name: Verify CLI executable
+        run: |
+          chmod +x dist/cli/index.js
+          ./dist/cli/index.js --help
+
+      - name: Test package contents
+        run: |
+          npm pack --dry-run
+          echo "Verifying package structure..."
+
+          # Check essential files exist
+          test -f dist/lib/cms.js || (echo "❌ cms.js missing" && exit 1)
+          test -f dist/lib/cms.d.ts || (echo "❌ cms.d.ts missing" && exit 1)
+          test -f dist/cli/index.js || (echo "❌ CLI missing" && exit 1)
+          test -d dist/templates || (echo "❌ Templates missing" && exit 1)
+          test -d dist/scripts || (echo "❌ Scripts missing" && exit 1)
+
+          echo "✅ Package structure verified"
+
+      - name: Test CLI commands
+        run: |
+          echo "Testing CLI commands..."
+          node dist/cli/index.js --help > /dev/null
+          echo "✅ CLI help works"
+
+      - name: Test Docker template generation
+        run: |
+          cd /tmp
+          mkdir leadcms-test
+          cd leadcms-test
+          node $GITHUB_WORKSPACE/dist/cli/index.js docker
+
+          # Verify Docker files were created
+          test -f Dockerfile || (echo "❌ Dockerfile not created" && exit 1)
+          test -f nginx.conf || (echo "❌ nginx.conf not created" && exit 1)
+          test -f preview/Dockerfile || (echo "❌ Preview Dockerfile not created" && exit 1)
+          test -f scripts/inject-runtime-env.sh || (echo "❌ Shell script not created" && exit 1)
+
+          echo "✅ Docker templates work correctly"
+
+  lint-and-format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check TypeScript
+        run: npx tsc --noEmit
+
+      - name: Verify package.json
+        run: |
+          echo "Checking package.json structure..."
+          node -e "
+            const pkg = require('./package.json');
+            if (!pkg.bin?.leadcms) throw new Error('Missing bin.leadcms');
+            if (!pkg.main) throw new Error('Missing main field');
+            if (!pkg.types) throw new Error('Missing types field');
+            if (!pkg.files?.includes('dist/')) throw new Error('Missing dist/ in files');
+            console.log('✅ package.json structure is valid');
+          "

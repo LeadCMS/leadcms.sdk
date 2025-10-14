@@ -1,6 +1,6 @@
 {
   "name": "@leadcms/sdk",
-  "version": "1.0.0",
+  "version": "1.2.85-pre",
   "description": "Official SDK and CLI tools for LeadCMS - framework-agnostic content management",
   "main": "dist/lib/cms.js",
   "types": "dist/lib/cms.d.ts",
@@ -12,10 +12,13 @@
     "npm": ">=8.0.0"
   },
   "scripts": {
-    "build": "npm run clean && tsc && npm run copy-assets",
+    "build": "npm run clean && tsc && npm run copy-assets && npm run fix-permissions",
     "clean": "rm -rf dist",
     "copy-assets": "cp -r src/scripts dist/ && cp -r src/templates dist/",
-    "dev": "tsc --watch",
+    "fix-permissions": "chmod +x dist/cli/index.js && chmod +x dist/scripts/*.sh 2>/dev/null || true",
+    "dev": "npm run build && concurrently \"tsc --watch\" \"npm run watch-assets\"",
+    "watch-assets": "nodemon --watch src/scripts --watch src/templates --ext '*' --exec 'npm run copy-assets'",
+    "test": "npm run build && node dist/cli/index.js --help > /dev/null && echo '✅ CLI tests passed'",
     "prepublishOnly": "npm run build",
     "leadcms:fetch": "node src/scripts/fetch-leadcms-content.mjs",
     "leadcms:watch": "node src/scripts/sse-watcher.mjs",
@@ -32,6 +35,8 @@
     "@types/eventsource": "^1.1.15",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.0.0",
+    "concurrently": "^9.2.1",
+    "nodemon": "^3.1.10",
     "typescript": "^5.0.0"
   },
   "files": [

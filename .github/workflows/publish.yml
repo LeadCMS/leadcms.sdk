@@ -1,0 +1,62 @@
+name: Publish to NPM
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (leave empty for package.json version)'
+        required: false
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write # Required for npm provenance
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run build
+        run: npm run build
+
+      - name: Run tests (if any)
+        run: npm test --if-present
+
+      - name: Verify package contents
+        run: |
+          npm pack --dry-run
+          echo "Package contents:"
+          tar -tzf $(npm pack --silent) | head -20
+
+      - name: Update version if specified
+        if: github.event.inputs.version
+        run: npm version ${{ github.event.inputs.version }} --no-git-tag-version
+
+      - name: Publish to NPM
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create package info
+        run: |
+          echo "## 📦 Published Package" >> $GITHUB_STEP_SUMMARY
+          echo "- **Package:** $(npm pkg get name | tr -d '"')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** $(npm pkg get version | tr -d '"')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Registry:** https://www.npmjs.com/package/$(npm pkg get name | tr -d '"')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Install:** \`npm install $(npm pkg get name | tr -d '"')\`" >> $GITHUB_STEP_SUMMARY
