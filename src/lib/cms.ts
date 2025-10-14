@@ -1,13 +1,33 @@
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
+import { getConfig, type LeadCMSConfig, type LeadCMSConfigOptions } from "./config";
 
 // Type definitions for configuration objects
 export interface HeaderConfig { [key: string]: any; }
 export interface FooterConfig { [key: string]: any; }
 
-// Default language from environment or fallback to 'en'
-export const DEFAULT_LANGUAGE = process.env.NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE || "en";
+// Default language - now configurable via configuration system
+export const DEFAULT_LANGUAGE = "en";
+
+/**
+ * Helper to get configuration with fallbacks
+ */
+function getConfigWithDefaults(configOptions?: LeadCMSConfigOptions): LeadCMSConfig {
+  try {
+    return getConfig(configOptions);
+  } catch (error) {
+    // If config loading fails, return minimal config with environment fallbacks
+    return {
+      url: process.env.LEADCMS_URL || process.env.NEXT_PUBLIC_LEADCMS_URL || "",
+      apiKey: process.env.LEADCMS_API_KEY || "",
+      defaultLanguage: process.env.LEADCMS_DEFAULT_LANGUAGE || process.env.NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE || DEFAULT_LANGUAGE,
+      contentDir: ".leadcms/content",
+      mediaDir: "public/media",
+      enableDrafts: false,
+    };
+  }
+}
 
 export interface CMSContentTemplateProps<T = CMSContent> {
   content: T;
@@ -33,10 +53,18 @@ export interface CMSContent {
 /**
  * Get all available languages from the content directory structure
  */
-export function getAvailableLanguages(contentDir: string): string[] {
+export function getAvailableLanguages(contentDir?: string, configOptions?: LeadCMSConfigOptions): string[] {
+  const config = getConfigWithDefaults(configOptions);
+  const defaultLanguage = config.defaultLanguage || DEFAULT_LANGUAGE;
+  const actualContentDir = contentDir || config.contentDir;
+
+  if (!actualContentDir) {
+    return [defaultLanguage];
+  }
+
   try {
-    const entries = fs.readdirSync(contentDir, { withFileTypes: true });
-    const languages = [DEFAULT_LANGUAGE]; // Always include default language
+    const entries = fs.readdirSync(actualContentDir, { withFileTypes: true });
+    const languages = [defaultLanguage]; // Always include default language
 
     for (const entry of entries) {
       if (entry.isDirectory() && entry.name.length === 2) {
@@ -49,15 +77,18 @@ export function getAvailableLanguages(contentDir: string): string[] {
 
     return languages.sort();
   } catch {
-    return [DEFAULT_LANGUAGE];
+    return [defaultLanguage];
   }
 }
 
 /**
  * Get content directory for a specific locale
  */
-export function getContentDirForLocale(contentDir: string, locale: string): string {
-  if (locale === DEFAULT_LANGUAGE) {
+export function getContentDirForLocale(contentDir: string, locale: string, configOptions?: LeadCMSConfigOptions): string {
+  const config = getConfigWithDefaults(configOptions);
+  const defaultLanguage = config.defaultLanguage || DEFAULT_LANGUAGE;
+
+  if (locale === defaultLanguage) {
     return contentDir;
   }
   return path.join(contentDir, locale);
@@ -295,32 +326,37 @@ export function getContentTranslations(
 }
 
 /**
- * Generate static params for all locales and content
+ * Get all content routes for all locales in a framework-agnostic format
+ * Returns an array of route objects with locale and slug information
  */
-export function generateStaticParamsForAllLocales(
+export function getAllContentRoutes(
   contentDir: string,
   contentTypes?: string[],
   includeDrafts?: boolean | null,
   draftUserUid?: string | null
-): { locale?: string; slug: string[] }[] {
+): { locale: string; slug: string; slugParts: string[]; isDefaultLocale: boolean; path: string }[] {
   const languages = getAvailableLanguages(contentDir);
-  const allParams: { locale?: string; slug: string[] }[] = [];
+  const allRoutes: { locale: string; slug: string; slugParts: string[]; isDefaultLocale: boolean; path: string }[] = [];
 
   for (const locale of languages) {
     const slugs = getAllContentSlugsForLocale(contentDir, locale, contentTypes, includeDrafts, draftUserUid);
 
     for (const slug of slugs) {
-      if (locale === DEFAULT_LANGUAGE) {
-        // Default language doesn't need locale prefix
-        allParams.push({ slug: slug.split("/") });
-      } else {
-        // Non-default languages get locale prefix
-        allParams.push({ locale, slug: slug.split("/") });
-      }
+      const isDefaultLocale = locale === DEFAULT_LANGUAGE;
+      const slugParts = slug.split("/");
+      const path = isDefaultLocale ? `/${slug}` : `/${locale}/${slug}`;
+
+      allRoutes.push({
+        locale,
+        slug,
+        slugParts,
+        isDefaultLocale,
+        path
+      });
     }
   }
 
-  return allParams;
+  return allRoutes;
 }
 
 /**
@@ -591,3 +627,4 @@ export function makeLocaleAwareLink(href: string, currentLocale: string): string
   // Add locale prefix
   return `/${currentLocale}${href.startsWith("/") ? "" : "/"}${href}`;
 }
+

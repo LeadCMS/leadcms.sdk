@@ -3,15 +3,45 @@ import path from "path"
 import yaml from "js-yaml"
 import axios from "axios"
 
-export const leadCMSUrl = process.env.NEXT_PUBLIC_LEADCMS_URL
-export const leadCMSApiKey = process.env.LEADCMS_API_KEY
-export const defaultLanguage = process.env.NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE || "en"
-export const CONTENT_DIR = path.resolve(".leadcms/content")
-export const MEDIA_DIR = path.resolve("public/media")
+import { existsSync, readFileSync } from "fs"
 
-// Fetch content types to build typeMap
+// Simple configuration loader for the scripts
+function loadConfig() {
+  const possiblePaths = [
+    "leadcms.config.json",
+    ".leadcmsrc.json",
+    ".leadcmsrc"
+  ];
+
+  for (const configPath of possiblePaths) {
+    try {
+      if (existsSync(configPath)) {
+        const content = readFileSync(configPath, "utf-8");
+        const config = JSON.parse(content);
+        console.log(`[LeadCMS] Loaded configuration from: ${configPath}`);
+        return config;
+      }
+    } catch (error) {
+      // Continue to next config file
+    }
+  }
+
+  return {};
+}
+
+const config = loadConfig();
+
+// Use configuration with environment variable fallbacks
+export const leadCMSUrl = config.url || process.env.LEADCMS_URL || process.env.NEXT_PUBLIC_LEADCMS_URL
+export const leadCMSApiKey = config.apiKey || process.env.LEADCMS_API_KEY
+export const defaultLanguage = config.defaultLanguage || process.env.LEADCMS_DEFAULT_LANGUAGE || process.env.NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE || "en"
+export const CONTENT_DIR = path.resolve(config.contentDir || ".leadcms/content")
+export const MEDIA_DIR = path.resolve(config.mediaDir || "public/media")
+
+// Fetch content types dynamically from LeadCMS API to build typeMap
+// Content types are automatically detected and don't need to be configured
 export async function fetchContentTypes() {
-  console.log(`[LeadCMS] Fetching content types...`)
+  console.log(`[LeadCMS] Fetching content types from API...`)
   const url = new URL("/api/content-types", leadCMSUrl)
   url.searchParams.set("filter[limit]", "100")
   try {
@@ -23,6 +53,7 @@ export async function fetchContentTypes() {
     for (const t of types) {
       typeMap[t.uid] = t.format
     }
+    console.log(`[LeadCMS] Detected ${Object.keys(typeMap).length} content types:`, Object.keys(typeMap).join(', '))
     return typeMap
   } catch (error) {
     console.error(`[LeadCMS] Failed to fetch content types:`, error.message)

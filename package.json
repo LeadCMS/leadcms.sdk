@@ -1,7 +1,7 @@
 {
   "name": "@leadcms/sdk",
   "version": "1.0.0",
-  "description": "Official SDK and CLI tools for LeadCMS integration with Next.js",
+  "description": "Official SDK and CLI tools for LeadCMS - framework-agnostic content management",
   "main": "dist/lib/cms.js",
   "types": "dist/lib/cms.d.ts",
   "bin": {
@@ -37,15 +37,23 @@
   "files": [
     "dist/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "leadcms.config.json.sample"
   ],
   "keywords": [
     "leadcms",
-    "nextjs",
     "cms",
     "headless-cms",
     "sdk",
-    "typescript"
+    "typescript",
+    "content-management",
+    "mdx",
+    "markdown",
+    "json",
+    "i18n",
+    "localization",
+    "static-content",
+    "framework-agnostic"
   ],
   "repository": {
     "type": "git",
