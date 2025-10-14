@@ -115,7 +115,7 @@ export function getContentDirForLocale(contentDir: string, locale: string, confi
 export function getAllContentSlugsForLocale(
   contentDir: string,
   locale: string,
-  contentTypes?: string[],
+  contentTypes?: readonly string[],
   includeDrafts?: boolean | null,
   draftUserUid?: string | null
 ): string[] {
@@ -202,7 +202,7 @@ function getBaseContentWithUserDraftOverrides(slugs: string[], draftUserUid: str
 
 function getAllContentSlugsExcludingLanguageDirs(
   contentDir: string,
-  contentTypes?: string[],
+  contentTypes?: readonly string[],
   rootContentDir?: string
 ): string[] {
   // Get available languages from the root content directory to know which directories to exclude
@@ -341,7 +341,7 @@ export function getContentTranslations(
  */
 export function getAllContentRoutes(
   contentDir: string,
-  contentTypes?: string[],
+  contentTypes?: readonly string[],
   includeDrafts?: boolean | null,
   draftUserUid?: string | null
 ): { locale: string; slug: string; slugParts: string[]; isDefaultLocale: boolean; path: string }[] {
@@ -382,7 +382,7 @@ export function extractUserUidFromSlug(slug: string): string | null {
   return match ? match[1] : null;
 }
 
-export function getAllContentSlugs(contentDir: string, contentTypes?: string[]): string[] {
+export function getAllContentSlugs(contentDir: string, contentTypes?: readonly string[]): string[] {
   function walk(dir: string, prefix = ""): string[] {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     const slugs: string[] = [];
