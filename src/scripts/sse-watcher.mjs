@@ -1,6 +1,5 @@
 import "dotenv/config"
 import { EventSource } from "eventsource"
-import { exec } from "child_process"
 import {
   saveContentFile,
   leadCMSUrl,
@@ -9,6 +8,7 @@ import {
   CONTENT_DIR,
 } from "./leadcms-helpers.mjs"
 import { fetchContentTypes } from "./leadcms-helpers.mjs"
+import { fetchLeadCMSContent } from "./fetch-leadcms-content.mjs"
 
 // Log environment configuration for debugging
 console.log(`[SSE ENV] LeadCMS URL: ${leadCMSUrl}`)
@@ -17,6 +17,17 @@ console.log(
 )
 console.log(`[SSE ENV] Default Language: ${defaultLanguage}`)
 console.log(`[SSE ENV] Content Dir: ${CONTENT_DIR}`)
+
+// Helper function to trigger content fetch
+async function triggerContentFetch() {
+  try {
+    console.log("[SSE] Starting content fetch...")
+    await fetchLeadCMSContent()
+    console.log("[SSE] Content fetch completed successfully")
+  } catch (error) {
+    console.error("[SSE] Content fetch failed:", error.message)
+  }
+}
 
 function buildSSEUrl() {
   console.log(`[SSE URL] Building SSE URL with base: ${leadCMSUrl}`)
@@ -95,16 +106,7 @@ async function startSSEWatcher() {
       if (data.entityType === "Content") {
         console.log(`[SSE] Content message - Operation: ${data.operation}`)
         console.log(`[SSE] Content change detected - triggering full fetch`)
-        exec("npm run fetch:leadcms", (err, stdout, stderr) => {
-          if (err) {
-            console.error("[SSE] fetch:leadcms failed:", err.message)
-            console.error("[SSE] fetch:leadcms stderr:", stderr)
-            return
-          }
-          console.log("[SSE] fetch:leadcms completed successfully")
-          console.log("[SSE] fetch:leadcms output:\n", stdout)
-          if (stderr) console.warn("[SSE] fetch:leadcms stderr:", stderr)
-        })
+        triggerContentFetch()
       } else {
         console.log(`[SSE] Non-content message - Entity type: ${data.entityType}`)
       }
@@ -163,16 +165,7 @@ async function startSSEWatcher() {
         }
 
         console.log(`[SSE] Draft updated - triggering full fetch`)
-        exec("npm run fetch:leadcms", (err, stdout, stderr) => {
-          if (err) {
-            console.error("[SSE] fetch:leadcms failed:", err.message)
-            console.error("[SSE] fetch:leadcms stderr:", stderr)
-            return
-          }
-          console.log("[SSE] fetch:leadcms completed successfully")
-          console.log("[SSE] fetch:leadcms output:\n", stdout)
-          if (stderr) console.warn("[SSE] fetch:leadcms stderr:", stderr)
-        })
+        triggerContentFetch()
 
         if (contentType === "MDX" || contentType === "JSON") {
           if (contentData && typeof contentData === "object") {
@@ -227,16 +220,7 @@ async function startSSEWatcher() {
         }
 
         console.log(`[SSE] Legacy draft modified - triggering full fetch`)
-        exec("npm run fetch:leadcms", (err, stdout, stderr) => {
-          if (err) {
-            console.error("[SSE] fetch:leadcms failed:", err.message)
-            console.error("[SSE] fetch:leadcms stderr:", stderr)
-            return
-          }
-          console.log("[SSE] fetch:leadcms completed successfully")
-          console.log("[SSE] fetch:leadcms output:\n", stdout)
-          if (stderr) console.warn("[SSE] fetch:leadcms stderr:", stderr)
-        })
+        triggerContentFetch()
 
         if (contentType === "MDX" || contentType === "JSON") {
           if (contentData && typeof contentData === "object") {
@@ -272,16 +256,7 @@ async function startSSEWatcher() {
       console.log(`[SSE] Content updated data:`, JSON.stringify(data, null, 2))
 
       console.log(`[SSE] Content updated - triggering full fetch`)
-      exec("npm run fetch:leadcms", (err, stdout, stderr) => {
-        if (err) {
-          console.error("[SSE] fetch:leadcms failed:", err.message)
-          console.error("[SSE] fetch:leadcms stderr:", stderr)
-          return
-        }
-        console.log("[SSE] fetch:leadcms completed successfully")
-        console.log("[SSE] fetch:leadcms output:\n", stdout)
-        if (stderr) console.warn("[SSE] fetch:leadcms stderr:", stderr)
-      })
+      triggerContentFetch()
     } catch (e) {
       console.warn("[SSE] Failed to parse content-updated event:", e.message)
       console.warn("[SSE] Raw content-updated event data:", event.data)

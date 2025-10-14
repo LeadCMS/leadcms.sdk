@@ -355,7 +355,5 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error("Error in fetch-leadcms-content:", err)
-  process.exit(1)
-})
+// Export the main function so it can be imported by other modules
+export { main as fetchLeadCMSContent }
