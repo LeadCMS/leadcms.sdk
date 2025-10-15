@@ -1,14 +1,14 @@
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
-import { getConfig, type LeadCMSConfig, type LeadCMSConfigOptions } from "./config";
+import { getConfig, type LeadCMSConfig } from "./config";
 
 // Type definitions for configuration objects
 export interface HeaderConfig { [key: string]: any; }
 export interface FooterConfig { [key: string]: any; }
 
-// Default language - now configurable via configuration system
-export const DEFAULT_LANGUAGE = "en";
+// Default language - internal fallback only when configuration is not available
+const DEFAULT_LANGUAGE = "en";
 
 // Content cache to avoid repeated file reads
 interface ContentCache<T> {
@@ -21,11 +21,15 @@ const contentCache = new Map<string, ContentCache<any>>();
 const CONTENT_CACHE_TTL = 30000; // 30 seconds cache TTL for content files
 
 /**
- * Helper to get configuration with fallbacks
+ * Get LeadCMS configuration with fallbacks
+ * This function attempts to load the LeadCMS configuration and falls back to environment variables
+ * if the configuration file is not available or cannot be loaded.
+ *
+ * @returns Complete LeadCMS configuration object with all required fields
  */
-function getConfigWithDefaults(configOptions?: LeadCMSConfigOptions): LeadCMSConfig {
+export function getLeadCMSConfig(): LeadCMSConfig {
   try {
-    return getConfig(configOptions);
+    return getConfig();
   } catch (error) {
     // If config loading fails, return minimal config with environment fallbacks
     return {
@@ -61,19 +65,15 @@ export interface CMSContent {
 }
 
 /**
- * Get all available languages from the content directory structure
+ * Get all available languages from a specific content directory (internal helper)
+ * @internal
  */
-export function getAvailableLanguages(contentDir?: string, configOptions?: LeadCMSConfigOptions): string[] {
-  const config = getConfigWithDefaults(configOptions);
+function getAvailableLanguagesFromDir(contentDir: string): string[] {
+  const config = getLeadCMSConfig();
   const defaultLanguage = config.defaultLanguage || DEFAULT_LANGUAGE;
-  const actualContentDir = contentDir || config.contentDir;
-
-  if (!actualContentDir) {
-    return [defaultLanguage];
-  }
 
   try {
-    const entries = fs.readdirSync(actualContentDir, { withFileTypes: true });
+    const entries = fs.readdirSync(contentDir, { withFileTypes: true });
     const languages = [defaultLanguage]; // Always include default language
 
     for (const entry of entries) {
@@ -92,46 +92,85 @@ export function getAvailableLanguages(contentDir?: string, configOptions?: LeadC
 }
 
 /**
+ * Get all available languages from the content directory structure
+ */
+export function getAvailableLanguages(): string[] {
+  const config = getLeadCMSConfig();
+  const defaultLanguage = config.defaultLanguage || DEFAULT_LANGUAGE;
+  const contentDir = config.contentDir;
+
+  if (!contentDir) {
+    return [defaultLanguage];
+  }
+
+  return getAvailableLanguagesFromDir(contentDir);
+}
+
+/**
  * Get content directory for a specific locale
  */
-export function getContentDirForLocale(contentDir: string, locale: string, configOptions?: LeadCMSConfigOptions): string {
-  const config = getConfigWithDefaults(configOptions);
+export function getContentDirForLocale(contentDir: string, locale?: string): string {
+  const config = getLeadCMSConfig();
   const defaultLanguage = config.defaultLanguage || DEFAULT_LANGUAGE;
+  const actualLocale = locale || defaultLanguage;
 
-  if (locale === defaultLanguage) {
+  if (actualLocale === defaultLanguage) {
     return contentDir;
   }
-  return path.join(contentDir, locale);
+
+  return path.join(contentDir, actualLocale);
+}
+
+/**
+ * Get all content slugs for a specific locale with draft filtering options (internal helper)
+ * @internal
+ */
+function getAllContentSlugsForLocaleFromDir(
+  contentDir: string,
+  locale?: string,
+  contentTypes?: readonly string[],
+  includeDrafts?: boolean | null,
+  draftUserUid?: string | null
+): string[] {
+  const config = getLeadCMSConfig();
+  const defaultLanguage = config.defaultLanguage;
+  const localeContentDir = getContentDirForLocale(contentDir, locale);
+
+  let slugs: string[];
+  if (locale === defaultLanguage) {
+    // For default language, we need to exclude language subdirectories
+    slugs = getAllContentSlugsExcludingLanguageDirs(localeContentDir, contentTypes, contentDir);
+  } else {
+    // For other languages, just get all content from their directory
+    slugs = getAllContentSlugsFromDir(localeContentDir, contentTypes);
+  }
+
+  // Apply draft filtering logic
+  return applyDraftFiltering(slugs, includeDrafts, draftUserUid);
 }
 
 /**
  * Get all content slugs for a specific locale with draft filtering options
- * @param contentDir - Content directory path
  * @param locale - Locale code
  * @param contentTypes - Optional array of content types to filter
  * @param includeDrafts - Whether to include draft content (default: null = false)
  * @param draftUserUid - Specific user UID for draft content (only relevant if includeDrafts is true)
  */
 export function getAllContentSlugsForLocale(
-  contentDir: string,
-  locale: string,
+  locale?: string,
   contentTypes?: readonly string[],
   includeDrafts?: boolean | null,
   draftUserUid?: string | null
 ): string[] {
-  const localeContentDir = getContentDirForLocale(contentDir, locale);
+  const config = getLeadCMSConfig();
+  const contentDir = config.contentDir;
 
-  let slugs: string[];
-  if (locale === DEFAULT_LANGUAGE) {
-    // For default language, we need to exclude language subdirectories
-    slugs = getAllContentSlugsExcludingLanguageDirs(localeContentDir, contentTypes, contentDir);
-  } else {
-    // For other languages, just get all content from their directory
-    slugs = getAllContentSlugs(localeContentDir, contentTypes);
+  if (!contentDir) {
+    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
+    return [];
   }
 
-  // Apply draft filtering logic
-  return applyDraftFiltering(slugs, includeDrafts, draftUserUid);
+  return getAllContentSlugsForLocaleFromDir(contentDir, locale, contentTypes, includeDrafts, draftUserUid);
 }
 
 /**
@@ -205,10 +244,11 @@ function getAllContentSlugsExcludingLanguageDirs(
   contentTypes?: readonly string[],
   rootContentDir?: string
 ): string[] {
+  const config = getLeadCMSConfig();
   // Get available languages from the root content directory to know which directories to exclude
   const availableLanguages = rootContentDir
-    ? getAvailableLanguages(rootContentDir)
-    : [DEFAULT_LANGUAGE];
+    ? getAvailableLanguagesFromDir(rootContentDir)
+    : [config.defaultLanguage];
 
   function walk(dir: string, prefix = ""): string[] {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -216,10 +256,11 @@ function getAllContentSlugsExcludingLanguageDirs(
     for (const entry of entries) {
       if (entry.isDirectory()) {
         // Skip language directories when we're in the root content directory
+        const defaultLanguage = config.defaultLanguage;
         if (
           prefix === "" &&
           availableLanguages.includes(entry.name) &&
-          entry.name !== DEFAULT_LANGUAGE
+          entry.name !== defaultLanguage
         ) {
           continue;
         }
@@ -260,39 +301,46 @@ function getAllContentSlugsExcludingLanguageDirs(
 /**
  * Get content by slug for a specific locale with optional draft support
  * @param slug - Content slug
- * @param contentDir - Content directory path
  * @param locale - Locale code
  * @param userUid - Optional user UID for draft content
  */
 export function getCMSContentBySlugForLocaleWithDraftSupport(
   slug: string,
-  contentDir: string,
   locale: string,
   userUid?: string | null
 ): CMSContent | null {
+  const config = getLeadCMSConfig();
+  const contentDir = config.contentDir;
+
+  if (!contentDir) {
+    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
+    return null;
+  }
+
   // If userUid is provided and this isn't already a draft slug, try draft version first
   if (userUid && !extractUserUidFromSlug(slug)) {
     const draftSlug = `${slug}-${userUid}`;
-    const draftContent = getCMSContentBySlugForLocale(draftSlug, contentDir, locale);
+    const draftContent = getCMSContentBySlugForLocaleFromDir(draftSlug, contentDir, locale);
     if (draftContent) {
       return draftContent;
     }
   }
 
   // Fall back to regular content
-  return getCMSContentBySlugForLocale(slug, contentDir, locale);
+  return getCMSContentBySlugForLocaleFromDir(slug, contentDir, locale);
 }
 
 /**
- * Get content by slug for a specific locale
+ * Get content by slug for a specific locale (internal helper)
+ * @internal
  */
-export function getCMSContentBySlugForLocale(
+function getCMSContentBySlugForLocaleFromDir(
   slug: string,
   contentDir: string,
-  locale: string
+  locale?: string
 ): CMSContent | null {
   const localeContentDir = getContentDirForLocale(contentDir, locale);
-  const content = getCMSContentBySlug(slug, localeContentDir);
+  const content = getCMSContentBySlugFromDir(slug, localeContentDir);
 
   if (content) {
     // Ensure the locale is set on the content object
@@ -303,13 +351,38 @@ export function getCMSContentBySlugForLocale(
 }
 
 /**
+ * Get content by slug for a specific locale
+ */
+export function getCMSContentBySlugForLocale(
+  slug: string,
+  locale?: string
+): CMSContent | null {
+  const config = getLeadCMSConfig();
+  const contentDir = config.contentDir;
+
+  if (!contentDir) {
+    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
+    return null;
+  }
+
+  return getCMSContentBySlugForLocaleFromDir(slug, contentDir, locale);
+}
+
+/**
  * Get all translations of a content item by translationKey
  */
 export function getContentTranslations(
-  translationKey: string,
-  contentDir: string
+  translationKey: string
 ): { locale: string; content: CMSContent }[] {
-  const languages = getAvailableLanguages(contentDir);
+  const config = getLeadCMSConfig();
+  const contentDir = config.contentDir;
+
+  if (!contentDir) {
+    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
+    return [];
+  }
+
+  const languages = getAvailableLanguagesFromDir(contentDir);
   const translations: { locale: string; content: CMSContent }[] = [];
 
   for (const locale of languages) {
@@ -317,9 +390,9 @@ export function getContentTranslations(
 
     // Search for content with matching translationKey
     try {
-      const slugs = getAllContentSlugs(localeContentDir);
+      const slugs = getAllContentSlugsFromDir(localeContentDir);
       for (const slug of slugs) {
-        const content = getCMSContentBySlug(slug, localeContentDir);
+        const content = getCMSContentBySlugFromDir(slug, localeContentDir);
         if (content && content.translationKey === translationKey) {
           content.language = content.language || locale;
           translations.push({ locale, content });
@@ -340,19 +413,27 @@ export function getContentTranslations(
  * Returns an array of route objects with locale and slug information
  */
 export function getAllContentRoutes(
-  contentDir: string,
   contentTypes?: readonly string[],
   includeDrafts?: boolean | null,
   draftUserUid?: string | null
 ): { locale: string; slug: string; slugParts: string[]; isDefaultLocale: boolean; path: string }[] {
-  const languages = getAvailableLanguages(contentDir);
+  const config = getLeadCMSConfig();
+  const contentDir = config.contentDir;
+  const defaultLanguage = config.defaultLanguage;
+
+  if (!contentDir) {
+    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
+    return [];
+  }
+
+  const languages = getAvailableLanguagesFromDir(contentDir);
   const allRoutes: { locale: string; slug: string; slugParts: string[]; isDefaultLocale: boolean; path: string }[] = [];
 
   for (const locale of languages) {
-    const slugs = getAllContentSlugsForLocale(contentDir, locale, contentTypes, includeDrafts, draftUserUid);
+    const slugs = getAllContentSlugsForLocaleFromDir(contentDir, locale, contentTypes, includeDrafts, draftUserUid);
 
     for (const slug of slugs) {
-      const isDefaultLocale = locale === DEFAULT_LANGUAGE;
+      const isDefaultLocale = locale === defaultLanguage;
       const slugParts = slug.split("/");
       const path = isDefaultLocale ? `/${slug}` : `/${locale}/${slug}`;
 
@@ -382,7 +463,19 @@ export function extractUserUidFromSlug(slug: string): string | null {
   return match ? match[1] : null;
 }
 
-export function getAllContentSlugs(contentDir: string, contentTypes?: readonly string[]): string[] {
+export function getAllContentSlugs(contentTypes?: readonly string[]): string[] {
+  const config = getLeadCMSConfig();
+  const contentDir = config.contentDir;
+
+  if (!contentDir) {
+    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
+    return [];
+  }
+
+  return getAllContentSlugsFromDir(contentDir, contentTypes);
+}
+
+function getAllContentSlugsFromDir(contentDir: string, contentTypes?: readonly string[]): string[] {
   function walk(dir: string, prefix = ""): string[] {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     const slugs: string[] = [];
@@ -421,7 +514,19 @@ export function getAllContentSlugs(contentDir: string, contentTypes?: readonly s
   return walk(contentDir);
 }
 
-export function getCMSContentBySlug(slug: string, contentDir: string): CMSContent | null {
+export function getCMSContentBySlug(slug: string): CMSContent | null {
+  const config = getLeadCMSConfig();
+  const contentDir = config.contentDir;
+
+  if (!contentDir) {
+    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
+    return null;
+  }
+
+  return getCMSContentBySlugFromDir(slug, contentDir);
+}
+
+function getCMSContentBySlugFromDir(slug: string, contentDir: string): CMSContent | null {
   // Try both .mdx and .json extensions
   const mdxPath = path.join(contentDir, `${slug}.mdx`);
   const jsonPath = path.join(contentDir, `${slug}.json`);
@@ -657,18 +762,20 @@ function loadConfigWithDraftSupport<T>(
  * @param configName - Name of the config file (e.g., 'header', 'footer', 'contact', 'navigation')
  * @param locale - Locale code (optional, uses default language from config if not provided)
  * @param userUid - Optional user UID for draft content
- * @param configOptions - Optional LeadCMS configuration options
  * @returns Parsed config object or null if not found
  */
 export function loadContentConfig<T>(
   configName: string,
   locale?: string,
-  userUid?: string | null,
-  configOptions?: LeadCMSConfigOptions
+  userUid?: string | null
 ): T | null {
-  const config = getConfigWithDefaults(configOptions);
-  const actualLocale = locale || config.defaultLanguage || DEFAULT_LANGUAGE;
+  const config = getLeadCMSConfig();
+  const actualLocale = locale || config.defaultLanguage;
   const contentDir = config.contentDir;
+
+  if (!actualLocale) {
+    throw new Error('[LeadCMS] No default language configured. Please set up your LeadCMS configuration with a defaultLanguage.');
+  }
 
   if (!contentDir) {
     console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
@@ -734,40 +841,65 @@ function getFooterConfigInternal(contentDir: string, locale: string, userUid?: s
  * Load header configuration using configured contentDir
  * @param locale - Locale code (optional, uses default language from config if not provided)
  * @param userUid - Optional user UID for draft content
- * @param configOptions - Optional LeadCMS configuration options
  */
-export function getHeaderConfig(locale?: string, userUid?: string | null, configOptions?: LeadCMSConfigOptions): HeaderConfig | null {
-  return loadContentConfig<HeaderConfig>('header', locale, userUid, configOptions);
+export function getHeaderConfig(locale?: string, userUid?: string | null): HeaderConfig | null {
+  return loadContentConfig<HeaderConfig>('header', locale, userUid);
 }
 
 /**
  * Load footer configuration using configured contentDir
  * @param locale - Locale code (optional, uses default language from config if not provided)
  * @param userUid - Optional user UID for draft content
- * @param configOptions - Optional LeadCMS configuration options
  */
-export function getFooterConfig(locale?: string, userUid?: string | null, configOptions?: LeadCMSConfigOptions): FooterConfig | null {
-  return loadContentConfig<FooterConfig>('footer', locale, userUid, configOptions);
+export function getFooterConfig(locale?: string, userUid?: string | null): FooterConfig | null {
+  return loadContentConfig<FooterConfig>('footer', locale, userUid);
 }
 
 /**
  * Get the current locale from a path
+ * @param pathname - The pathname to extract locale from
+ * @param contentDir - Content directory path (optional, uses configured contentDir if not provided)
  */
 export function getLocaleFromPath(pathname: string): string {
+  const config = getLeadCMSConfig();
+  const contentDir = config.contentDir;
+  const defaultLanguage = config.defaultLanguage;
+
+  if (!defaultLanguage) {
+    throw new Error('[LeadCMS] No default language configured. Please set up your LeadCMS configuration with a defaultLanguage.');
+  }
+
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length > 0) {
     const firstSegment = segments[0];
-    // Check if the first segment is a known locale
-    const knownLocales = ["en", "ru", "cs"]; // Add more locales as needed
-    if (knownLocales.includes(firstSegment)) {
-      return firstSegment;
+
+    // If we have a content directory, get available languages from it
+    if (contentDir) {
+      try {
+        const knownLocales = getAvailableLanguagesFromDir(contentDir);
+        if (knownLocales.includes(firstSegment)) {
+          return firstSegment;
+        }
+      } catch {
+        // If we can't read available languages, fall back to checking if it's not the default
+        if (firstSegment.length === 2 && firstSegment !== defaultLanguage) {
+          return firstSegment;
+        }
+      }
+    } else {
+      // Fallback: assume 2-character segments that aren't the default language are locales
+      if (firstSegment.length === 2 && firstSegment !== defaultLanguage) {
+        return firstSegment;
+      }
     }
   }
-  return DEFAULT_LANGUAGE;
+  return defaultLanguage;
 }
 
 /**
  * Make a link locale-aware by adding the current locale prefix
+ * @param href - The href to make locale-aware
+ * @param currentLocale - The current locale
  */
 export function makeLocaleAwareLink(href: string, currentLocale: string): string {
   // Don't modify external links or anchors
@@ -775,8 +907,15 @@ export function makeLocaleAwareLink(href: string, currentLocale: string): string
     return href;
   }
 
+  const config = getLeadCMSConfig();
+  const defaultLanguage = config.defaultLanguage;
+
+  if (!defaultLanguage) {
+    throw new Error('[LeadCMS] No default language configured. Please set up your LeadCMS configuration with a defaultLanguage.');
+  }
+
   // If it's the default language, don't add prefix
-  if (currentLocale === DEFAULT_LANGUAGE) {
+  if (currentLocale === defaultLanguage) {
     return href;
   }
 
@@ -790,40 +929,26 @@ export function makeLocaleAwareLink(href: string, currentLocale: string): string
 }
 
 /**
- * Load layout configuration using configured contentDir
- * Uses the configured contentDir automatically
- * @param locale - Locale code (optional, uses default language from config if not provided)
- * @param userUid - Optional user UID for draft content
- * @param configOptions - Optional LeadCMS configuration options
- * @returns Parsed layout config object or null if not found
- */
-export function getLayoutConfig(
-  locale?: string,
-  userUid?: string | null,
-  configOptions?: LeadCMSConfigOptions
-): any | null {
-  return loadContentConfig('layout', locale, userUid, configOptions);
-}
-
-/**
  * Load configuration with detailed error information for debugging
  * Unlike loadContentConfig, this throws descriptive errors instead of returning null
  * @param configName - Name of the config file
  * @param locale - Locale code (optional, uses default language from config if not provided)
  * @param userUid - Optional user UID for draft content
- * @param configOptions - Optional LeadCMS configuration options
  * @returns Parsed config object (never returns null)
  * @throws {Error} With detailed information about missing files including configName, locale, and expected path
  */
 export function loadContentConfigStrict<T>(
   configName: string,
   locale?: string,
-  userUid?: string | null,
-  configOptions?: LeadCMSConfigOptions
+  userUid?: string | null
 ): T {
-  const config = getConfigWithDefaults(configOptions);
-  const actualLocale = locale || config.defaultLanguage || DEFAULT_LANGUAGE;
+  const config = getLeadCMSConfig();
+  const actualLocale = locale || config.defaultLanguage;
   const contentDir = config.contentDir;
+
+  if (!actualLocale) {
+    throw new Error('[LeadCMS] No default language configured. Please set up your LeadCMS configuration with a defaultLanguage.');
+  }
 
   if (!contentDir) {
     throw new Error('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');

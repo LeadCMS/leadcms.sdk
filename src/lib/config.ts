@@ -7,27 +7,20 @@ export interface LeadCMSConfig {
   /** LeadCMS API key */
   apiKey: string;
   /** Default language for content */
-  defaultLanguage?: string;
+  defaultLanguage: string;
   /** Content directory path (relative to project root) */
-  contentDir?: string;
+  contentDir: string;
   /** Media directory path (relative to project root) */
-  mediaDir?: string;
+  mediaDir: string;
   /** Enable draft content support */
-  enableDrafts?: boolean;
+  enableDrafts: boolean;
 }
 
-export interface LeadCMSConfigOptions extends Partial<LeadCMSConfig> {
-  /** Custom config file path */
-  configPath?: string;
-  /** Working directory for resolving paths */
-  cwd?: string;
-}
-
-let globalConfig: Partial<LeadCMSConfig> | null = null;
+let globalConfig: LeadCMSConfig | null = null;
 
 // Configuration cache to avoid repeated file reads
 interface ConfigCache {
-  config: Partial<LeadCMSConfig>;
+  config: LeadCMSConfig;
   timestamp: number;
   filePath: string;
 }
@@ -55,11 +48,11 @@ const DEFAULT_CONFIG: Partial<LeadCMSConfig> = {
  * 3. Environment variables
  * 4. Default values
  */
-export function loadConfig(options: LeadCMSConfigOptions = {}): LeadCMSConfig {
-  const cwd = options.cwd || process.cwd();
+export function loadConfig(): LeadCMSConfig {
+  const cwd = process.cwd();
 
   // 1. Try to load from config file
-  const configFromFile = loadConfigFile(options.configPath, cwd);
+  const configFromFile = loadConfigFile(cwd);
 
   // 2. Load from environment variables
   const configFromEnv = loadConfigFromEnv();
@@ -71,7 +64,6 @@ export function loadConfig(options: LeadCMSConfigOptions = {}): LeadCMSConfig {
     ...configFromFile,     // Config file settings
     ...configFromEnv,      // Environment variables override config file
     ...globalConfig,       // Programmatic config takes precedence
-    ...options,           // Options passed to this function take highest precedence
   };
 
   // Remove undefined values and ensure required fields
@@ -91,7 +83,7 @@ export function loadConfig(options: LeadCMSConfigOptions = {}): LeadCMSConfig {
 /**
  * Set configuration programmatically
  */
-export function configure(config: Partial<LeadCMSConfig>): void {
+export function configure(config: LeadCMSConfig): void {
   globalConfig = { ...globalConfig, ...config };
 }
 
@@ -106,16 +98,15 @@ export function resetConfig(): void {
 /**
  * Get current configuration
  */
-export function getConfig(options?: LeadCMSConfigOptions): LeadCMSConfig {
-  return loadConfig(options);
+export function getConfig(): LeadCMSConfig {
+  return loadConfig();
 }
 
 /**
  * Load configuration from file with caching
  */
-function loadConfigFile(configPath?: string, cwd: string = process.cwd()): Partial<LeadCMSConfig> {
+function loadConfigFile(cwd: string = process.cwd()): Partial<LeadCMSConfig> {
   const possiblePaths = [
-    configPath,
     path.join(cwd, "leadcms.config.js"),
     path.join(cwd, "leadcms.config.mjs"),
     path.join(cwd, "leadcms.config.json"),
@@ -138,7 +129,7 @@ function loadConfigFile(configPath?: string, cwd: string = process.cwd()): Parti
       }
 
       const ext = path.extname(configFilePath);
-      let config: Partial<LeadCMSConfig>;
+      let config: LeadCMSConfig;
 
       if (ext === ".json" || configFilePath.endsWith(".leadcmsrc")) {
         // JSON config
