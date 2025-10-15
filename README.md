@@ -48,9 +48,29 @@ npm install -g @leadcms/sdk
 
 LeadCMS SDK supports multiple configuration methods in order of priority:
 
-### 1. Configuration File (Recommended)
+### 1. Environment Variables (Recommended for API credentials)
 
-Create a `leadcms.config.json` file in your project root:
+For security reasons, it's best to keep sensitive credentials as environment variables:
+
+```bash
+# Required - keep these as environment variables for security
+LEADCMS_URL=your-leadcms-instance-url
+LEADCMS_API_KEY=your-api-key
+
+# Optional - can also be set via environment variables
+LEADCMS_DEFAULT_LANGUAGE=en
+LEADCMS_CONTENT_DIR=.leadcms/content
+LEADCMS_MEDIA_DIR=public/media
+LEADCMS_ENABLE_DRAFTS=true
+
+# Next.js users can also use:
+NEXT_PUBLIC_LEADCMS_URL=your-leadcms-instance-url
+NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE=en
+```
+
+### 2. Configuration File (For project-specific settings)
+
+Create a `leadcms.config.json` file **only if you need to override default settings** like `contentDir`, `mediaDir`, or `defaultLanguage`:
 
 ```bash
 # Initialize configuration file
@@ -59,8 +79,6 @@ npx leadcms init
 
 ```json
 {
-  "url": "https://your-leadcms-instance.com",
-  "apiKey": "your-api-key-here",
   "defaultLanguage": "en",
   "contentDir": ".leadcms/content",
   "mediaDir": "public/media",
@@ -68,9 +86,11 @@ npx leadcms init
 }
 ```
 
-> **Note:** Content types are automatically detected from your LeadCMS API - no need to configure them manually!
+> **Security Note:** Avoid putting `url` and `apiKey` in config files. Environment variables are safer and work better with deployment platforms.
 
-### 2. Programmatic Configuration
+### 3. Programmatic Configuration
+
+For advanced use cases, you can configure the SDK programmatically:
 
 ```typescript
 import { configure } from '@leadcms/sdk';
@@ -78,26 +98,23 @@ import { configure } from '@leadcms/sdk';
 configure({
   url: 'https://your-leadcms-instance.com',
   apiKey: 'your-api-key',
-  defaultLanguage: 'en'
+  defaultLanguage: 'en',
+  contentDir: '.leadcms/content',
+  mediaDir: 'public/media',
+  enableDrafts: false
 });
 ```
 
-### 3. Environment Variables (Fallback)
+> **Best Practice:** Use environment variables for `url` and `apiKey`, and programmatic configuration only for project-specific overrides.
 
-```bash
-# Required
-LEADCMS_URL=your-leadcms-instance-url
-LEADCMS_API_KEY=your-api-key
+### Configuration Options
 
-# Optional
-LEADCMS_DEFAULT_LANGUAGE=en
-LEADCMS_CONTENT_DIR=.leadcms/content
-LEADCMS_MEDIA_DIR=public/media
-
-# Next.js users can also use:
-NEXT_PUBLIC_LEADCMS_URL=your-leadcms-instance-url
-NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE=en
-```
+- `url` - Your LeadCMS instance URL (**required**, best as env var)
+- `apiKey` - Your LeadCMS API key (**required**, best as env var)
+- `defaultLanguage` - Default language code (default: "en")
+- `contentDir` - Directory for downloaded content (default: ".leadcms/content")
+- `mediaDir` - Directory for media files (default: "public/media")
+- `enableDrafts` - Enable draft content support (default: false)
 
 ## CLI Usage
 
@@ -128,97 +145,17 @@ npx leadcms watch
 npx leadcms generate-env
 ```
 
-## Core Functions
 
-```typescript
-import {
-  getCMSContentBySlugForLocale,
-  getAllContentSlugsForLocale,
-  getAllContentRoutes,
-  getAvailableLanguages,
-  configure
-} from '@leadcms/sdk';
-
-// Option 1: Use configuration file (recommended)
-// Content directory from config: .leadcms/content
-const content = getCMSContentBySlugForLocale('about-us', undefined, 'en');
-
-// Option 2: Programmatic configuration
-configure({
-  url: 'https://your-instance.com',
-  apiKey: 'your-key',
-  contentDir: '.leadcms/content'
-});
-
-// Option 3: Specify content directory explicitly
-const content = getCMSContentBySlugForLocale('about-us', '.leadcms/content', 'en');
-
-// Get all content slugs for a locale
-const slugs = getAllContentSlugsForLocale('.leadcms/content', 'en');
-
-// Get all routes (framework-agnostic)
-const routes = getAllContentRoutes('.leadcms/content');
-// Returns: [{ locale: 'en', slug: 'about-us', path: '/about-us', ... }]
-
-// Get available languages (uses configured contentDir if not specified)
-const languages = getAvailableLanguages();
-
-// Get content with draft support
-const draftContent = getCMSContentBySlugForLocaleWithDraftSupport(
-  'about-us',
-  '.leadcms/content',
-  'en',
-  'user-uuid-for-drafts'
-);
-
-// Load configuration objects
-const headerConfig = getHeaderConfig('.leadcms/content', 'en');
-const footerConfig = getFooterConfig('.leadcms/content', 'en');
-
-// Advanced configuration loading with draft support
-import {
-  loadConfigWithDraftSupport,
-  loadContentConfig,
-  getHeaderConfigAuto,
-  getFooterConfigAuto
-} from '@leadcms/sdk';
-
-// Generic config loading with explicit paths
-const customConfig = loadConfigWithDraftSupport(
-  '.leadcms/content',
-  'en',
-  'navigation',
-  'user-uuid-for-drafts'
-);
-
-// Convenience functions using configured contentDir
-const headerAuto = getHeaderConfigAuto('en', 'user-uuid-for-drafts');
-const footerAuto = getFooterConfigAuto(); // Uses default language
-
-// Generic config loading with auto contentDir resolution
-const menuConfig = loadContentConfig('menu', 'en', 'user-uuid-for-drafts');
-
-// Strict config loading with detailed error information (throws on missing files)
-try {
-  const requiredConfig = loadContentConfigStrict('layout', 'en');
-} catch (error) {
-  console.log('Missing config:', error.configName);
-  console.log('Expected locale:', error.locale);
-  console.log('Expected path:', error.message);
-}
-```
 
 ## Framework Integration
 
 The SDK provides framework-agnostic data access. Most frameworks use it as a **development dependency** for build-time static generation:
 
 ```typescript
-// Next.js App Router (Build-time only - devDependency)
-import { getAllContentRoutes, getCMSContentBySlugForLocale } from '@leadcms/sdk';
-
+// Next.js Static Generation (Build-time only - devDependency)
 export function generateStaticParams() {
   // This runs at BUILD TIME, not runtime
-  const routes = getAllContentRoutes('.leadcms/content');
+  const routes = getAllContentRoutes();
   return routes.map(route => ({
     slug: route.slugParts,
     ...(route.isDefaultLocale ? {} : { locale: route.locale })
@@ -228,7 +165,7 @@ export function generateStaticParams() {
 // Astro Static Generation (Build-time only - devDependency)
 export function getStaticPaths() {
   // This runs at BUILD TIME, not runtime
-  const routes = getAllContentRoutes('.leadcms/content');
+  const routes = getAllContentRoutes();
   return routes.map(route => ({
     params: { slug: route.slug },
     props: { locale: route.locale, path: route.path }
@@ -238,7 +175,7 @@ export function getStaticPaths() {
 // Gatsby Static Generation (Build-time only - devDependency)
 exports.createPages = async ({ actions }) => {
   const { createPage } = actions;
-  const routes = getAllContentRoutes('.leadcms/content');
+  const routes = getAllContentRoutes();
 
   routes.forEach(route => {
     createPage({
@@ -256,16 +193,75 @@ import { getCMSContentBySlugForLocale } from '@leadcms/sdk';
 
 export async function GET(request) {
   // This runs at REQUEST TIME, needs production dependency
-  const content = getCMSContentBySlugForLocale('about', '.leadcms/content', 'en');
+  const content = getCMSContentBySlugForLocale('about', 'en');
   return Response.json(content);
 }
 
 // Express.js Server (Runtime)
 app.get('/api/content/:slug', (req, res) => {
   // This runs at REQUEST TIME, needs production dependency
-  const content = getCMSContentBySlugForLocale(req.params.slug, '.leadcms/content', 'en');
+  const content = getCMSContentBySlugForLocale(req.params.slug, 'en');
   res.json(content);
 });
+```
+
+## API Reference
+
+### Core Functions
+
+```typescript
+import {
+  getCMSContentBySlugForLocale,
+  getAllContentSlugsForLocale,
+  getAllContentRoutes,
+  getAvailableLanguages,
+  configure
+} from '@leadcms/sdk';
+
+// Get content by slug and locale
+const content = getCMSContentBySlugForLocale('about-us', 'en');
+
+// Get all content slugs for a locale
+const slugs = getAllContentSlugsForLocale('en');
+
+// Get all routes (framework-agnostic)
+const routes = getAllContentRoutes();
+// Returns: [{ locale: 'en', slug: 'about-us', path: '/about-us', ... }]
+
+// Get available languages (uses configured contentDir)
+const languages = getAvailableLanguages();
+
+// Get content with draft support
+const draftContent = getCMSContentBySlugForLocaleWithDraftSupport(
+  'about-us',
+  'en',
+  'user-uuid-for-drafts'
+);
+
+// Load configuration objects (header, footer, etc.)
+const headerConfig = getHeaderConfig('en');
+const footerConfig = getFooterConfig('en');
+```
+
+### Advanced Configuration Loading
+
+```typescript
+import {
+  loadContentConfig,
+  loadContentConfigStrict
+} from '@leadcms/sdk';
+
+// Generic config loading with auto contentDir resolution
+const menuConfig = loadContentConfig('menu', 'en', 'user-uuid-for-drafts');
+
+// Strict config loading with detailed error information (throws on missing files)
+try {
+  const requiredConfig = loadContentConfigStrict('layout', 'en');
+} catch (error) {
+  console.log('Missing config:', error.configName);
+  console.log('Expected locale:', error.locale);
+  console.log('Expected path:', error.message);
+}
 ```
 
 ## Docker Deployment
@@ -410,7 +406,40 @@ try {
 
 ## Development
 
+For SDK development and contributions:
+
 ```bash
+# Clone and setup
+git clone https://github.com/LeadCMS/leadcms.sdk.git
+cd leadcms-sdk
+npm install
+
+# Development workflow
 npm run build    # Build the SDK
 npm run dev      # Watch mode for development
+npm run test     # Run tests
+npm run clean    # Clean build artifacts
+
+# Local testing with npm link
+npm link
+cd ../your-test-project
+npm link @leadcms/sdk
 ```
+
+### Debug Mode
+
+Enable detailed logging during development:
+
+```bash
+LEADCMS_DEBUG=true npm run build
+```
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests: `npm run test`
+5. Submit a pull request
+
+For detailed development setup, see [DEVELOPMENT.md](./DEVELOPMENT.md).

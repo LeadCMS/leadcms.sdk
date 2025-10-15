@@ -244,16 +244,10 @@ function isValidUrl(url: string): boolean {
  * Generate a sample configuration file
  */
 export function generateConfigFile(filePath: string = "leadcms.config.json"): string {
-  const sampleConfig: LeadCMSConfig = {
-    url: "https://your-leadcms-instance.com",
-    apiKey: "your-api-key-here",
-    defaultLanguage: "en",
-    contentDir: ".leadcms/content",
-    mediaDir: "public/media",
-    enableDrafts: false
-  };
-
-  const content = JSON.stringify(sampleConfig, null, 2);
-  fs.writeFileSync(filePath, content, "utf-8");
+  // Use the sample config file as the source of truth
+  const sampleConfigPath = path.join(__dirname, '../../leadcms.config.json.sample');
+  const sampleConfig = fs.readFileSync(sampleConfigPath, 'utf-8');
+  
+  fs.writeFileSync(filePath, sampleConfig, "utf-8");
   return filePath;
 }

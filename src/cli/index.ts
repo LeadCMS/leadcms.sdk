@@ -47,12 +47,12 @@ Usage:
   leadcms generate-env   - Generate environment variables file
 
 Configuration:
-  Create a leadcms.config.json file in your project root, or set environment variables:
+  Set required environment variables (recommended for security):
+    LEADCMS_URL=your-leadcms-instance-url
+    LEADCMS_API_KEY=your-api-key
 
-  Config file example:
+  Optional: Create leadcms.config.json for project-specific settings:
   {
-    "url": "https://your-leadcms-instance.com",
-    "apiKey": "your-api-key",
     "defaultLanguage": "en",
     "contentDir": ".leadcms/content",
     "mediaDir": "public/media"
@@ -71,19 +71,21 @@ Configuration:
 }
 
 function initializeConfig() {
-  import('fs').then(fs => {
+  Promise.all([import('fs'), import('readline')]).then(([fs, readline]) => {
     const configPath = 'leadcms.config.json';
     if (fs.existsSync(configPath)) {
-      console.log('❓ leadcms.config.json already exists. Overwrite? (y/N)');
-      process.stdin.setRawMode(true);
-      process.stdin.resume();
-      process.stdin.on('data', (key) => {
-        if (key.toString().toLowerCase() === 'y') {
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+
+      rl.question('❓ leadcms.config.json already exists. Overwrite? (y/N): ', (answer) => {
+        if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
           createConfigFile(configPath);
         } else {
-          console.log('\\n✅ Configuration initialization cancelled.');
+          console.log('✅ Configuration initialization cancelled.');
         }
-        process.exit(0);
+        rl.close();
       });
     } else {
       createConfigFile(configPath);
@@ -93,19 +95,14 @@ function initializeConfig() {
 
 function createConfigFile(configPath: string) {
   import('fs').then(fs => {
-    const sampleConfig = {
-      "url": "https://your-leadcms-instance.com",
-      "apiKey": "your-api-key-here",
-      "defaultLanguage": "en",
-      "contentDir": ".leadcms/content",
-      "mediaDir": "public/media",
-      "enableDrafts": false
-    };
+    // Use the sample config file as the source of truth
+    const sampleConfigPath = path.join(__dirname, '../../leadcms.config.json.sample');
+    const sampleConfig = fs.readFileSync(sampleConfigPath, 'utf-8');
 
-    const content = JSON.stringify(sampleConfig, null, 2);
-    fs.writeFileSync(configPath, content, 'utf-8');
+    fs.writeFileSync(configPath, sampleConfig, 'utf-8');
     console.log(`✅ Created ${configPath}`);
-    console.log('📝 Please edit the configuration file with your LeadCMS details.');
+    console.log('📝 Set LEADCMS_URL and LEADCMS_API_KEY as environment variables.');
+    console.log('🔧 Customize contentDir, mediaDir, or other settings in the config file.');
     console.log('ℹ️  Content types are automatically detected from your LeadCMS API.');
   });
 }

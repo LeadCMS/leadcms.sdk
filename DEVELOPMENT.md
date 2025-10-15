@@ -111,7 +111,10 @@ const { getCMSContentBySlugForLocale, configure } = require('@leadcms/sdk');
 configure({
   url: 'https://test.com',
   apiKey: 'test-key',
-  contentDir: '.leadcms/content'
+  defaultLanguage: 'en',
+  contentDir: '.leadcms/content',
+  mediaDir: 'public/media',
+  enableDrafts: false
 });
 
 console.log('SDK configured successfully!');
