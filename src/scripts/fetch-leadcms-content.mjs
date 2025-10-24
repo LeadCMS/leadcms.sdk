@@ -357,3 +357,11 @@ async function main() {
 
 // Export the main function so it can be imported by other modules
 export { main as fetchLeadCMSContent }
+
+// If this script is run directly (not imported), execute the main function
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((error) => {
+    console.error('Error running LeadCMS fetch:', error.message);
+    process.exit(1);
+  });
+}
