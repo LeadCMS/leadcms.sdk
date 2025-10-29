@@ -95,7 +95,7 @@ leadcms docker
 leadcms --help
 
 # Test configuration scenarios
-LEADCMS_URL=test leadcms fetch  # Test env vars
+LEADCMS_URL=test leadcms pull  # Test env vars (fetch also works as alias)
 leadcms init  # Test config file creation
 ```
 

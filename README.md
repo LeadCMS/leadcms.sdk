@@ -198,10 +198,12 @@ npx leadcms docker
 # Creates Docker files for production and preview deployments
 ```
 
-### Fetch content from LeadCMS
+### Pull content from LeadCMS
 ```bash
-npx leadcms fetch
+npx leadcms pull
 ```
+
+> **Note:** `npx leadcms fetch` is still supported as an alias for backward compatibility.
 
 ### Watch for real-time updates
 ```bash

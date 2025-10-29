@@ -18,7 +18,8 @@ function runScript(scriptName: string) {
 }
 
 switch (command) {
-  case 'fetch':
+  case 'pull':
+  case 'fetch': // Alias for backward compatibility
     runScript('fetch-leadcms-content.mjs');
     break;
   case 'watch':
@@ -42,7 +43,8 @@ LeadCMS SDK CLI
 Usage:
   leadcms init           - Initialize LeadCMS configuration
   leadcms docker         - Generate Docker deployment templates
-  leadcms fetch          - Fetch content from LeadCMS
+  leadcms pull           - Pull content from LeadCMS
+  leadcms fetch          - Alias for 'pull' (backward compatibility)
   leadcms watch          - Watch for real-time updates
   leadcms generate-env   - Generate environment variables file
 

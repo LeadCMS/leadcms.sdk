@@ -23,6 +23,7 @@
     "test:coverage": "jest --coverage",
     "test:cli": "npm run build && node dist/cli/index.js --help > /dev/null && echo '✅ CLI tests passed'",
     "prepublishOnly": "npm run build",
+    "leadcms:pull": "node src/scripts/fetch-leadcms-content.mjs",
     "leadcms:fetch": "node src/scripts/fetch-leadcms-content.mjs",
     "leadcms:watch": "node src/scripts/sse-watcher.mjs",
     "leadcms:generate-env": "node src/scripts/generate-env-js.mjs"
