@@ -42,7 +42,7 @@ jobs:
 
       - name: Archive coverage artifacts
         if: matrix.node-version == '20'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v5
         with:
           name: coverage-report
           path: |
