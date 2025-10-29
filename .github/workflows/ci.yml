@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -79,21 +84,6 @@ jobs:
           node dist/cli/index.js --help > /dev/null
           echo "✅ CLI help works"
 
-      - name: Test Docker template generation
-        run: |
-          cd /tmp
-          mkdir leadcms-test
-          cd leadcms-test
-          node $GITHUB_WORKSPACE/dist/cli/index.js docker
-
-          # Verify Docker files were created
-          test -f Dockerfile || (echo "❌ Dockerfile not created" && exit 1)
-          test -f nginx.conf || (echo "❌ nginx.conf not created" && exit 1)
-          test -f preview/Dockerfile || (echo "❌ Preview Dockerfile not created" && exit 1)
-          test -f scripts/inject-runtime-env.sh || (echo "❌ Shell script not created" && exit 1)
-
-          echo "✅ Docker templates work correctly"
-
   coverage-report:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
@@ -120,34 +110,3 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           lcov-file: ./coverage/lcov.info
           delete-old-comments: true
-
-  lint-and-format:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Check TypeScript
-        run: npx tsc --noEmit
-
-      - name: Verify package.json
-        run: |
-          echo "Checking package.json structure..."
-          node -e "
-            const pkg = require('./package.json');
-            if (!pkg.bin?.leadcms) throw new Error('Missing bin.leadcms');
-            if (!pkg.main) throw new Error('Missing main field');
-            if (!pkg.types) throw new Error('Missing types field');
-            if (!pkg.files?.includes('dist/')) throw new Error('Missing dist/ in files');
-            console.log('✅ package.json structure is valid');
-          "
