@@ -31,7 +31,7 @@ switch (command) {
     runScript('push-leadcms-content.js', commandArgs);
     break;
   case 'status':
-    runScript('status-leadcms-content.js');
+    runScript('status-leadcms-content.js', commandArgs);
     break;
   case 'watch':
     runScript('sse-watcher.js');
@@ -58,7 +58,11 @@ Usage:
   leadcms push [options] - Push local content to LeadCMS
     --force              - Override remote changes (skip conflict check)
     --bulk               - Use bulk import for new content (faster)
-  leadcms status         - Show sync status between local and remote content
+    --id <content-id>    - Target specific content by ID
+    --slug <slug>        - Target specific content by slug
+  leadcms status [options] - Show sync status between local and remote content
+    --id <content-id>    - Show detailed status for specific content by ID
+    --slug <slug>        - Show detailed status for specific content by slug
   leadcms fetch          - Alias for 'pull' (backward compatibility)
   leadcms watch          - Watch for real-time updates
   leadcms generate-env   - Generate environment variables file

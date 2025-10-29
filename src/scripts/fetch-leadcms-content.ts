@@ -5,7 +5,6 @@ import axios, { AxiosResponse } from "axios";
 import {
   extractMediaUrlsFromContent,
   downloadMediaFileDirect,
-  saveContentFile,
   leadCMSUrl,
   leadCMSApiKey,
   defaultLanguage,
@@ -14,6 +13,7 @@ import {
   fetchContentTypes,
   ContentItem,
 } from "./leadcms-helpers.js";
+import { saveContentFile } from "../lib/content-transformation.js";
 
 // Type definitions
 interface SyncResponse {

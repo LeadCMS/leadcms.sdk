@@ -455,4 +455,393 @@ describe('LeadCMS SDK Core Functionality', () => {
       expect(isContentDraft(content)).toBe(false); // Should be published
     });
   });
+
+  describe('Content Transformation and Comparison', () => {
+    // Import necessary dependencies for transformation tests
+    const fs = require('fs/promises');
+    const path = require('path');
+    const os = require('os');
+
+    const tempDir = path.join(os.tmpdir(), 'leadcms-transform-test-' + Date.now());
+
+    beforeEach(async () => {
+      await fs.mkdir(tempDir, { recursive: true });
+    });
+
+    afterEach(async () => {
+      try {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+    });
+
+    // Import shared transformation logic
+    const { transformRemoteToLocalFormat, transformRemoteForComparison } = require('../src/lib/content-transformation');
+
+    it('should preserve createdAt and publishedAt in content transformation', async () => {
+      // Create a local file that matches real-world structure
+      const localFilePath = path.join(tempDir, 'test-content.mdx');
+      const localContent = `---
+id: 51
+createdAt: '2025-09-10T09:32:54.223364Z'
+title: Test Content
+description: A test article
+slug: test-content
+type: doc
+author: Test Author
+language: en
+publishedAt: '2025-09-09T18:30:00Z'
+---
+
+# Test Content
+
+This is test content.`;
+
+      await fs.writeFile(localFilePath, localContent);
+
+      // Remote content with the same timestamp fields
+      const remoteContent = {
+        id: 51,
+        createdAt: '2025-09-10T09:32:54.223364Z',
+        title: 'Test Content',
+        description: 'A test article',
+        slug: 'test-content',
+        type: 'doc',
+        author: 'Test Author',
+        language: 'en',
+        publishedAt: '2025-09-09T18:30:00Z',
+        isLocal: false,
+        body: `# Test Content
+
+This is test content.`
+      };
+
+      const typeMap = { doc: 'MDX' as const };
+
+      // Transform remote content
+      const transformedRemote = await transformRemoteToLocalFormat(remoteContent, typeMap);
+      const localFileContent = await fs.readFile(localFilePath, 'utf-8');
+
+      // Should be identical after transformation
+      expect(localFileContent.trim()).toBe(transformedRemote.trim());
+
+      // Verify that timestamp fields are preserved
+      expect(transformedRemote).toContain('createdAt');
+      expect(transformedRemote).toContain('publishedAt');
+      expect(transformedRemote).toContain('2025-09-10T09:32:54.223364Z');
+      expect(transformedRemote).toContain('2025-09-09T18:30:00Z');
+    });
+
+    it('should detect legitimate updatedAt differences as changes', async () => {
+      // Local file without updatedAt
+      const localFilePath = path.join(tempDir, 'updated-content.mdx');
+      const localContent = `---
+id: 51
+createdAt: '2025-09-10T09:32:54.223364Z'
+title: Test Content
+publishedAt: '2025-09-09T18:30:00Z'
+---
+
+# Test Content`;
+
+      await fs.writeFile(localFilePath, localContent);
+
+      // Remote content with updatedAt (indicating changes)
+      const remoteContent = {
+        id: 51,
+        createdAt: '2025-09-10T09:32:54.223364Z',
+        updatedAt: '2025-10-29T10:00:00.000Z',
+        title: 'Test Content',
+        publishedAt: '2025-09-09T18:30:00Z',
+        isLocal: false,
+        body: '# Test Content'
+      };
+
+      const typeMap = { doc: 'MDX' as const };
+      const transformedRemote = await transformRemoteToLocalFormat(remoteContent, typeMap);
+      const localFileContent = await fs.readFile(localFilePath, 'utf-8');
+
+      // Should detect difference due to updatedAt
+      const hasChanges = localFileContent.trim() !== transformedRemote.trim();
+      expect(hasChanges).toBe(true);
+      expect(transformedRemote).toContain('updatedAt');
+      expect(localFileContent).not.toContain('updatedAt');
+    });
+
+    it('should exclude only truly internal fields from transformation', async () => {
+      const remoteContent = {
+        id: 51,
+        title: 'Test',
+        createdAt: '2025-09-10T09:32:54.223364Z',
+        updatedAt: '2025-10-01T10:00:00.000Z',
+        publishedAt: '2025-09-09T18:30:00Z',
+        isLocal: false, // Should be excluded (truly internal)
+        body: '# Test Content', // Should be excluded (content, not metadata)
+        customField: 'user value', // Should be included
+        type: 'doc'
+      };
+
+      const typeMap = { doc: 'MDX' as const };
+      const result = await transformRemoteToLocalFormat(remoteContent, typeMap);
+
+      // Should include user content fields and timestamps
+      expect(result).toContain('createdAt');
+      expect(result).toContain('updatedAt');
+      expect(result).toContain('publishedAt');
+      expect(result).toContain('customField');
+      expect(result).toContain('title');
+
+      // Should exclude truly internal fields
+      expect(result).not.toContain('isLocal: false');
+      // Body content should be in the content section, not frontmatter
+      expect(result).toContain('# Test Content');
+    });
+
+    it('should handle content comparison edge cases', async () => {
+      // Test with identical content except for whitespace normalization
+      const localFilePath = path.join(tempDir, 'whitespace-test.mdx');
+      const localContent = `---
+id: 51
+title: Test
+---
+
+# Test Content
+
+Some content here.`;
+
+      await fs.writeFile(localFilePath, localContent);
+
+      const remoteContent = {
+        id: 51,
+        title: 'Test',
+        isLocal: false,
+        body: `# Test Content\n\nSome content here.` // Different whitespace
+      };
+
+      const transformedRemote = await transformRemoteToLocalFormat(remoteContent, { doc: 'MDX' as const });
+      const localFileContent = await fs.readFile(localFilePath, 'utf-8');
+
+      // Should normalize whitespace differences
+      const normalizeContent = (content: string): string => {
+        return content
+          .trim()
+          .replace(/\r\n/g, '\n')
+          .replace(/\s+\n/g, '\n')
+          .replace(/\n\n+/g, '\n\n');
+      };
+
+      const normalizedLocal = normalizeContent(localFileContent);
+      const normalizedRemote = normalizeContent(transformedRemote);
+
+      expect(normalizedLocal).toBe(normalizedRemote);
+    });
+
+    it('should reproduce the false positive changes issue from real-world scenario', async () => {
+      // Create a real-world local file with timestamps (like the user's actual files)
+      const localFilePath = path.join(tempDir, 'real-world-content.mdx');
+      const localContent = `---
+id: 25
+createdAt: '2025-09-10T09:32:54.223364Z'
+title: Contact Us
+description: Get in touch with our team
+slug: contact-us
+type: contact
+author: Test Author
+language: da
+publishedAt: '2025-09-09T18:30:00Z'
+---
+
+# Contact Us
+
+Get in touch with our team for any questions or support.`;
+
+      await fs.writeFile(localFilePath, localContent);
+
+      // Remote content with exactly the same data (should result in no changes)
+      const remoteContent = {
+        id: 25,
+        createdAt: '2025-09-10T09:32:54.223364Z',
+        updatedAt: '2025-10-15T14:22:33.123456Z', // This field might not be in local
+        title: 'Contact Us',
+        description: 'Get in touch with our team',
+        slug: 'contact-us',
+        type: 'contact',
+        author: 'Test Author',
+        language: 'da',
+        publishedAt: '2025-09-09T18:30:00Z',
+        isLocal: false,
+        body: `# Contact Us
+
+Get in touch with our team for any questions or support.`
+      };
+
+      const typeMap = { contact: 'MDX' as const };
+
+      // OLD METHOD (causing false positives): Transform without considering local fields
+      const transformedRemoteOld = await transformRemoteToLocalFormat(remoteContent, typeMap);
+      const localFileContent = await fs.readFile(localFilePath, 'utf-8');
+
+      const hasChangesOld = localFileContent.trim() !== transformedRemoteOld.trim();
+
+      // NEW METHOD (fixed): Transform only including fields present in local file
+      const transformedRemoteNew = await transformRemoteForComparison(remoteContent, localFileContent, typeMap);
+
+      const hasChangesNew = localFileContent.trim() !== transformedRemoteNew.trim();
+
+      // Verify the old method shows false positive and new method fixes it
+      expect(hasChangesOld).toBe(true); // Old method shows false positive
+      expect(hasChangesNew).toBe(false); // New method correctly shows no changes
+
+      expect(transformedRemoteOld).toContain('updatedAt'); // Old method includes updatedAt
+      expect(transformedRemoteNew).not.toContain('updatedAt'); // New method excludes it (since not in local)
+      expect(localFileContent).not.toContain('updatedAt'); // Local doesn't have updatedAt
+    });
+
+    it('should not include null values in transformed frontmatter', async () => {
+      // Import the transformation function
+      const { transformRemoteToLocalFormat } = await import('../src/lib/content-transformation.js');
+
+      // Create remote content with null values that should be excluded
+      const remoteContent = {
+        id: 56,
+        slug: 'blog',
+        type: 'blog-index',
+        title: 'Test Blog',
+        description: 'Test description',
+        coverImageUrl: '',
+        coverImageAlt: '',
+        author: 'Test Author',
+        language: 'en',
+        category: 'Blog',
+        tags: [],
+        allowComments: false,
+        publishedAt: '2025-10-23T18:30:00Z',
+        createdAt: '2025-10-24T12:38:00.088466Z',
+        updatedAt: '2025-10-24T12:38:25.125472Z',
+        // These are null values that should NOT appear in the output
+        comments: null,
+        translations: null,
+        translationKey: null,
+        source: null,
+        body: 'Test content'
+      };
+
+      const typeMap = { 'blog-index': 'MDX' as const };
+      const transformed = await transformRemoteToLocalFormat(remoteContent, typeMap);
+
+      // Verify that null values are NOT included in the output
+      expect(transformed).not.toContain('comments: null');
+      expect(transformed).not.toContain('translations: null');
+      expect(transformed).not.toContain('translationKey: null');
+      expect(transformed).not.toContain('source: null');
+
+      // Verify that non-null values ARE included
+      expect(transformed).toContain('title: Test Blog');
+      expect(transformed).toContain('author: Test Author');
+      expect(transformed).toContain('allowComments: false'); // false is not null
+      expect(transformed).toContain('tags: []'); // empty array is not null
+      expect(transformed).toContain("coverImageUrl: ''"); // empty string is not null
+    });
+
+    it('should transform API media URLs to local media URLs in frontmatter and body content', async () => {
+      // Import the transformation function
+      const { transformRemoteToLocalFormat } = await import('../src/lib/content-transformation.js');
+
+      // Create remote content with API media URLs that should be transformed
+      const remoteContent = {
+        id: 58,
+        slug: 'blog/building-sites-with-leadcms-sdk',
+        type: 'blog-article',
+        title: 'Building a Modern Site with LeadCMS SDK – A Developer\'s Guide',
+        description: 'Master the LeadCMS SDK to build blazing-fast static sites with Next.js.',
+        coverImageUrl: '/api/media/blog/building-sites-with-leadcms-sdk/leadcms-sdk.avif',
+        coverImageAlt: 'Building a Modern Site with LeadCMS SDK – A Developer\'s Guide',
+        author: 'LeadCMS Team',
+        language: 'en',
+        category: 'Development',
+        tags: ['LeadCMS SDK', 'Next.js CMS'],
+        allowComments: true,
+        featured: false,
+        createdAt: '2025-10-24T17:03:44.678452Z',
+        updatedAt: '2025-10-29T11:09:20.158347Z',
+        body: `# Building Modern Sites
+
+Article content with various media references:
+
+## Standard Markdown Images
+![Test Image](/api/media/images/test.jpg)
+![Hero Banner](/api/media/blog/hero-banner.webp "Hero Banner Alt Text")
+![Diagram](/api/media/diagrams/architecture.svg)
+
+## Links to Media Files
+Download the [PDF Guide](/api/media/docs/guide.pdf) or check out [video tutorial](/api/media/videos/tutorial.mp4).
+
+## Custom Components with Image Props
+<ImageGallery
+  images={[
+    "/api/media/gallery/image1.jpg",
+    "/api/media/gallery/image2.png"
+  ]}
+/>
+
+<HeroSection
+  backgroundImage="/api/media/backgrounds/hero.jpg"
+  image="/api/media/icons/logo.svg"
+  thumbnail="/api/media/thumbnails/preview.webp"
+/>
+
+<BlogCard
+  coverImage="/api/media/blog/covers/article1.jpg"
+  authorAvatar="/api/media/avatars/author.png"
+/>
+
+## Mixed Content
+Check this ![inline image](/api/media/inline/icon.svg) in text, and visit [our resources](/api/media/resources/package.zip).
+
+<CustomComponent
+  src="/api/media/components/example.jpg"
+  poster="/api/media/videos/poster.jpg"
+  data-background="/api/media/patterns/bg.png"
+/>`
+      };
+
+      const typeMap = { 'blog-article': 'MDX' as const };
+      const transformed = await transformRemoteToLocalFormat(remoteContent, typeMap);
+
+      // Verify that /api/media/ URLs are converted to /media/ URLs in frontmatter
+      expect(transformed).toContain('coverImageUrl: /media/blog/building-sites-with-leadcms-sdk/leadcms-sdk.avif');
+      expect(transformed).not.toContain('coverImageUrl: /api/media/');
+
+      // Verify that /api/media/ URLs are converted in the body content
+
+      // Standard Markdown images
+      expect(transformed).toContain('![Test Image](/media/images/test.jpg)');
+      expect(transformed).toContain('![Hero Banner](/media/blog/hero-banner.webp "Hero Banner Alt Text")');
+      expect(transformed).toContain('![Diagram](/media/diagrams/architecture.svg)');
+
+      // Links to media files
+      expect(transformed).toContain('[PDF Guide](/media/docs/guide.pdf)');
+      expect(transformed).toContain('[video tutorial](/media/videos/tutorial.mp4)');
+
+      // Custom components with image props
+      expect(transformed).toContain('"/media/gallery/image1.jpg"');
+      expect(transformed).toContain('"/media/gallery/image2.png"');
+      expect(transformed).toContain('backgroundImage="/media/backgrounds/hero.jpg"');
+      expect(transformed).toContain('image="/media/icons/logo.svg"');
+      expect(transformed).toContain('thumbnail="/media/thumbnails/preview.webp"');
+      expect(transformed).toContain('coverImage="/media/blog/covers/article1.jpg"');
+      expect(transformed).toContain('authorAvatar="/media/avatars/author.png"');
+
+      // Mixed content and custom attributes
+      expect(transformed).toContain('![inline image](/media/inline/icon.svg)');
+      expect(transformed).toContain('[our resources](/media/resources/package.zip)');
+      expect(transformed).toContain('src="/media/components/example.jpg"');
+      expect(transformed).toContain('poster="/media/videos/poster.jpg"');
+      expect(transformed).toContain('data-background="/media/patterns/bg.png"');
+
+      // Verify NO /api/media/ URLs remain anywhere
+      expect(transformed).not.toContain('/api/media/');
+    });
+  });
 });

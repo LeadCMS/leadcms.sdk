@@ -1,13 +1,15 @@
 import "dotenv/config";
+import fs from "fs/promises";
+import path from "path";
 import { EventSource } from "eventsource";
 import {
-  saveContentFile,
   leadCMSUrl,
   leadCMSApiKey,
   defaultLanguage,
   CONTENT_DIR,
+  fetchContentTypes,
 } from "./leadcms-helpers.js";
-import { fetchContentTypes } from "./leadcms-helpers.js";
+import { saveContentFile } from "../lib/content-transformation.js";
 import { fetchLeadCMSContent } from "./fetch-leadcms-content.js";
 
 // Type definitions

@@ -3,12 +3,19 @@ import fs from "fs/promises";
 import path from "path";
 import readline from "readline";
 import matter from "gray-matter";
+import * as Diff from "diff";
 import {
   defaultLanguage,
   CONTENT_DIR,
   ContentItem as BaseContentItem,
 } from "./leadcms-helpers.js";
 import { leadCMSDataService, ContentItem } from "../lib/data-service.js";
+import {
+  transformRemoteToLocalFormat,
+  transformRemoteForComparison,
+  hasContentDifferences,
+  type ContentTypeMap
+} from "../lib/content-transformation.js";
 
 // Extended interfaces for local operations
 interface LocalContentItem extends BaseContentItem {
@@ -43,6 +50,8 @@ interface PushOptions {
   statusOnly?: boolean;
   force?: boolean;
   bulk?: boolean;
+  targetId?: string;      // Target specific content by ID
+  targetSlug?: string;    // Target specific content by slug
 }
 
 interface ExecutionOptions {
@@ -207,81 +216,37 @@ async function fetchRemoteContent(): Promise<RemoteContentItem[]> {
   return allItems.map(item => ({ ...item, isLocal: false })) as RemoteContentItem[];
 }
 
+
+
 /**
- * Compare local and remote content to detect actual content changes
+ * Compare local and remote content by transforming remote to local format
  * Returns true if there are meaningful differences in content
+ * This new approach compares normalized file content directly instead of parsed objects
  */
-function hasActualContentChanges(local: LocalContentItem, remote: RemoteContentItem): boolean {
-  // Compare body content
-  const localBody = (local.body || '').trim();
-  const remoteBody = (remote.body || '').trim();
-  if (localBody !== remoteBody) {
+async function hasActualContentChanges(local: LocalContentItem, remote: RemoteContentItem, typeMap?: Record<string, string>): Promise<boolean> {
+  try {
+    // Read the local file content as-is
+    const localFileContent = await fs.readFile(local.filePath, 'utf-8');
+
+    // Transform remote content for comparison, only including fields that exist in local content
+    // This prevents false positives when remote has additional fields like updatedAt
+    const transformedRemoteContent = await transformRemoteForComparison(remote, localFileContent, typeMap as ContentTypeMap);
+
+    // Compare the raw file contents using shared normalization logic
+    const hasFileContentChanges = hasContentDifferences(localFileContent, transformedRemoteContent);
+
+    return hasFileContentChanges;
+  } catch (error: any) {
+    console.warn(`[COMPARE] Failed to compare content for ${local.slug}:`, error.message);
+    // Fallback to true to err on the side of showing changes
     return true;
   }
-
-  // Fields that should NOT be compared (system/internal fields)
-  const fieldsToExclude = new Set([
-    'id',
-    'createdAt',
-    'updatedAt',
-    'publishedAt', // This is managed by the CMS
-    'body',        // Already compared separately above
-    'filePath',    // Local-only field
-    'isLocal'      // Local-only field
-  ]);
-
-  // Helper function to compare two values
-  const compareValues = (localValue: any, remoteValue: any): boolean => {
-    // Handle undefined/null values consistently
-    const normalizedLocal = localValue === undefined ? null : localValue;
-    const normalizedRemote = remoteValue === undefined ? null : remoteValue;
-
-    // Handle different data types appropriately
-    if (Array.isArray(normalizedLocal) && Array.isArray(normalizedRemote)) {
-      // Compare arrays (like tags) - sort for consistent comparison
-      const localSorted = [...normalizedLocal].sort((a, b) => String(a).localeCompare(String(b)));
-      const remoteSorted = [...normalizedRemote].sort((a, b) => String(a).localeCompare(String(b)));
-      return JSON.stringify(localSorted) !== JSON.stringify(remoteSorted);
-    } else if (Array.isArray(normalizedLocal) || Array.isArray(normalizedRemote)) {
-      // One is array, other is not - they're different
-      return true;
-    } else if (typeof normalizedLocal === 'object' && typeof normalizedRemote === 'object' &&
-               normalizedLocal !== null && normalizedRemote !== null) {
-      // Compare objects (like seo metadata, nested structures)
-      return JSON.stringify(normalizedLocal) !== JSON.stringify(normalizedRemote);
-    } else {
-      // Compare primitive values (strings, numbers, booleans, null)
-      return normalizedLocal !== normalizedRemote;
-    }
-  };
-
-  // Get all unique fields from both local metadata and remote content
-  const allLocalFields = new Set(Object.keys(local.metadata));
-  const allRemoteFields = new Set(Object.keys(remote));
-  const allFields = new Set([...allLocalFields, ...allRemoteFields]);
-
-  // Compare each field that's not in the exclusion list
-  for (const field of allFields) {
-    if (fieldsToExclude.has(field)) {
-      continue; // Skip excluded fields
-    }
-
-    const localValue = local.metadata[field];
-    const remoteValue = remote[field];
-
-    if (compareValues(localValue, remoteValue)) {
-      return true;
-    }
-  }
-
-  // No differences found
-  return false;
 }
 
 /**
  * Match local content with remote content
  */
-function matchContent(localContent: LocalContentItem[], remoteContent: RemoteContentItem[]): ContentOperations {
+async function matchContent(localContent: LocalContentItem[], remoteContent: RemoteContentItem[], typeMap?: Record<string, string>): Promise<ContentOperations> {
 
   const operations: ContentOperations = {
     create: [],
@@ -373,7 +338,7 @@ function matchContent(localContent: LocalContentItem[], remoteContent: RemoteCon
         });
       } else {
         // Check if content actually changed by comparing all fields
-        const hasContentChanges = hasActualContentChanges(local, match);
+        const hasContentChanges = await hasActualContentChanges(local, match, typeMap);
 
         if (hasContentChanges) {
           // Regular update - content modified but slug and type same
@@ -452,16 +417,219 @@ async function createContentTypeInteractive(typeName: string): Promise<void> {
 }
 
 /**
+ * Filter content operations to only include specific content by ID or slug
+ */
+function filterContentOperations(operations: ContentOperations, targetId?: string, targetSlug?: string): ContentOperations {
+  if (!targetId && !targetSlug) {
+    return operations; // No filtering needed
+  }
+
+  const matchesTarget = (op: MatchOperation): boolean => {
+    if (targetId) {
+      // Check if local content has the target ID
+      if (op.local.metadata.id?.toString() === targetId) return true;
+      // Check if remote content has the target ID
+      if (op.remote?.id?.toString() === targetId) return true;
+    }
+
+    if (targetSlug) {
+      // Check if local content has the target slug
+      if (op.local.slug === targetSlug) return true;
+      // Check if remote content has the target slug
+      if (op.remote?.slug === targetSlug) return true;
+      // Check if this is a rename and the old slug matches
+      if (op.oldSlug === targetSlug) return true;
+    }
+
+    return false;
+  };
+
+  return {
+    create: operations.create.filter(matchesTarget),
+    update: operations.update.filter(matchesTarget),
+    rename: operations.rename.filter(matchesTarget),
+    typeChange: operations.typeChange.filter(matchesTarget),
+    conflict: operations.conflict.filter(matchesTarget)
+  };
+}
+
+/**
+ * Display detailed diff for a single content item
+ */
+async function displayDetailedDiff(operation: MatchOperation, operationType: string, typeMap?: Record<string, string>): Promise<void> {
+  const { local, remote } = operation;
+
+  console.log(`\n📄 Detailed Changes for: ${local.slug} [${local.locale}]`);
+  console.log(`   Operation: ${operationType}`);
+  console.log(`   Content Type: ${local.type}`);
+  if (remote?.id) {
+    console.log(`   Remote ID: ${remote.id}`);
+  }
+  console.log('');
+
+  // Compare metadata fields
+  console.log('📋 Metadata Changes:');
+
+  const excludedFields = new Set(['id', 'createdAt', 'updatedAt', 'publishedAt', 'body', 'filePath', 'isLocal']);
+  const allLocalFields = new Set(Object.keys(local.metadata));
+  const allRemoteFields = new Set(remote ? Object.keys(remote) : []);
+  const allFields = new Set([...allLocalFields, ...allRemoteFields]);
+
+  let hasMetadataChanges = false;
+
+  /**
+   * Format a value for display, with pretty-printing for objects and arrays
+   */
+  function formatValue(value: any): string {
+    if (value === null || value === undefined) {
+      return String(value);
+    }
+    if (typeof value === 'object') {
+      return JSON.stringify(value, null, 2).split('\n').map((line, index) =>
+        index === 0 ? line : `     ${line}`
+      ).join('\n');
+    }
+    return JSON.stringify(value);
+  }
+
+  for (const field of allFields) {
+    if (excludedFields.has(field)) continue;
+
+    const localValue = local.metadata[field];
+    const remoteValue = remote?.[field];
+
+    // Normalize values for comparison
+    const normalizedLocal = localValue === undefined ? null : localValue;
+    const normalizedRemote = remoteValue === undefined ? null : remoteValue;
+
+    if (JSON.stringify(normalizedLocal) !== JSON.stringify(normalizedRemote)) {
+      hasMetadataChanges = true;
+
+      if (normalizedRemote === null) {
+        console.log(`   + ${field}: ${formatValue(normalizedLocal)} (added)`);
+      } else if (normalizedLocal === null) {
+        console.log(`   - ${field}: ${formatValue(normalizedRemote)} (removed)`);
+      } else {
+        console.log(`   ~ ${field}: (changed)`);
+        console.log(`     - ${formatValue(normalizedRemote)}`);
+        console.log(`     + ${formatValue(normalizedLocal)}`);
+      }
+    }
+  }
+
+  if (!hasMetadataChanges && remote) {
+    console.log('   No metadata changes detected');
+  } else if (!remote) {
+    console.log('   New content - all metadata will be added');
+  }
+
+  // Compare content using the new transformation approach
+  console.log('\n📝 Content Changes:');
+
+  try {
+    // Read local file content as-is
+    const localFileContent = await fs.readFile(local.filePath, 'utf-8');
+
+    // Transform remote content to local format for comparison
+    const transformedRemoteContent = remote ? await transformRemoteToLocalFormat(remote, typeMap as ContentTypeMap) : '';
+
+    if (localFileContent.trim() === transformedRemoteContent.trim()) {
+      console.log('   No content changes detected');
+    } else {
+      // Use line-by-line diff for detailed comparison
+      const diff = Diff.diffLines(transformedRemoteContent, localFileContent);
+
+      let addedLines = 0;
+      let removedLines = 0;
+      let unchangedLines = 0;
+
+      // Show diff preview and count changes
+      console.log('   Content diff preview:');
+
+      let previewLines = 0;
+      const maxPreviewLines = 10;
+
+      for (const part of diff) {
+        // Count non-empty lines only for more accurate statistics
+        const lines = part.value.split('\n').filter((line: string) => line.trim() !== '');
+
+        if (part.added) {
+          addedLines += lines.length;
+          if (previewLines < maxPreviewLines) {
+            for (const line of lines.slice(0, Math.min(lines.length, maxPreviewLines - previewLines))) {
+              console.log(`   + ${line}`);
+              previewLines++;
+            }
+          }
+        } else if (part.removed) {
+          removedLines += lines.length;
+          if (previewLines < maxPreviewLines) {
+            for (const line of lines.slice(0, Math.min(lines.length, maxPreviewLines - previewLines))) {
+              console.log(`   - ${line}`);
+              previewLines++;
+            }
+          }
+        } else {
+          unchangedLines += lines.length;
+        }
+
+        if (previewLines >= maxPreviewLines) break;
+      }
+
+      if (previewLines >= maxPreviewLines && (addedLines + removedLines > previewLines)) {
+        console.log(`   ... (${addedLines + removedLines - previewLines} more changes)`);
+      }
+
+      console.log(`\n   📊 Change Summary: +${addedLines} lines added, -${removedLines} lines removed, ${unchangedLines} lines unchanged`);
+    }
+  } catch (error: any) {
+    console.warn(`[DIFF] Failed to generate detailed diff for ${local.slug}:`, error.message);
+    console.log('   Unable to show content comparison');
+  }
+
+  console.log('');
+}
+
+/**
  * Display status/preview of changes
  */
-function displayStatus(operations: ContentOperations, isStatusOnly: boolean = false): void {
-  console.log('\n📊 LeadCMS Status');
+async function displayStatus(operations: ContentOperations, isStatusOnly: boolean = false, isSingleFile: boolean = false, typeMap?: Record<string, string>): Promise<void> {
+  if (isSingleFile) {
+    console.log('\n📄 LeadCMS File Status');
+  } else {
+    console.log('\n📊 LeadCMS Status');
+  }
   console.log('');
 
   // Summary line like git
   const totalChanges = operations.create.length + operations.update.length + operations.rename.length + operations.typeChange.length + operations.conflict.length;
   if (totalChanges === 0) {
-    console.log('✅ No changes detected. Everything is in sync!');
+    if (isSingleFile) {
+      console.log('✅ File is in sync with remote content!');
+    } else {
+      console.log('✅ No changes detected. Everything is in sync!');
+    }
+    return;
+  }
+
+  // For single file mode, show detailed diff information
+  if (isSingleFile) {
+    // Show detailed diff for each operation
+    for (const op of operations.create) {
+      await displayDetailedDiff(op, 'New file', typeMap);
+    }
+    for (const op of operations.update) {
+      await displayDetailedDiff(op, 'Modified', typeMap);
+    }
+    for (const op of operations.rename) {
+      await displayDetailedDiff(op, `Renamed (${op.oldSlug} → ${op.local.slug})`, typeMap);
+    }
+    for (const op of operations.typeChange) {
+      await displayDetailedDiff(op, `Type changed (${op.oldType} → ${op.newType})`, typeMap);
+    }
+    for (const op of operations.conflict) {
+      await displayDetailedDiff(op, `Conflict: ${op.reason}`, typeMap);
+    }
     return;
   }
 
@@ -556,10 +724,14 @@ function displayStatus(operations: ContentOperations, isStatusOnly: boolean = fa
  * Main function for push command
  */
 async function pushMain(options: PushOptions = {}): Promise<void> {
-  const { statusOnly = false, force = false, bulk = false } = options;
+  const { statusOnly = false, force = false, bulk = false, targetId, targetSlug } = options;
 
   try {
-    console.log(`[PUSH] Starting content ${statusOnly ? 'status check' : 'push'}...`);
+    const isSingleFileMode = !!(targetId || targetSlug);
+    const actionDescription = statusOnly ? 'status check' : 'push';
+    const targetDescription = targetId ? `ID ${targetId}` : targetSlug ? `slug "${targetSlug}"` : 'all content';
+
+    console.log(`[PUSH] Starting ${actionDescription} for ${targetDescription}...`);
 
     // Read local content
     const localContent = await readLocalContent();
@@ -569,26 +741,63 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
       return;
     }
 
-    // Get local content types
-    const localTypes = getLocalContentTypes(localContent);
-    console.log(`[LOCAL] Found content types: ${Array.from(localTypes).join(', ')}`);
-
-    // Fetch remote content types and validate
+    // Fetch remote content types for content transformation
     const remoteTypes = await leadCMSDataService.getContentTypes();
     const remoteTypeMap: Record<string, string> = {};
     remoteTypes.forEach(type => {
       remoteTypeMap[type.uid] = type.format;
     });
-    await validateContentTypes(localTypes, remoteTypeMap);
+
+    // Filter local content if targeting specific content
+    let filteredLocalContent = localContent;
+    if (isSingleFileMode) {
+      filteredLocalContent = localContent.filter(content => {
+        if (targetId && content.metadata.id?.toString() === targetId) return true;
+        if (targetSlug && content.slug === targetSlug) return true;
+        return false;
+      });
+
+      if (filteredLocalContent.length === 0) {
+        console.log(`❌ No local content found with ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`}`);
+        return;
+      }
+
+      console.log(`[LOCAL] Found ${filteredLocalContent.length} matching local file(s)`);
+    } else {
+      // Get local content types and validate them
+      const localTypes = getLocalContentTypes(localContent);
+      console.log(`[LOCAL] Found content types: ${Array.from(localTypes).join(', ')}`);
+      await validateContentTypes(localTypes, remoteTypeMap);
+    }
 
     // Fetch remote content for comparison
     const remoteContent = await fetchRemoteContent();
 
-    // Match local vs remote content
-    const operations = matchContent(localContent, remoteContent);
+    // Match local vs remote content with type mapping for proper content transformation
+    const operations = await matchContent(filteredLocalContent, remoteContent, remoteTypeMap);
+
+    // Filter operations if targeting specific content
+    const finalOperations = isSingleFileMode ?
+      filterContentOperations(operations, targetId, targetSlug) :
+      operations;
+
+    // Check if we found the target content
+    if (isSingleFileMode) {
+      const totalChanges = finalOperations.create.length + finalOperations.update.length +
+                          finalOperations.rename.length + finalOperations.typeChange.length +
+                          finalOperations.conflict.length;
+
+      if (totalChanges === 0 && filteredLocalContent.length > 0) {
+        // We have local content but no operations - it's in sync
+        console.log(`✅ Content with ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`} is in sync`);
+      } else if (totalChanges === 0) {
+        console.log(`❌ No content found with ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`} in remote or local`);
+        return;
+      }
+    }
 
     // Display status
-    displayStatus(operations, statusOnly);
+    await displayStatus(finalOperations, statusOnly, isSingleFileMode, remoteTypeMap);
 
     // If status only, we're done
     if (statusOnly) {
@@ -596,26 +805,31 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     }
 
     // Handle conflicts
-    if (operations.conflict.length > 0 && !force) {
+    if (finalOperations.conflict.length > 0 && !force) {
       console.log('\n❌ Cannot proceed due to conflicts. Use --force to override or resolve conflicts first.');
       return;
     }
 
-    const totalChanges = operations.create.length + operations.update.length + operations.rename.length + operations.typeChange.length;
+    const totalChanges = finalOperations.create.length + finalOperations.update.length + finalOperations.rename.length + finalOperations.typeChange.length;
     if (totalChanges === 0) {
-      console.log('✅ Nothing to sync.');
+      if (isSingleFileMode) {
+        console.log('✅ File is already in sync.');
+      } else {
+        console.log('✅ Nothing to sync.');
+      }
       return;
     }
 
     // Ask about sync method if we only have creates and bulk wasn't specified via CLI
     let useBulk = bulk;
-    if (!bulk && operations.create.length > 0 && operations.update.length === 0) {
+    if (!bulk && finalOperations.create.length > 0 && finalOperations.update.length === 0 && !isSingleFileMode) {
       const bulkChoice = await question(`\nUse bulk import for faster syncing? (y/N): `);
       useBulk = bulkChoice.toLowerCase() === 'y' || bulkChoice.toLowerCase() === 'yes';
     }
 
     // Confirm changes
-    const confirmMsg = `\nProceed with syncing ${totalChanges} changes to LeadCMS? (y/N): `;
+    const itemDescription = isSingleFileMode ? 'file change' : 'changes';
+    const confirmMsg = `\nProceed with syncing ${totalChanges} ${itemDescription} to LeadCMS? (y/N): `;
     const confirmation = await question(confirmMsg);
 
     if (confirmation.toLowerCase() !== 'y' && confirmation.toLowerCase() !== 'yes') {
@@ -624,7 +838,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     }
 
     // Execute the sync
-    await executePush(operations, { force, bulk: useBulk });
+    await executePush(finalOperations, { force, bulk: useBulk });
 
     console.log('\n🎉 Content push completed successfully!');
 
@@ -835,10 +1049,9 @@ async function updateLocalMetadata(localContent: LocalContentItem, remoteRespons
       const fileContent = await fs.readFile(filePath, 'utf-8');
       const parsed = matter(fileContent);
 
-      // Update metadata with response data
+      // Update metadata with response data (only non-system fields)
       parsed.data.id = remoteResponse.id;
-      parsed.data.createdAt = remoteResponse.createdAt;
-      parsed.data.updatedAt = remoteResponse.updatedAt;
+      // Do not add system fields (createdAt, updatedAt, publishedAt) to local files
 
       // Rebuild the file
       const newContent = matter.stringify(parsed.content, parsed.data);
@@ -847,10 +1060,9 @@ async function updateLocalMetadata(localContent: LocalContentItem, remoteRespons
     } else if (ext === '.json') {
       const jsonData = JSON.parse(await fs.readFile(filePath, 'utf-8'));
 
-      // Update metadata
+      // Update metadata (only non-system fields)
       jsonData.id = remoteResponse.id;
-      jsonData.createdAt = remoteResponse.createdAt;
-      jsonData.updatedAt = remoteResponse.updatedAt;
+      // Do not add system fields (createdAt, updatedAt, publishedAt) to local files
 
       await fs.writeFile(filePath, JSON.stringify(jsonData, null, 2), 'utf-8');
     }
@@ -862,14 +1074,33 @@ async function updateLocalMetadata(localContent: LocalContentItem, remoteRespons
 // Export functions for CLI usage
 export { pushMain as pushLeadCMSContent };
 
-// Handle direct script execution
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+// Export internal functions for testing
+export { hasActualContentChanges };
+// Re-export the new comparison function for consistency
+export { transformRemoteForComparison } from "../lib/content-transformation.js";
+
+// Handle direct script execution only in ESM environment
+if (typeof import.meta !== 'undefined' && process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   const statusOnly = args.includes('--status');
   const force = args.includes('--force');
   const bulk = args.includes('--bulk');
 
-  pushMain({ statusOnly, force, bulk }).catch((error) => {
+  // Parse target ID or slug
+  let targetId: string | undefined;
+  let targetSlug: string | undefined;
+
+  const idIndex = args.findIndex(arg => arg === '--id');
+  if (idIndex !== -1 && args[idIndex + 1]) {
+    targetId = args[idIndex + 1];
+  }
+
+  const slugIndex = args.findIndex(arg => arg === '--slug');
+  if (slugIndex !== -1 && args[slugIndex + 1]) {
+    targetSlug = args[slugIndex + 1];
+  }
+
+  pushMain({ statusOnly, force, bulk, targetId, targetSlug }).catch((error) => {
     console.error('Error running LeadCMS push:', error.message);
     process.exit(1);
   });

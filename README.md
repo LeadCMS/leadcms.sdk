@@ -589,4 +589,4 @@ LEADCMS_DEBUG=true npm run build
 4. Run tests: `npm run test`
 5. Submit a pull request
 
-For detailed development setup, see [DEVELOPMENT.md](./DEVELOPMENT.md).
+For detailed development setup, see [DEVELOPMENT.md](./docs/DEVELOPMENT.md).
