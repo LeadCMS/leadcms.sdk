@@ -41,7 +41,7 @@ switch (command) {
     break;
   case 'init':
   case 'config':
-    initializeConfig();
+    generateConfig();
     break;
   case 'docker':
   case 'templates':
@@ -91,25 +91,41 @@ Configuration:
     break;
 }
 
-function initializeConfig() {
-  Promise.all([import('fs'), import('readline')]).then(([fs, readline]) => {
-    const configPath = 'leadcms.config.json';
+function generateConfig() {
+  Promise.all([import('fs'), import('path')]).then(([fs, pathModule]) => {
+    const configPath = pathModule.join(process.cwd(), 'leadcms.config.json');
+
     if (fs.existsSync(configPath)) {
+      const readline = require('readline');
+
       const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout
       });
 
-      rl.question('❓ leadcms.config.json already exists. Overwrite? (y/N): ', (answer) => {
-        if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
-          createConfigFile(configPath);
-        } else {
+      rl.question('leadcms.config.json already exists. Overwrite? (y/N): ', (answer: any) => {
+        if (answer.toLowerCase() !== 'y' && answer.toLowerCase() !== 'yes') {
           console.log('✅ Configuration initialization cancelled.');
+          rl.close();
+          return;
         }
+
+        createConfig();
         rl.close();
       });
     } else {
-      createConfigFile(configPath);
+      createConfig();
+    }
+
+    function createConfig() {
+      const sampleConfigPath = pathModule.join(__dirname, '../../leadcms.config.json.sample');
+      const sampleConfig = fs.readFileSync(sampleConfigPath, 'utf-8');
+
+      fs.writeFileSync(configPath, sampleConfig, 'utf-8');
+      console.log(`✅ Created ${configPath}`);
+      console.log('📝 Set LEADCMS_URL and LEADCMS_API_KEY as environment variables.');
+      console.log('🔧 Customize contentDir, mediaDir, or other settings in the config file.');
+      console.log('ℹ️  Content types are automatically detected from your LeadCMS API.');
     }
   });
 }

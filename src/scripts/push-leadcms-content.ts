@@ -16,6 +16,7 @@ import {
   hasContentDifferences,
   type ContentTypeMap
 } from "../lib/content-transformation.js";
+import { colorConsole, statusColors, diffColors } from '../lib/console-colors.js';
 
 // Extended interfaces for local operations
 interface LocalContentItem extends BaseContentItem {
@@ -52,6 +53,7 @@ interface PushOptions {
   bulk?: boolean;
   targetId?: string;      // Target specific content by ID
   targetSlug?: string;    // Target specific content by slug
+  showDetailedPreview?: boolean;  // Show detailed diff preview for all files
 }
 
 interface ExecutionOptions {
@@ -373,8 +375,8 @@ async function validateContentTypes(localTypes: Set<string>, remoteTypeMap: Reco
   }
 
   if (missingTypes.length > 0) {
-    console.log(`\n❌ Missing content types in remote LeadCMS: ${missingTypes.join(', ')}`);
-    console.log(`\nYou need to create these content types in your LeadCMS instance before pushing content.`);
+    colorConsole.error(`\n❌ Missing content types in remote LeadCMS: ${colorConsole.highlight(missingTypes.join(', '))}`);
+    colorConsole.warn(`\nYou need to create these content types in your LeadCMS instance before pushing content.`);
 
     const createChoice = await question('\nWould you like me to create these content types automatically? (y/N): ');
 
@@ -383,7 +385,7 @@ async function validateContentTypes(localTypes: Set<string>, remoteTypeMap: Reco
         await createContentTypeInteractive(type);
       }
     } else {
-      console.log('\nPlease create the missing content types manually in your LeadCMS instance and try again.');
+      colorConsole.info('\nPlease create the missing content types manually in your LeadCMS instance and try again.');
       process.exit(1);
     }
   }
@@ -393,11 +395,11 @@ async function validateContentTypes(localTypes: Set<string>, remoteTypeMap: Reco
  * Create a content type in remote LeadCMS
  */
 async function createContentTypeInteractive(typeName: string): Promise<void> {
-  console.log(`\n📝 Creating content type: ${typeName}`);
+  colorConsole.progress(`\n📝 Creating content type: ${colorConsole.highlight(typeName)}`);
 
-  const format = await question(`What format should '${typeName}' use? (MDX/JSON) [MDX]: `) || 'MDX';
-  const supportsCoverImage = await question(`Should '${typeName}' support cover images? (y/N): `);
-  const supportsComments = await question(`Should '${typeName}' support comments? (y/N): `);
+  const format = await question(`What format should '${colorConsole.highlight(typeName)}' use? (MDX/JSON) [MDX]: `) || 'MDX';
+  const supportsCoverImage = await question(`Should '${colorConsole.highlight(typeName)}' support cover images? (y/N): `);
+  const supportsComments = await question(`Should '${colorConsole.highlight(typeName)}' support comments? (y/N): `);
 
   const contentTypeData = {
     uid: typeName,
@@ -409,9 +411,9 @@ async function createContentTypeInteractive(typeName: string): Promise<void> {
 
   try {
     await leadCMSDataService.createContentType(contentTypeData);
-    console.log(`✅ Created content type: ${typeName}`);
+    colorConsole.success(`✅ Created content type: ${colorConsole.highlight(typeName)}`);
   } catch (error: any) {
-    console.error(`❌ Failed to create content type '${typeName}':`, error.message);
+    colorConsole.error(`❌ Failed to create content type '${colorConsole.highlight(typeName)}':`, error.message);
     throw error;
   }
 }
@@ -506,13 +508,13 @@ async function displayDetailedDiff(operation: MatchOperation, operationType: str
       hasMetadataChanges = true;
 
       if (normalizedRemote === null) {
-        console.log(`   + ${field}: ${formatValue(normalizedLocal)} (added)`);
+        colorConsole.log(`   ${diffColors.added(`+ ${field}: ${formatValue(normalizedLocal)} (added)`)}`);
       } else if (normalizedLocal === null) {
-        console.log(`   - ${field}: ${formatValue(normalizedRemote)} (removed)`);
+        colorConsole.log(`   ${diffColors.removed(`- ${field}: ${formatValue(normalizedRemote)} (removed)`)}`);
       } else {
-        console.log(`   ~ ${field}: (changed)`);
-        console.log(`     - ${formatValue(normalizedRemote)}`);
-        console.log(`     + ${formatValue(normalizedLocal)}`);
+        colorConsole.log(`   ${diffColors.modified(`~ ${field}: (changed)`)}`);
+        colorConsole.log(`     ${diffColors.removed(`- ${formatValue(normalizedRemote)}`)}`);
+        colorConsole.log(`     ${diffColors.added(`+ ${formatValue(normalizedLocal)}`)}`);
       }
     }
   }
@@ -544,7 +546,7 @@ async function displayDetailedDiff(operation: MatchOperation, operationType: str
       let unchangedLines = 0;
 
       // Show diff preview and count changes
-      console.log('   Content diff preview:');
+      colorConsole.info('   Content diff preview:');
 
       let previewLines = 0;
       const maxPreviewLines = 10;
@@ -557,7 +559,7 @@ async function displayDetailedDiff(operation: MatchOperation, operationType: str
           addedLines += lines.length;
           if (previewLines < maxPreviewLines) {
             for (const line of lines.slice(0, Math.min(lines.length, maxPreviewLines - previewLines))) {
-              console.log(`   + ${line}`);
+              colorConsole.log(`   ${diffColors.added(`+ ${line}`)}`);
               previewLines++;
             }
           }
@@ -565,7 +567,7 @@ async function displayDetailedDiff(operation: MatchOperation, operationType: str
           removedLines += lines.length;
           if (previewLines < maxPreviewLines) {
             for (const line of lines.slice(0, Math.min(lines.length, maxPreviewLines - previewLines))) {
-              console.log(`   - ${line}`);
+              colorConsole.log(`   ${diffColors.removed(`- ${line}`)}`);
               previewLines++;
             }
           }
@@ -577,10 +579,11 @@ async function displayDetailedDiff(operation: MatchOperation, operationType: str
       }
 
       if (previewLines >= maxPreviewLines && (addedLines + removedLines > previewLines)) {
-        console.log(`   ... (${addedLines + removedLines - previewLines} more changes)`);
+        colorConsole.gray(`   ... (${addedLines + removedLines - previewLines} more changes)`);
       }
 
-      console.log(`\n   📊 Change Summary: +${addedLines} lines added, -${removedLines} lines removed, ${unchangedLines} lines unchanged`);
+      const summaryText = `\n   📊 Change Summary: ${colorConsole.green(`+${addedLines} lines added`)}, ${colorConsole.red(`-${removedLines} lines removed`)}, ${unchangedLines} lines unchanged`;
+      colorConsole.log(summaryText);
     }
   } catch (error: any) {
     console.warn(`[DIFF] Failed to generate detailed diff for ${local.slug}:`, error.message);
@@ -593,21 +596,21 @@ async function displayDetailedDiff(operation: MatchOperation, operationType: str
 /**
  * Display status/preview of changes
  */
-async function displayStatus(operations: ContentOperations, isStatusOnly: boolean = false, isSingleFile: boolean = false, typeMap?: Record<string, string>): Promise<void> {
+async function displayStatus(operations: ContentOperations, isStatusOnly: boolean = false, isSingleFile: boolean = false, showDetailedPreview: boolean = false, typeMap?: Record<string, string>): Promise<void> {
   if (isSingleFile) {
-    console.log('\n📄 LeadCMS File Status');
+    colorConsole.important('\n📄 LeadCMS File Status');
   } else {
-    console.log('\n📊 LeadCMS Status');
+    colorConsole.important('\n📊 LeadCMS Status');
   }
-  console.log('');
+  colorConsole.log('');
 
   // Summary line like git
   const totalChanges = operations.create.length + operations.update.length + operations.rename.length + operations.typeChange.length + operations.conflict.length;
   if (totalChanges === 0) {
     if (isSingleFile) {
-      console.log('✅ File is in sync with remote content!');
+      colorConsole.success('✅ File is in sync with remote content!');
     } else {
-      console.log('✅ No changes detected. Everything is in sync!');
+      colorConsole.success('✅ No changes detected. Everything is in sync!');
     }
     return;
   }
@@ -658,7 +661,7 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
     for (const op of sortOperations([...operations.create])) {
       const typeLabel = op.local.type.padEnd(12);
       const localeLabel = `[${op.local.locale}]`.padEnd(6);
-      console.log(`        new file:   ${typeLabel} ${localeLabel} ${op.local.slug}`);
+      colorConsole.log(`        ${statusColors.created('new file:')}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)}`);
     }
 
     // Modified content
@@ -666,7 +669,7 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
       const typeLabel = op.local.type.padEnd(12);
       const localeLabel = `[${op.local.locale}]`.padEnd(6);
       const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
-      console.log(`        modified:   ${typeLabel} ${localeLabel} ${op.local.slug} ${idLabel}`);
+      colorConsole.log(`        ${statusColors.modified('modified:')}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`);
     }
 
     // Renamed content (slug changed)
@@ -674,7 +677,7 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
       const typeLabel = op.local.type.padEnd(12);
       const localeLabel = `[${op.local.locale}]`.padEnd(6);
       const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
-      console.log(`        renamed:    ${typeLabel} ${localeLabel} ${op.oldSlug} -> ${op.local.slug} ${idLabel}`);
+      colorConsole.log(`        ${statusColors.renamed('renamed:')}    ${typeLabel} ${localeLabel} ${colorConsole.gray(op.oldSlug || 'unknown')} -> ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`);
     }
 
     // Type changed content
@@ -682,16 +685,37 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
       const typeLabel = op.local.type.padEnd(12);
       const localeLabel = `[${op.local.locale}]`.padEnd(6);
       const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
-      const typeChangeLabel = `(${op.oldType} -> ${op.newType})`;
-      console.log(`        type change:${typeLabel} ${localeLabel} ${op.local.slug} ${typeChangeLabel} ${idLabel}`);
+      const typeChangeLabel = `(${colorConsole.gray(op.oldType || 'unknown')} -> ${colorConsole.highlight(op.newType || 'unknown')})`;
+      colorConsole.log(`        ${statusColors.typeChange('type change:')}${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${typeChangeLabel} ${colorConsole.gray(idLabel)}`);
+    }
+
+    // Show detailed previews if requested (and not in single file mode which already shows them)
+    if (showDetailedPreview && !isSingleFile) {
+      console.log('');
+      console.log('📋 Detailed Change Previews:');
+      console.log('');
+
+      // Show detailed diff for each operation (same as single file mode)
+      for (const op of sortOperations([...operations.create])) {
+        await displayDetailedDiff(op, 'New file', typeMap);
+      }
+      for (const op of sortOperations([...operations.update])) {
+        await displayDetailedDiff(op, 'Modified', typeMap);
+      }
+      for (const op of sortOperations([...operations.rename])) {
+        await displayDetailedDiff(op, `Renamed (${op.oldSlug} → ${op.local.slug})`, typeMap);
+      }
+      for (const op of sortOperations([...operations.typeChange])) {
+        await displayDetailedDiff(op, `Type changed (${op.oldType} → ${op.newType})`, typeMap);
+      }
     }
 
     console.log('');
   }  // Conflicts (like git's merge conflicts)
   if (operations.conflict.length > 0) {
-    console.log(`⚠️  Unmerged conflicts (${operations.conflict.length} files):`);
-    console.log('  (use "leadcms pull" to merge remote changes)');
-    console.log('');
+    colorConsole.warn(`⚠️  Unmerged conflicts (${operations.conflict.length} files):`);
+    colorConsole.info('  (use "leadcms pull" to merge remote changes)');
+    colorConsole.log('');
 
     // Sort conflicts by locale then slug as well
     const sortedConflicts = [...operations.conflict].sort((a, b) => {
@@ -704,18 +728,29 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
     for (const op of sortedConflicts) {
       const typeLabel = op.local.type.padEnd(12);
       const localeLabel = `[${op.local.locale}]`.padEnd(6);
-      console.log(`        conflict:   ${typeLabel} ${localeLabel} ${op.local.slug}`);
-      console.log(`                    ${op.reason}`);
+      colorConsole.log(`        ${statusColors.conflict('conflict:')}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)}`);
+      colorConsole.log(`                    ${colorConsole.gray(op.reason || 'Unknown conflict')}`);
     }
-    console.log('');
+    colorConsole.log('');
+
+    // Show detailed previews for conflicts if requested (and not in single file mode)
+    if (showDetailedPreview && !isSingleFile && operations.conflict.length > 0) {
+      console.log('');
+      console.log('📋 Detailed Conflict Previews:');
+      console.log('');
+
+      for (const op of sortedConflicts) {
+        await displayDetailedDiff(op, `Conflict: ${op.reason}`, typeMap);
+      }
+    }
 
     if (!isStatusOnly) {
-      console.log('💡 To resolve conflicts:');
-      console.log('   • Run "leadcms pull" to fetch latest changes');
-      console.log('   • Resolve conflicts in local files');
-      console.log('   • Run "leadcms push" again');
-      console.log('   • Or use "leadcms push --force" to override remote changes (⚠️  data loss risk)');
-      console.log('');
+      colorConsole.important('💡 To resolve conflicts:');
+      colorConsole.info('   • Run "leadcms pull" to fetch latest changes');
+      colorConsole.info('   • Resolve conflicts in local files');
+      colorConsole.info('   • Run "leadcms push" again');
+      colorConsole.warn('   • Or use "leadcms push --force" to override remote changes (⚠️  data loss risk)');
+      colorConsole.log('');
     }
   }
 }
@@ -724,7 +759,7 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
  * Main function for push command
  */
 async function pushMain(options: PushOptions = {}): Promise<void> {
-  const { statusOnly = false, force = false, bulk = false, targetId, targetSlug } = options;
+  const { statusOnly = false, force = false, bulk = false, targetId, targetSlug, showDetailedPreview = false } = options;
 
   try {
     const isSingleFileMode = !!(targetId || targetSlug);
@@ -797,7 +832,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     }
 
     // Display status
-    await displayStatus(finalOperations, statusOnly, isSingleFileMode, remoteTypeMap);
+    await displayStatus(finalOperations, statusOnly, isSingleFileMode, showDetailedPreview, remoteTypeMap);
 
     // If status only, we're done
     if (statusOnly) {
@@ -840,7 +875,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     // Execute the sync
     await executePush(finalOperations, { force, bulk: useBulk });
 
-    console.log('\n🎉 Content push completed successfully!');
+    colorConsole.success('\n🎉 Content push completed successfully!');
 
   } catch (error: any) {
     const operation = statusOnly ? 'Status check' : 'Push';
@@ -925,14 +960,14 @@ async function executeIndividualOperations(operations: ContentOperations, option
         if (result) {
           await updateLocalMetadata(op.local, result);
           successful++;
-          console.log(`✅ Created: ${op.local.type}/${op.local.slug}`);
+          colorConsole.success(`✅ Created: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`);
         } else {
           failed++;
-          console.log(`❌ Failed to create: ${op.local.type}/${op.local.slug}`);
+          colorConsole.error(`❌ Failed to create: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`);
         }
       } catch (error: any) {
         failed++;
-        console.log(`❌ Failed to create ${op.local.type}/${op.local.slug}:`, error.message);
+        colorConsole.error(`❌ Failed to create ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}:`, error.message);
       }
     }
   }
@@ -947,14 +982,14 @@ async function executeIndividualOperations(operations: ContentOperations, option
           if (result) {
             await updateLocalMetadata(op.local, result);
             successful++;
-            console.log(`✅ Updated: ${op.local.type}/${op.local.slug}`);
+            colorConsole.success(`✅ Updated: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`);
           } else {
             failed++;
-            console.log(`❌ Failed to update: ${op.local.type}/${op.local.slug}`);
+            colorConsole.error(`❌ Failed to update: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`);
           }
         } else {
           failed++;
-          console.log(`❌ Failed to update ${op.local.type}/${op.local.slug}: No remote ID`);
+          colorConsole.error(`❌ Failed to update ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}: No remote ID`);
         }
       } catch (error: any) {
         failed++;

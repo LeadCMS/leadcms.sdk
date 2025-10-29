@@ -10,6 +10,7 @@ async function main(): Promise<void> {
     // Parse target ID or slug
     let targetId: string | undefined;
     let targetSlug: string | undefined;
+    let showDetailedPreview = false;
 
     const idIndex = args.findIndex(arg => arg === '--id');
     if (idIndex !== -1 && args[idIndex + 1]) {
@@ -21,9 +22,14 @@ async function main(): Promise<void> {
       targetSlug = args[slugIndex + 1];
     }
 
-    await pushLeadCMSContent({ statusOnly: true, targetId, targetSlug });
+    // Check for --preview flag
+    if (args.includes('--preview')) {
+      showDetailedPreview = true;
+    }
+
+    await pushLeadCMSContent({ statusOnly: true, targetId, targetSlug, showDetailedPreview });
   } catch (error: any) {
-    console.error('Error running LeadCMS status:', error.message);
+    console.error('\x1b[31mError running LeadCMS status:\x1b[0m', error.message);
     process.exit(1);
   }
 }

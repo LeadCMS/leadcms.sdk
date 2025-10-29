@@ -296,8 +296,8 @@ async function main(): Promise<void> {
     console.warn(`[MAIN] Continuing without media sync...`);
   }
 
-  console.log(`Fetched ${items.length} content items, ${deleted.length} deleted.`);
-  console.log(`Fetched ${mediaItems.length} media items.`);
+  console.log(`\x1b[32mFetched ${items.length} content items, ${deleted.length} deleted.\x1b[0m`);
+  console.log(`\x1b[32mFetched ${mediaItems.length} media items.\x1b[0m`);
 
   // Save content files and collect all media URLs from content
   const allMediaUrls = new Set<string>();
