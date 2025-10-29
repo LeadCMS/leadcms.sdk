@@ -223,7 +223,6 @@ ehthumbs.db
 Thumbs.db
 
 # Local development
-.leadcms/
 leadcms-content/
 
 # Test files

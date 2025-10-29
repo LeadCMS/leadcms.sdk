@@ -1,0 +1,10 @@
+{
+  "id": 4,
+  "slug": "json-article",
+  "type": "article",
+  "title": "JSON Article",
+  "description": "This is an article stored as JSON",
+  "translationKey": "article-4",
+  "publishedAt": "2024-10-27T15:30:00Z",
+  "body": "This is the content of a JSON article. It should be visible and properly handle date conversion."
+}

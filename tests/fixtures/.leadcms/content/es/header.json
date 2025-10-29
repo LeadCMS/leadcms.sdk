@@ -1,0 +1,8 @@
+{
+  "logo": "logo.png",
+  "navigation": [
+    { "label": "Inicio", "href": "/" },
+    { "label": "Blog", "href": "/blog" },
+    { "label": "Acerca", "href": "/about" }
+  ]
+}

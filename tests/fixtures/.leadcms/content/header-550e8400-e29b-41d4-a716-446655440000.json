@@ -1,0 +1,9 @@
+{
+  "logo": "logo-draft.png",
+  "navigation": [
+    { "label": "Home (Draft)", "href": "/" },
+    { "label": "Blog", "href": "/blog" },
+    { "label": "About", "href": "/about" },
+    { "label": "Contact", "href": "/contact" }
+  ]
+}
