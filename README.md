@@ -61,7 +61,7 @@ The LeadCMS SDK includes comprehensive CI/CD workflows for GitHub Actions that p
 - **LCOV Reports**: Line and branch coverage tracking
 - **PR Comments**: Automatic coverage comments on pull requests showing coverage changes
 - **Coverage Artifacts**: HTML coverage reports archived for 30 days
-- **Codecov Integration**: Optional Codecov integration for advanced coverage analytics
+- **Multiple Formats**: Coverage available in LCOV, HTML, and Clover formats
 
 ### 🔧 Quality Checks
 - **TypeScript Compilation**: Ensures type safety across all Node.js versions

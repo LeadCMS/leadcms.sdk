@@ -38,17 +38,14 @@ The repository includes two main workflows:
 - Download coverage artifacts for local viewing
 - Check PR comments for coverage changes
 
-## Setting Up Codecov (Optional)
+## Coverage Integration
 
-To enable Codecov integration for advanced coverage analytics:
+The workflows provide comprehensive coverage reporting without requiring external services:
 
-1. **Sign up** at [codecov.io](https://codecov.io) with your GitHub account
-2. **Add your repository** to Codecov
-3. **Get your upload token** from Codecov settings
-4. **Add the token** to GitHub Secrets:
-   - Go to your repository > Settings > Secrets and variables > Actions
-   - Add new secret: `CODECOV_TOKEN` with the token value
-5. **Enable the workflow**: The Codecov upload is already configured but disabled by default
+1. **Local Coverage**: HTML reports generated in `coverage/` directory
+2. **GitHub Artifacts**: Coverage reports archived for 30 days
+3. **PR Comments**: Automatic coverage change comments on pull requests
+4. **Multiple Formats**: LCOV, HTML, and Clover formats available
 
 ## Local Development
 
@@ -95,7 +92,7 @@ Add these badges to your README to show CI status:
 1. **Tests fail locally but pass in CI**: Check Node.js version compatibility
 2. **Coverage reports not generated**: Ensure `jest-junit` is installed
 3. **JUnit XML missing**: Verify Jest configuration includes reporters section
-4. **Codecov upload fails**: Check if `CODECOV_TOKEN` secret is set correctly
+4. **PR comments not appearing**: Check if `GITHUB_TOKEN` has proper permissions
 
 ### Debug Commands
 ```bash
