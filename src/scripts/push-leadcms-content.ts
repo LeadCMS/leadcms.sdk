@@ -54,6 +54,7 @@ interface PushOptions {
   targetId?: string;      // Target specific content by ID
   targetSlug?: string;    // Target specific content by slug
   showDetailedPreview?: boolean;  // Show detailed diff preview for all files
+  dryRun?: boolean;       // Show API calls without executing them
 }
 
 interface ExecutionOptions {
@@ -365,7 +366,7 @@ async function matchContent(localContent: LocalContentItem[], remoteContent: Rem
 /**
  * Validate that all required content types exist remotely
  */
-async function validateContentTypes(localTypes: Set<string>, remoteTypeMap: Record<string, string>): Promise<void> {
+async function validateContentTypes(localTypes: Set<string>, remoteTypeMap: Record<string, string>, dryRun: boolean = false): Promise<void> {
   const missingTypes: string[] = [];
 
   for (const type of localTypes) {
@@ -378,11 +379,31 @@ async function validateContentTypes(localTypes: Set<string>, remoteTypeMap: Reco
     colorConsole.error(`\n❌ Missing content types in remote LeadCMS: ${colorConsole.highlight(missingTypes.join(', '))}`);
     colorConsole.warn(`\nYou need to create these content types in your LeadCMS instance before pushing content.`);
 
+    if (dryRun) {
+      colorConsole.info('\n🧪 In dry run mode - showing what content type creation would look like:');
+      for (const type of missingTypes) {
+        colorConsole.progress(`\n📋 CREATE CONTENT TYPE (Dry Run):`);
+        colorConsole.log(`\n${colorConsole.cyan('POST')} ${colorConsole.highlight('/api/content-types')}`);
+        colorConsole.log(`${colorConsole.gray('Content-Type:')} application/json`);
+        colorConsole.log(`\n${colorConsole.gray('Request Body:')}`);
+        const sampleContentTypeData = {
+          uid: type,
+          name: type.charAt(0).toUpperCase() + type.slice(1),
+          format: 'MDX',
+          supportsCoverImage: false,
+          supportsComments: false
+        };
+        colorConsole.log(JSON.stringify(sampleContentTypeData, null, 2));
+        colorConsole.success(`✅ Would create content type: ${colorConsole.highlight(type)}`);
+      }
+      return; // Skip interactive creation in dry run mode
+    }
+
     const createChoice = await question('\nWould you like me to create these content types automatically? (y/N): ');
 
     if (createChoice.toLowerCase() === 'y' || createChoice.toLowerCase() === 'yes') {
       for (const type of missingTypes) {
-        await createContentTypeInteractive(type);
+        await createContentTypeInteractive(type, dryRun);
       }
     } else {
       colorConsole.info('\nPlease create the missing content types manually in your LeadCMS instance and try again.');
@@ -394,7 +415,7 @@ async function validateContentTypes(localTypes: Set<string>, remoteTypeMap: Reco
 /**
  * Create a content type in remote LeadCMS
  */
-async function createContentTypeInteractive(typeName: string): Promise<void> {
+async function createContentTypeInteractive(typeName: string, dryRun: boolean = false): Promise<void> {
   colorConsole.progress(`\n📝 Creating content type: ${colorConsole.highlight(typeName)}`);
 
   const format = await question(`What format should '${colorConsole.highlight(typeName)}' use? (MDX/JSON) [MDX]: `) || 'MDX';
@@ -409,12 +430,21 @@ async function createContentTypeInteractive(typeName: string): Promise<void> {
     supportsComments: supportsComments.toLowerCase() === 'y'
   };
 
-  try {
-    await leadCMSDataService.createContentType(contentTypeData);
-    colorConsole.success(`✅ Created content type: ${colorConsole.highlight(typeName)}`);
-  } catch (error: any) {
-    colorConsole.error(`❌ Failed to create content type '${colorConsole.highlight(typeName)}':`, error.message);
-    throw error;
+  if (dryRun) {
+    colorConsole.progress(`\n📋 CREATE CONTENT TYPE (Dry Run):`);
+    colorConsole.log(`\n${colorConsole.cyan('POST')} ${colorConsole.highlight('/api/content-types')}`);
+    colorConsole.log(`${colorConsole.gray('Content-Type:')} application/json`);
+    colorConsole.log(`\n${colorConsole.gray('Request Body:')}`);
+    colorConsole.log(JSON.stringify(contentTypeData, null, 2));
+    colorConsole.success(`✅ Would create content type: ${colorConsole.highlight(typeName)}`);
+  } else {
+    try {
+      await leadCMSDataService.createContentType(contentTypeData);
+      colorConsole.success(`✅ Created content type: ${colorConsole.highlight(typeName)}`);
+    } catch (error: any) {
+      colorConsole.error(`❌ Failed to create content type '${colorConsole.highlight(typeName)}':`, error.message);
+      throw error;
+    }
   }
 }
 
@@ -756,10 +786,87 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
 }
 
 /**
+ * Display what API calls would be made without executing them
+ */
+async function showDryRunOperations(operations: ContentOperations): Promise<void> {
+  colorConsole.important('\n🧪 Dry Run Mode - API Calls Preview');
+  colorConsole.info('The following API calls would be made:\n');
+
+  // Create operations
+  if (operations.create.length > 0) {
+    colorConsole.progress(`\n📤 CREATE Operations (${operations.create.length}):`);
+    for (const op of operations.create) {
+      const contentData = formatContentForAPI(op.local);
+      colorConsole.log(`\n${colorConsole.cyan('POST')} ${colorConsole.highlight('/api/content')}`);
+      colorConsole.log(`${colorConsole.gray('Content-Type:')} application/json`);
+      colorConsole.log(`\n${colorConsole.gray('Request Body:')}`);
+      colorConsole.log(JSON.stringify(contentData, null, 2));
+    }
+  }
+
+  // Update operations
+  if (operations.update.length > 0) {
+    colorConsole.progress(`\n🔄 UPDATE Operations (${operations.update.length}):`);
+    for (const op of operations.update) {
+      if (op.remote?.id) {
+        const contentData = formatContentForAPI(op.local);
+        colorConsole.log(`\n${colorConsole.yellow('PUT')} ${colorConsole.highlight(`/api/content/${op.remote.id}`)}`);
+        colorConsole.log(`${colorConsole.gray('Content-Type:')} application/json`);
+        colorConsole.log(`\n${colorConsole.gray('Request Body:')}`);
+        colorConsole.log(JSON.stringify(contentData, null, 2));
+      }
+    }
+  }
+
+  // Rename operations (implemented as updates)
+  if (operations.rename.length > 0) {
+    colorConsole.progress(`\n📝 RENAME Operations (${operations.rename.length}):`);
+    for (const op of operations.rename) {
+      if (op.remote?.id) {
+        const contentData = formatContentForAPI(op.local);
+        colorConsole.log(`\n${colorConsole.yellow('PUT')} ${colorConsole.highlight(`/api/content/${op.remote.id}`)}`);
+        colorConsole.log(`${colorConsole.gray('Content-Type:')} application/json`);
+        colorConsole.log(`${colorConsole.gray('Note:')} Renaming ${colorConsole.gray(op.oldSlug || 'unknown')} → ${colorConsole.highlight(op.local.slug)}`);
+        colorConsole.log(`\n${colorConsole.gray('Request Body:')}`);
+        colorConsole.log(JSON.stringify(contentData, null, 2));
+      }
+    }
+  }
+
+  // Type change operations (implemented as updates)
+  if (operations.typeChange.length > 0) {
+    colorConsole.progress(`\n🔀 TYPE CHANGE Operations (${operations.typeChange.length}):`);
+    for (const op of operations.typeChange) {
+      if (op.remote?.id) {
+        const contentData = formatContentForAPI(op.local);
+        colorConsole.log(`\n${colorConsole.yellow('PUT')} ${colorConsole.highlight(`/api/content/${op.remote.id}`)}`);
+        colorConsole.log(`${colorConsole.gray('Content-Type:')} application/json`);
+        colorConsole.log(`${colorConsole.gray('Note:')} Type change ${colorConsole.gray(op.oldType || 'unknown')} → ${colorConsole.highlight(op.newType || 'unknown')}`);
+        colorConsole.log(`\n${colorConsole.gray('Request Body:')}`);
+        colorConsole.log(JSON.stringify(contentData, null, 2));
+      }
+    }
+  }
+
+  // Bulk operations
+  if (operations.create.length > 3) {
+    colorConsole.progress(`\n📦 BULK CREATE Operation (Alternative):`);
+    const bulkData = operations.create.map(op => formatContentForAPI(op.local));
+    colorConsole.log(`\n${colorConsole.cyan('POST')} ${colorConsole.highlight('/api/content/bulk')}`);
+    colorConsole.log(`${colorConsole.gray('Content-Type:')} application/json`);
+    colorConsole.log(`\n${colorConsole.gray('Request Body:')}`);
+    colorConsole.log(JSON.stringify({ items: bulkData }, null, 2));
+  }
+
+  colorConsole.log('\n');
+  colorConsole.important('💡 No actual API calls were made. Use without --dry-run to execute.');
+}
+
+/**
  * Main function for push command
  */
 async function pushMain(options: PushOptions = {}): Promise<void> {
-  const { statusOnly = false, force = false, bulk = false, targetId, targetSlug, showDetailedPreview = false } = options;
+  const { statusOnly = false, force = false, bulk = false, targetId, targetSlug, showDetailedPreview = false, dryRun = false } = options;
 
   try {
     const isSingleFileMode = !!(targetId || targetSlug);
@@ -802,7 +909,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
       // Get local content types and validate them
       const localTypes = getLocalContentTypes(localContent);
       console.log(`[LOCAL] Found content types: ${Array.from(localTypes).join(', ')}`);
-      await validateContentTypes(localTypes, remoteTypeMap);
+      await validateContentTypes(localTypes, remoteTypeMap, dryRun);
     }
 
     // Fetch remote content for comparison
@@ -836,6 +943,12 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
 
     // If status only, we're done
     if (statusOnly) {
+      return;
+    }
+
+    // If dry run mode, show API calls without executing
+    if (dryRun) {
+      await showDryRunOperations(finalOperations);
       return;
     }
 
@@ -1120,6 +1233,7 @@ if (typeof import.meta !== 'undefined' && process.argv[1] && import.meta.url ===
   const statusOnly = args.includes('--status');
   const force = args.includes('--force');
   const bulk = args.includes('--bulk');
+  const dryRun = args.includes('--dry-run');
 
   // Parse target ID or slug
   let targetId: string | undefined;
@@ -1135,7 +1249,7 @@ if (typeof import.meta !== 'undefined' && process.argv[1] && import.meta.url ===
     targetSlug = args[slugIndex + 1];
   }
 
-  pushMain({ statusOnly, force, bulk, targetId, targetSlug }).catch((error) => {
+  pushMain({ statusOnly, force, bulk, targetId, targetSlug, dryRun }).catch((error) => {
     console.error('Error running LeadCMS push:', error.message);
     process.exit(1);
   });
