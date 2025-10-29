@@ -101,6 +101,15 @@ npm run test:coverage
 
 # Run tests in watch mode
 npm run test:watch
+
+# Run tests with mock server (includes CLI integration tests)
+./tests/run-tests.sh
+
+# Run only unit tests
+npm run test:unit
+
+# Run only CLI integration tests
+npm run test:integration
 ```
 
 ### Test Coverage
@@ -111,6 +120,39 @@ The SDK maintains high test coverage with comprehensive unit tests covering:
 - 📝 Draft content handling and user-specific overrides
 - 🏗️ Build-time optimizations and caching
 - 🔧 Configuration management and validation
+- 🔄 Push/Pull synchronization with conflict detection
+- 🖥️ CLI command functionality with mocked API responses
+
+### Testing with Mock Data
+
+For testing CLI commands locally without a real LeadCMS instance, use the built-in mock data service:
+
+```bash
+# Enable mock mode and test status command
+LEADCMS_USE_MOCK=true LEADCMS_CONTENT_DIR=./test-content npx leadcms status
+
+# Test with different mock scenarios
+LEADCMS_USE_MOCK=true LEADCMS_MOCK_SCENARIO=hasConflicts npx leadcms status
+LEADCMS_USE_MOCK=true LEADCMS_MOCK_SCENARIO=mixedOperations npx leadcms push --dry-run
+
+# Test in development with localhost (automatically uses mock)
+LEADCMS_URL=http://localhost:3001 npx leadcms status
+```
+
+**Available Mock Scenarios:**
+- `allNew` - Local content that doesn't exist remotely (default)
+- `noChanges` - All content is in sync
+- `hasConflicts` - Remote content is newer than local
+- `hasUpdates` - Local content is newer than remote  
+- `mixedOperations` - Mix of new, updated, and conflicted content
+- `missingContentTypes` - Content with unknown types
+
+**Mock Mode Auto-Detection:**
+- `NODE_ENV=test` - Automatically uses mock mode
+- `LEADCMS_USE_MOCK=true` - Force mock mode
+- `LEADCMS_URL` contains `localhost` - Automatically uses mock mode
+
+The data service abstraction automatically handles switching between real API calls and mock data based on your environment, providing seamless testing without external dependencies.
 
 ## Configuration
 
@@ -204,6 +246,41 @@ npx leadcms pull
 ```
 
 > **Note:** `npx leadcms fetch` is still supported as an alias for backward compatibility.
+
+### Push local content to LeadCMS
+```bash
+npx leadcms push [options]
+```
+
+Push your local content changes to LeadCMS. This command will:
+- Analyze local MDX/JSON files and compare with remote content
+- Detect new content, updates, and conflicts using `updatedAt` timestamps
+- Prompt for confirmation before making changes
+- Support for creating missing content types automatically
+- Update local files with remote metadata (id, createdAt, updatedAt) after sync
+
+**Options:**
+- `--force` - Override remote changes (skip conflict check)
+- `--bulk` - Use bulk import for new content (faster for large imports)
+
+**Required Metadata Fields:**
+```yaml
+---
+type: "article"                    # Content type (must exist in LeadCMS)
+title: "Article Title"             # Content title
+slug: "article-slug"               # URL slug
+language: "en"                     # Content language
+publishedAt: "2024-10-29T10:00:00Z" # Publication date
+updatedAt: "2024-10-29T10:00:00Z"   # Last update (used for conflict detection)
+---
+```
+
+### Check sync status
+```bash
+npx leadcms status
+```
+
+Shows the current sync status between local and remote content without making any changes.
 
 ### Watch for real-time updates
 ```bash

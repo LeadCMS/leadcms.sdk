@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 import { spawn } from 'child_process';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const command = process.argv[2];
+const commandArgs = process.argv.slice(3);
 const scriptDir = path.join(__dirname, '../scripts');
 
-function runScript(scriptName: string) {
+function runScript(scriptName: string, args: string[] = []) {
   const scriptPath = path.join(scriptDir, scriptName);
-  const child = spawn('node', [scriptPath], {
+  const child = spawn('node', [scriptPath, ...args], {
     stdio: 'inherit',
     env: process.env
   });
@@ -20,13 +25,19 @@ function runScript(scriptName: string) {
 switch (command) {
   case 'pull':
   case 'fetch': // Alias for backward compatibility
-    runScript('fetch-leadcms-content.mjs');
+    runScript('fetch-leadcms-content.js');
+    break;
+  case 'push':
+    runScript('push-leadcms-content.js', commandArgs);
+    break;
+  case 'status':
+    runScript('status-leadcms-content.js');
     break;
   case 'watch':
-    runScript('sse-watcher.mjs');
+    runScript('sse-watcher.js');
     break;
   case 'generate-env':
-    runScript('generate-env-js.mjs');
+    runScript('generate-env-js.js');
     break;
   case 'init':
   case 'config':
@@ -44,6 +55,10 @@ Usage:
   leadcms init           - Initialize LeadCMS configuration
   leadcms docker         - Generate Docker deployment templates
   leadcms pull           - Pull content from LeadCMS
+  leadcms push [options] - Push local content to LeadCMS
+    --force              - Override remote changes (skip conflict check)
+    --bulk               - Use bulk import for new content (faster)
+  leadcms status         - Show sync status between local and remote content
   leadcms fetch          - Alias for 'pull' (backward compatibility)
   leadcms watch          - Watch for real-time updates
   leadcms generate-env   - Generate environment variables file

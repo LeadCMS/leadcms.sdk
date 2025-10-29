@@ -2,6 +2,7 @@
   "name": "@leadcms/sdk",
   "version": "1.3.0",
   "description": "Official SDK and CLI tools for LeadCMS - framework-agnostic content management for static site generators",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -12,21 +13,21 @@
     "npm": ">=8.0.0"
   },
   "scripts": {
-    "build": "npm run clean && tsc && npm run copy-assets && npm run fix-permissions",
+    "build": "npm run clean && npm run compile",
+    "compile": "tsc && cp -r src/templates dist/ && chmod +x dist/cli/index.js",
     "clean": "rm -rf dist",
-    "copy-assets": "cp -r src/scripts dist/ && cp -r src/templates dist/",
-    "fix-permissions": "chmod +x dist/cli/index.js && chmod +x dist/scripts/*.sh 2>/dev/null || true",
-    "dev": "npm run build && concurrently \"tsc --watch\" \"npm run watch-assets\"",
-    "watch-assets": "nodemon --watch src/scripts --watch src/templates --ext '*' --exec 'npm run copy-assets'",
+    "dev": "npm run build && tsc --watch",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:cli": "npm run build && node dist/cli/index.js --help > /dev/null && echo '✅ CLI tests passed'",
     "prepublishOnly": "npm run build",
-    "leadcms:pull": "node src/scripts/fetch-leadcms-content.mjs",
-    "leadcms:fetch": "node src/scripts/fetch-leadcms-content.mjs",
-    "leadcms:watch": "node src/scripts/sse-watcher.mjs",
-    "leadcms:generate-env": "node src/scripts/generate-env-js.mjs"
+    "leadcms:pull": "node dist/scripts/fetch-leadcms-content.js",
+    "leadcms:push": "node dist/scripts/push-leadcms-content.js",
+    "leadcms:status": "node dist/scripts/status-leadcms-content.js",
+    "leadcms:fetch": "node dist/scripts/fetch-leadcms-content.js",
+    "leadcms:watch": "node dist/scripts/sse-watcher.js",
+    "leadcms:generate-env": "node dist/scripts/generate-env-js.js"
   },
   "dependencies": {
     "axios": "^1.0.0",

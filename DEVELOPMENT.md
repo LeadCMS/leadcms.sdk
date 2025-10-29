@@ -92,11 +92,21 @@ leadcms docker
 # Test all CLI commands
 leadcms init
 leadcms docker
+leadcms pull
+leadcms push --help
+leadcms status
 leadcms --help
 
 # Test configuration scenarios
 LEADCMS_URL=test leadcms pull  # Test env vars (fetch also works as alias)
+LEADCMS_URL=test leadcms status  # Test status without credentials
+leadcms push --help  # Test push command help
 leadcms init  # Test config file creation
+
+# Test push functionality with sample content
+cp examples/* .leadcms/content/  # Copy sample files
+leadcms status  # Should detect 2 files and 2 content types
+rm .leadcms/content/sample-*  # Clean up
 ```
 
 ### SDK Functions Testing
@@ -128,7 +138,48 @@ ls -la Dockerfile nginx.conf scripts/ preview/
 docker build -t test-build .  # Test if Docker builds
 ```
 
-## 🐛 Debugging Tips
+## � Push/Pull Functionality
+
+### Content Metadata Requirements
+
+For proper push functionality, ensure your local content includes:
+
+```yaml
+---
+type: "article"                    # Required: Content type
+title: "Content Title"             # Required: Display title
+slug: "content-slug"               # Optional: Will use filename if missing
+language: "en"                     # Optional: Defaults to configured language
+publishedAt: "2024-10-29T10:00:00Z" # Required: Publication timestamp
+updatedAt: "2024-10-29T10:00:00Z"   # Important: Used for conflict detection
+translationKey: "unique-key"       # Optional: For content translations
+---
+```
+
+### Conflict Detection
+
+The push command uses `updatedAt` timestamps from content metadata (not file system timestamps) to detect conflicts:
+
+- **Local updatedAt** < **Remote updatedAt** = Conflict (remote is newer)
+- **Local updatedAt** >= **Remote updatedAt** = Safe to update
+
+### Testing Push Functionality
+
+```bash
+# Copy sample content to test directory
+cp examples/* .leadcms/content/
+
+# Check what would be synced (dry run)
+leadcms status
+
+# Test push with valid credentials
+LEADCMS_URL=https://your-instance.com LEADCMS_API_KEY=your-key leadcms push
+
+# Clean up test content
+rm .leadcms/content/sample-*
+```
+
+## ��� Debugging Tips
 
 ### 1. CLI Debugging
 
@@ -208,7 +259,7 @@ dist/
 │   ├── cms.d.ts
 │   └── config.js
 ├── scripts/
-│   ├── *.mjs files
+│   ├── *.js files (compiled from TypeScript)
 │   └── inject-runtime-env.sh (executable)
 └── templates/
     ├── docker/
@@ -277,6 +328,27 @@ ls -la dist/templates/
 ```bash
 # Solution: Check if dev mode is running
 npm run dev  # Should show watch mode active
+```
+
+### 5. "Status check failed: Invalid URL" or "Using real API mode: undefined"
+```bash
+# Problem: Environment variables aren't being loaded
+# Solution: Ensure .env file exists in your project root
+echo "LEADCMS_URL=https://your-instance.com" > .env
+echo "LEADCMS_API_KEY=your-api-key" >> .env
+
+# Or use environment variables directly:
+LEADCMS_URL=https://your-instance.com LEADCMS_API_KEY=your-key leadcms status
+
+# Check if .env file exists and is properly formatted:
+cat .env
+```
+
+### 6. Error messages showing "Push failed" when running status
+```bash
+# This was fixed in recent versions - update your SDK:
+npm update @leadcms/sdk
+# Should now show "Status check failed" for status command errors
 ```
 
 ## 📚 Testing Different Package Managers

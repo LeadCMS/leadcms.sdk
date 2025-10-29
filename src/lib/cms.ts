@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
-import { getConfig, type LeadCMSConfig } from "./config";
+import { getConfig, type LeadCMSConfig } from "./config.js";
 
 // Type definitions for configuration objects
 export interface HeaderConfig { [key: string]: any; }

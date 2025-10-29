@@ -87,13 +87,7 @@ export function configure(config: LeadCMSConfig): void {
   globalConfig = { ...globalConfig, ...config };
 }
 
-/**
- * Reset configuration (useful for testing)
- */
-export function resetConfig(): void {
-  globalConfig = null;
-  configCache.clear();
-}
+
 
 /**
  * Get current configuration
@@ -240,14 +234,4 @@ function isValidUrl(url: string): boolean {
   }
 }
 
-/**
- * Generate a sample configuration file
- */
-export function generateConfigFile(filePath: string = "leadcms.config.json"): string {
-  // Use the sample config file as the source of truth
-  const sampleConfigPath = path.join(__dirname, '../../leadcms.config.json.sample');
-  const sampleConfig = fs.readFileSync(sampleConfigPath, 'utf-8');
-  
-  fs.writeFileSync(filePath, sampleConfig, "utf-8");
-  return filePath;
-}
+

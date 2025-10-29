@@ -1,6 +1,6 @@
 // Main exports
-export * from './lib/cms';
-export * from './lib/config';
+export * from './lib/cms.js';
+export * from './lib/config.js';
 
 // LeadCMS SDK - Framework-agnostic content management
 //
