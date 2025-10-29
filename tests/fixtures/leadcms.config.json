@@ -1,0 +1,8 @@
+{
+  "url": "https://test.leadcms.com",
+  "apiKey": "test-api-key",
+  "defaultLanguage": "en",
+  "contentDir": ".leadcms/content",
+  "mediaDir": "public/media",
+  "enableDrafts": true
+}

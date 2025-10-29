@@ -21,6 +21,35 @@ const contentCache = new Map<string, ContentCache<any>>();
 const CONTENT_CACHE_TTL = 30000; // 30 seconds cache TTL for content files
 
 /**
+ * Check if content is a draft based on publishedAt field
+ * Content is considered draft if:
+ * - publishedAt is null/undefined
+ * - publishedAt is a future date (after current time)
+ *
+ * @param content - The content to check
+ * @returns true if content is draft, false otherwise
+ */
+export function isContentDraft(content: CMSContent): boolean {
+  if (!content.publishedAt) {
+    return true;
+  }
+
+  const publishedDate = content.publishedAt instanceof Date
+    ? content.publishedAt
+    : new Date(content.publishedAt);
+
+  const publishedTime = publishedDate.getTime();
+
+  // If the date is invalid (NaN), treat as draft
+  if (isNaN(publishedTime)) {
+    return true;
+  }
+
+  const now = Date.now();
+  return publishedTime > now;
+}
+
+/**
  * Get LeadCMS configuration with fallbacks
  * This function attempts to load the LeadCMS configuration and falls back to environment variables
  * if the configuration file is not available or cannot be loaded.
@@ -57,7 +86,7 @@ export interface CMSContent {
   coverImageAlt?: string;
   language?: string;
   translationKey?: string;
-  publishedAt?: Date;
+  publishedAt?: Date | string;
   draft?: boolean; // Added to support draft content filtering
 
   [key: string]: any;
@@ -146,7 +175,7 @@ function getAllContentSlugsForLocaleFromDir(
   }
 
   // Apply draft filtering logic
-  return applyDraftFiltering(slugs, includeDrafts, draftUserUid);
+  return applyDraftFiltering(slugs, includeDrafts, draftUserUid, contentDir, locale);
 }
 
 /**
@@ -178,25 +207,41 @@ export function getAllContentSlugsForLocale(
  * @param slugs - Array of all slugs
  * @param includeDrafts - Whether to include draft content (null/false = filter out drafts)
  * @param draftUserUid - Specific user UID for draft content (only relevant if includeDrafts is true)
+ * @param contentDir - Content directory to load content from for publishedAt checking
+ * @param locale - Locale for content loading
  */
 function applyDraftFiltering(
   slugs: string[],
   includeDrafts?: boolean | null,
-  draftUserUid?: string | null
+  draftUserUid?: string | null,
+  contentDir?: string,
+  locale?: string
 ): string[] {
   // If includeDrafts is false or null, filter out all draft content
   if (!includeDrafts) {
-    return filterOutDraftSlugs(slugs);
-  }
+    let filteredSlugs = filterOutDraftSlugs(slugs);
 
-  // If includeDrafts is true but no specific user UID, return all slugs as-is
-  if (!draftUserUid) {
-    return slugs;
+    // Also filter based on publishedAt if contentDir is available
+    if (contentDir) {
+      filteredSlugs = filteredSlugs.filter(slug => {
+        const localeContentDir = getContentDirForLocale(contentDir, locale);
+        const content = getCMSContentBySlugFromDir(slug, localeContentDir);
+        return content && !isContentDraft(content);
+      });
+    }
+
+    return filteredSlugs;
   }
 
   // If includeDrafts is true and draftUserUid is specified,
   // return base content with user's drafts overriding the originals
-  return getBaseContentWithUserDraftOverrides(slugs, draftUserUid);
+  // User-specific drafts are always included regardless of publishedAt
+  if (draftUserUid) {
+    return getBaseContentWithUserDraftOverrides(slugs, draftUserUid);
+  }
+
+  // If includeDrafts is true but no specific user UID, return all slugs as-is
+  return slugs;
 }
 
 /**
@@ -216,22 +261,22 @@ function filterOutDraftSlugs(slugs: string[]): string[] {
 
 /**
  * Get base content slugs with user-specific draft overrides
- * Returns only the user's draft versions when they exist, otherwise the base content
+ * Returns base slugs, but when content is fetched, user's version will be preferred
+ * Also includes user-only drafts (drafts that don't have a base version)
  */
 function getBaseContentWithUserDraftOverrides(slugs: string[], draftUserUid: string): string[] {
   // First, get all base slugs (non-draft)
   const baseSlugs = filterOutDraftSlugs(slugs);
+  const result: string[] = [...baseSlugs]; // Start with all base slugs
 
-  // For each base slug, check if user has a draft version and prefer it
-  const result: string[] = [];
+  // Find user-only drafts (drafts that don't have a corresponding base slug)
+  const userDraftPattern = new RegExp(`-${draftUserUid}$`);
+  const userDrafts = slugs.filter(slug => userDraftPattern.test(slug));
 
-  for (const baseSlug of baseSlugs) {
-    const userDraftSlug = `${baseSlug}-${draftUserUid}`;
-
-    // If user has a draft version, use it; otherwise use the base version
-    if (slugs.includes(userDraftSlug)) {
-      result.push(userDraftSlug);
-    } else {
+  for (const userDraft of userDrafts) {
+    const baseSlug = userDraft.replace(userDraftPattern, '');
+    // If this is a user-only draft (no base version exists), add the base slug
+    if (!baseSlugs.includes(baseSlug)) {
       result.push(baseSlug);
     }
   }
@@ -303,11 +348,13 @@ function getAllContentSlugsExcludingLanguageDirs(
  * @param slug - Content slug
  * @param locale - Locale code
  * @param userUid - Optional user UID for draft content
+ * @param includeDrafts - Whether to include content that is draft based on publishedAt (default: false)
  */
 export function getCMSContentBySlugForLocaleWithDraftSupport(
   slug: string,
   locale: string,
-  userUid?: string | null
+  userUid?: string | null,
+  includeDrafts: boolean = false
 ): CMSContent | null {
   const config = getLeadCMSConfig();
   const contentDir = config.contentDir;
@@ -322,12 +369,20 @@ export function getCMSContentBySlugForLocaleWithDraftSupport(
     const draftSlug = `${slug}-${userUid}`;
     const draftContent = getCMSContentBySlugForLocaleFromDir(draftSlug, contentDir, locale);
     if (draftContent) {
+      // Always return user-specific draft content when found, ignoring publishedAt logic
       return draftContent;
     }
   }
 
   // Fall back to regular content
-  return getCMSContentBySlugForLocaleFromDir(slug, contentDir, locale);
+  const content = getCMSContentBySlugForLocaleFromDir(slug, contentDir, locale);
+
+  // Filter out drafts by default unless explicitly requested
+  if (content && !includeDrafts && isContentDraft(content)) {
+    return null;
+  }
+
+  return content;
 }
 
 /**
@@ -355,7 +410,8 @@ function getCMSContentBySlugForLocaleFromDir(
  */
 export function getCMSContentBySlugForLocale(
   slug: string,
-  locale?: string
+  locale?: string,
+  includeDrafts: boolean = false
 ): CMSContent | null {
   const config = getLeadCMSConfig();
   const contentDir = config.contentDir;
@@ -365,14 +421,24 @@ export function getCMSContentBySlugForLocale(
     return null;
   }
 
-  return getCMSContentBySlugForLocaleFromDir(slug, contentDir, locale);
+  const content = getCMSContentBySlugForLocaleFromDir(slug, contentDir, locale);
+
+  // Filter out drafts by default unless explicitly requested
+  if (content && !includeDrafts && isContentDraft(content)) {
+    return null;
+  }
+
+  return content;
 }
 
 /**
  * Get all translations of a content item by translationKey
+ * @param translationKey - The translation key to search for
+ * @param includeDrafts - Whether to include draft content (default: false)
  */
 export function getContentTranslations(
-  translationKey: string
+  translationKey: string,
+  includeDrafts: boolean = false
 ): { locale: string; content: CMSContent }[] {
   const config = getLeadCMSConfig();
   const contentDir = config.contentDir;
@@ -390,10 +456,15 @@ export function getContentTranslations(
 
     // Search for content with matching translationKey
     try {
-      const slugs = getAllContentSlugsFromDir(localeContentDir);
+      const slugs = getAllContentSlugsForLocaleFromDir(contentDir, locale, undefined, includeDrafts);
       for (const slug of slugs) {
         const content = getCMSContentBySlugFromDir(slug, localeContentDir);
         if (content && content.translationKey === translationKey) {
+          // Filter out drafts by default unless explicitly requested
+          if (!includeDrafts && isContentDraft(content)) {
+            continue;
+          }
+
           content.language = content.language || locale;
           translations.push({ locale, content });
           break; // Found the translation for this locale
@@ -411,10 +482,13 @@ export function getContentTranslations(
 /**
  * Get all content routes for all locales in a framework-agnostic format
  * Returns an array of route objects with locale and slug information
+ * @param contentTypes - Optional array of content types to filter
+ * @param includeDrafts - Whether to include draft content (default: false)
+ * @param draftUserUid - Specific user UID for draft content (only relevant if includeDrafts is true)
  */
 export function getAllContentRoutes(
   contentTypes?: readonly string[],
-  includeDrafts?: boolean | null,
+  includeDrafts: boolean = false,
   draftUserUid?: string | null
 ): { locale: string; slug: string; slugParts: string[]; isDefaultLocale: boolean; path: string }[] {
   const config = getLeadCMSConfig();
@@ -463,7 +537,10 @@ export function extractUserUidFromSlug(slug: string): string | null {
   return match ? match[1] : null;
 }
 
-export function getAllContentSlugs(contentTypes?: readonly string[]): string[] {
+export function getAllContentSlugs(
+  contentTypes?: readonly string[],
+  includeDrafts: boolean = false
+): string[] {
   const config = getLeadCMSConfig();
   const contentDir = config.contentDir;
 
@@ -472,12 +549,36 @@ export function getAllContentSlugs(contentTypes?: readonly string[]): string[] {
     return [];
   }
 
-  return getAllContentSlugsFromDir(contentDir, contentTypes);
+  const allSlugs = getAllContentSlugsFromDir(contentDir, contentTypes);
+
+  // Always filter out user-specific draft slugs (with GUID pattern) - these should never appear in general listings
+  let filteredSlugs = filterOutDraftSlugs(allSlugs);
+
+  // Filter out draft content based on publishedAt if includeDrafts is false
+  if (!includeDrafts) {
+    // Then filter based on publishedAt
+    return filteredSlugs.filter(slug => {
+      const content = getCMSContentBySlugFromDir(slug, contentDir);
+      return content && !isContentDraft(content);
+    });
+  }
+
+  return filteredSlugs;
 }
 
 function getAllContentSlugsFromDir(contentDir: string, contentTypes?: readonly string[]): string[] {
   function walk(dir: string, prefix = ""): string[] {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (error: any) {
+      // If directory doesn't exist or can't be read, return empty array
+      if (error.code === 'ENOENT' || error.code === 'EACCES') {
+        return [];
+      }
+      throw error;
+    }
+
     const slugs: string[] = [];
     for (const entry of entries) {
       if (entry.isDirectory()) {
@@ -514,7 +615,7 @@ function getAllContentSlugsFromDir(contentDir: string, contentTypes?: readonly s
   return walk(contentDir);
 }
 
-export function getCMSContentBySlug(slug: string): CMSContent | null {
+export function getCMSContentBySlug(slug: string, includeDrafts: boolean = false): CMSContent | null {
   const config = getLeadCMSConfig();
   const contentDir = config.contentDir;
 
@@ -523,7 +624,14 @@ export function getCMSContentBySlug(slug: string): CMSContent | null {
     return null;
   }
 
-  return getCMSContentBySlugFromDir(slug, contentDir);
+  const content = getCMSContentBySlugFromDir(slug, contentDir);
+
+  // Filter out drafts by default unless explicitly requested
+  if (content && !includeDrafts && isContentDraft(content)) {
+    return null;
+  }
+
+  return content;
 }
 
 function getCMSContentBySlugFromDir(slug: string, contentDir: string): CMSContent | null {
@@ -536,6 +644,12 @@ function getCMSContentBySlugFromDir(slug: string, contentDir: string): CMSConten
     try {
       const file = fs.readFileSync(mdxPath, "utf8");
       const { data, content } = matter(file);
+
+      // Convert publishedAt string to Date if present
+      if (data.publishedAt && typeof data.publishedAt === 'string') {
+        data.publishedAt = new Date(data.publishedAt);
+      }
+
       return {
         ...data,
         slug,
@@ -553,6 +667,12 @@ function getCMSContentBySlugFromDir(slug: string, contentDir: string): CMSConten
     try {
       const file = fs.readFileSync(jsonPath, "utf8");
       const data = JSON.parse(file);
+
+      // Convert publishedAt string to Date if present
+      if (data.publishedAt && typeof data.publishedAt === 'string') {
+        data.publishedAt = new Date(data.publishedAt);
+      }
+
       return {
         ...data,
         slug,

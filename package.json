@@ -18,7 +18,10 @@
     "fix-permissions": "chmod +x dist/cli/index.js && chmod +x dist/scripts/*.sh 2>/dev/null || true",
     "dev": "npm run build && concurrently \"tsc --watch\" \"npm run watch-assets\"",
     "watch-assets": "nodemon --watch src/scripts --watch src/templates --ext '*' --exec 'npm run copy-assets'",
-    "test": "npm run build && node dist/cli/index.js --help > /dev/null && echo '✅ CLI tests passed'",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:cli": "npm run build && node dist/cli/index.js --help > /dev/null && echo '✅ CLI tests passed'",
     "prepublishOnly": "npm run build",
     "leadcms:fetch": "node src/scripts/fetch-leadcms-content.mjs",
     "leadcms:watch": "node src/scripts/sse-watcher.mjs",
@@ -33,10 +36,14 @@
   },
   "devDependencies": {
     "@types/eventsource": "^1.1.15",
+    "@types/jest": "^29.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.0.0",
     "concurrently": "^9.2.1",
+    "jest": "^29.0.0",
+    "jest-junit": "^16.0.0",
     "nodemon": "^3.1.10",
+    "ts-jest": "^29.0.0",
     "typescript": "^5.0.0"
   },
   "files": [

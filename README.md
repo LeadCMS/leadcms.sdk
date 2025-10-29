@@ -44,6 +44,75 @@ npm install -g @leadcms/sdk
 - 🛠️ Project initialization and setup
 - 🛠️ Content fetching and Docker template generation
 
+## CI/CD Integration
+
+[![CI](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/ci.yml)
+[![Tests](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/test.yml/badge.svg)](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/test.yml)
+
+The LeadCMS SDK includes comprehensive CI/CD workflows for GitHub Actions that provide:
+
+### 🧪 Automated Testing
+- **Multi-Node Support**: Tests run on Node.js 18, 20, and 22
+- **Coverage Reports**: Automatic coverage reporting with visual coverage diffs on PRs
+- **Test Results**: Interactive test results displayed directly in GitHub Actions
+- **JUnit XML**: Structured test output for integration with external tools
+
+### 📊 Coverage Reporting
+- **LCOV Reports**: Line and branch coverage tracking
+- **PR Comments**: Automatic coverage comments on pull requests showing coverage changes
+- **Coverage Artifacts**: HTML coverage reports archived for 30 days
+- **Codecov Integration**: Optional Codecov integration for advanced coverage analytics
+
+### 🔧 Quality Checks
+- **TypeScript Compilation**: Ensures type safety across all Node.js versions
+- **Package Validation**: Verifies package structure and CLI functionality
+- **Docker Template Testing**: Validates generated Docker configurations
+
+### Setting Up CI/CD for Your Project
+
+If you're using this SDK in your own project, you can add similar testing workflows:
+
+```yaml
+# .github/workflows/test.yml
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm test
+```
+
+### Running Tests Locally
+
+```bash
+# Run all tests
+npm test
+
+# Run tests with coverage
+npm run test:coverage
+
+# Run tests in watch mode
+npm run test:watch
+```
+
+### Test Coverage
+
+The SDK maintains high test coverage with comprehensive unit tests covering:
+- 📄 Content retrieval and parsing
+- 🌍 Multi-language support and translations
+- 📝 Draft content handling and user-specific overrides
+- 🏗️ Build-time optimizations and caching
+- 🔧 Configuration management and validation
+
 ## Configuration
 
 LeadCMS SDK supports multiple configuration methods in order of priority:
@@ -231,11 +300,11 @@ const routes = getAllContentRoutes();
 // Get available languages (uses configured contentDir)
 const languages = getAvailableLanguages();
 
-// Get content with draft support
+// Get content with draft support (userUid must be a valid GUID)
 const draftContent = getCMSContentBySlugForLocaleWithDraftSupport(
   'about-us',
   'en',
-  'user-uuid-for-drafts'
+  '550e8400-e29b-41d4-a716-446655440000' // Valid GUID format
 );
 
 // Load configuration objects (header, footer, etc.)
@@ -251,8 +320,8 @@ import {
   loadContentConfigStrict
 } from '@leadcms/sdk';
 
-// Generic config loading with auto contentDir resolution
-const menuConfig = loadContentConfig('menu', 'en', 'user-uuid-for-drafts');
+// Generic config loading with auto contentDir resolution (userUid must be valid GUID)
+const menuConfig = loadContentConfig('menu', 'en', '6ba7b810-9dad-11d1-80b4-00c04fd430c8');
 
 // Strict config loading with detailed error information (throws on missing files)
 try {

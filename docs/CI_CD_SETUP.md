@@ -1,0 +1,110 @@
+# CI/CD Setup Guide
+
+This guide helps you set up comprehensive testing and coverage reporting for the LeadCMS SDK.
+
+## GitHub Actions Workflows
+
+The repository includes two main workflows:
+
+### 1. CI Workflow (`.github/workflows/ci.yml`)
+- **Purpose**: Complete build, test, and validation pipeline
+- **Triggers**: Push to main/develop, Pull Requests
+- **Features**:
+  - Multi-Node.js version testing (18, 20, 22)
+  - Package building and validation
+  - CLI functionality testing
+  - Docker template generation testing
+
+### 2. Test Workflow (`.github/workflows/test.yml`)
+- **Purpose**: Focused testing with coverage reporting
+- **Triggers**: Push to main/develop, Pull Requests  
+- **Features**:
+  - Jest test execution with coverage
+  - JUnit XML test result reporting
+  - Coverage artifacts and summaries
+  - PR coverage comments
+
+## Test Result Visibility
+
+### In GitHub Actions
+1. **Test Summary**: Visible in the Actions run summary page
+2. **Test Reporter**: Detailed test results with pass/fail status for each test
+3. **Coverage Reports**: HTML coverage reports archived as artifacts
+4. **PR Comments**: Automatic coverage change comments on pull requests
+
+### Viewing Test Results
+- Go to the GitHub repository > Actions tab
+- Click on any test run to see detailed results
+- Download coverage artifacts for local viewing
+- Check PR comments for coverage changes
+
+## Setting Up Codecov (Optional)
+
+To enable Codecov integration for advanced coverage analytics:
+
+1. **Sign up** at [codecov.io](https://codecov.io) with your GitHub account
+2. **Add your repository** to Codecov
+3. **Get your upload token** from Codecov settings
+4. **Add the token** to GitHub Secrets:
+   - Go to your repository > Settings > Secrets and variables > Actions
+   - Add new secret: `CODECOV_TOKEN` with the token value
+5. **Enable the workflow**: The Codecov upload is already configured but disabled by default
+
+## Local Development
+
+### Running Tests
+```bash
+# Install dependencies
+npm ci
+
+# Run all tests
+npm test
+
+# Run tests with coverage
+npm run test:coverage
+
+# Run tests in watch mode (for development)
+npm run test:watch
+```
+
+### Coverage Reports
+After running `npm run test:coverage`, you can:
+- View text coverage in the terminal
+- Open `coverage/lcov-report/index.html` in your browser for detailed HTML report
+- Check `coverage/lcov.info` for raw coverage data
+
+### Test Configuration
+The Jest configuration is in `jest.config.js` and includes:
+- TypeScript support via `ts-jest`
+- Coverage collection from `src/**/*.ts` files
+- JUnit XML output for CI integration
+- HTML and LCOV coverage reporting
+
+## Badge Integration
+
+Add these badges to your README to show CI status:
+
+```markdown
+[![CI](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/ci.yml)
+[![Tests](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/test.yml/badge.svg)](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/test.yml)
+```
+
+## Troubleshooting
+
+### Common Issues
+1. **Tests fail locally but pass in CI**: Check Node.js version compatibility
+2. **Coverage reports not generated**: Ensure `jest-junit` is installed
+3. **JUnit XML missing**: Verify Jest configuration includes reporters section
+4. **Codecov upload fails**: Check if `CODECOV_TOKEN` secret is set correctly
+
+### Debug Commands
+```bash
+# Verify Jest configuration
+npx jest --showConfig
+
+# Run tests with verbose output
+npm test -- --verbose
+
+# Generate coverage without running all tests
+npm run test:coverage -- --collectCoverageOnlyFrom="src/lib/cms.ts"
+```
