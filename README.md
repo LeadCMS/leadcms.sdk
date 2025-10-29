@@ -47,7 +47,6 @@ npm install -g @leadcms/sdk
 ## CI/CD Integration
 
 [![CI](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/ci.yml)
-[![Tests](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/test.yml/badge.svg)](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/test.yml)
 
 The LeadCMS SDK includes comprehensive CI/CD workflows for GitHub Actions that provide:
 

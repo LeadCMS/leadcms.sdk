@@ -12,7 +12,8 @@ permissions:
   pull-requests: write
 
 jobs:
-  build-and-test:
+  test:
+    name: Test & Build
     runs-on: ubuntu-latest
 
     strategy:
@@ -32,32 +33,53 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run build
-        run: npm run build
-
       - name: Run tests with coverage
         run: npm run test:coverage
 
+      - name: Run build
+        run: npm run build
+
       - name: Upload test results
         uses: dorny/test-reporter@v1
-        if: success() || failure()
+        if: (success() || failure()) && matrix.node-version == '20'
         with:
-          name: Jest Tests (Node ${{ matrix.node-version }})
+          name: Jest Tests Results
           path: coverage/junit.xml
           reporter: jest-junit
           fail-on-error: true
 
-      - name: Generate test summary
-        if: success() || failure()
+      - name: Archive coverage artifacts
+        if: matrix.node-version == '20'
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-report
+          path: |
+            coverage/
+            !coverage/tmp
+          retention-days: 30
+
+      - name: Test Summary
+        if: matrix.node-version == '20'
         run: |
-          echo "## Test Results 🧪" >> $GITHUB_STEP_SUMMARY
+          echo "## 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Coverage Report" >> $GITHUB_STEP_SUMMARY
           if [ -f coverage/lcov-report/index.html ]; then
-            echo "### Coverage Report" >> $GITHUB_STEP_SUMMARY
-            echo "Coverage reports have been generated and uploaded." >> $GITHUB_STEP_SUMMARY
+            echo "✅ Coverage report generated successfully" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "📊 **Coverage Details:**" >> $GITHUB_STEP_SUMMARY
+            if [ -f coverage/lcov.info ]; then
+              COVERAGE=$(grep -E "end_of_record" coverage/lcov.info | wc -l)
+              echo "- Number of files covered: $COVERAGE" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "❌ Coverage report generation failed" >> $GITHUB_STEP_SUMMARY
           fi
-          echo "### Test Execution" >> $GITHUB_STEP_SUMMARY
-          echo "- Node.js version: ${{ matrix.node-version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Tests completed for commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Environment" >> $GITHUB_STEP_SUMMARY
+          echo "- Node.js: ${{ matrix.node-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Branch: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Verify CLI executable
         run: |
@@ -84,8 +106,57 @@ jobs:
           node dist/cli/index.js --help > /dev/null
           echo "✅ CLI help works"
 
-  coverage-report:
+      - name: Test Docker template generation
+        run: |
+          cd /tmp
+          mkdir leadcms-test
+          cd leadcms-test
+          node $GITHUB_WORKSPACE/dist/cli/index.js docker
+
+          # Verify Docker files were created
+          test -f Dockerfile || (echo "❌ Dockerfile not created" && exit 1)
+          test -f nginx.conf || (echo "❌ nginx.conf not created" && exit 1)
+          test -f preview/Dockerfile || (echo "❌ Preview Dockerfile not created" && exit 1)
+          test -f scripts/inject-runtime-env.sh || (echo "❌ Shell script not created" && exit 1)
+
+          echo "✅ Docker templates work correctly"
+
+  lint:
+    name: Lint & Type Check
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check TypeScript
+        run: npx tsc --noEmit
+
+      - name: Verify package.json
+        run: |
+          echo "Checking package.json structure..."
+          node -e "
+            const pkg = require('./package.json');
+            if (!pkg.bin?.leadcms) throw new Error('Missing bin.leadcms');
+            if (!pkg.main) throw new Error('Missing main field');
+            if (!pkg.types) throw new Error('Missing types field');
+            if (!pkg.files?.includes('dist/')) throw new Error('Missing dist/ in files');
+            console.log('✅ package.json structure is valid');
+          "
+
+  coverage-comment:
+    name: Coverage Comment
+    runs-on: ubuntu-latest
+    needs: test
     if: github.event_name == 'pull_request'
 
     steps:
@@ -101,7 +172,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests with coverage
+      - name: Generate coverage
         run: npm run test:coverage
 
       - name: Coverage comment
@@ -110,3 +181,4 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           lcov-file: ./coverage/lcov.info
           delete-old-comments: true
+          filter-changed-files: true

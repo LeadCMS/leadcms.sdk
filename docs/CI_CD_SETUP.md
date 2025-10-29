@@ -4,25 +4,20 @@ This guide helps you set up comprehensive testing and coverage reporting for the
 
 ## GitHub Actions Workflows
 
-The repository includes two main workflows:
+The repository includes a comprehensive CI workflow:
 
-### 1. CI Workflow (`.github/workflows/ci.yml`)
-- **Purpose**: Complete build, test, and validation pipeline
+### CI Workflow (`.github/workflows/ci.yml`)
+- **Purpose**: Complete test, build, and validation pipeline
 - **Triggers**: Push to main/develop, Pull Requests
 - **Features**:
   - Multi-Node.js version testing (18, 20, 22)
+  - Jest test execution with coverage reporting
   - Package building and validation
   - CLI functionality testing
   - Docker template generation testing
-
-### 2. Test Workflow (`.github/workflows/test.yml`)
-- **Purpose**: Focused testing with coverage reporting
-- **Triggers**: Push to main/develop, Pull Requests  
-- **Features**:
-  - Jest test execution with coverage
+  - TypeScript compilation checking
   - JUnit XML test result reporting
-  - Coverage artifacts and summaries
-  - PR coverage comments
+  - Coverage artifacts and PR comments
 
 ## Test Result Visibility
 
