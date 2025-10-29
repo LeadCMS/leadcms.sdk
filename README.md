@@ -261,7 +261,7 @@ Push your local content changes to LeadCMS. This command will:
 
 **Options:**
 - `--force` - Override remote changes (skip conflict check)
-- `--bulk` - Use bulk import for new content (faster for large imports)
+
 
 **Required Metadata Fields:**
 ```yaml

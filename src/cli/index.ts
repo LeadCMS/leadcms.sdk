@@ -57,7 +57,6 @@ Usage:
   leadcms pull           - Pull content from LeadCMS
   leadcms push [options] - Push local content to LeadCMS
     --force              - Override remote changes (skip conflict check)
-    --bulk               - Use bulk import for new content (faster)
     --dry-run            - Show API calls without executing them (preview mode)
     --id <content-id>    - Target specific content by ID
     --slug <slug>        - Target specific content by slug

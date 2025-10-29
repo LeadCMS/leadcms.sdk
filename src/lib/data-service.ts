@@ -38,9 +38,7 @@ interface MockData {
   scenario: string;
 }
 
-interface BulkImportResponse {
-  items: ContentItem[];
-}
+
 
 interface ApiHeaders {
   'Authorization': string;
@@ -378,39 +376,7 @@ class LeadCMSDataService {
     }
   }
 
-  /**
-   * Bulk import content to LeadCMS or mock
-   */
-  async bulkImportContent(items: Partial<ContentItem>[]): Promise<BulkImportResponse> {
-    this._initialize();
 
-    if (this.useMock && this.mockData) {
-      console.log(`[MOCK] Bulk importing ${items.length} items`);
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      const createdItems: ContentItem[] = items.map(item => ({
-        ...item,
-        id: Math.floor(Math.random() * 1000) + 100,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      } as ContentItem));
-
-      this.mockData.remoteContent.push(...createdItems);
-      return { items: createdItems };
-    }
-
-    try {
-      console.log(`[API] Bulk importing ${items.length} items`);
-      const response: AxiosResponse<BulkImportResponse> = await axios.post(`${this.baseURL}/api/content/import`, { items }, {
-        headers: this.getApiHeaders()
-      });
-
-      return response.data;
-    } catch (error: any) {
-      console.error(`[API] Failed to bulk import content:`, error.message);
-      throw error;
-    }
-  }
 
   /**
    * Create content type in LeadCMS or mock
@@ -521,4 +487,4 @@ export const leadCMSDataService = new LeadCMSDataService();
 export { LeadCMSDataService };
 
 // Export types for use in other modules
-export type { ContentItem, ContentType, MockScenario, MockData, BulkImportResponse };
+export type { ContentItem, ContentType, MockScenario, MockData };

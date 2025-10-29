@@ -50,7 +50,6 @@ interface ContentOperations {
 interface PushOptions {
   statusOnly?: boolean;
   force?: boolean;
-  bulk?: boolean;
   targetId?: string;      // Target specific content by ID
   targetSlug?: string;    // Target specific content by slug
   showDetailedPreview?: boolean;  // Show detailed diff preview for all files
@@ -59,7 +58,6 @@ interface PushOptions {
 
 interface ExecutionOptions {
   force?: boolean;
-  bulk?: boolean;
 }
 
 // Create readline interface for user prompts
@@ -848,15 +846,7 @@ async function showDryRunOperations(operations: ContentOperations): Promise<void
     }
   }
 
-  // Bulk operations
-  if (operations.create.length > 3) {
-    colorConsole.progress(`\n📦 BULK CREATE Operation (Alternative):`);
-    const bulkData = operations.create.map(op => formatContentForAPI(op.local));
-    colorConsole.log(`\n${colorConsole.cyan('POST')} ${colorConsole.highlight('/api/content/bulk')}`);
-    colorConsole.log(`${colorConsole.gray('Content-Type:')} application/json`);
-    colorConsole.log(`\n${colorConsole.gray('Request Body:')}`);
-    colorConsole.log(JSON.stringify({ items: bulkData }, null, 2));
-  }
+
 
   colorConsole.log('\n');
   colorConsole.important('💡 No actual API calls were made. Use without --dry-run to execute.');
@@ -866,7 +856,7 @@ async function showDryRunOperations(operations: ContentOperations): Promise<void
  * Main function for push command
  */
 async function pushMain(options: PushOptions = {}): Promise<void> {
-  const { statusOnly = false, force = false, bulk = false, targetId, targetSlug, showDetailedPreview = false, dryRun = false } = options;
+  const { statusOnly = false, force = false, targetId, targetSlug, showDetailedPreview = false, dryRun = false } = options;
 
   try {
     const isSingleFileMode = !!(targetId || targetSlug);
@@ -968,13 +958,6 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
       return;
     }
 
-    // Ask about sync method if we only have creates and bulk wasn't specified via CLI
-    let useBulk = bulk;
-    if (!bulk && finalOperations.create.length > 0 && finalOperations.update.length === 0 && !isSingleFileMode) {
-      const bulkChoice = await question(`\nUse bulk import for faster syncing? (y/N): `);
-      useBulk = bulkChoice.toLowerCase() === 'y' || bulkChoice.toLowerCase() === 'yes';
-    }
-
     // Confirm changes
     const itemDescription = isSingleFileMode ? 'file change' : 'changes';
     const confirmMsg = `\nProceed with syncing ${totalChanges} ${itemDescription} to LeadCMS? (y/N): `;
@@ -986,7 +969,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     }
 
     // Execute the sync
-    await executePush(finalOperations, { force, bulk: useBulk });
+    await executePush(finalOperations, { force });
 
     colorConsole.success('\n🎉 Content push completed successfully!');
 
@@ -1003,9 +986,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
  * Execute the actual push operations
  */
 async function executePush(operations: ContentOperations, options: ExecutionOptions = {}): Promise<void> {
-  const { force = false, bulk = false } = options;
-  let successful = 0;
-  let failed = 0;
+  const { force = false } = options;
 
   // Handle force updates for conflicts
   if (force && operations.conflict.length > 0) {
@@ -1018,42 +999,8 @@ async function executePush(operations: ContentOperations, options: ExecutionOpti
     }
   }
 
-  // If bulk mode is requested and we only have creates, use bulk import
-  if (bulk && operations.create.length > 0 && operations.update.length === 0) {
-    console.log(`\n📦 Using bulk import for ${operations.create.length} new items...`);
-    try {
-      const result = await leadCMSDataService.bulkImportContent(operations.create.map(op => formatContentForAPI(op.local)));
-      const items = result.items || [];
-      if (items && items.length > 0) {
-        // Update local metadata for successfully imported items
-        for (let i = 0; i < items.length; i++) {
-          if (items[i] && operations.create[i]) {
-            await updateLocalMetadata(operations.create[i].local, items[i]);
-            successful++;
-          } else {
-            failed++;
-          }
-        }
-        console.log(`✅ Bulk import completed: ${successful} successful, ${failed} failed`);
-      } else {
-        console.log(`❌ Bulk import failed`);
-        failed = operations.create.length;
-      }
-    } catch (error: any) {
-      console.log(`❌ Bulk import failed:`, error.message);
-      console.log(`🔄 Falling back to individual operations...`);
-
-      // Fall back to individual operations
-      await executeIndividualOperations(operations, { force });
-      return;
-    }
-  } else {
-    // Use individual operations
-    await executeIndividualOperations(operations, { force });
-    return;
-  }
-
-  console.log(`\n📊 Results: ${successful} successful, ${failed} failed`);
+  // Use individual operations
+  await executeIndividualOperations(operations, { force });
 }
 
 /**
@@ -1164,6 +1111,19 @@ async function executeIndividualOperations(operations: ContentOperations, option
   }
 
   console.log(`\n📊 Results: ${successful} successful, ${failed} failed`);
+
+  // If any updates were successful, automatically pull latest changes to sync local store
+  if (successful > 0) {
+    console.log(`\n🔄 Syncing latest changes from LeadCMS to local store...`);
+    try {
+      const { fetchLeadCMSContent } = await import('./fetch-leadcms-content.js');
+      await fetchLeadCMSContent();
+      console.log('✅ Local content store synchronized with latest changes');
+    } catch (error: any) {
+      console.warn('⚠️  Failed to automatically sync local content:', error.message);
+      console.log('💡 You may want to manually run the pull command to sync latest changes');
+    }
+  }
 }
 
 /**
@@ -1177,6 +1137,13 @@ function formatContentForAPI(localContent: LocalContentItem): Partial<ContentIte
     body: localContent.body,
     ...localContent.metadata
   };
+
+  // Preserve the file-based slug (from localContent.slug) over metadata slug
+  // This is crucial for rename operations where the file has been renamed
+  // but the frontmatter still contains the old slug
+  if (localContent.slug !== localContent.metadata?.slug) {
+    contentData.slug = localContent.slug;
+  }
 
   // Remove local-only fields
   delete contentData.filePath;
@@ -1232,7 +1199,6 @@ if (typeof import.meta !== 'undefined' && process.argv[1] && import.meta.url ===
   const args = process.argv.slice(2);
   const statusOnly = args.includes('--status');
   const force = args.includes('--force');
-  const bulk = args.includes('--bulk');
   const dryRun = args.includes('--dry-run');
 
   // Parse target ID or slug
@@ -1249,7 +1215,7 @@ if (typeof import.meta !== 'undefined' && process.argv[1] && import.meta.url ===
     targetSlug = args[slugIndex + 1];
   }
 
-  pushMain({ statusOnly, force, bulk, targetId, targetSlug, dryRun }).catch((error) => {
+  pushMain({ statusOnly, force, targetId, targetSlug, dryRun }).catch((error) => {
     console.error('Error running LeadCMS push:', error.message);
     process.exit(1);
   });

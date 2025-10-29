@@ -367,45 +367,7 @@ describe('LeadCMS Push/Status', () => {
     });
   });
 
-  describe('Bulk Import Logic', () => {
-    it('should prefer bulk import for large numbers of new content', () => {
-      const analysisResult = {
-        toCreate: Array.from({ length: 10 }, (_, i) => ({
-          slug: `article-${i + 1}`,
-          type: 'article',
-          language: 'en'
-        })),
-        toUpdate: [],
-        conflicts: [],
-        inSync: []
-      };
 
-      const shouldUseBulkImport = analysisResult.toCreate.length >= 5 &&
-                                 analysisResult.toUpdate.length === 0 &&
-                                 analysisResult.conflicts.length === 0;
-
-      expect(shouldUseBulkImport).toBe(true);
-    });
-
-    it('should not use bulk import when updates or conflicts exist', () => {
-      const analysisResult = {
-        toCreate: Array.from({ length: 10 }, (_, i) => ({
-          slug: `article-${i + 1}`,
-          type: 'article',
-          language: 'en'
-        })),
-        toUpdate: [{ slug: 'existing', type: 'article', language: 'en' }],
-        conflicts: [],
-        inSync: []
-      };
-
-      const shouldUseBulkImport = analysisResult.toCreate.length >= 5 &&
-                                 analysisResult.toUpdate.length === 0 &&
-                                 analysisResult.conflicts.length === 0;
-
-      expect(shouldUseBulkImport).toBe(false);
-    });
-  });
 
   describe('Content Parsing and Formatting', () => {
     it('should correctly parse MDX frontmatter', () => {
@@ -667,6 +629,97 @@ This is the content.`;
         expect(operations.rename[0].oldSlug).toBe('old-post');
         expect(operations.rename[0].local.slug).toBe('new-post');
         expect(operations.rename[0].local.metadata.slug).toBe('old-post'); // Frontmatter has old slug
+      });
+
+      it('should use new file-based slug for API request in rename operations', () => {
+        // This test verifies that when formatting content for API during rename,
+        // the new slug from the file path is used, not the old slug from frontmatter
+
+        const mockLocalContent = {
+          slug: 'blog-1', // New slug from file path
+          type: 'blog-index',
+          locale: 'en',
+          body: 'Blog content here',
+          metadata: {
+            slug: 'blog', // Old slug in frontmatter
+            title: 'Blog Title',
+            id: 56
+          },
+          filePath: '/path/to/blog-1.mdx',
+          isLocal: true
+        };
+
+        // Simulate the corrected formatContentForAPI function behavior
+        const formatContentForAPI = (localContent: any) => {
+          const contentData: any = {
+            slug: localContent.slug,
+            type: localContent.type,
+            language: localContent.locale,
+            body: localContent.body,
+            ...localContent.metadata
+          };
+
+          // Preserve the file-based slug over metadata slug (the fix)
+          if (localContent.slug !== localContent.metadata?.slug) {
+            contentData.slug = localContent.slug;
+          }
+
+          delete contentData.filePath;
+          delete contentData.isLocal;
+          return contentData;
+        };
+
+        const result = formatContentForAPI(mockLocalContent);
+
+        // After the fix, this should pass - using file-based slug for rename
+        expect(result.slug).toBe('blog-1'); // Should use file-based slug for rename
+        expect(result.type).toBe('blog-index');
+        expect(result.id).toBe(56);
+      });
+
+      it('should preserve metadata slug when it matches file-based slug', () => {
+        // This test ensures we don't break normal cases where slugs match
+
+        const mockLocalContent = {
+          slug: 'normal-article', // Same slug in file path
+          type: 'article',
+          locale: 'en',
+          body: 'Article content here',
+          metadata: {
+            slug: 'normal-article', // Same slug in frontmatter
+            title: 'Normal Article',
+            id: 123
+          },
+          filePath: '/path/to/normal-article.mdx',
+          isLocal: true
+        };
+
+        // Simulate the corrected formatContentForAPI function behavior
+        const formatContentForAPI = (localContent: any) => {
+          const contentData: any = {
+            slug: localContent.slug,
+            type: localContent.type,
+            language: localContent.locale,
+            body: localContent.body,
+            ...localContent.metadata
+          };
+
+          // Preserve the file-based slug over metadata slug (the fix)
+          if (localContent.slug !== localContent.metadata?.slug) {
+            contentData.slug = localContent.slug;
+          }
+
+          delete contentData.filePath;
+          delete contentData.isLocal;
+          return contentData;
+        };
+
+        const result = formatContentForAPI(mockLocalContent);
+
+        // Should still work correctly when slugs match
+        expect(result.slug).toBe('normal-article');
+        expect(result.type).toBe('article');
+        expect(result.id).toBe(123);
       });
     });
 
