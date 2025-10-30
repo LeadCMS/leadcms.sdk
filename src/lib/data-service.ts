@@ -5,6 +5,30 @@
 
 import axios, { AxiosResponse } from 'axios';
 
+/**
+ * Formats API validation errors in a user-friendly way
+ */
+function formatApiValidationErrors(errorResponse: any): string {
+  if (!errorResponse?.data?.errors) {
+    return 'Unknown validation error';
+  }
+
+  const errors = errorResponse.data.errors;
+  const errorMessages: string[] = [];
+
+  for (const [field, messages] of Object.entries(errors)) {
+    if (Array.isArray(messages)) {
+      messages.forEach((msg: string) => {
+        errorMessages.push(`  • ${field}: ${msg}`);
+      });
+    }
+  }
+
+  return errorMessages.length > 0 
+    ? `\nValidation errors:\n${errorMessages.join('\n')}`
+    : 'Validation failed';
+}
+
 // Type definitions
 interface ContentItem {
   id?: number;
@@ -333,7 +357,25 @@ class LeadCMSDataService {
 
       return response.data;
     } catch (error: any) {
+      // Handle validation errors (422) with user-friendly formatting
+      if (error.response?.status === 422 && error.response?.data?.errors) {
+        const validationMessage = formatApiValidationErrors(error.response);
+        
+        // Create a more descriptive error with validation details
+        // The error message will be displayed by the caller, so we don't log it here
+        const enhancedError = new Error(`Validation failed${validationMessage}`);
+        (enhancedError as any).status = 422;
+        (enhancedError as any).validationErrors = error.response.data.errors;
+        throw enhancedError;
+      }
+      
+      // For other errors, log detailed information
       console.error(`[API] Failed to create content:`, error.message);
+      if (error.response) {
+        console.error(`[API] Status: ${error.response.status}`);
+        console.error(`[API] Response data:`, JSON.stringify(error.response.data, null, 2));
+      }
+      
       throw error;
     }
   }
@@ -371,7 +413,25 @@ class LeadCMSDataService {
 
       return response.data;
     } catch (error: any) {
+      // Handle validation errors (422) with user-friendly formatting
+      if (error.response?.status === 422 && error.response?.data?.errors) {
+        const validationMessage = formatApiValidationErrors(error.response);
+        
+        // Create a more descriptive error with validation details
+        // The error message will be displayed by the caller, so we don't log it here
+        const enhancedError = new Error(`Validation failed${validationMessage}`);
+        (enhancedError as any).status = 422;
+        (enhancedError as any).validationErrors = error.response.data.errors;
+        throw enhancedError;
+      }
+      
+      // For other errors, log detailed information
       console.error(`[API] Failed to update content:`, error.message);
+      if (error.response) {
+        console.error(`[API] Status: ${error.response.status}`);
+        console.error(`[API] Response data:`, JSON.stringify(error.response.data, null, 2));
+      }
+      
       throw error;
     }
   }

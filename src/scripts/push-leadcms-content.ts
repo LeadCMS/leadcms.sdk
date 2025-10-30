@@ -922,9 +922,16 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     }
 
     // Execute the sync
-    await executePush(finalOperations, { force });
+    const results = await executePush(finalOperations, { force });
 
-    colorConsole.success('\n🎉 Content push completed successfully!');
+    // Display final message based on results
+    if (results.failed === 0) {
+      colorConsole.success('\n🎉 Content push completed successfully!');
+    } else if (results.successful > 0) {
+      colorConsole.warn(`\n⚠️  Content push completed with errors: ${results.successful} successful, ${results.failed} failed`);
+    } else {
+      colorConsole.error('\n❌ Content push failed - no changes were synced');
+    }
 
   } catch (error: any) {
     const operation = statusOnly ? 'Status check' : 'Push';
@@ -938,7 +945,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
 /**
  * Execute the actual push operations
  */
-async function executePush(operations: ContentOperations, options: ExecutionOptions = {}): Promise<void> {
+async function executePush(operations: ContentOperations, options: ExecutionOptions = {}): Promise<{ successful: number; failed: number }> {
   const { force = false } = options;
 
   // Handle force updates for conflicts
@@ -953,13 +960,13 @@ async function executePush(operations: ContentOperations, options: ExecutionOpti
   }
 
   // Use individual operations
-  await executeIndividualOperations(operations, { force });
+  return await executeIndividualOperations(operations, { force });
 }
 
 /**
  * Execute operations individually (one by one)
  */
-async function executeIndividualOperations(operations: ContentOperations, options: ExecutionOptions = {}): Promise<void> {
+async function executeIndividualOperations(operations: ContentOperations, options: ExecutionOptions = {}): Promise<{ successful: number; failed: number }> {
   const { force = false } = options;
   let successful = 0;
   let failed = 0;
@@ -980,7 +987,7 @@ async function executeIndividualOperations(operations: ContentOperations, option
         }
       } catch (error: any) {
         failed++;
-        colorConsole.error(`❌ Failed to create ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}:`, error.message);
+        colorConsole.error(`❌ Failed to create ${op.local.type}/${op.local.slug}: ${error.message}`);
       }
     }
   }
@@ -1006,7 +1013,7 @@ async function executeIndividualOperations(operations: ContentOperations, option
         }
       } catch (error: any) {
         failed++;
-        console.log(`❌ Failed to update ${op.local.type}/${op.local.slug}:`, error.message);
+        colorConsole.error(`❌ Failed to update ${op.local.type}/${op.local.slug}: ${error.message}`);
       }
     }
   }
@@ -1021,18 +1028,18 @@ async function executeIndividualOperations(operations: ContentOperations, option
           if (result) {
             await updateLocalMetadata(op.local, result);
             successful++;
-            console.log(`✅ Renamed: ${op.oldSlug} -> ${op.local.slug}`);
+            colorConsole.success(`✅ Renamed: ${op.oldSlug} -> ${op.local.slug}`);
           } else {
             failed++;
-            console.log(`❌ Failed to rename: ${op.oldSlug} -> ${op.local.slug}`);
+            colorConsole.error(`❌ Failed to rename: ${op.oldSlug} -> ${op.local.slug}`);
           }
         } else {
           failed++;
-          console.log(`❌ Failed to rename ${op.oldSlug}: No remote ID`);
+          colorConsole.error(`❌ Failed to rename ${op.oldSlug}: No remote ID`);
         }
       } catch (error: any) {
         failed++;
-        console.log(`❌ Failed to rename ${op.oldSlug}:`, error.message);
+        colorConsole.error(`❌ Failed to rename ${op.oldSlug}: ${error.message}`);
       }
     }
   }
@@ -1047,18 +1054,18 @@ async function executeIndividualOperations(operations: ContentOperations, option
           if (result) {
             await updateLocalMetadata(op.local, result);
             successful++;
-            console.log(`✅ Type changed: ${op.local.slug} (${op.oldType} -> ${op.newType})`);
+            colorConsole.success(`✅ Type changed: ${op.local.slug} (${op.oldType} -> ${op.newType})`);
           } else {
             failed++;
-            console.log(`❌ Failed to change type: ${op.local.slug} (${op.oldType} -> ${op.newType})`);
+            colorConsole.error(`❌ Failed to change type: ${op.local.slug} (${op.oldType} -> ${op.newType})`);
           }
         } else {
           failed++;
-          console.log(`❌ Failed to change type for ${op.local.slug}: No remote ID`);
+          colorConsole.error(`❌ Failed to change type for ${op.local.slug}: No remote ID`);
         }
       } catch (error: any) {
         failed++;
-        console.log(`❌ Failed to change type for ${op.local.slug}:`, error.message);
+        colorConsole.error(`❌ Failed to change type for ${op.local.slug}: ${error.message}`);
       }
     }
   }
@@ -1077,6 +1084,8 @@ async function executeIndividualOperations(operations: ContentOperations, option
       console.log('💡 You may want to manually run the pull command to sync latest changes');
     }
   }
+
+  return { successful, failed };
 }
 
 /**

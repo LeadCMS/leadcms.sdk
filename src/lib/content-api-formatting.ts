@@ -81,6 +81,12 @@ export function formatContentForAPI(localContent: any) {
   delete contentData.filePath;
   delete contentData.isLocal;
 
+  // Remove read-only fields that the API manages
+  // These should not be sent in create/update requests
+  delete contentData.id;
+  delete contentData.createdAt;
+  delete contentData.updatedAt;
+
   // Apply backward URL transformation: convert /media/ paths back to /api/media/ for API
   return replaceLocalMediaPaths(contentData);
 }

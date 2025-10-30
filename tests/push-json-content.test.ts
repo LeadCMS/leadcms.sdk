@@ -277,7 +277,10 @@ describe('Push JSON Content', () => {
       expect(bodyData.footerData.copyright.showYear).toBe(true);
 
       // CORRECT: Only standard API fields should be at root level
-      expect(apiFormattedContent.id).toBe(19);
+      // Note: id, createdAt, updatedAt are removed (read-only, managed by API)
+      expect(apiFormattedContent.id).toBeUndefined();
+      expect(apiFormattedContent.createdAt).toBeUndefined();
+      expect(apiFormattedContent.updatedAt).toBeUndefined();
       expect(apiFormattedContent.slug).toBe('footer');
       expect(apiFormattedContent.type).toBe('component');
       expect(apiFormattedContent.language).toBe('ru');
@@ -338,7 +341,10 @@ describe('Push JSON Content', () => {
       const apiFormattedContent = formatContentForAPI(localContentItem);
 
       // Verify API structure with all fields
-      expect(apiFormattedContent.id).toBe(42);
+      // Note: id, createdAt, updatedAt are removed (read-only, managed by API)
+      expect(apiFormattedContent.id).toBeUndefined();
+      expect(apiFormattedContent.createdAt).toBeUndefined();
+      expect(apiFormattedContent.updatedAt).toBeUndefined();
       expect(apiFormattedContent.slug).toBe('test-header');
       expect(apiFormattedContent.type).toBe('component');
       expect(apiFormattedContent.language).toBe('en');

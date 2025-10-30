@@ -455,12 +455,13 @@ heroImage: /media/hero.jpg
       const apiFormattedContent = formatContentForAPI(mockLocalContentWithCustomAttributes);
 
       // Verify that only standard fields are present as top-level properties
+      // Note: id, createdAt, updatedAt are removed (read-only, managed by API)
       expect(apiFormattedContent.slug).toBe('blog/custom-article');
       expect(apiFormattedContent.type).toBe('article');
       expect(apiFormattedContent.language).toBe('en');
-      expect(apiFormattedContent.id).toBe(59);
-      expect(apiFormattedContent.createdAt).toBe('2025-10-28T17:14:06.903848Z');
-      expect(apiFormattedContent.updatedAt).toBe('2025-10-30T04:48:35.208197Z');
+      expect(apiFormattedContent.id).toBeUndefined();
+      expect(apiFormattedContent.createdAt).toBeUndefined();
+      expect(apiFormattedContent.updatedAt).toBeUndefined();
       expect(apiFormattedContent.title).toBe('Test Article');
       expect(apiFormattedContent.publishedAt).toBe('2025-10-27T18:30:00Z');
 
