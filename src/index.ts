@@ -1,6 +1,7 @@
 // Main exports
 export * from './lib/cms.js';
 export * from './lib/config.js';
+export * from './lib/locale-utils.js';
 
 // LeadCMS SDK - Framework-agnostic content management
 //
@@ -9,6 +10,9 @@ export * from './lib/config.js';
 // - getAllContentSlugsForLocale() - Get all content slugs
 // - getAllContentRoutes() - Get all routes for static generation
 // - getAvailableLanguages() - Get supported languages
+//
+// Locale utilities:
+// - isValidLocaleCode() - Validate locale directory names
 //
 // Configuration options:
 // 1. leadcms.config.json file (recommended)

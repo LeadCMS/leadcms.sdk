@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
 import { getConfig, type LeadCMSConfig } from "./config.js";
+import { isValidLocaleCode } from "./locale-utils.js";
 
 // Type definitions for configuration objects
 export interface HeaderConfig { [key: string]: any; }
@@ -106,8 +107,8 @@ function getAvailableLanguagesFromDir(contentDir: string): string[] {
     const languages = [defaultLanguage]; // Always include default language
 
     for (const entry of entries) {
-      if (entry.isDirectory() && entry.name.length === 2) {
-        // Assume 2-character directory names are language codes
+      if (entry.isDirectory() && isValidLocaleCode(entry.name)) {
+        // Only include directories that match valid locale patterns
         if (!languages.includes(entry.name)) {
           languages.push(entry.name);
         }
