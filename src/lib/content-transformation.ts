@@ -166,7 +166,9 @@ function transformToJSONFormatForComparison(remote: RemoteContentData, localCont
     bodyObj = {};
   }
 
-  const merged = { ...bodyObj };
+  // Apply URL transformation to the body object first
+  const transformedBodyObj = replaceApiMediaPaths(bodyObj);
+  const merged = { ...transformedBodyObj };
 
   // Exclude system/internal fields that should not appear in local files
   const systemFields = ['body', 'isLocal'];
@@ -235,7 +237,9 @@ function transformToJSONFormat(remote: RemoteContentData): string {
     bodyObj = {};
   }
 
-  const merged = { ...bodyObj };
+  // Apply URL transformation to the body object first
+  const transformedBodyObj = replaceApiMediaPaths(bodyObj);
+  const merged = { ...transformedBodyObj };
 
   // Exclude system/internal fields that should not appear in local files
   // Only exclude truly internal fields, not user content fields like timestamps
@@ -256,16 +260,41 @@ function transformToJSONFormat(remote: RemoteContentData): string {
 /**
  * Replace API media paths with local media paths
  * Converts /api/media/ paths to /media/ paths
+ * Only transforms paths that start with /api/media/ (not in the middle of URLs)
  */
 export function replaceApiMediaPaths(obj: any): any {
   if (typeof obj === "string") {
-    return obj.replace(/\/api\/media\//g, "/media/");
+    // Only replace /api/media/ that appears at the start of a path or after whitespace/quotes
+    // This prevents replacing /api/media/ inside external URLs like https://example.com/api/media/
+    return obj.replace(/(^|[\s"'\(\)\[\]>])\/api\/media\//g, "$1/media/");
   } else if (Array.isArray(obj)) {
     return obj.map(replaceApiMediaPaths);
   } else if (typeof obj === "object" && obj !== null) {
     const out: Record<string, any> = {};
     for (const [k, v] of Object.entries(obj)) {
       out[k] = replaceApiMediaPaths(v);
+    }
+    return out;
+  }
+  return obj;
+}
+
+/**
+ * Replace local media paths with API media paths (reverse transformation for push)
+ * Converts /media/ paths to /api/media/ paths
+ * Only transforms paths that start with /media/ (not in the middle of URLs)
+ */
+export function replaceLocalMediaPaths(obj: any): any {
+  if (typeof obj === "string") {
+    // Only replace /media/ that appears at the start of a path or after whitespace/quotes
+    // This prevents replacing /media/ inside external URLs like https://example.com/media/
+    return obj.replace(/(^|[\s"'\(\)\[\]>])\/media\//g, "$1/api/media/");
+  } else if (Array.isArray(obj)) {
+    return obj.map(replaceLocalMediaPaths);
+  } else if (typeof obj === "object" && obj !== null) {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      out[k] = replaceLocalMediaPaths(v);
     }
     return out;
   }

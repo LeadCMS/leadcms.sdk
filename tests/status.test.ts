@@ -1,42 +1,11 @@
 /**
- * Unit tests for LeadCMS push and status functionality
- * These tests focus on testing the core logic by mocking external dependencies
+ * Unit tests for LeadCMS status functionality
+ * These tests focus on testing the status analysis logic by mocking external dependencies
  */
 
 import { jest } from '@jest/globals';
 
-// Create a mock module that we can test the push/status logic with
-const mockPushLogic = {
-  async analyzePushStatus() {
-    // Mock implementation to test different scenarios
-    return {
-      toCreate: [],
-      toUpdate: [],
-      conflicts: [],
-      inSync: []
-    };
-  },
-
-  async executePush(analysisResult: any, options: any = {}) {
-    // Mock implementation for push execution
-    const { toCreate, toUpdate, conflicts } = analysisResult;
-    const { force = false } = options;
-
-    if (conflicts.length > 0 && !force) {
-      throw new Error('Conflicts exist - use force flag to override');
-    }
-
-    const results = {
-      created: toCreate.length,
-      updated: toUpdate.length,
-      errors: []
-    };
-
-    return results;
-  }
-};
-
-describe('LeadCMS Push/Status', () => {
+describe('LeadCMS Status Analysis', () => {
   describe('Status Analysis', () => {
     it('should correctly identify new content to create', async () => {
       const mockLocalContent = [
@@ -317,57 +286,6 @@ describe('LeadCMS Push/Status', () => {
       expect(updates[0].language).toBe('es');
     });
   });
-
-  describe('Push Execution Logic', () => {
-    it('should refuse to push when conflicts exist without force flag', async () => {
-      const analysisResult = {
-        toCreate: [],
-        toUpdate: [],
-        conflicts: [{ slug: 'conflicted', type: 'article', language: 'en' }],
-        inSync: []
-      };
-
-      await expect(mockPushLogic.executePush(analysisResult, { force: false }))
-        .rejects.toThrow('Conflicts exist - use force flag to override');
-    });
-
-    it('should push with force flag even when conflicts exist', async () => {
-      const analysisResult = {
-        toCreate: [{ slug: 'new-article', type: 'article', language: 'en' }],
-        toUpdate: [],
-        conflicts: [{ slug: 'conflicted', type: 'article', language: 'en' }],
-        inSync: []
-      };
-
-      const result = await mockPushLogic.executePush(analysisResult, { force: true });
-
-      expect(result.created).toBe(1);
-      expect(result.updated).toBe(0);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it('should successfully push when no conflicts exist', async () => {
-      const analysisResult = {
-        toCreate: [
-          { slug: 'new-article-1', type: 'article', language: 'en' },
-          { slug: 'new-article-2', type: 'article', language: 'en' }
-        ],
-        toUpdate: [
-          { slug: 'updated-article', type: 'article', language: 'en' }
-        ],
-        conflicts: [],
-        inSync: []
-      };
-
-      const result = await mockPushLogic.executePush(analysisResult);
-
-      expect(result.created).toBe(2);
-      expect(result.updated).toBe(1);
-      expect(result.errors).toHaveLength(0);
-    });
-  });
-
-
 
   describe('Content Parsing and Formatting', () => {
     it('should correctly parse MDX frontmatter', () => {

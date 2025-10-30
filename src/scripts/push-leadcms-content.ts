@@ -14,6 +14,7 @@ import {
   transformRemoteToLocalFormat,
   transformRemoteForComparison,
   hasContentDifferences,
+  replaceLocalMediaPaths,
   type ContentTypeMap
 } from "../lib/content-transformation.js";
 import { colorConsole, statusColors, diffColors } from '../lib/console-colors.js';
@@ -497,62 +498,6 @@ async function displayDetailedDiff(operation: MatchOperation, operationType: str
   }
   console.log('');
 
-  // Compare metadata fields
-  console.log('📋 Metadata Changes:');
-
-  const excludedFields = new Set(['id', 'createdAt', 'updatedAt', 'publishedAt', 'body', 'filePath', 'isLocal']);
-  const allLocalFields = new Set(Object.keys(local.metadata));
-  const allRemoteFields = new Set(remote ? Object.keys(remote) : []);
-  const allFields = new Set([...allLocalFields, ...allRemoteFields]);
-
-  let hasMetadataChanges = false;
-
-  /**
-   * Format a value for display, with pretty-printing for objects and arrays
-   */
-  function formatValue(value: any): string {
-    if (value === null || value === undefined) {
-      return String(value);
-    }
-    if (typeof value === 'object') {
-      return JSON.stringify(value, null, 2).split('\n').map((line, index) =>
-        index === 0 ? line : `     ${line}`
-      ).join('\n');
-    }
-    return JSON.stringify(value);
-  }
-
-  for (const field of allFields) {
-    if (excludedFields.has(field)) continue;
-
-    const localValue = local.metadata[field];
-    const remoteValue = remote?.[field];
-
-    // Normalize values for comparison
-    const normalizedLocal = localValue === undefined ? null : localValue;
-    const normalizedRemote = remoteValue === undefined ? null : remoteValue;
-
-    if (JSON.stringify(normalizedLocal) !== JSON.stringify(normalizedRemote)) {
-      hasMetadataChanges = true;
-
-      if (normalizedRemote === null) {
-        colorConsole.log(`   ${diffColors.added(`+ ${field}: ${formatValue(normalizedLocal)} (added)`)}`);
-      } else if (normalizedLocal === null) {
-        colorConsole.log(`   ${diffColors.removed(`- ${field}: ${formatValue(normalizedRemote)} (removed)`)}`);
-      } else {
-        colorConsole.log(`   ${diffColors.modified(`~ ${field}: (changed)`)}`);
-        colorConsole.log(`     ${diffColors.removed(`- ${formatValue(normalizedRemote)}`)}`);
-        colorConsole.log(`     ${diffColors.added(`+ ${formatValue(normalizedLocal)}`)}`);
-      }
-    }
-  }
-
-  if (!hasMetadataChanges && remote) {
-    console.log('   No metadata changes detected');
-  } else if (!remote) {
-    console.log('   New content - all metadata will be added');
-  }
-
   // Compare content using the new transformation approach
   console.log('\n📝 Content Changes:');
 
@@ -787,6 +732,14 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
  * Display what API calls would be made without executing them
  */
 async function showDryRunOperations(operations: ContentOperations): Promise<void> {
+  // Check if there are any operations to show
+  const totalOperations = operations.create.length + operations.update.length +
+                         operations.rename.length + operations.typeChange.length;
+
+  if (totalOperations === 0) {
+    return; // Don't show dry run preview if there are no operations
+  }
+
   colorConsole.important('\n🧪 Dry Run Mode - API Calls Preview');
   colorConsole.info('The following API calls would be made:\n');
 
@@ -1149,7 +1102,8 @@ function formatContentForAPI(localContent: LocalContentItem): Partial<ContentIte
   delete contentData.filePath;
   delete contentData.isLocal;
 
-  return contentData;
+  // Apply backward URL transformation: convert /media/ paths back to /api/media/ for API
+  return replaceLocalMediaPaths(contentData);
 }
 
 /**

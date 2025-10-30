@@ -65,9 +65,9 @@ export function getLeadCMSConfig(): LeadCMSConfig {
       url: process.env.LEADCMS_URL || process.env.NEXT_PUBLIC_LEADCMS_URL || "",
       apiKey: process.env.LEADCMS_API_KEY || "",
       defaultLanguage: process.env.LEADCMS_DEFAULT_LANGUAGE || process.env.NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE || DEFAULT_LANGUAGE,
-      contentDir: ".leadcms/content",
-      mediaDir: "public/media",
-      enableDrafts: false,
+      contentDir: process.env.LEADCMS_CONTENT_DIR || ".leadcms/content",
+      mediaDir: process.env.LEADCMS_MEDIA_DIR || "public/media",
+      enableDrafts: process.env.LEADCMS_ENABLE_DRAFTS === "true",
     };
   }
 }

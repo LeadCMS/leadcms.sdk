@@ -330,7 +330,18 @@ ls -la dist/templates/
 npm run dev  # Should show watch mode active
 ```
 
-### 5. "Status check failed: Invalid URL" or "Using real API mode: undefined"
+### 6. ES Module Import Issues ("require is not defined")
+```bash
+# Problem: Dynamic require() calls in ES modules fail at runtime
+# Solution: Use proper ES module imports at the top of files
+# ❌ Don't do this:
+const { someFunction } = require('./module.js');
+
+# ✅ Do this instead:
+import { someFunction } from './module.js';
+```
+
+### 7. "Status check failed: Invalid URL" or "Using real API mode: undefined"
 ```bash
 # Problem: Environment variables aren't being loaded
 # Solution: Ensure .env file exists in your project root
@@ -344,7 +355,7 @@ LEADCMS_URL=https://your-instance.com LEADCMS_API_KEY=your-key leadcms status
 cat .env
 ```
 
-### 6. Error messages showing "Push failed" when running status
+### 8. Error messages showing "Push failed" when running status
 ```bash
 # This was fixed in recent versions - update your SDK:
 npm update @leadcms/sdk
