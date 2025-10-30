@@ -53,9 +53,15 @@ export function formatContentForAPI(localContent: any) {
   const isJsonFile = localContent.filePath && localContent.filePath.endsWith('.json');
 
   if (isJsonFile) {
-    // For JSON files: send custom fields as top-level properties, body contains pure JSON
-    Object.assign(contentData, customFields);
-    contentData.body = localContent.body || '';
+    // For JSON files: custom fields should be serialized in the body as JSON string
+    // Root level contains only standard API fields
+    if (Object.keys(customFields).length > 0) {
+      // Serialize custom fields as JSON string in body
+      contentData.body = JSON.stringify(customFields, null, 2);
+    } else {
+      // No custom fields, use original body
+      contentData.body = localContent.body || '';
+    }
   } else {
     // For MDX files: handle body with custom fields preserved in frontmatter
     let bodyContent = localContent.body || '';

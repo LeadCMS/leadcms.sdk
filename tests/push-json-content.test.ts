@@ -92,20 +92,25 @@ describe('Push JSON Content', () => {
   });
 
   it('should handle JSON files with custom fields correctly', async () => {
-    // Create minimal JSON with custom fields to test field preservation
-    const customJsonContent = {
-      "slug": "custom-test",
+    // Create JSON with custom fields like the real-world footer example
+    // Note: body field in JSON is for storing additional data, not the content body
+    // Custom fields like footerData should be serialized into the API body
+    const footerJsonContent = {
+      "slug": "footer-test",
       "type": "component",
-      "title": "Custom Test",
-      "customField": "test-value",
-      "body": JSON.stringify({
-        "data": { "key": "value" }
-      }, null, 2)
+      "title": "Footer Test",
+      "author": "Test Author",
+      "category": "Component",
+      "footerData": {
+        "logo": { "src": "/images/logo.png", "alt": "Logo" },
+        "copyright": { "text": "© 2025 Test", "showYear": true },
+        "navigation": [{ "label": "Terms", "href": "/terms" }]
+      }
     };
 
     await fs.mkdir(contentDir, { recursive: true });
-    const jsonFilePath = path.join(contentDir, 'custom-test.json');
-    await fs.writeFile(jsonFilePath, JSON.stringify(customJsonContent, null, 2));
+    const jsonFilePath = path.join(contentDir, 'footer-test.json');
+    await fs.writeFile(jsonFilePath, JSON.stringify(footerJsonContent, null, 2));
 
     const { formatContentForAPI } = await import('../src/lib/content-api-formatting');
 
@@ -118,7 +123,7 @@ describe('Push JSON Content', () => {
 
     const localContentItem = {
       filePath: jsonFilePath,
-      slug: 'custom-test',
+      slug: 'footer-test',
       locale: 'en',
       type: 'component',
       metadata,
@@ -129,11 +134,31 @@ describe('Push JSON Content', () => {
     // Format for API
     const apiFormattedContent = formatContentForAPI(localContentItem);
 
-    // Body should be valid JSON and custom fields preserved at top level
+    // CRITICAL: Custom fields like footerData should NOT be at root level
+    // They should be serialized in the body as JSON string
+    expect(apiFormattedContent).not.toHaveProperty('footerData');
+
+    // Standard fields should be at root level
+    expect(apiFormattedContent.title).toBe('Footer Test');
+    expect(apiFormattedContent.author).toBe('Test Author');
+    expect(apiFormattedContent.category).toBe('Component');
+
+    // Body should contain ALL custom fields serialized as JSON string
+    expect(apiFormattedContent.body).toBeTruthy();
+    expect(apiFormattedContent.body).not.toBe('');
     expect(() => JSON.parse(apiFormattedContent.body)).not.toThrow();
+
+    // Body should contain the footerData custom field (and ONLY custom fields)
     const bodyData = JSON.parse(apiFormattedContent.body);
-    expect(bodyData.data.key).toBe('value');
-    expect(apiFormattedContent.customField).toBe('test-value');
+    expect(bodyData.footerData).toBeDefined();
+    expect(bodyData.footerData.logo.src).toBe('/images/logo.png');
+    expect(bodyData.footerData.copyright.text).toBe('© 2025 Test');
+    expect(bodyData.footerData.navigation).toHaveLength(1);
+
+    // Body should NOT contain standard fields
+    expect(bodyData.title).toBeUndefined();
+    expect(bodyData.slug).toBeUndefined();
+    expect(bodyData.type).toBeUndefined();
   });
 
   it('should handle media URL transformation in JSON body content', async () => {
@@ -184,6 +209,82 @@ describe('Push JSON Content', () => {
   });
 
   describe('Complex JSON Scenarios', () => {
+    it('should reproduce the real-world footer bug with custom fields in wrong location', async () => {
+      // Reproduce the exact scenario from the user's bug report
+      const footerJsonContent = {
+        "id": 19,
+        "slug": "footer",
+        "type": "component",
+        "language": "ru",
+        "title": "Footer Configuration",
+        "description": "Footer configuration including logo, copyright and navigation links.",
+        "author": "Test Author",
+        "category": "Component",
+        "source": "Translated from 0",
+        "publishedAt": "2025-08-31T00:00:00Z",
+        "footerData": {
+          "logo": {
+            "src": "/images/icon-192x192.png",
+            "alt": "LeadCMS Logo"
+          },
+          "copyright": {
+            "text": "© {year} LeadCMS. All rights reserved.",
+            "showYear": true
+          },
+          "navigation": [
+            { "label": "Terms", "href": "/legal/terms" },
+            { "label": "Privacy", "href": "/legal/privacy" }
+          ]
+        },
+        "body": ""
+      };
+
+      await fs.mkdir(path.join(contentDir, 'ru'), { recursive: true });
+      const jsonFilePath = path.join(contentDir, 'ru', 'footer.json');
+      await fs.writeFile(jsonFilePath, JSON.stringify(footerJsonContent, null, 2));
+
+      const { formatContentForAPI } = await import('../src/lib/content-api-formatting');
+
+      const fileContent = await fs.readFile(jsonFilePath, 'utf-8');
+      const jsonData = JSON.parse(fileContent);
+      const body = jsonData.body || '';
+      const metadata = { ...jsonData };
+      delete metadata.body;
+
+      const localContentItem = {
+        filePath: jsonFilePath,
+        slug: 'footer',
+        locale: 'ru',
+        type: 'component',
+        metadata,
+        body,
+        isLocal: true
+      };
+
+      const apiFormattedContent = formatContentForAPI(localContentItem);
+
+      // FIXED: footerData should NOT appear at root level
+      expect(apiFormattedContent).not.toHaveProperty('footerData');
+
+      // CORRECT: Body should contain custom fields serialized as JSON
+      expect(apiFormattedContent.body).toBeTruthy();
+      expect(() => JSON.parse(apiFormattedContent.body)).not.toThrow();
+
+      // Body should contain the footerData custom field
+      const bodyData = JSON.parse(apiFormattedContent.body);
+      expect(bodyData.footerData).toBeDefined();
+      expect(bodyData.footerData.logo.src).toBe('/images/icon-192x192.png');
+      expect(bodyData.footerData.copyright.showYear).toBe(true);
+
+      // CORRECT: Only standard API fields should be at root level
+      expect(apiFormattedContent.id).toBe(19);
+      expect(apiFormattedContent.slug).toBe('footer');
+      expect(apiFormattedContent.type).toBe('component');
+      expect(apiFormattedContent.language).toBe('ru');
+      expect(apiFormattedContent.title).toBe('Footer Configuration');
+      expect(apiFormattedContent.publishedAt).toBe('2025-08-31T00:00:00Z');
+    });
+
     it('should format complex JSON component with all API fields correctly', async () => {
       // Test complex JSON with all API fields (mimics real-world usage)
       const complexJsonContent = {
