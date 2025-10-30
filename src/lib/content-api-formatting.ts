@@ -1,0 +1,70 @@
+/**
+ * Content API formatting utilities for LeadCMS
+ */
+
+import matter from 'gray-matter';
+import { replaceLocalMediaPaths } from './content-transformation.js';
+
+// Standard API fields that should be sent as top-level properties
+// Based on the actual LeadCMS API schema
+const STANDARD_API_FIELDS = new Set([
+  'id', 'slug', 'type', 'title', 'body', 'language',
+  'createdAt', 'updatedAt', 'publishedAt',
+  'description', 'coverImageUrl', 'coverImageAlt',
+  'author', 'category', 'tags', 'allowComments',
+  'source', 'translationKey', 'translations'
+]);
+
+/**
+ * Formats local content for API submission
+ *
+ * Separates standard API fields (sent as top-level properties) from custom fields
+ * (preserved in frontmatter within the body field)
+ */
+export function formatContentForAPI(localContent: any) {
+  // Start with only standard fields from metadata
+  const standardFields: any = {};
+  const customFields: any = {};
+
+  // Separate standard fields from custom fields
+  for (const [key, value] of Object.entries(localContent.metadata)) {
+    if (STANDARD_API_FIELDS.has(key)) {
+      standardFields[key] = value;
+    } else {
+      customFields[key] = value;
+    }
+  }
+
+  // Build the content data with standard fields only
+  const contentData: any = {
+    slug: localContent.slug,
+    type: localContent.type,
+    language: localContent.locale,
+    ...standardFields
+  };
+
+  // Preserve the file-based slug over metadata slug
+  if (localContent.slug !== localContent.metadata?.slug) {
+    contentData.slug = localContent.slug;
+  }
+
+  // Handle body with custom fields preserved in frontmatter
+  let bodyContent = localContent.body || '';
+
+  if (Object.keys(customFields).length > 0) {
+    // If we have custom fields, preserve ONLY custom fields in frontmatter
+    // Standard fields are already sent as top-level properties, no need to duplicate
+    const rebuiltBody = matter.stringify(bodyContent, customFields);
+    contentData.body = rebuiltBody;
+  } else {
+    // No custom fields, use body as-is (could be plain markdown or already have frontmatter)
+    contentData.body = bodyContent;
+  }
+
+  // Remove local-only fields
+  delete contentData.filePath;
+  delete contentData.isLocal;
+
+  // Apply backward URL transformation: convert /media/ paths back to /api/media/ for API
+  return replaceLocalMediaPaths(contentData);
+}

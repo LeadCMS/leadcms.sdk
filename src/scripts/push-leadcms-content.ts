@@ -14,9 +14,9 @@ import {
   transformRemoteToLocalFormat,
   transformRemoteForComparison,
   hasContentDifferences,
-  replaceLocalMediaPaths,
   type ContentTypeMap
 } from "../lib/content-transformation.js";
+import { formatContentForAPI } from '../lib/content-api-formatting.js';
 import { colorConsole, statusColors, diffColors } from '../lib/console-colors.js';
 
 // Extended interfaces for local operations
@@ -1082,29 +1082,7 @@ async function executeIndividualOperations(operations: ContentOperations, option
 /**
  * Format local content for API submission
  */
-function formatContentForAPI(localContent: LocalContentItem): Partial<ContentItem> {
-  const contentData: any = {
-    slug: localContent.slug,
-    type: localContent.type,
-    language: localContent.locale,
-    body: localContent.body,
-    ...localContent.metadata
-  };
 
-  // Preserve the file-based slug (from localContent.slug) over metadata slug
-  // This is crucial for rename operations where the file has been renamed
-  // but the frontmatter still contains the old slug
-  if (localContent.slug !== localContent.metadata?.slug) {
-    contentData.slug = localContent.slug;
-  }
-
-  // Remove local-only fields
-  delete contentData.filePath;
-  delete contentData.isLocal;
-
-  // Apply backward URL transformation: convert /media/ paths back to /api/media/ for API
-  return replaceLocalMediaPaths(contentData);
-}
 
 /**
  * Update local file with metadata from LeadCMS response
@@ -1145,6 +1123,8 @@ export { pushMain as pushLeadCMSContent };
 
 // Export internal functions for testing
 export { hasActualContentChanges };
+// Re-export formatContentForAPI from utility module for testing
+export { formatContentForAPI } from '../lib/content-api-formatting.js';
 // Re-export the new comparison function for consistency
 export { transformRemoteForComparison } from "../lib/content-transformation.js";
 
