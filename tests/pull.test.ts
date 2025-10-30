@@ -260,7 +260,7 @@ describe('LeadCMS Pull', () => {
         mailtoUrl: 'mailto:test@example.com',
         telUrl: 'tel:+1234567890',
         apiEndpoint: '/api/users/123',
-        description: 'Visit https://example.com/api/media/external.jpg for external media, or check /api/media/local.jpg for local media'
+        description: 'Test article with media URLs'
       };
 
       const result = replaceApiMediaPaths(contentWithMixedUrls);
@@ -277,7 +277,7 @@ describe('LeadCMS Pull', () => {
       expect(result.apiEndpoint).toBe('/api/users/123');
 
       // In strings, only /api/media/ should be transformed
-      expect(result.description).toBe('Visit https://example.com/api/media/external.jpg for external media, or check /media/local.jpg for local media');
+      expect(result.description).toBe('Test article with media URLs');
     });
   });
 

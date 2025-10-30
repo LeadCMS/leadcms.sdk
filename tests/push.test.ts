@@ -422,27 +422,27 @@ heroImage: /media/hero.jpg
         slug: 'blog/custom-article',
         locale: 'en',
         type: 'blog-article',
-        body: 'This is the article content',
+        body: 'Test article content',
         metadata: {
           id: 59,
           createdAt: '2025-10-28T17:14:06.903848Z',
           updatedAt: '2025-10-30T04:48:35.208197Z',
-          title: 'Build a Modern Website in Hours with AI: V0, Copilot, LeadCMS',
-          description: 'Build a modern Next.js site using V0 for UI, GitHub Copilot for code, and LeadCMS for headless content.',
-          coverImageUrl: '/media/blog/build-modern-website-in-hours.avif',
-          coverImageAlt: 'Build a modern website in hours using V0, GitHub Copilot, and LeadCMS',
-          slug: 'blog/build-a-modern-website-with-ai-v0-copilot-leadcms',
-          type: 'blog-article',
-          author: 'LeadCMS Team',
+          title: 'Test Article',
+          description: 'Test article description',
+          coverImageUrl: '/media/test-cover.jpg',
+          coverImageAlt: 'Test cover image',
+          slug: 'test-article',
+          type: 'article',
+          author: 'Test Author',
           language: 'en',
-          category: 'Development',
-          tags: ['V0 by Vercel', 'GitHub Copilot', 'Next.js 15', 'Static Site Generation', 'AI Development'],
+          category: 'Test',
+          tags: ['test'],
           allowComments: true,
-          source: 'AI Generated - Model: gpt-5, Tokens: 15051',
+          source: 'test-source',
           publishedAt: '2025-10-27T18:30:00Z',
           featured: true, // Custom attribute that should be preserved in frontmatter
           customRating: 5, // Another custom attribute
-          customTags: ['tutorial', 'beginner'], // Custom array attribute
+          customTags: ['test'], // Custom array attribute
           customMetadata: { // Custom nested object
             seoScore: 95,
             readingTime: '8 minutes'
@@ -456,23 +456,23 @@ heroImage: /media/hero.jpg
 
       // Verify that only standard fields are present as top-level properties
       expect(apiFormattedContent.slug).toBe('blog/custom-article');
-      expect(apiFormattedContent.type).toBe('blog-article');
+      expect(apiFormattedContent.type).toBe('article');
       expect(apiFormattedContent.language).toBe('en');
       expect(apiFormattedContent.id).toBe(59);
       expect(apiFormattedContent.createdAt).toBe('2025-10-28T17:14:06.903848Z');
       expect(apiFormattedContent.updatedAt).toBe('2025-10-30T04:48:35.208197Z');
-      expect(apiFormattedContent.title).toBe('Build a Modern Website in Hours with AI: V0, Copilot, LeadCMS');
+      expect(apiFormattedContent.title).toBe('Test Article');
       expect(apiFormattedContent.publishedAt).toBe('2025-10-27T18:30:00Z');
 
       // Verify that standard fields ARE present as top-level properties
-      expect(apiFormattedContent.description).toBe('Build a modern Next.js site using V0 for UI, GitHub Copilot for code, and LeadCMS for headless content.');
-      expect(apiFormattedContent.author).toBe('LeadCMS Team');
-      expect(apiFormattedContent.category).toBe('Development');
+      expect(apiFormattedContent.description).toBe('Test article description');
+      expect(apiFormattedContent.author).toBe('Test Author');
+      expect(apiFormattedContent.category).toBe('Test');
       expect(apiFormattedContent.allowComments).toBe(true);
-      expect(apiFormattedContent.source).toBe('AI Generated - Model: gpt-5, Tokens: 15051');
-      expect(apiFormattedContent.tags).toEqual(['V0 by Vercel', 'GitHub Copilot', 'Next.js 15', 'Static Site Generation', 'AI Development']);
-      expect(apiFormattedContent.coverImageUrl).toBe('/api/media/blog/build-modern-website-in-hours.avif');
-      expect(apiFormattedContent.coverImageAlt).toBe('Build a modern website in hours using V0, GitHub Copilot, and LeadCMS');
+      expect(apiFormattedContent.source).toBe('test-source');
+      expect(apiFormattedContent.tags).toEqual(['test']);
+      expect(apiFormattedContent.coverImageUrl).toBe('/api/media/test-cover.jpg');
+      expect(apiFormattedContent.coverImageAlt).toBe('Test cover image');
 
       // Verify that custom attributes are NOT present as top-level properties
       expect(apiFormattedContent).not.toHaveProperty('featured'); // featured is custom, not in API schema
@@ -487,7 +487,7 @@ heroImage: /media/hero.jpg
       // Check that ONLY custom attributes are in the frontmatter (no duplication of standard fields)
       expect(parsedBody.data.featured).toBe(true); // featured is custom, preserved in frontmatter
       expect(parsedBody.data.customRating).toBe(5);
-      expect(parsedBody.data.customTags).toEqual(['tutorial', 'beginner']);
+      expect(parsedBody.data.customTags).toEqual(['test']);
       expect(parsedBody.data.customMetadata).toEqual({
         seoScore: 95,
         readingTime: '8 minutes'
@@ -506,7 +506,7 @@ heroImage: /media/hero.jpg
       // (coverImageUrl is now a standard field, so it's not in frontmatter)
 
       // Verify the body content is preserved
-      expect(parsedBody.content.trim()).toBe('This is the article content');
+      expect(parsedBody.content.trim()).toBe('Test article content');
 
       // Verify local-only fields are removed
       expect(apiFormattedContent).not.toHaveProperty('filePath');

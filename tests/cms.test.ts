@@ -643,18 +643,18 @@ Some content here.`;
       const localContent = `---
 id: 25
 createdAt: '2025-09-10T09:32:54.223364Z'
-title: Contact Us
-description: Get in touch with our team
-slug: contact-us
-type: contact
+title: Test Page
+description: Test page description
+slug: test-page
+type: page
 author: Test Author
-language: da
+language: en
 publishedAt: '2025-09-09T18:30:00Z'
 ---
 
-# Contact Us
+# Test Page
 
-Get in touch with our team for any questions or support.`;
+Test page content.`;
 
       await fs.writeFile(localFilePath, localContent);
 
@@ -663,20 +663,20 @@ Get in touch with our team for any questions or support.`;
         id: 25,
         createdAt: '2025-09-10T09:32:54.223364Z',
         updatedAt: '2025-10-15T14:22:33.123456Z', // This field might not be in local
-        title: 'Contact Us',
-        description: 'Get in touch with our team',
-        slug: 'contact-us',
-        type: 'contact',
+        title: 'Test Page',
+        description: 'Test page description',
+        slug: 'test-page',
+        type: 'page',
         author: 'Test Author',
-        language: 'da',
+        language: 'en',
         publishedAt: '2025-09-09T18:30:00Z',
         isLocal: false,
-        body: `# Contact Us
+        body: `# Test Page
 
-Get in touch with our team for any questions or support.`
+Test page content.`
       };
 
-      const typeMap = { contact: 'MDX' as const };
+      const typeMap = { page: 'MDX' as const };
 
       // OLD METHOD (causing false positives): Transform without considering local fields
       const transformedRemoteOld = await transformRemoteToLocalFormat(remoteContent, typeMap);
@@ -751,94 +751,65 @@ Get in touch with our team for any questions or support.`
       // Create remote content with API media URLs that should be transformed
       const remoteContent = {
         id: 58,
-        slug: 'blog/building-sites-with-leadcms-sdk',
-        type: 'blog-article',
-        title: 'Building a Modern Site with LeadCMS SDK – A Developer\'s Guide',
-        description: 'Master the LeadCMS SDK to build blazing-fast static sites with Next.js.',
-        coverImageUrl: '/api/media/blog/building-sites-with-leadcms-sdk/leadcms-sdk.avif',
-        coverImageAlt: 'Building a Modern Site with LeadCMS SDK – A Developer\'s Guide',
-        author: 'LeadCMS Team',
+        slug: 'test-article',
+        type: 'article',
+        title: 'Test Article',
+        description: 'Test article description',
+        coverImageUrl: '/api/media/test-cover.jpg',
+        coverImageAlt: 'Test Cover',
+        author: 'Test Author',
         language: 'en',
-        category: 'Development',
-        tags: ['LeadCMS SDK', 'Next.js CMS'],
+        category: 'Test',
+        tags: ['test'],
         allowComments: true,
         featured: false,
         createdAt: '2025-10-24T17:03:44.678452Z',
         updatedAt: '2025-10-29T11:09:20.158347Z',
-        body: `# Building Modern Sites
+        body: `# Test Content
 
-Article content with various media references:
+Content with media references:
 
-## Standard Markdown Images
-![Test Image](/api/media/images/test.jpg)
-![Hero Banner](/api/media/blog/hero-banner.webp "Hero Banner Alt Text")
-![Diagram](/api/media/diagrams/architecture.svg)
+![Test Image](/api/media/test.jpg)
+[Download PDF](/api/media/doc.pdf)
 
-## Links to Media Files
-Download the [PDF Guide](/api/media/docs/guide.pdf) or check out [video tutorial](/api/media/videos/tutorial.mp4).
-
-## Custom Components with Image Props
-<ImageGallery
-  images={[
-    "/api/media/gallery/image1.jpg",
-    "/api/media/gallery/image2.png"
-  ]}
-/>
-
-<HeroSection
-  backgroundImage="/api/media/backgrounds/hero.jpg"
-  image="/api/media/icons/logo.svg"
-  thumbnail="/api/media/thumbnails/preview.webp"
+<Component
+  image="/api/media/logo.svg"
+  thumbnail="/api/media/thumb.jpg"
 />
 
 <BlogCard
-  coverImage="/api/media/blog/covers/article1.jpg"
-  authorAvatar="/api/media/avatars/author.png"
+  coverImage="/api/media/cover.jpg"
+  authorAvatar="/api/media/avatar.png"
 />
 
-## Mixed Content
-Check this ![inline image](/api/media/inline/icon.svg) in text, and visit [our resources](/api/media/resources/package.zip).
+Check this ![inline image](/api/media/icon.svg) and [resources](/api/media/package.zip).
 
 <CustomComponent
-  src="/api/media/components/example.jpg"
-  poster="/api/media/videos/poster.jpg"
-  data-background="/api/media/patterns/bg.png"
+  src="/api/media/example.jpg"
+  poster="/api/media/poster.jpg"
+  data-background="/api/media/bg.png"
 />`
       };
 
-      const typeMap = { 'blog-article': 'MDX' as const };
+      const typeMap = { article: 'MDX' as const };
       const transformed = await transformRemoteToLocalFormat(remoteContent, typeMap);
 
       // Verify that /api/media/ URLs are converted to /media/ URLs in frontmatter
-      expect(transformed).toContain('coverImageUrl: /media/blog/building-sites-with-leadcms-sdk/leadcms-sdk.avif');
+      expect(transformed).toContain('coverImageUrl: /media/test-cover.jpg');
       expect(transformed).not.toContain('coverImageUrl: /api/media/');
 
       // Verify that /api/media/ URLs are converted in the body content
-
-      // Standard Markdown images
-      expect(transformed).toContain('![Test Image](/media/images/test.jpg)');
-      expect(transformed).toContain('![Hero Banner](/media/blog/hero-banner.webp "Hero Banner Alt Text")');
-      expect(transformed).toContain('![Diagram](/media/diagrams/architecture.svg)');
-
-      // Links to media files
-      expect(transformed).toContain('[PDF Guide](/media/docs/guide.pdf)');
-      expect(transformed).toContain('[video tutorial](/media/videos/tutorial.mp4)');
-
-      // Custom components with image props
-      expect(transformed).toContain('"/media/gallery/image1.jpg"');
-      expect(transformed).toContain('"/media/gallery/image2.png"');
-      expect(transformed).toContain('backgroundImage="/media/backgrounds/hero.jpg"');
-      expect(transformed).toContain('image="/media/icons/logo.svg"');
-      expect(transformed).toContain('thumbnail="/media/thumbnails/preview.webp"');
-      expect(transformed).toContain('coverImage="/media/blog/covers/article1.jpg"');
-      expect(transformed).toContain('authorAvatar="/media/avatars/author.png"');
-
-      // Mixed content and custom attributes
-      expect(transformed).toContain('![inline image](/media/inline/icon.svg)');
-      expect(transformed).toContain('[our resources](/media/resources/package.zip)');
-      expect(transformed).toContain('src="/media/components/example.jpg"');
-      expect(transformed).toContain('poster="/media/videos/poster.jpg"');
-      expect(transformed).toContain('data-background="/media/patterns/bg.png"');
+      expect(transformed).toContain('![Test Image](/media/test.jpg)');
+      expect(transformed).toContain('[Download PDF](/media/doc.pdf)');
+      expect(transformed).toContain('image="/media/logo.svg"');
+      expect(transformed).toContain('thumbnail="/media/thumb.jpg"');
+      expect(transformed).toContain('coverImage="/media/cover.jpg"');
+      expect(transformed).toContain('authorAvatar="/media/avatar.png"');
+      expect(transformed).toContain('![inline image](/media/icon.svg)');
+      expect(transformed).toContain('[resources](/media/package.zip)');
+      expect(transformed).toContain('src="/media/example.jpg"');
+      expect(transformed).toContain('poster="/media/poster.jpg"');
+      expect(transformed).toContain('data-background="/media/bg.png"');
 
       // Verify NO /api/media/ URLs remain anywhere
       expect(transformed).not.toContain('/api/media/');

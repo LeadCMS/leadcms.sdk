@@ -19,7 +19,8 @@ const STANDARD_API_FIELDS = new Set([
  * Formats local content for API submission
  *
  * Separates standard API fields (sent as top-level properties) from custom fields
- * (preserved in frontmatter within the body field)
+ * For MDX files: custom fields are preserved in frontmatter within the body field
+ * For JSON files: custom fields are sent as top-level properties, body contains pure JSON
  */
 export function formatContentForAPI(localContent: any) {
   // Start with only standard fields from metadata
@@ -48,17 +49,26 @@ export function formatContentForAPI(localContent: any) {
     contentData.slug = localContent.slug;
   }
 
-  // Handle body with custom fields preserved in frontmatter
-  let bodyContent = localContent.body || '';
+  // Determine if this is a JSON file based on file extension
+  const isJsonFile = localContent.filePath && localContent.filePath.endsWith('.json');
 
-  if (Object.keys(customFields).length > 0) {
-    // If we have custom fields, preserve ONLY custom fields in frontmatter
-    // Standard fields are already sent as top-level properties, no need to duplicate
-    const rebuiltBody = matter.stringify(bodyContent, customFields);
-    contentData.body = rebuiltBody;
+  if (isJsonFile) {
+    // For JSON files: send custom fields as top-level properties, body contains pure JSON
+    Object.assign(contentData, customFields);
+    contentData.body = localContent.body || '';
   } else {
-    // No custom fields, use body as-is (could be plain markdown or already have frontmatter)
-    contentData.body = bodyContent;
+    // For MDX files: handle body with custom fields preserved in frontmatter
+    let bodyContent = localContent.body || '';
+
+    if (Object.keys(customFields).length > 0) {
+      // If we have custom fields, preserve ONLY custom fields in frontmatter
+      // Standard fields are already sent as top-level properties, no need to duplicate
+      const rebuiltBody = matter.stringify(bodyContent, customFields);
+      contentData.body = rebuiltBody;
+    } else {
+      // No custom fields, use body as-is (could be plain markdown or already have frontmatter)
+      contentData.body = bodyContent;
+    }
   }
 
   // Remove local-only fields

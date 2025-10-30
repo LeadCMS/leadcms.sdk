@@ -1,62 +1,36 @@
 # LeadCMS SDK - GitHub Copilot Instructions
 
-## Project Overview
+**LeadCMS SDK** is a framework-agnostic TypeScript/JavaScript SDK for LeadCMS integration. This document outlines principles for developing and maintaining the SDK itself, not for end-user consumption.
 
-**LeadCMS SDK** is a comprehensive, framework-agnostic TypeScript/JavaScript SDK for integrating with LeadCMS. It provides clean access to content through simple functions that work with any framework or static site generator.
+## Architecture Principles
 
-## Core Architecture Principles
+- **Framework-Agnostic**: Work seamlessly across Next.js, Astro, Gatsby, Nuxt, vanilla JS
+- **TypeScript-First**: Strict types, consistent interfaces, named exports for tree-shaking
+- **Bidirectional Sync**: Handle MDX/JSON formats with conflict detection and timestamp comparison
 
-### 1. Framework-Agnostic Design
-- **Primary Goal**: Work seamlessly across all JavaScript frameworks (Next.js, Astro, Gatsby, Nuxt, vanilla JS)
-- **API Design**: Simple, functional API that doesn't impose framework-specific patterns
-- **Build vs Runtime**: Clear separation between build-time (static generation) and runtime (SSR/API) usage
+## Code Organization
 
-### 2. TypeScript-First Development
-- **Strict Types**: All functions have comprehensive TypeScript definitions
-- **Interface Consistency**: Consistent interface patterns across all modules
-- **Generic Support**: Proper generic types for content and configuration objects
-- **Export Strategy**: Named exports for tree-shaking optimization
-
-### 3. Content Transformation & Synchronization
-- **Bidirectional Sync**: Support for both pulling content from LeadCMS and pushing local changes
-- **Format Agnostic**: Handle both MDX and JSON content formats seamlessly
-- **Conflict Resolution**: Intelligent conflict detection using timestamp comparison
-- **System Fields**: Clear separation between user content fields and internal system fields
-
-## Key Components
-
-### `/src/lib/` - Core Library
-- **`cms.ts`** - Main content access functions (getCMSContentBySlug, getAllContentRoutes, etc.)
-- **`config.ts`** - Configuration management with environment variable support
-- **`data-service.ts`** - Data access layer with API/mock mode switching
-- **`content-transformation.ts`** - Shared content transformation utilities (avoid duplication)
-
-### `/src/scripts/` - Content Management
-- **`push-leadcms-content.ts`** - Push/status operations with conflict detection
-- **`fetch-leadcms-content.mjs`** - Pull operations for downloading content
-- **`leadcms-helpers.mjs`** - Shared utilities for content processing
-- **`sse-watcher.mjs`** - Real-time content watching with Server-Sent Events
-
-### `/src/cli/` - Command Line Interface
-- **`index.ts`** - CLI entry point with command parsing and routing
+### Core Structure
+- **`/src/lib/`** - Main library (`cms.ts`, `config.ts`, `data-service.ts`, transformations)
+- **`/src/scripts/`** - Content operations (push, pull, helpers, SSE watcher)  
+- **`/src/cli/`** - Command line interface
+- **`/tests/`** - Test suites: core, feature-specific, integration, validation (144 tests, 60% coverage)
 
 ## Development Guidelines
 
-### 1. Error Handling Strategy
-- **Graceful Degradation**: Functions should return `null` or empty arrays rather than throwing
-- **Detailed Logging**: Use debug logging for development, minimal logging for production
-- **Strict Mode**: Provide `*Strict` variants that throw detailed errors for debugging
-- **Type Safety**: Prefer compile-time type checking over runtime assertions
+### Test-Driven Development (TDD)
+- **Test-First**: Always write failing tests before implementing features or fixes
+- **Bug Fix Protocol**: Reproduce bug with test → fix → verify
+- **Coverage Goal**: Improve from current 60% to >80%
+- **Test Data**: Minimal, generic, privacy-compliant test data only
 
-### 2. Testing Approach
-- **Mock Mode**: Comprehensive mock data service for testing without external dependencies
-- **Shared Test Utilities**: Use shared transformation functions to avoid test code duplication
-- **Real-World Scenarios**: Test with actual user data patterns and edge cases
-- **Integration Tests**: Test CLI commands with mock API responses
+### Error Handling
+- **Public APIs**: Return `null`/empty arrays, don't throw
+- **Strict Variants**: Provide `*Strict` functions that throw detailed errors
+- **Logging**: Debug mode for development, minimal for production
 
 ## Content Model
 
-### Content Structure
 ```typescript
 interface CMSContent {
   id?: number;
@@ -72,159 +46,150 @@ interface CMSContent {
 }
 ```
 
-### File Format Conventions
-- **MDX Files**: YAML frontmatter + Markdown content
-- **JSON Files**: Pure JSON with optional nested content structure
-- **Localization**: Content in `content/{locale}/` subdirectories
-- **User Drafts**: Files with `-{userUid}` suffix for user-specific drafts
+### File Formats
+- **MDX**: YAML frontmatter + content
+- **JSON**: Pure JSON structure
+- **Localization**: Both formats in `content/{locale}/` subdirectories
+- **User Drafts**: Both formats support `-{userUid}` suffix
 
-## Configuration Management
+## Configuration
 
-### Priority Order
-1. **Environment Variables** (highest priority) - for sensitive data like API keys
-2. **Configuration File** (`leadcms.config.json`) - for project-specific settings
-3. **Programmatic Configuration** - for runtime overrides
-4. **Defaults** (lowest priority) - sensible defaults for all settings
+**Priority**: Environment Variables → Config File → Programmatic → Defaults
 
-### Environment Variable Patterns
 ```bash
-# Primary configuration
-LEADCMS_URL=https://your-leadcms-instance.com
-LEADCMS_API_KEY=your-api-key
-
-# Alternative patterns (framework-specific)
-NEXT_PUBLIC_LEADCMS_URL=https://your-leadcms-instance.com
-
-# Development/testing modes
-LEADCMS_USE_MOCK=true
-LEADCMS_DEBUG=true
-NODE_ENV=test
+LEADCMS_URL=https://instance.com
+LEADCMS_API_KEY=key
+LEADCMS_USE_MOCK=true  # Testing
 ```
 
-## CLI Design Patterns
+## CLI Design
 
-### Command Structure
-- **Consistent Naming**: Use clear, action-oriented command names
-- **Option Flags**: Support both short (`-f`) and long (`--force`) flags
-- **Dry Run Support**: Always provide `--dry-run` or equivalent for destructive operations
-- **Progress Feedback**: Show clear progress and completion messages
+- **Consistent naming**: Clear, action-oriented commands with short/long flags (`-f`/`--force`)
+- **Dry run support**: `--dry-run` for destructive operations
+- **Git-style output**: Clear status messages with progress feedback
 
-### Status Output Format
-```bash
-# Git-style status output
-Changes to be synced (3 files):
-        new file:   article      [en]    new-blog-post
-        modified:   page         [en]    about-us (ID: 123)
-        renamed:    doc          [en]    old-name -> new-name (ID: 456)
+## Performance & Security
 
-⚠️  Unmerged conflicts (1 file):
-        conflict:   article      [en]    conflicted-post
-                    Remote content was updated after local content
-```
+### Caching
+- Config files: 60s, Content: 30s, Process-level caching for builds
 
-## Performance Considerations
-
-### Caching Strategy
-- **Configuration Files**: Cache for 60 seconds to improve build performance
-- **Content Files**: Cache for 30 seconds to balance freshness and performance
-- **Process-Level Caching**: Cache within the same Node.js process execution
-- **Build-Time Optimization**: Minimize file system operations during static generation
-
-### Memory Management
-- **Lazy Loading**: Load content files only when requested
-- **Stream Processing**: Use streams for large file operations
-- **Garbage Collection**: Avoid memory leaks in long-running processes
-
-## Security Guidelines
-
-### API Key Management
-- **Environment Variables Only**: Never hardcode API keys in source code
-- **Local Configuration**: Warn users against putting secrets in config files
-- **Docker Templates**: Provide secure environment injection patterns
-
-### Input Validation
-- **GUID Validation**: Validate user UIDs as proper GUID format
-- **Path Traversal**: Prevent directory traversal in file operations
-- **Content Sanitization**: Validate content types and formats
+### Security
+- **API Keys**: Environment variables only, never hardcode
+- **Validation**: GUID format, prevent path traversal, sanitize content
 
 ## Common Anti-Patterns to Avoid
 
-### ❌ Configuration Anti-Patterns
+### ❌ Testing Anti-Patterns
 ```typescript
-// DON'T: Hardcode sensitive configuration
-const config = {
-  apiKey: 'hardcoded-api-key', // ❌ Security risk
-  url: 'https://hardcoded-url.com' // ❌ Not flexible
-};
+// DON'T: Implement features without tests
+export function newFeature() {
+  // Implementation without corresponding tests
+} // ❌ No test coverage
 
-// DON'T: Mix system and user fields
-const excludedFields = ['body', 'createdAt', 'publishedAt']; // ❌ Excludes user data
+// DON'T: Write tests after implementation
+it('should work', () => {
+  // Test written after feature is already working
+  expect(existingFeature()).toBeTruthy(); // ❌ Not TDD
+});
+
+// DON'T: Use overly complex test data
+const complexTestData = {
+  // 50+ lines of unnecessary test data
+}; // ❌ Should be minimal and focused
 ```
 
 ### ❌ Error Handling Anti-Patterns
 ```typescript
-// DON'T: Throw on missing content
+// DON'T: Throw on missing content in public APIs
 if (!content) {
-  throw new Error('Content not found'); // ❌ Should return null
+  throw new Error('Content not found'); // ❌ Should return null for user-facing APIs
 }
 
 // DON'T: Swallow errors silently
 try {
   parseContent();
 } catch (e) {
-  // ❌ Silent failure - log the error at minimum
+  // ❌ Silent failure - should at least log
 }
+
+// DON'T: Generic error messages
+throw new Error('Something went wrong'); // ❌ Provide context
 ```
 
-### ❌ API Design Anti-Patterns
+### ❌ Code Organization Anti-Patterns
 ```typescript
-// DON'T: Framework-specific patterns
+// DON'T: Mix business logic with framework-specific code
 export function getNextJSContent(slug: string) {} // ❌ Not framework-agnostic
 
 // DON'T: Inconsistent return types
-export function getContent(slug: string): CMSContent | undefined | null {} // ❌ Pick one
+export function getContent(slug: string): CMSContent | undefined | null {} // ❌ Pick one pattern
+
+// DON'T: Violate single responsibility principle
+export function fetchParseValidateAndCacheContent() {} // ❌ Does too many things
 ```
 
-## Testing Philosophy
+### ❌ Development Workflow Anti-Patterns
+```typescript
+// DON'T: Skip tests for "simple" bug fixes
+// "This is just a one-line fix, no need for a test" // ❌ All changes need tests
 
-### Mock Data Strategy
-- **Environment Detection**: Automatically enable mock mode for testing environments
-- **Scenario-Based**: Provide different mock scenarios (conflicts, updates, etc.)
-- **Real Data Patterns**: Mock data should reflect real-world usage patterns
-- **CLI Integration**: Test CLI commands with mock responses
+// DON'T: Write implementation-specific tests
+expect(mockFunction).toHaveBeenCalledWith(/* specific implementation details */); // ❌ Too tightly coupled
 
-### Test Organization
-- **Core Functionality**: `cms.test.ts` for main content access functions
-- **Advanced Features**: `cms-advanced.test.ts` for complex scenarios
-- **Push/Status Operations**: `push-status.test.ts` for synchronization logic
-- **Shared Utilities**: Avoid duplicating test transformation logic
+// DON'T: Leave TODO comments in production code
+// TODO: Fix this later // ❌ Should be tracked in issues or fixed immediately
+```
 
-## Documentation Standards
+## SDK Development Workflow
 
-### README Structure
-- **Quick Start**: Installation and basic usage examples
-- **Framework Examples**: Show integration with popular frameworks
-- **CLI Reference**: Complete command documentation with examples
-- **API Reference**: Comprehensive function documentation
+### 1. Feature Development Process
+1. **Requirement Analysis**: Understand the feature requirements and edge cases
+2. **Test Planning**: Design test cases that cover all scenarios including edge cases
+3. **Test Implementation**: Write comprehensive failing tests first
+4. **Feature Implementation**: Implement minimal code to make tests pass
+5. **Refactoring**: Clean up code while maintaining test coverage
+6. **Integration Testing**: Ensure feature works with existing functionality
 
-### Code Documentation
-- **JSDoc Comments**: All public functions should have comprehensive JSDoc
-- **Type Annotations**: Use descriptive type names and interfaces
-- **Example Usage**: Include usage examples in function documentation
-- **Error Scenarios**: Document what errors functions might throw/return
+### 2. Bug Fix Protocol
+1. **Issue Reproduction**: Create a test that demonstrates the bug
+2. **Root Cause Analysis**: Understand why the bug occurs
+3. **Test Creation**: Write a test that fails due to the bug
+4. **Fix Implementation**: Make minimal changes to fix the issue
+5. **Regression Testing**: Ensure fix doesn't break existing functionality
+6. **Documentation Update**: Update relevant documentation if needed
 
-## Release & Deployment
+### 3. Code Quality Standards
+- **TypeScript Strict Mode**: Use strict TypeScript settings for type safety
+- **Interface Consistency**: Maintain consistent API patterns across modules
+- **Generic Types**: Use proper generic types for reusable functions
+- **Pure Functions**: Prefer pure functions where possible for easier testing
+- **Dependency Injection**: Use dependency injection for better testability
 
-### Version Strategy
-- **Semantic Versioning**: Follow semver for all releases
-- **Breaking Changes**: Clearly document breaking changes in CHANGELOG
-- **Deprecation Policy**: Provide migration guides for deprecated features
-- **CLI Compatibility**: Maintain backward compatibility for CLI commands
+### 4. Testing Best Practices
+- **Test Isolation**: Each test should be independent and not rely on others
+- **Descriptive Names**: Test names should clearly describe what they test
+- **Arrange-Act-Assert**: Structure tests with clear setup, execution, and verification
+- **Edge Case Coverage**: Test boundary conditions and error scenarios
+- **Mock Strategy**: Mock external dependencies but test core logic thoroughly
 
-### CI/CD Pipeline
-- **Multi-Node Testing**: Test on Node.js 18, 20, and 22
-- **Coverage Requirements**: Maintain high test coverage (>80%)
-- **Type Checking**: Ensure TypeScript compilation across all Node versions
-- **Integration Tests**: Test CLI functionality with mock data
+## Current Development Practices
+
+### Test Coverage & Quality
+- **Current Coverage**: 60% across all modules with 144 comprehensive tests
+- **Mock Data Service**: Comprehensive `data-service.ts` with scenario-based testing
+- **CI/CD Integration**: GitHub Actions with automated testing on Node.js 18, 20, 22
+- **Jest Configuration**: TypeScript support, coverage reporting, JUnit XML output
+
+### Code Organization Patterns
+- **Framework Agnostic**: All functions work across Next.js, Astro, Gatsby, Nuxt, vanilla JS
+- **TypeScript Strict**: Full type safety with comprehensive interface definitions
+- **Modular Architecture**: Clear separation between core library, CLI, and content management
+- **Configuration Management**: Environment-based config with fallback hierarchy
+
+### Development Tools & Practices
+- **Build System**: TypeScript compilation with template copying and executable permissions
+- **Testing Framework**: Jest with ts-jest, multiple test categories and scenarios
+- **Package Distribution**: NPM package with CLI binary and TypeScript declarations
+- **Documentation**: Comprehensive README, development guides, and API documentation
 
 This document serves as a guide for GitHub Copilot and contributors to understand the project's architecture, patterns, and best practices. Follow these principles when suggesting code changes or implementing new features.
