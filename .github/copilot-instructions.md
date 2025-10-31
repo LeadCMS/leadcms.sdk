@@ -14,7 +14,31 @@
 - **`/src/lib/`** - Main library (`cms.ts`, `config.ts`, `data-service.ts`, transformations)
 - **`/src/scripts/`** - Content operations (push, pull, helpers, SSE watcher)  
 - **`/src/cli/`** - Command line interface
+- **`/src/swagger.json`** - OpenAPI 3.0 specification for LeadCMS API (see API Reference section below)
 - **`/tests/`** - Test suites: core, feature-specific, integration, validation (144 tests, 60% coverage)
+
+## API Reference
+
+### swagger.json - Source of Truth
+The **`/src/swagger.json`** file contains the complete OpenAPI 3.0 specification for the LeadCMS API. Use it to understand:
+
+- **API Endpoints**: All available endpoints with HTTP methods and paths
+- **Request/Response Types**: Complete DTO (Data Transfer Object) schemas
+- **Required Fields**: Which fields are mandatory vs optional
+- **Data Validation**: Field types, formats, patterns, and constraints
+- **Authentication**: Bearer token requirements and 401 handling
+- **Error Responses**: Expected error codes (400, 401, 404, 422, 500) and structures
+
+**Examples:**
+- `/api/users/me` → Returns `UserDetailsDto` with `displayName`, `email`, `userName` (all required)
+- `/api/content` → Accepts `ContentCreateDto`, returns `ContentDetailsDto`
+- `/api/comments/sync` → Sync endpoint with timestamp parameter
+
+**When implementing new features:**
+1. Check swagger.json for endpoint structure
+2. Use the exact DTO schema names and field types
+3. Validate required fields match the specification
+4. Handle all documented error response codes
 
 ## Development Guidelines
 

@@ -67,6 +67,7 @@ export function getLeadCMSConfig(): LeadCMSConfig {
       apiKey: process.env.LEADCMS_API_KEY || "",
       defaultLanguage: process.env.LEADCMS_DEFAULT_LANGUAGE || process.env.NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE || DEFAULT_LANGUAGE,
       contentDir: process.env.LEADCMS_CONTENT_DIR || ".leadcms/content",
+      commentsDir: process.env.LEADCMS_COMMENTS_DIR || ".leadcms/comments",
       mediaDir: process.env.LEADCMS_MEDIA_DIR || "public/media",
       enableDrafts: process.env.LEADCMS_ENABLE_DRAFTS === "true",
     };
@@ -1077,5 +1078,145 @@ export function loadContentConfigStrict<T>(
 
   // This will throw detailed errors with configName, locale, and path information
   return loadConfigWithDraftSupport<T>(contentDir, actualLocale, configName, userUid) as T;
+}
+
+/**
+ * Build comment file path based on language and entity
+ * @param commentsDir - Base comments directory
+ * @param commentableType - The type of entity (e.g., "Content", "Contact")
+ * @param commentableId - The ID of the entity
+ * @param language - Language code (optional, uses default language if not provided)
+ * @returns Full path to the comment file
+ * @internal
+ */
+function getCommentFilePath(
+  commentsDir: string,
+  commentableType: string,
+  commentableId: number,
+  language?: string
+): string {
+  const config = getLeadCMSConfig();
+  const defaultLanguage = config.defaultLanguage;
+  const locale = language || defaultLanguage;
+
+  // Lowercase the commentableType for the path
+  const typeLower = commentableType.toLowerCase();
+
+  // Default language goes in root, others in language subdirectories
+  if (locale === defaultLanguage) {
+    return path.join(commentsDir, typeLower, `${commentableId}.json`);
+  } else {
+    return path.join(commentsDir, locale, typeLower, `${commentableId}.json`);
+  }
+}
+
+/**
+ * Get comments for a specific commentable entity
+ * @param commentableType - The type of entity (e.g., "Content", "Contact")
+ * @param commentableId - The ID of the entity
+ * @param language - Language code (optional, uses default language if not provided)
+ * @returns Array of comments for the entity, or empty array if none found
+ */
+export function getComments(commentableType: string, commentableId: number, language?: string): any[] {
+  try {
+    const config = getLeadCMSConfig();
+    const filePath = getCommentFilePath(config.commentsDir, commentableType, commentableId, language);
+
+    if (!fs.existsSync(filePath)) {
+      return [];
+    }
+
+    const content = fs.readFileSync(filePath, "utf8");
+    return JSON.parse(content);
+  } catch (error) {
+    // Return empty array on any error (file not found, parse error, etc.)
+    return [];
+  }
+}
+
+/**
+ * Get comments for a specific content item by content ID
+ * This is a convenience function that calls getComments with commentableType="Content"
+ * @param contentId - The ID of the content
+ * @param language - Language code (optional, uses default language if not provided)
+ * @returns Array of comments for the content, or empty array if none found
+ */
+export function getCommentsForContent(contentId: number, language?: string): any[] {
+  return getComments("Content", contentId, language);
+}
+
+/**
+ * Get comments for a specific commentable entity with strict error handling
+ * Unlike getComments, this function throws descriptive errors instead of returning empty array
+ * @param commentableType - The type of entity (e.g., "Content", "Contact")
+ * @param commentableId - The ID of the entity
+ * @param language - Language code (optional, uses default language if not provided)
+ * @returns Array of comments for the entity
+ * @throws {Error} If comments file cannot be read or parsed
+ */
+export function getCommentsStrict(commentableType: string, commentableId: number, language?: string): any[] {
+  const config = getLeadCMSConfig();
+  const filePath = getCommentFilePath(config.commentsDir, commentableType, commentableId, language);
+
+  if (!fs.existsSync(filePath)) {
+    throw new Error(
+      `[LeadCMS] Comments file not found for ${commentableType}/${commentableId} (language: ${language || config.defaultLanguage}) at path: ${filePath}`
+    );
+  }
+
+  try {
+    const content = fs.readFileSync(filePath, "utf8");
+    return JSON.parse(content);
+  } catch (error: any) {
+    throw new Error(
+      `[LeadCMS] Failed to read or parse comments file for ${commentableType}/${commentableId}: ${error.message}`
+    );
+  }
+}
+
+/**
+ * Get comments for a specific content item with strict error handling
+ * This is a convenience function that calls getCommentsStrict with commentableType="Content"
+ * @param contentId - The ID of the content
+ * @param language - Language code (optional, uses default language if not provided)
+ * @returns Array of comments for the content
+ * @throws {Error} If comments file cannot be read or parsed
+ */
+export function getCommentsForContentStrict(contentId: number, language?: string): any[] {
+  return getCommentsStrict("Content", contentId, language);
+}
+
+/**
+ * Get comments as a tree structure with parent-child relationships
+ * @param commentableType - The type of entity (e.g., "Content", "Contact")
+ * @param commentableId - The ID of the entity
+ * @param language - Language code (optional, uses default language if not provided)
+ * @param options - Tree building options (sorting, filtering, etc.)
+ * @returns Array of root-level comment nodes with nested children
+ */
+export function getCommentsTree(
+  commentableType: string,
+  commentableId: number,
+  language?: string,
+  options?: import('./comment-utils.js').CommentTreeOptions
+): import('./comment-utils.js').CommentTreeNode[] {
+  const comments = getComments(commentableType, commentableId, language);
+  const { buildCommentTree } = require('./comment-utils.js');
+  return buildCommentTree(comments, options);
+}
+
+/**
+ * Get comments tree for content with convenience wrapper
+ * @param contentId - The ID of the content
+ * @param language - Language code (optional, uses default language if not provided)
+ * @param options - Tree building options (sorting, filtering, etc.)
+ * @returns Array of root-level comment nodes with nested children
+ */
+export function getCommentsTreeForContent(
+  contentId: number,
+  language?: string,
+  options?: import('./comment-utils.js').CommentTreeOptions
+): import('./comment-utils.js').CommentTreeNode[] {
+  return getCommentsTree("Content", contentId, language, options);
 }
 

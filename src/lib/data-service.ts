@@ -24,12 +24,26 @@ function formatApiValidationErrors(errorResponse: any): string {
     }
   }
 
-  return errorMessages.length > 0 
+  return errorMessages.length > 0
     ? `\nValidation errors:\n${errorMessages.join('\n')}`
     : 'Validation failed';
 }
 
-// Type definitions
+/**
+ * Formats authentication errors with helpful guidance
+ */
+function formatAuthenticationError(error: any): Error {
+  const enhancedError = new Error(
+    'Authentication failed: Invalid or missing API key\n' +
+    '\n💡 To fix this:\n' +
+    '   • Verify your LEADCMS_API_KEY in .env file is correct\n' +
+    '   • Or run: leadcms login\n' +
+    '   • Check that your API key has not expired'
+  );
+  (enhancedError as any).status = 401;
+  (enhancedError as any).originalError = error;
+  return enhancedError;
+}// Type definitions
 interface ContentItem {
   id?: number;
   slug: string;
@@ -159,14 +173,8 @@ function shouldUseMock(): boolean {
     return true;
   }
 
-  // Use mock if explicitly requested
+  // Use mock only if explicitly requested
   if (process.env.LEADCMS_USE_MOCK === 'true') {
-    return true;
-  }
-
-  // Use mock if URL points to localhost (development server)
-  const url = process.env.LEADCMS_URL || process.env.NEXT_PUBLIC_LEADCMS_URL;
-  if (url?.includes('localhost')) {
     return true;
   }
 
@@ -357,10 +365,15 @@ class LeadCMSDataService {
 
       return response.data;
     } catch (error: any) {
+      // Handle authentication errors (401)
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
       // Handle validation errors (422) with user-friendly formatting
       if (error.response?.status === 422 && error.response?.data?.errors) {
         const validationMessage = formatApiValidationErrors(error.response);
-        
+
         // Create a more descriptive error with validation details
         // The error message will be displayed by the caller, so we don't log it here
         const enhancedError = new Error(`Validation failed${validationMessage}`);
@@ -368,14 +381,14 @@ class LeadCMSDataService {
         (enhancedError as any).validationErrors = error.response.data.errors;
         throw enhancedError;
       }
-      
+
       // For other errors, log detailed information
       console.error(`[API] Failed to create content:`, error.message);
       if (error.response) {
         console.error(`[API] Status: ${error.response.status}`);
         console.error(`[API] Response data:`, JSON.stringify(error.response.data, null, 2));
       }
-      
+
       throw error;
     }
   }
@@ -413,10 +426,15 @@ class LeadCMSDataService {
 
       return response.data;
     } catch (error: any) {
+      // Handle authentication errors (401)
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
       // Handle validation errors (422) with user-friendly formatting
       if (error.response?.status === 422 && error.response?.data?.errors) {
         const validationMessage = formatApiValidationErrors(error.response);
-        
+
         // Create a more descriptive error with validation details
         // The error message will be displayed by the caller, so we don't log it here
         const enhancedError = new Error(`Validation failed${validationMessage}`);
@@ -424,14 +442,14 @@ class LeadCMSDataService {
         (enhancedError as any).validationErrors = error.response.data.errors;
         throw enhancedError;
       }
-      
+
       // For other errors, log detailed information
       console.error(`[API] Failed to update content:`, error.message);
       if (error.response) {
         console.error(`[API] Status: ${error.response.status}`);
         console.error(`[API] Response data:`, JSON.stringify(error.response.data, null, 2));
       }
-      
+
       throw error;
     }
   }

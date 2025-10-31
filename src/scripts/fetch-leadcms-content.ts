@@ -116,6 +116,7 @@ async function writeMediaSyncToken(token: string): Promise<void> {
 
 async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> {
   console.log(`[FETCH_CONTENT_SYNC] Starting with syncToken: ${syncToken || "NONE"}`);
+  console.log(`[FETCH_CONTENT_SYNC] Fetching public content (no authentication)`);
   let allItems: ContentItem[] = [];
   let allDeleted: number[] = [];
   let token = syncToken || "";
@@ -130,9 +131,9 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
     console.log(`[FETCH_CONTENT_SYNC] Page ${page}, URL: ${url.toString()}`);
 
     try {
-      const res: AxiosResponse<SyncResponse> = await axios.get(url.toString(), {
-        headers: { Authorization: `Bearer ${leadCMSApiKey}` },
-      });
+      // SECURITY: Never send API key for read operations
+      // Content sync should only return public data
+      const res: AxiosResponse<SyncResponse> = await axios.get(url.toString());
 
       if (res.status === 204) {
         console.log(`[FETCH_CONTENT_SYNC] Got 204 No Content - ending sync`);
@@ -180,6 +181,7 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
 
 async function fetchMediaSync(syncToken?: string): Promise<MediaSyncResult> {
   console.log(`[FETCH_MEDIA_SYNC] Starting with syncToken: ${syncToken || "NONE"}`);
+  console.log(`[FETCH_MEDIA_SYNC] Fetching public media (no authentication)`);
   let allItems: MediaItem[] = [];
   let token = syncToken || "";
   let nextSyncToken: string | undefined = undefined;
@@ -193,9 +195,9 @@ async function fetchMediaSync(syncToken?: string): Promise<MediaSyncResult> {
     console.log(`[FETCH_MEDIA_SYNC] Page ${page}, URL: ${url.toString()}`);
 
     try {
-      const res: AxiosResponse<MediaSyncResponse> = await axios.get(url.toString(), {
-        headers: { Authorization: `Bearer ${leadCMSApiKey}` },
-      });
+      // SECURITY: Never send API key for read operations
+      // Media sync should only return public files
+      const res: AxiosResponse<MediaSyncResponse> = await axios.get(url.toString());
 
       if (res.status === 204) {
         console.log(`[FETCH_MEDIA_SYNC] Got 204 No Content - ending sync`);
@@ -236,6 +238,30 @@ async function fetchMediaSync(syncToken?: string): Promise<MediaSyncResult> {
   };
 }
 
+/**
+ * Fetch CMS config to check supported entities
+ */
+async function fetchCMSConfigForEntities(): Promise<{ content: boolean; media: boolean }> {
+  try {
+    const { setCMSConfig, isContentSupported, isMediaSupported } = await import('../lib/cms-config-types.js');
+
+    const configUrl = new URL('/api/config', leadCMSUrl).toString();
+    const response = await axios.get(configUrl, { timeout: 10000 });
+
+    if (response.data) {
+      setCMSConfig(response.data);
+      return {
+        content: isContentSupported(),
+        media: isMediaSupported()
+      };
+    }
+  } catch (error: any) {
+    console.warn(`[FETCH_CONTENT_SYNC] Could not fetch CMS config: ${error.message}`);
+    console.warn(`[FETCH_CONTENT_SYNC] Assuming content and media are supported (backward compatibility)`);
+  }
+  return { content: false, media: false };
+}
+
 async function main(): Promise<void> {
   // Log environment configuration for debugging
   console.log(`[ENV] LeadCMS URL: ${leadCMSUrl}`);
@@ -246,8 +272,33 @@ async function main(): Promise<void> {
   console.log(`[ENV] Content Dir: ${CONTENT_DIR}`);
   console.log(`[ENV] Media Dir: ${MEDIA_DIR}`);
 
-  await fs.mkdir(CONTENT_DIR, { recursive: true });
-  await fs.mkdir(MEDIA_DIR, { recursive: true });
+  // Check supported entities
+  console.log(`\n🔍 Checking CMS configuration...`);
+  const { content: contentSupported, media: mediaSupported } = await fetchCMSConfigForEntities();
+
+  if (!contentSupported && !mediaSupported) {
+    console.log(`⏭️  Neither Content nor Media entities are supported by this LeadCMS instance - skipping sync`);
+    return;
+  }
+
+  if (!contentSupported) {
+    console.log(`⏭️  Content entity not supported - skipping content sync`);
+  }
+
+  if (!mediaSupported) {
+    console.log(`⏭️  Media entity not supported - skipping media sync`);
+  }
+
+  console.log(`✅ Proceeding with sync\n`);
+
+  // Only create directories for supported entity types
+  if (contentSupported) {
+    await fs.mkdir(CONTENT_DIR, { recursive: true });
+  }
+
+  if (mediaSupported) {
+    await fs.mkdir(MEDIA_DIR, { recursive: true });
+  }
 
   const typeMap = await fetchContentTypes();
 
@@ -261,39 +312,43 @@ async function main(): Promise<void> {
   let mediaItems: MediaItem[] = [],
     nextMediaSyncToken: string = "";
 
-  // Sync content
-  try {
-    if (lastSyncToken) {
-      console.log(`Syncing content from LeadCMS using sync token: ${lastSyncToken}`);
-      ({ items, deleted, nextSyncToken } = await fetchContentSync(lastSyncToken));
-    } else {
-      console.log("No content sync token found. Doing full fetch from LeadCMS...");
-      ({ items, deleted, nextSyncToken } = await fetchContentSync(undefined));
+  // Sync content (only if supported)
+  if (contentSupported) {
+    try {
+      if (lastSyncToken) {
+        console.log(`Syncing content from LeadCMS using sync token: ${lastSyncToken}`);
+        ({ items, deleted, nextSyncToken } = await fetchContentSync(lastSyncToken));
+      } else {
+        console.log("No content sync token found. Doing full fetch from LeadCMS...");
+        ({ items, deleted, nextSyncToken } = await fetchContentSync(undefined));
+      }
+    } catch (error: any) {
+      console.error(`[MAIN] Failed to fetch content:`, error.message);
+      if (error.response?.status === 401) {
+        console.error(`[MAIN] Authentication failed - check your LEADCMS_API_KEY`);
+      }
+      throw error;
     }
-  } catch (error: any) {
-    console.error(`[MAIN] Failed to fetch content:`, error.message);
-    if (error.response?.status === 401) {
-      console.error(`[MAIN] Authentication failed - check your LEADCMS_API_KEY`);
-    }
-    throw error;
   }
 
-  // Sync media
-  try {
-    if (lastMediaSyncToken) {
-      console.log(`Syncing media from LeadCMS using sync token: ${lastMediaSyncToken}`);
-      ({ items: mediaItems, nextSyncToken: nextMediaSyncToken } = await fetchMediaSync(lastMediaSyncToken));
-    } else {
-      console.log("No media sync token found. Doing full fetch from LeadCMS...");
-      ({ items: mediaItems, nextSyncToken: nextMediaSyncToken } = await fetchMediaSync(undefined));
+  // Sync media (only if supported)
+  if (mediaSupported) {
+    try {
+      if (lastMediaSyncToken) {
+        console.log(`Syncing media from LeadCMS using sync token: ${lastMediaSyncToken}`);
+        ({ items: mediaItems, nextSyncToken: nextMediaSyncToken } = await fetchMediaSync(lastMediaSyncToken));
+      } else {
+        console.log("No media sync token found. Doing full fetch from LeadCMS...");
+        ({ items: mediaItems, nextSyncToken: nextMediaSyncToken } = await fetchMediaSync(undefined));
+      }
+    } catch (error: any) {
+      console.error(`[MAIN] Failed to fetch media:`, error.message);
+      if (error.response?.status === 401) {
+        console.error(`[MAIN] Authentication failed - check your LEADCMS_API_KEY`);
+      }
+      // Don't throw here, continue with content sync even if media sync fails
+      console.warn(`[MAIN] Continuing without media sync...`);
     }
-  } catch (error: any) {
-    console.error(`[MAIN] Failed to fetch media:`, error.message);
-    if (error.response?.status === 401) {
-      console.error(`[MAIN] Authentication failed - check your LEADCMS_API_KEY`);
-    }
-    // Don't throw here, continue with content sync even if media sync fails
-    console.warn(`[MAIN] Continuing without media sync...`);
   }
 
   console.log(`\x1b[32mFetched ${items.length} content items, ${deleted.length} deleted.\x1b[0m`);

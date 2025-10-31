@@ -143,7 +143,7 @@ LEADCMS_URL=http://localhost:3001 npx leadcms status
 - `allNew` - Local content that doesn't exist remotely (default)
 - `noChanges` - All content is in sync
 - `hasConflicts` - Remote content is newer than local
-- `hasUpdates` - Local content is newer than remote  
+- `hasUpdates` - Local content is newer than remote
 - `mixedOperations` - Mix of new, updated, and conflicted content
 - `missingContentTypes` - Content with unknown types
 
@@ -158,13 +158,18 @@ The data service abstraction automatically handles switching between real API ca
 
 LeadCMS SDK supports multiple configuration methods in order of priority:
 
+> **🚀 Quick Start:** Run `npx leadcms init` for an interactive setup wizard that handles everything!
+
 ### 1. Environment Variables (Recommended for API credentials)
 
 For security reasons, it's best to keep sensitive credentials as environment variables:
 
 ```bash
-# Required - keep these as environment variables for security
+# Required
 LEADCMS_URL=your-leadcms-instance-url
+
+# Optional - API key for authenticated access
+# Omit this for public-only mode (published content only)
 LEADCMS_API_KEY=your-api-key
 
 # Optional - can also be set via environment variables
@@ -177,6 +182,8 @@ LEADCMS_ENABLE_DRAFTS=true
 NEXT_PUBLIC_LEADCMS_URL=your-leadcms-instance-url
 NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE=en
 ```
+
+> **� Security Note:** The SDK uses a **security-first approach** - all read operations (content, comments, media sync) are performed WITHOUT authentication, ensuring only public data is retrieved. API keys are only used for write operations. See [Public API Mode Guide](./docs/PUBLIC_API_MODE.md) for details.
 
 ### 2. Configuration File (For project-specific settings)
 
@@ -220,19 +227,95 @@ configure({
 ### Configuration Options
 
 - `url` - Your LeadCMS instance URL (**required**, best as env var)
-- `apiKey` - Your LeadCMS API key (**required**, best as env var)
+- `apiKey` - Your LeadCMS API key (**optional**, omit for public-only mode, best as env var when used)
 - `defaultLanguage` - Default language code (default: "en")
 - `contentDir` - Directory for downloaded content (default: ".leadcms/content")
 - `mediaDir` - Directory for media files (default: "public/media")
-- `enableDrafts` - Enable draft content support (default: false)
+- `enableDrafts` - Enable draft content support (default: false, requires API key)
 
 ## CLI Usage
+
+### Check SDK version
+```bash
+npx leadcms version
+# or
+npx leadcms -v
+# or
+npx leadcms --version
+```
 
 ### Initialize configuration
 ```bash
 npx leadcms init
-# Creates leadcms.config.json with sample configuration
 ```
+
+Interactive setup wizard that:
+1. **Connects to your LeadCMS instance** - Validates URL (API key optional)
+2. **Fetches configuration** - Retrieves default language and available languages from public `/api/config` endpoint
+3. **Configures directories** - Sets content and media directories (defaults: `.leadcms/content`, `public/media`)
+4. **Creates environment file** - Saves configuration to `.env` or `.env.local`
+5. **Creates config file** - Only if you use non-default directories (keeps your project clean!)
+
+**Note:** The `/api/config` endpoint is public and works without authentication. API key is only required for write operations (push).
+
+Example session with API key:
+```
+🚀 LeadCMS SDK Initialization
+
+Enter your LeadCMS URL: https://your-instance.leadcms.io
+Enter your LeadCMS API Key (or press Enter for anonymous mode): ••••••••
+
+🔍 Connecting to LeadCMS...
+✅ Connected successfully!
+
+📋 Available languages:
+   1. English (United States) [en-US] (default)
+   2. Russian (Russia) [ru-RU]
+
+✓ Using default language: en-US
+
+Content directory [.leadcms/content]:
+Media directory [public/media]:
+
+✅ Updated .env
+ℹ️  Using default directories, no leadcms.config.json needed.
+
+✨ Configuration complete!
+```
+
+Example session in anonymous mode:
+```
+🚀 LeadCMS SDK Initialization
+
+Enter your LeadCMS URL: https://your-instance.leadcms.io
+Enter your LeadCMS API Key (or press Enter for anonymous mode): 
+
+ℹ️  Anonymous mode: Only public content will be accessible.
+   Read operations will work, but write operations (push) will fail.
+
+🔍 Connecting to LeadCMS...
+✅ Connected successfully!
+
+📋 Available languages:
+   1. English (United States) [en-US] (default)
+   2. Russian (Russia) [ru-RU]
+
+✓ Using default language: en-US
+
+Content directory [.leadcms/content]:
+Media directory [public/media]:
+
+✅ Updated .env
+ℹ️  Using default directories, no leadcms.config.json needed.
+
+✨ Configuration complete!
+```
+
+The wizard creates:
+- **`.env`** (or `.env.local` if exists) with `LEADCMS_URL`, `LEADCMS_DEFAULT_LANGUAGE`, and optionally `LEADCMS_API_KEY`
+- **`leadcms.config.json`** only if custom directories are specified
+
+**Anonymous Mode:** Perfect for static sites that only need public content. Omit the API key to skip authentication entirely.
 
 ### Generate Docker deployment templates
 ```bash
@@ -240,9 +323,19 @@ npx leadcms docker
 # Creates Docker files for production and preview deployments
 ```
 
-### Pull content from LeadCMS
+### Pull content and comments from LeadCMS
 ```bash
 npx leadcms pull
+```
+
+This command will:
+- Sync all content from LeadCMS to local files
+- Sync all comments to `.leadcms/comments/` directory
+- Update sync tokens for incremental updates
+
+To pull only comments:
+```bash
+npx leadcms pull-comments
 ```
 
 > **Note:** `npx leadcms fetch` is still supported as an alias for backward compatibility.
@@ -410,6 +503,179 @@ try {
   console.log('Expected path:', error.message);
 }
 ```
+
+### Comments Support
+
+LeadCMS SDK provides full support for working with comments on your content. Comments are automatically synced when you run `npx leadcms pull` and stored locally in `.leadcms/comments/` directory organized by entity type and ID.
+
+#### Syncing Comments
+
+```bash
+# Pull both content and comments (recommended)
+npx leadcms pull
+
+# Pull only comments
+npx leadcms pull-comments
+```
+
+> **💡 Note:** Comments are fetched **without authentication** for security. If you encounter 403 errors, check that your LeadCMS instance allows public access to comments. See [Public API Mode Guide](./docs/PUBLIC_API_MODE.md#troubleshooting) for troubleshooting.
+
+Comments are stored in the following structure:
+```
+.leadcms/
+  comments/
+    Content/
+      10.json    # Comments for Content with ID 10
+      20.json    # Comments for Content with ID 20
+    Contact/
+      5.json     # Comments for Contact with ID 5
+```
+
+#### Retrieving Comments
+
+```typescript
+import {
+  getComments,
+  getCommentsForContent,
+  getCommentsStrict,
+  getCommentsForContentStrict
+} from '@leadcms/sdk';
+
+// Get comments for any commentable entity (returns empty array if not found)
+const contentComments = getComments('Content', 10);
+const contactComments = getComments('Contact', 5);
+
+// Convenience function for content comments (most common use case)
+const comments = getCommentsForContent(20);
+
+// Strict versions that throw errors instead of returning empty arrays
+try {
+  const strictComments = getCommentsStrict('Content', 10);
+  const strictContentComments = getCommentsForContentStrict(20);
+} catch (error) {
+  console.error('Comments not found or invalid:', error.message);
+}
+```
+
+#### Comment Structure
+
+Each comment has the following structure:
+
+```typescript
+interface Comment {
+  id: number;
+  parentId?: number | null;              // For nested/threaded comments
+  authorName: string;
+  authorEmail?: string;
+  body: string;
+  createdAt: string;                     // ISO 8601 format
+  updatedAt?: string | null;             // ISO 8601 format
+  commentableId: number;                 // ID of the entity being commented on
+  commentableType: string;               // Type of entity (e.g., "Content", "Contact")
+  avatarUrl?: string;
+  language: string;
+  translationKey?: string | null;
+  contactId?: number | null;
+  source?: string | null;
+  tags?: string[] | null;
+}
+```
+
+#### Usage Examples
+
+**Display comments on a blog post:**
+
+```typescript
+// Next.js example
+import { getCMSContentBySlugForLocale, getCommentsForContent } from '@leadcms/sdk';
+
+export default function BlogPost({ params }) {
+  const content = getCMSContentBySlugForLocale(params.slug, 'en');
+  const comments = content.id ? getCommentsForContent(content.id) : [];
+
+  return (
+    <article>
+      <h1>{content.title}</h1>
+      <div dangerouslySetInnerHTML={{ __html: content.body }} />
+
+      <section className="comments">
+        <h2>Comments ({comments.length})</h2>
+        {comments.map(comment => (
+          <div key={comment.id} className="comment">
+            <img src={comment.avatarUrl} alt={comment.authorName} />
+            <div>
+              <strong>{comment.authorName}</strong>
+              <time>{new Date(comment.createdAt).toLocaleDateString()}</time>
+              <p>{comment.body}</p>
+            </div>
+          </div>
+        ))}
+      </section>
+    </article>
+  );
+}
+```
+
+**Working with threaded comments:**
+
+```typescript
+import {
+  getCommentsTreeForContent,
+  flattenCommentTree
+} from '@leadcms/sdk';
+
+// Get comments as a tree with nested replies
+const tree = getCommentsTreeForContent(20, {
+  sortOrder: 'newest',        // Sort root comments newest first
+  replySortOrder: 'oldest'    // Sort replies chronologically
+});
+
+// Each node has: id, body, authorName, children, depth, isLeaf, threadCount
+tree.forEach(comment => {
+  console.log(`${comment.authorName}: ${comment.body}`);
+  console.log(`  ${comment.threadCount - 1} replies`);
+});
+
+// Flatten tree for display with indentation
+const flat = flattenCommentTree(tree);
+flat.forEach(comment => {
+  const indent = '  '.repeat(comment.depth);
+  console.log(`${indent}${comment.authorName}: ${comment.body}`);
+});
+```
+
+**Advanced comment features:**
+
+```typescript
+import {
+  getCommentsForContent,
+  searchComments,
+  getCommentStatistics,
+  filterComments,
+  getRecentComments
+} from '@leadcms/sdk';
+
+const comments = getCommentsForContent(10);
+
+// Search comments
+const results = searchComments(comments, 'react');
+
+// Get statistics
+const stats = getCommentStatistics(comments);
+console.log(`${stats.total} comments, ${stats.threads} threads, ${stats.authors} authors`);
+
+// Filter by language, tags, date range
+const filtered = filterComments(comments, {
+  language: 'en',
+  tags: ['important'],
+  since: '2024-01-01'
+});
+
+// Get recent comments
+const latest = getRecentComments(comments, 5);
+```
+
+> **📖 See [Comment Tree Documentation](./docs/COMMENT_TREE.md)** for comprehensive guide on tree structures, sorting options, filtering, statistics, and more advanced features.
 
 ## Docker Deployment
 

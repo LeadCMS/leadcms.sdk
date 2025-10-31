@@ -2,6 +2,7 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,10 +23,63 @@ function runScript(scriptName: string, args: string[] = []) {
   });
 }
 
+function runScriptSequence(scripts: string[], args: string[] = []) {
+  let currentIndex = 0;
+
+  function runNext() {
+    if (currentIndex >= scripts.length) {
+      return;
+    }
+
+    const scriptName = scripts[currentIndex];
+    const scriptPath = path.join(scriptDir, scriptName);
+    const child = spawn('node', [scriptPath, ...args], {
+      stdio: 'inherit',
+      env: process.env
+    });
+
+    child.on('exit', (code) => {
+      if (code !== 0) {
+        process.exit(code || 0);
+      } else {
+        currentIndex++;
+        runNext();
+      }
+    });
+  }
+
+  runNext();
+}
+
+function getVersion(): string {
+  try {
+    const packageJsonPath = path.join(__dirname, '../../package.json');
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+    return packageJson.version;
+  } catch (error) {
+    return 'unknown';
+  }
+}
+
 switch (command) {
+  case 'version':
+  case '-v':
+  case '--version':
+    console.log(`LeadCMS SDK v${getVersion()}`);
+    process.exit(0);
+    break;
   case 'pull':
   case 'fetch': // Alias for backward compatibility
-    runScript('fetch-leadcms-content.js');
+    runScript('pull-all.js');
+    break;
+  case 'pull-content':
+    runScript('pull-content.js');
+    break;
+  case 'pull-media':
+    runScript('pull-media.js');
+    break;
+  case 'pull-comments':
+    runScript('pull-comments.js');
     break;
   case 'push':
     runScript('push-leadcms-content.js', commandArgs);
@@ -41,7 +95,10 @@ switch (command) {
     break;
   case 'init':
   case 'config':
-    generateConfig();
+    runScript('init-leadcms.js');
+    break;
+  case 'login':
+    runScript('login-leadcms.js');
     break;
   case 'docker':
   case 'templates':
@@ -49,100 +106,68 @@ switch (command) {
     break;
   default:
     console.log(`
-LeadCMS SDK CLI
+LeadCMS SDK CLI v${getVersion()}
 
 Usage:
+  leadcms version        - Show SDK version
   leadcms init           - Initialize LeadCMS configuration
+  leadcms login          - Authenticate and save API token to .env file
   leadcms docker         - Generate Docker deployment templates
-  leadcms pull           - Pull content from LeadCMS
+
+  Pull commands:
+  leadcms pull           - Pull all content, media, and comments from LeadCMS
+  leadcms pull-content   - Pull only content from LeadCMS
+  leadcms pull-media     - Pull only media files from LeadCMS
+  leadcms pull-comments  - Pull only comments from LeadCMS
+  leadcms fetch          - Alias for 'pull' (backward compatibility)
+
+  Push commands:
   leadcms push [options] - Push local content to LeadCMS
     --force              - Override remote changes (skip conflict check)
     --dry-run            - Show API calls without executing them (preview mode)
     --id <content-id>    - Target specific content by ID
     --slug <slug>        - Target specific content by slug
+
+  Status & monitoring:
   leadcms status [options] - Show sync status between local and remote content
     --preview            - Show detailed change previews for all files
     --id <content-id>    - Show detailed status for specific content by ID
     --slug <slug>        - Show detailed status for specific content by slug
-  leadcms fetch          - Alias for 'pull' (backward compatibility)
-  leadcms watch          - Watch for real-time updates
+  leadcms watch          - Watch for real-time updates via Server-Sent Events
+
+  Utilities:
   leadcms generate-env   - Generate environment variables file
 
-Configuration:
-  Set required environment variables (recommended for security):
-    LEADCMS_URL=your-leadcms-instance-url
-    LEADCMS_API_KEY=your-api-key
+Getting Started:
+  1. Initialize configuration:
+     leadcms init              - Interactive setup wizard
 
-  Optional: Create leadcms.config.json for project-specific settings:
-  {
-    "defaultLanguage": "en",
-    "contentDir": ".leadcms/content",
-    "mediaDir": "public/media"
-  }
+  2. Authenticate (optional, required for push operations):
+     leadcms login             - Get and save API token
 
-  Environment variables (fallback):
-  LEADCMS_URL                     - LeadCMS instance URL
-  LEADCMS_API_KEY                 - LeadCMS API key
-  LEADCMS_DEFAULT_LANGUAGE        - Default language (optional, defaults to 'en')
+  3. Start syncing:
+     leadcms pull              - Download content from LeadCMS
+     leadcms push              - Upload local changes
 
-  Next.js users can also use:
-  NEXT_PUBLIC_LEADCMS_URL         - LeadCMS instance URL
-  NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE - Default language
+Configuration Files:
+  .env (recommended, created by 'leadcms login'):
+    LEADCMS_URL=https://your-instance.leadcms.io
+    LEADCMS_API_KEY=your-token-here
+    LEADCMS_DEFAULT_LANGUAGE=en
+
+  leadcms.config.json (created by 'leadcms init'):
+    {
+      "url": "https://your-instance.leadcms.io",
+      "defaultLanguage": "en",
+      "contentDir": "content",
+      "mediaDir": "public/media",
+      "commentsDir": "comments"
+    }
+
+  Note: Environment variables take precedence over config file.
+  Next.js users can use NEXT_PUBLIC_LEADCMS_URL for client-side access.
 `);
     break;
-}
-
-function generateConfig() {
-  Promise.all([import('fs'), import('path')]).then(([fs, pathModule]) => {
-    const configPath = pathModule.join(process.cwd(), 'leadcms.config.json');
-
-    if (fs.existsSync(configPath)) {
-      const readline = require('readline');
-
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-
-      rl.question('leadcms.config.json already exists. Overwrite? (y/N): ', (answer: any) => {
-        if (answer.toLowerCase() !== 'y' && answer.toLowerCase() !== 'yes') {
-          console.log('✅ Configuration initialization cancelled.');
-          rl.close();
-          return;
-        }
-
-        createConfig();
-        rl.close();
-      });
-    } else {
-      createConfig();
-    }
-
-    function createConfig() {
-      const sampleConfigPath = pathModule.join(__dirname, '../../leadcms.config.json.sample');
-      const sampleConfig = fs.readFileSync(sampleConfigPath, 'utf-8');
-
-      fs.writeFileSync(configPath, sampleConfig, 'utf-8');
-      console.log(`✅ Created ${configPath}`);
-      console.log('📝 Set LEADCMS_URL and LEADCMS_API_KEY as environment variables.');
-      console.log('🔧 Customize contentDir, mediaDir, or other settings in the config file.');
-      console.log('ℹ️  Content types are automatically detected from your LeadCMS API.');
-    }
-  });
-}
-
-function createConfigFile(configPath: string) {
-  import('fs').then(fs => {
-    // Use the sample config file as the source of truth
-    const sampleConfigPath = path.join(__dirname, '../../leadcms.config.json.sample');
-    const sampleConfig = fs.readFileSync(sampleConfigPath, 'utf-8');
-
-    fs.writeFileSync(configPath, sampleConfig, 'utf-8');
-    console.log(`✅ Created ${configPath}`);
-    console.log('📝 Set LEADCMS_URL and LEADCMS_API_KEY as environment variables.');
-    console.log('🔧 Customize contentDir, mediaDir, or other settings in the config file.');
-    console.log('ℹ️  Content types are automatically detected from your LeadCMS API.');
-  });
 }
 
 function generateDockerTemplates() {

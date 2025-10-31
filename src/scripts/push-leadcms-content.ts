@@ -818,6 +818,19 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
 
     console.log(`[PUSH] Starting ${actionDescription} for ${targetDescription}...`);
 
+    // Check for API key if not in status-only mode
+    if (!statusOnly && !dryRun) {
+      const config = await import('../lib/config.js').then(m => m.getConfig());
+      if (!config.apiKey) {
+        console.log('\n❌ Cannot push changes: No API key configured (anonymous mode)');
+        console.log('\n💡 To push changes, you need to authenticate:');
+        console.log('   • Set LEADCMS_API_KEY in your .env file');
+        console.log('   • Or run: leadcms login');
+        console.log('\nℹ️  Tip: Use "leadcms status" to check changes without authentication');
+        return;
+      }
+    }
+
     // Read local content
     const localContent = await readLocalContent();
 

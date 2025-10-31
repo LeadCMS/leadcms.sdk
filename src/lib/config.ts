@@ -4,12 +4,14 @@ import path from "path";
 export interface LeadCMSConfig {
   /** LeadCMS instance URL */
   url: string;
-  /** LeadCMS API key */
-  apiKey: string;
+  /** LeadCMS API key (optional - when not provided, only public content is accessible) */
+  apiKey?: string;
   /** Default language for content */
   defaultLanguage: string;
   /** Content directory path (relative to project root) */
   contentDir: string;
+  /** Comments directory path (relative to project root) */
+  commentsDir: string;
   /** Media directory path (relative to project root) */
   mediaDir: string;
   /** Enable draft content support */
@@ -37,6 +39,7 @@ const DEBUG_LOGGING = process.env.LEADCMS_DEBUG === 'true' || process.env.NODE_E
 const DEFAULT_CONFIG: Partial<LeadCMSConfig> = {
   defaultLanguage: "en",
   contentDir: ".leadcms/content",
+  commentsDir: ".leadcms/comments",
   mediaDir: "public/media",
   enableDrafts: false,
 };
@@ -69,9 +72,10 @@ export function loadConfig(): LeadCMSConfig {
   // Remove undefined values and ensure required fields
   const cleanConfig: LeadCMSConfig = {
     url: mergedConfig.url || "",
-    apiKey: mergedConfig.apiKey || "",
+    apiKey: mergedConfig.apiKey, // Optional - undefined if not provided
     defaultLanguage: mergedConfig.defaultLanguage || DEFAULT_CONFIG.defaultLanguage!,
     contentDir: mergedConfig.contentDir || DEFAULT_CONFIG.contentDir!,
+    commentsDir: mergedConfig.commentsDir || DEFAULT_CONFIG.commentsDir!,
     mediaDir: mergedConfig.mediaDir || DEFAULT_CONFIG.mediaDir!,
     enableDrafts: mergedConfig.enableDrafts || DEFAULT_CONFIG.enableDrafts!,
   };
@@ -188,6 +192,10 @@ function loadConfigFromEnv(): Partial<LeadCMSConfig> {
     config.contentDir = process.env.LEADCMS_CONTENT_DIR;
   }
 
+  if (process.env.LEADCMS_COMMENTS_DIR) {
+    config.commentsDir = process.env.LEADCMS_COMMENTS_DIR;
+  }
+
   if (process.env.LEADCMS_MEDIA_DIR) {
     config.mediaDir = process.env.LEADCMS_MEDIA_DIR;
   }
@@ -209,12 +217,13 @@ function validateConfig(config: LeadCMSConfig): void {
     errors.push("Missing required configuration: url");
   }
 
-  if (!config.apiKey) {
-    errors.push("Missing required configuration: apiKey");
-  }
-
   if (config.url && !isValidUrl(config.url)) {
     errors.push("Invalid URL format: url");
+  }
+
+  // API key is now optional - warn if not provided
+  if (!config.apiKey && DEBUG_LOGGING) {
+    console.warn("[LeadCMS] No API key provided - only public content will be accessible");
   }
 
   if (errors.length > 0) {

@@ -34,13 +34,14 @@ export const MEDIA_DIR = path.resolve(config.mediaDir);
 // Content types are automatically detected and don't need to be configured
 export async function fetchContentTypes(): Promise<Record<string, string>> {
   console.log(`[LeadCMS] Fetching content types from API...`);
+  console.log(`[LeadCMS] Fetching public content types (no authentication)`);
   const url = new URL("/api/content-types", leadCMSUrl);
   url.searchParams.set("filter[limit]", "100");
 
   try {
-    const res: AxiosResponse<ContentType[]> = await axios.get(url.toString(), {
-      headers: { Authorization: `Bearer ${leadCMSApiKey}` },
-    });
+    // SECURITY: Never send API key for read operations
+    // Content types should only return public types
+    const res: AxiosResponse<ContentType[]> = await axios.get(url.toString());
 
     const types = res.data;
     const typeMap: Record<string, string> = {};
@@ -57,7 +58,6 @@ export async function fetchContentTypes(): Promise<Record<string, string>> {
 }
 
 export function extractMediaUrlsFromContent(content: ContentItem): string[] {
-  console.log(`[LeadCMS] Extracting media URLs from content: ${content}`);
   const urls = new Set<string>();
   const body = content.body || "";
   const regex = /["'\(](\/api\/media\/[^"'\)\s]+)/g;
@@ -71,7 +71,12 @@ export function extractMediaUrlsFromContent(content: ContentItem): string[] {
     urls.add(content.coverImageUrl);
   }
 
-  return Array.from(urls);
+  const foundUrls = Array.from(urls);
+  if (foundUrls.length > 0) {
+    console.log(`[LeadCMS] Extracted ${foundUrls.length} media URL(s) from content: ${content.slug || content.id}`);
+  }
+
+  return foundUrls;
 }
 
 // Direct media download without meta.json dependency
@@ -79,17 +84,19 @@ export async function downloadMediaFileDirect(
   mediaUrl: string,
   destPath: string,
   leadCMSUrl: string,
-  leadCMSApiKey: string
+  leadCMSApiKey?: string
 ): Promise<boolean> {
   await fs.mkdir(path.dirname(destPath), { recursive: true });
 
   const fullUrl = mediaUrl.startsWith("http") ? mediaUrl : leadCMSUrl.replace(/\/$/, "") + mediaUrl;
-  const headers = { Authorization: `Bearer ${leadCMSApiKey}` };
+
+  // SECURITY: Never send API key for media downloads
+  // Media files should be publicly accessible
+  // Note: leadCMSApiKey parameter kept for backward compatibility but not used
 
   try {
     const res = await axios.get(fullUrl, {
       responseType: "arraybuffer",
-      headers,
       validateStatus: (status) =>
         (status >= 200 && status < 300) || status === 404,
     });
