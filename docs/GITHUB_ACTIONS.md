@@ -6,7 +6,7 @@ This guide explains how to set up automated CI/CD for the LeadCMS SDK using GitH
 
 The repository includes two GitHub Actions workflows:
 
-1. **CI Workflow** (`.github/workflows/ci.yml`) - Runs on every push and PR
+1. **Build & Test Workflow** (`.github/workflows/build-and-test.yml`) - Runs on every push and PR
 2. **Publish Workflow** (`.github/workflows/publish.yml`) - Runs on releases
 
 ## 📋 Prerequisites
@@ -40,7 +40,7 @@ The repository includes two GitHub Actions workflows:
 
 ## 🔄 Workflow Details
 
-### CI Workflow (Continuous Integration)
+### Build & Test Workflow (Continuous Integration)
 
 **Triggers:**
 - Push to `main` or `develop` branches

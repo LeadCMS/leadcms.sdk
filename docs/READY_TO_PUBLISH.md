@@ -4,7 +4,7 @@
 
 ### 🔄 **GitHub Actions Workflows**
 
-1. **CI Workflow** (`.github/workflows/ci.yml`)
+1. **Build & Test Workflow** (`.github/workflows/build-and-test.yml`)
    - ✅ Runs on push/PR to main/develop branches
    - ✅ Tests on Node.js 18, 20, 22
    - ✅ Validates build, CLI functionality, and package structure

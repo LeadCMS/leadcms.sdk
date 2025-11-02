@@ -4,9 +4,9 @@ This guide helps you set up comprehensive testing and coverage reporting for the
 
 ## GitHub Actions Workflows
 
-The repository includes a comprehensive CI workflow:
+The repository includes a comprehensive Build & Test workflow:
 
-### CI Workflow (`.github/workflows/ci.yml`)
+### Build & Test Workflow (`.github/workflows/build-and-test.yml`)
 - **Purpose**: Complete test, build, and validation pipeline
 - **Triggers**: Push to main/develop, Pull Requests
 - **Features**:
@@ -77,8 +77,8 @@ The Jest configuration is in `jest.config.js` and includes:
 Add these badges to your README to show CI status:
 
 ```markdown
-[![CI](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/ci.yml)
-[![Tests](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/test.yml/badge.svg)](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/test.yml)
+[![Build & Test](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/build-and-test.yml)
+[![Publish](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/publish.yml/badge.svg)](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/publish.yml)
 ```
 
 ## Troubleshooting
