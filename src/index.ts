@@ -4,6 +4,7 @@ export * from './lib/config.js';
 export * from './lib/locale-utils.js';
 export * from './lib/comment-types.js';
 export * from './lib/cms-config-types.js';
+export * from './lib/auth.js';
 
 // Export only public comment tree types (functions are exported from cms.js)
 export type { CommentTreeNode, CommentTreeOptions, CommentStatistics, CommentSortOrder } from './lib/comment-utils.js';
@@ -37,9 +38,19 @@ export type { CommentTreeNode, CommentTreeOptions, CommentStatistics, CommentSor
 // 3. Programmatic configuration using configure()
 //
 // CLI utilities:
-// - npx leadcms init      - Initialize configuration
+// - npx leadcms init      - Initialize configuration (includes authentication setup)
+// - npx leadcms login     - Authenticate with LeadCMS (device auth or manual token)
 // - npx leadcms pull      - Pull content and comments from LeadCMS
 // - npx leadcms pull-comments - Pull only comments from LeadCMS
 // - npx leadcms fetch     - Alias for pull (backward compatibility)
 // - npx leadcms watch     - Watch for real-time updates
 // - npx leadcms generate-env - Generate environment file
+//
+// Authentication API:
+// - authenticate()        - Complete authentication flow with version detection
+// - deviceAuthFlow()      - Device authentication flow (LeadCMS >= 1.2.88)
+// - manualTokenFlow()     - Manual token extraction (legacy versions)
+// - verifyToken()         - Verify API token
+// - saveTokenToEnv()      - Save token to .env file
+// - getLeadCMSVersion()   - Get LeadCMS instance version
+// - supportsDeviceAuth()  - Check if device auth is supported

@@ -9,6 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
 import { type CMSConfigResponse, setCMSConfig } from '../lib/cms-config-types.js';
+import { authenticate, saveTokenToEnv } from '../lib/auth.js';
 
 // Default values
 const DEFAULTS = {
@@ -179,26 +180,74 @@ function createConfigFile(config: UserConfig): void {
 }
 
 /**
+ * Read existing configuration values
+ */
+function readExistingConfig(): Partial<UserConfig> {
+  const existingConfig: Partial<UserConfig> = {};
+
+  // Read from .env or .env.local
+  const envPath = path.join(process.cwd(), '.env');
+  const envLocalPath = path.join(process.cwd(), '.env.local');
+  const targetEnvFile = fs.existsSync(envLocalPath) ? envLocalPath : envPath;
+
+  if (fs.existsSync(targetEnvFile)) {
+    const envContent = fs.readFileSync(targetEnvFile, 'utf-8');
+    envContent.split('\n').forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        const [key, ...valueParts] = trimmed.split('=');
+        const value = valueParts.join('=').trim();
+
+        if (key.trim() === 'LEADCMS_URL' && value) {
+          existingConfig.url = value;
+        } else if (key.trim() === 'LEADCMS_API_KEY' && value) {
+          existingConfig.apiKey = value;
+        } else if (key.trim() === 'LEADCMS_DEFAULT_LANGUAGE' && value) {
+          existingConfig.defaultLanguage = value;
+        }
+      }
+    });
+  }
+
+  // Read from leadcms.config.json
+  const configPath = path.join(process.cwd(), 'leadcms.config.json');
+  if (fs.existsSync(configPath)) {
+    try {
+      const configContent = fs.readFileSync(configPath, 'utf-8');
+      const jsonConfig = JSON.parse(configContent);
+
+      if (jsonConfig.contentDir) {
+        existingConfig.contentDir = jsonConfig.contentDir;
+      }
+      if (jsonConfig.mediaDir) {
+        existingConfig.mediaDir = jsonConfig.mediaDir;
+      }
+      if (jsonConfig.commentsDir) {
+        existingConfig.commentsDir = jsonConfig.commentsDir;
+      }
+    } catch (error) {
+      // Ignore parse errors, will use defaults
+    }
+  }
+
+  return existingConfig;
+}
+
+/**
  * Main initialization flow
  */
 async function main(): Promise<void> {
   console.log('\n🚀 LeadCMS SDK Initialization\n');
-
-  const config: UserConfig = {
-    url: '',
-    apiKey: '',
-    defaultLanguage: 'en',
-    contentDir: DEFAULTS.contentDir,
-    mediaDir: DEFAULTS.mediaDir,
-    commentsDir: DEFAULTS.commentsDir,
-  };
 
   // Check if config already exists
   const configPath = path.join(process.cwd(), 'leadcms.config.json');
   const envPath = path.join(process.cwd(), '.env');
   const envLocalPath = path.join(process.cwd(), '.env.local');
 
-  if (fs.existsSync(configPath) || fs.existsSync(envPath) || fs.existsSync(envLocalPath)) {
+  const hasExistingConfig = fs.existsSync(configPath) || fs.existsSync(envPath) || fs.existsSync(envLocalPath);
+  const existingConfig = hasExistingConfig ? readExistingConfig() : {};
+
+  if (hasExistingConfig) {
     const answer = await question('⚠️  Configuration files already exist. Overwrite? (y/N): ');
     if (answer.toLowerCase() !== 'y' && answer.toLowerCase() !== 'yes') {
       console.log('✅ Initialization cancelled.');
@@ -208,10 +257,30 @@ async function main(): Promise<void> {
     console.log('');
   }
 
+  const config: UserConfig = {
+    url: existingConfig.url || '',
+    apiKey: existingConfig.apiKey || '',
+    defaultLanguage: existingConfig.defaultLanguage || 'en',
+    contentDir: existingConfig.contentDir || DEFAULTS.contentDir,
+    mediaDir: existingConfig.mediaDir || DEFAULTS.mediaDir,
+    commentsDir: existingConfig.commentsDir || DEFAULTS.commentsDir,
+  };
+
   // Step 1: Get LeadCMS URL
+  const existingUrlForPrompt = existingConfig.url || '';
+  const urlPrompt = existingUrlForPrompt
+    ? `Enter your LeadCMS URL [${existingUrlForPrompt}]: `
+    : 'Enter your LeadCMS URL (e.g., https://your-instance.leadcms.io): ';
+
   while (!config.url) {
-    const urlInput = await question('Enter your LeadCMS URL (e.g., https://your-instance.leadcms.io): ');
+    const urlInput = await question(urlPrompt);
     const trimmedUrl = urlInput.trim().replace(/\/$/, ''); // Remove trailing slash
+
+    // If empty and we have existing URL, use it
+    if (!trimmedUrl && existingUrlForPrompt) {
+      config.url = existingUrlForPrompt;
+      break;
+    }
 
     if (!trimmedUrl) {
       console.log('❌ URL is required.\n');
@@ -226,14 +295,51 @@ async function main(): Promise<void> {
     config.url = trimmedUrl;
   }
 
-  // Step 2: Get API Key (optional)
+  // Step 2: Authentication
   console.log('');
-  const apiKeyInput = await question('Enter your LeadCMS API Key (or press Enter for anonymous mode): ');
-  config.apiKey = apiKeyInput.trim();
 
-  if (!config.apiKey) {
-    console.log('ℹ️  Anonymous mode: Only public content will be accessible.');
-    console.log('   Read operations will work, but write operations (push) will fail.');
+  // Check if API key already exists in environment or .env files
+  const existingApiKey = process.env.LEADCMS_API_KEY;
+  const envFilePath = path.join(process.cwd(), '.env');
+  const hasEnvFile = fs.existsSync(envFilePath);
+
+  if (existingApiKey) {
+    console.log('✓ API key found in environment');
+    config.apiKey = existingApiKey;
+  } else {
+    // Only mention "No API key found" if .env file exists
+    if (hasEnvFile) {
+      console.log('ℹ️  No API key found in existing .env file.\n');
+    }
+
+    console.log('🔐 Authentication Setup');
+    console.log('   Authentication is optional and can be skipped for most use cases.');
+    console.log('   • Without authentication: You can pull content and build your site (read-only access)');
+    console.log('   • With authentication: You can also push content changes back to LeadCMS');
+    console.log('   • You can always authenticate later by running: leadcms login\n');
+
+    const authenticateNow = await question('Would you like to authenticate now? (Y/n): ');
+
+    if (authenticateNow.toLowerCase() !== 'n' && authenticateNow.toLowerCase() !== 'no') {
+      try {
+        console.log('');
+        const { token, user } = await authenticate(config.url, question);
+
+        // Save to .env
+        saveTokenToEnv(token);
+        config.apiKey = token;
+
+        console.log('✅ Authentication successful!');
+        console.log(`   Logged in as: ${user.displayName || user.userName}\n`);
+      } catch (error: any) {
+        console.log('\n⚠️  Authentication failed. Continuing in read-only mode.');
+        console.log(`   Error: ${error.message}`);
+        console.log('   You can run "leadcms login" later to authenticate.\n');
+      }
+    } else {
+      console.log('ℹ️  Skipping authentication. Continuing in read-only mode.');
+      console.log('   You can run "leadcms login" later to authenticate.\n');
+    }
   }
 
   // Step 3: Fetch CMS configuration (public endpoint, no authentication required)
@@ -261,15 +367,23 @@ async function main(): Promise<void> {
     // Successfully fetched CMS config
     console.log('✅ Connected successfully!\n');
 
-    // Set default language from CMS
-    config.defaultLanguage = cmsConfig.defaultLanguage;
-
     console.log('📋 Available languages:');
     cmsConfig.languages.forEach((lang: { code: string; name: string }, idx: number) => {
-      const marker = lang.code === cmsConfig!.defaultLanguage ? '(default)' : '';
+      const marker = lang.code === cmsConfig.defaultLanguage ? '(default)' : '';
       console.log(`   ${idx + 1}. ${lang.name} [${lang.code}] ${marker}`);
     });
-    console.log(`\n✓ Using default language: ${config.defaultLanguage}\n`);
+    console.log('');
+
+    // Ask for default language confirmation
+    const suggestedLanguage = cmsConfig.defaultLanguage;
+    const langInput = await question(`Default language code [${suggestedLanguage}]: `);
+    if (langInput.trim()) {
+      config.defaultLanguage = langInput.trim();
+    } else {
+      config.defaultLanguage = suggestedLanguage;
+    }
+
+    console.log(`✓ Using default language: ${config.defaultLanguage}\n`);
 
     // Check which entities are supported
     if (cmsConfig.entities && Array.isArray(cmsConfig.entities) && cmsConfig.entities.length > 0) {
@@ -301,21 +415,21 @@ async function main(): Promise<void> {
 
   // Step 4: Ask for directories only for supported entity types
   if (supportsContent) {
-    const contentDirInput = await question(`Content directory [${DEFAULTS.contentDir}]: `);
+    const contentDirInput = await question(`Content directory [${config.contentDir}]: `);
     if (contentDirInput.trim()) {
       config.contentDir = contentDirInput.trim();
     }
   }
 
   if (supportsMedia) {
-    const mediaDirInput = await question(`Media directory [${DEFAULTS.mediaDir}]: `);
+    const mediaDirInput = await question(`Media directory [${config.mediaDir}]: `);
     if (mediaDirInput.trim()) {
       config.mediaDir = mediaDirInput.trim();
     }
   }
 
   if (supportsComments) {
-    const commentsDirInput = await question(`Comments directory [${DEFAULTS.commentsDir}]: `);
+    const commentsDirInput = await question(`Comments directory [${config.commentsDir}]: `);
     if (commentsDirInput.trim()) {
       config.commentsDir = commentsDirInput.trim();
     }
@@ -331,8 +445,15 @@ async function main(): Promise<void> {
 
   console.log('\n✨ Configuration complete!\n');
   console.log('Next steps:');
-  console.log('  1. Run: npx leadcms pull');
-  console.log('  2. Start using LeadCMS content in your project\n');
+
+  if (!config.apiKey) {
+    console.log('  1. Run: npx leadcms login (for write access and private content)');
+    console.log('  2. Run: npx leadcms pull (to download content)');
+    console.log('  3. Start using LeadCMS content in your project\n');
+  } else {
+    console.log('  1. Run: npx leadcms pull (to download content)');
+    console.log('  2. Start using LeadCMS content in your project\n');
+  }
 
   rl.close();
 }

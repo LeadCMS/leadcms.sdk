@@ -44,6 +44,37 @@ npm install -g @leadcms/sdk
 - 🛠️ Project initialization and setup
 - 🛠️ Content fetching and Docker template generation
 
+## Quick Start
+
+Get started with LeadCMS in 3 simple steps:
+
+### 1. Initialize Your Project
+```bash
+npx leadcms init
+```
+This will:
+- Connect to your LeadCMS instance
+- Detect available entity types (content, media, comments)
+- Create configuration files (`.env` and optionally `leadcms.config.json`)
+
+### 2. Authenticate (for write access)
+```bash
+npx leadcms login
+```
+- **LeadCMS v1.2.88+**: Automatic device authentication via browser
+- **Older versions**: Guided manual token extraction
+- Saves your API token securely to `.env`
+
+**Skip this step** if you only need read-only access to public content.
+
+### 3. Download Your Content
+```bash
+npx leadcms pull
+```
+Downloads all content, media, and comments to your local project.
+
+**That's it!** You're ready to use LeadCMS content in your application. See [Usage Examples](#usage-examples) below.
+
 ## CI/CD Integration
 
 [![CI](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/ci.yml)
@@ -250,20 +281,36 @@ npx leadcms init
 ```
 
 Interactive setup wizard that:
-1. **Connects to your LeadCMS instance** - Validates URL (API key optional)
+1. **Connects to your LeadCMS instance** - Validates URL and checks for existing authentication
 2. **Fetches configuration** - Retrieves default language and available languages from public `/api/config` endpoint
 3. **Configures directories** - Sets content and media directories (defaults: `.leadcms/content`, `public/media`)
 4. **Creates environment file** - Saves configuration to `.env` or `.env.local`
 5. **Creates config file** - Only if you use non-default directories (keeps your project clean!)
 
-**Note:** The `/api/config` endpoint is public and works without authentication. API key is only required for write operations (push).
+**Note:** The `/api/config` endpoint is public and works without authentication. For write operations and private content, run `leadcms login` after initialization.
 
-Example session with API key:
+### Login to LeadCMS
+```bash
+npx leadcms login
+```
+
+Authenticates with your LeadCMS instance:
+- **Device Authentication** (LeadCMS v1.2.88+) - Opens a browser link for secure authentication
+- **Manual Token** (older versions) - Guides you through extracting an API token
+- **Saves token** - Automatically stores the token in your `.env` file
+
+**When to use:**
+- After running `leadcms init` if you need write access
+- To update an expired or invalid token
+- When switching between LeadCMS instances
+
+Example session (with existing authentication):
 ```
 🚀 LeadCMS SDK Initialization
 
 Enter your LeadCMS URL: https://your-instance.leadcms.io
-Enter your LeadCMS API Key (or press Enter for anonymous mode): ••••••••
+
+✓ API key found in environment
 
 🔍 Connecting to LeadCMS...
 ✅ Connected successfully!
@@ -281,17 +328,24 @@ Media directory [public/media]:
 ℹ️  Using default directories, no leadcms.config.json needed.
 
 ✨ Configuration complete!
+
+Next steps:
+  1. Run: npx leadcms pull (to download content)
+  2. Start using LeadCMS content in your project
 ```
 
-Example session in anonymous mode:
+Example session (without authentication):
 ```
 🚀 LeadCMS SDK Initialization
 
 Enter your LeadCMS URL: https://your-instance.leadcms.io
-Enter your LeadCMS API Key (or press Enter for anonymous mode): 
 
-ℹ️  Anonymous mode: Only public content will be accessible.
-   Read operations will work, but write operations (push) will fail.
+ℹ️  No API key found.
+   • For read-only access: Continue without API key (public content only)
+   • For full access: Run "leadcms login" after initialization
+
+Continue without API key? (Y/n): y
+ℹ️  Continuing in read-only mode.
 
 🔍 Connecting to LeadCMS...
 ✅ Connected successfully!
@@ -309,6 +363,11 @@ Media directory [public/media]:
 ℹ️  Using default directories, no leadcms.config.json needed.
 
 ✨ Configuration complete!
+
+Next steps:
+  1. Run: npx leadcms login (for write access and private content)
+  2. Run: npx leadcms pull (to download content)
+  3. Start using LeadCMS content in your project
 ```
 
 The wizard creates:
