@@ -166,10 +166,16 @@ describe('Config Module', () => {
     it('should throw for malformed JSON config', () => {
       fs.writeFileSync(testConfigPath, '{ invalid json }');
 
+      // Suppress expected warning during this test
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
       const { getConfig: getConfigFresh } = require('../src/lib/config');
 
       // Should throw due to invalid JSON
       expect(() => getConfigFresh()).toThrow();
+
+      // Restore console.warn
+      consoleWarnSpy.mockRestore();
     });
   });
 
