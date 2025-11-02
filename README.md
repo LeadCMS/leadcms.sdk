@@ -77,7 +77,7 @@ Downloads all content, media, and comments to your local project.
 
 ## CI/CD Integration
 
-[![Build & Test](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/LeadCMS/leadcms-sdk/actions/workflows/build-and-test.yml)
+[![Build & Test](https://github.com/LeadCMS/leadcms.sdk/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/LeadCMS/leadcms.sdk/actions/workflows/build-and-test.yml)
 
 The LeadCMS SDK includes comprehensive CI/CD workflows for GitHub Actions that provide:
 
@@ -883,7 +883,7 @@ For SDK development and contributions:
 ```bash
 # Clone and setup
 git clone https://github.com/LeadCMS/leadcms.sdk.git
-cd leadcms-sdk
+cd leadcms.sdk
 npm install
 
 # Development workflow

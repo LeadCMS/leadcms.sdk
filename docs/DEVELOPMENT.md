@@ -12,7 +12,7 @@ This is the fastest way to test your package locally with hot reloading:
 
 ```bash
 # 1. In the SDK directory
-cd leadcms-sdk
+cd leadcms.sdk
 npm run build
 npm link
 
@@ -40,7 +40,7 @@ npm pack
 mkdir ../test-project
 cd ../test-project
 npm init -y
-npm install ../leadcms-sdk/leadcms-sdk-1.0.0.tgz
+npm install ../leadcms.sdk/leadcms.sdk-1.0.0.tgz
 
 # 3. Test with npx
 npx leadcms init
@@ -237,12 +237,12 @@ npm run build
 
 # 2. Test the package
 npm pack
-tar -tzf leadcms-sdk-1.0.0.tgz  # Check contents
+tar -tzf leadcms.sdk-1.0.0.tgz  # Check contents
 
 # 3. Test installation from tarball
 mkdir test-install
 cd test-install
-npm install ../leadcms-sdk-1.0.0.tgz
+npm install ../leadcms.sdk-1.0.0.tgz
 npx leadcms --help
 ```
 
