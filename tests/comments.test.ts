@@ -305,7 +305,7 @@ describe("Comments Feature", () => {
 
       await saveCommentsForEntity("Content", 10, comments);
 
-      const filePath = path.join(TEST_COMMENTS_DIR, "Content", "10.json");
+      const filePath = path.join(TEST_COMMENTS_DIR, "content", "10.json");
       expect(fs.existsSync(filePath)).toBe(true);
 
       const saved = JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -349,7 +349,7 @@ describe("Comments Feature", () => {
 
       await saveCommentsForEntity("Content", 10, comments);
 
-      const filePath = path.join(TEST_COMMENTS_DIR, "Content", "10.json");
+      const filePath = path.join(TEST_COMMENTS_DIR, "content", "10.json");
       const saved = JSON.parse(fs.readFileSync(filePath, "utf8"));
 
       expect(saved[0].id).toBe(1);
@@ -571,7 +571,7 @@ describe("Comments Feature", () => {
 
     it("should throw error for invalid JSON", () => {
       // Create invalid JSON file
-      const dirPath = path.join(TEST_COMMENTS_DIR, "Content");
+      const dirPath = path.join(TEST_COMMENTS_DIR, "content");
       fs.mkdirSync(dirPath, { recursive: true });
       fs.writeFileSync(path.join(dirPath, "20.json"), "invalid json");
 
@@ -695,8 +695,8 @@ describe("Comments Feature", () => {
       await saveCommentsForEntity("Content", 10, contentComments);
       await saveCommentsForEntity("Contact", 5, contactComments);
 
-      const contentPath = path.join(TEST_COMMENTS_DIR, "Content", "10.json");
-      const contactPath = path.join(TEST_COMMENTS_DIR, "Contact", "5.json");
+      const contentPath = path.join(TEST_COMMENTS_DIR, "content", "10.json");
+      const contactPath = path.join(TEST_COMMENTS_DIR, "contact", "5.json");
 
       expect(fs.existsSync(contentPath)).toBe(true);
       expect(fs.existsSync(contactPath)).toBe(true);
