@@ -258,7 +258,7 @@ async function main(): Promise<void> {
   }
 
   const config: UserConfig = {
-    url: existingConfig.url || '',
+    url: '',
     apiKey: existingConfig.apiKey || '',
     defaultLanguage: existingConfig.defaultLanguage || 'en',
     contentDir: existingConfig.contentDir || DEFAULTS.contentDir,
