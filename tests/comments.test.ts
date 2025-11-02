@@ -372,7 +372,7 @@ describe("Comments Feature", () => {
         },
       ]);
 
-      const filePath = path.join(TEST_COMMENTS_DIR, "Content", "10.json");
+      const filePath = path.join(TEST_COMMENTS_DIR, "content", "10.json");
       expect(fs.existsSync(filePath)).toBe(true);
 
       // Now save empty array
@@ -463,7 +463,7 @@ describe("Comments Feature", () => {
       await saveCommentsForEntity("Content", 10, comments);
       await deleteComment(1);
 
-      const filePath = path.join(TEST_COMMENTS_DIR, "Content", "10.json");
+      const filePath = path.join(TEST_COMMENTS_DIR, "content", "10.json");
       expect(fs.existsSync(filePath)).toBe(false);
     });
   });
@@ -500,7 +500,7 @@ describe("Comments Feature", () => {
 
     it("should return empty array for invalid data", () => {
       // Create invalid JSON file
-      const dirPath = path.join(TEST_COMMENTS_DIR, "Content");
+      const dirPath = path.join(TEST_COMMENTS_DIR, "content");
       fs.mkdirSync(dirPath, { recursive: true });
       fs.writeFileSync(path.join(dirPath, "20.json"), "invalid json");
 
