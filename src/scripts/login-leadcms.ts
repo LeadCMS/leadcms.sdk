@@ -181,13 +181,8 @@ async function deviceAuthFlow(url: string): Promise<string> {
   }
 
   // Step 2: Display instructions to user
-  console.log('📋 To complete authentication:\n');
-  console.log(`   1. Open this URL in your browser:`);
-  console.log(`      ${initData.verificationUri}\n`);
-  console.log(`   2. Enter this code:`);
-  console.log(`      ${initData.userCode}\n`);
-  console.log('   Or open this direct link:');
-  console.log(`      ${initData.verificationUriComplete}\n`);
+  console.log('📋 To complete authentication, open this link in your browser:\n');
+  console.log(`   ${initData.verificationUriComplete}\n`);
   console.log(`⏱️  Code expires in ${Math.floor(initData.expiresIn / 60)} minutes`);
   console.log('⏳ Waiting for authorization...\n');
 
@@ -242,6 +237,7 @@ async function deviceAuthFlow(url: string): Promise<string> {
 async function manualTokenFlow(url: string): Promise<string> {
   console.log('\n🔐 LeadCMS Authentication\n');
   console.log('⚠️  Note: This instance does not support automatic device authentication.');
+  console.log('   (Device authentication requires LeadCMS version 1.2.88 or higher)');
   console.log('   Please follow these steps to obtain your API token:\n');
 
   console.log('📋 Steps to get your API token:\n');
