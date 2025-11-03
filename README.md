@@ -298,8 +298,6 @@ Example session:
 
 Enter your LeadCMS URL: https://your-instance.leadcms.ai
 
-ℹ️  No API key found.
-
 🔐 Authentication Setup
    Authentication is optional and can be skipped for most use cases.
    • Without authentication: You can pull content and build your site (read-only access)
@@ -354,22 +352,33 @@ npx leadcms docker
 # Creates Docker files for production and preview deployments
 ```
 
-### Pull content and comments from LeadCMS
+### Pull content, media and comments from LeadCMS
+
+The CLI supports several focused pull commands so you can sync exactly what you need.
+
 ```bash
+# Pull everything (content, media, comments)
 npx leadcms pull
-```
 
-This command will:
-- Sync all content from LeadCMS to local files
-- Sync all comments to `.leadcms/comments/` directory
-- Update sync tokens for incremental updates
+# Pull only content (no media or comments)
+npx leadcms pull-content
 
-To pull only comments:
-```bash
+# Pull only media files
+npx leadcms pull-media
+
+# Pull only comments
 npx leadcms pull-comments
 ```
 
 > **Note:** `npx leadcms fetch` is still supported as an alias for backward compatibility.
+
+What each command does:
+- `npx leadcms pull` - Syncs content, media and comments into your project using the configured directories. Updates incremental sync tokens so subsequent runs are faster.
+- `npx leadcms pull-content` - Downloads only content entities (MDX/JSON files) and updates local metadata.
+- `npx leadcms pull-media` - Downloads media files to your `mediaDir` (e.g., `public/media`). Use this when you changed media or want to refresh assets separately from content.
+- `npx leadcms pull-comments` - Downloads comments to the comments directory (e.g., `.leadcms/comments/`). Useful when you only need comment updates.
+
+> **Note:** The CLI uses incremental sync tokens to avoid re-downloading unchanged items where supported by the LeadCMS API.
 
 ### Push local content to LeadCMS
 ```bash
@@ -387,17 +396,21 @@ Push your local content changes to LeadCMS. This command will:
 - `--force` - Override remote changes (skip conflict check)
 
 
-**Required Metadata Fields:**
+**Content frontmatter / metadata (required and optional fields):**
 ```yaml
 ---
-type: "article"                    # Content type (must exist in LeadCMS)
-title: "Article Title"             # Content title
-slug: "article-slug"               # URL slug
-language: "en"                     # Content language
-publishedAt: "2024-10-29T10:00:00Z" # Publication date
-updatedAt: "2024-10-29T10:00:00Z"   # Last update (used for conflict detection)
+type: "article"                    # required: Content type (must exist in LeadCMS)
+title: "Article Title"             # required: Content title
+slug: "article-slug"               # required: URL slug (unique per locale)
+language: "en"                     # required: Content language
+publishedAt: "2024-10-29T10:00:00Z" # optional: Publication date (omit to create a draft or schedule a future publish)
+# updatedAt: "2024-10-29T10:00:00Z"   # optional: maintained by the server; do not set for new content
 ---
 ```
+
+Notes:
+- `publishedAt` is optional. Omitting it is a valid way to create draft or scheduled content depending on your LeadCMS workflow.
+- `updatedAt` is typically set and maintained by the LeadCMS server after content is created or updated. The SDK will use `updatedAt` when present for conflict detection, but you should not rely on it being set for brand-new local files.
 
 ### Check sync status
 ```bash
