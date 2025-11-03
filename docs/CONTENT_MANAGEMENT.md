@@ -299,7 +299,7 @@ npx leadcms pull
 # Pull only content (no media, no comments)
 npx leadcms pull-content
 
-# Check sync status
+# Check content sync status
 npx leadcms status
 ```
 
@@ -366,27 +366,41 @@ if (isContentDraft(content)) {
 ```
 .leadcms/
   content/
-    en/                    # English content
+    home.mdx               # Default locale content (root level)
+    about.mdx
+    header.json            # Default locale config files
+    footer.json
+    articles/
+      article-1.mdx
+      article-2.mdx
+    en/                    # English content (if not default locale)
       home.mdx
       about.mdx
+      header.json          # Locale-specific config files
+      footer.json
       articles/
         article-1.mdx
         article-2.mdx
     fr/                    # French content
       home.mdx
       about.mdx
+      header.json          # Locale-specific config files
+      footer.json
       articles/
         article-1.mdx
-    header.json            # Config files (no locale subdirectory)
-    footer.json
 ```
+
+Notes:
+- Default locale content is placed at the root level
+- Non-default locale content is placed in locale-specific subdirectories
+- Config files (like `header.json`, `footer.json`) follow the same pattern - root for default locale, subdirectories for other locales
 
 ### Content Types
 
 Content types are automatically detected from your LeadCMS instance:
 
 ```bash
-# View available content types
+# View available content types and sync status
 npx leadcms status
 ```
 
@@ -399,17 +413,6 @@ const articles = getAllContentSlugsForLocale('en', ['article']);
 // Multiple types
 const content = getAllContentSlugsForLocale('en', ['article', 'page']);
 ```
-
-## Performance & Caching
-
-The SDK automatically caches:
-- **Config files**: 60 seconds
-- **Content files**: 30 seconds
-
-For better performance:
-- Use build-time content fetching (SSG) over runtime (SSR)
-- Filter by content type when possible
-- Use configuration files instead of programmatic config
 
 ## Error Handling
 

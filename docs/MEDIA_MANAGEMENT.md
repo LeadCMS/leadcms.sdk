@@ -14,9 +14,6 @@ npx leadcms pull
 
 # Pull only media (no content, no comments)
 npx leadcms pull-media
-
-# Check sync status
-npx leadcms status
 ```
 
 ## Configuration
@@ -80,37 +77,50 @@ The SDK automatically detects and downloads media files referenced in your conte
 
 **Markdown Images:**
 ```markdown
-![Alt text](/api/media/image.jpg)
-![Logo](https://your-cms.com/api/media/logo.png)
+![Alt text](/api/media/about-us/image.jpg)
 ```
 
 **HTML Images:**
 ```html
-<img src="/api/media/photo.jpg" alt="Photo">
-<img src="https://your-cms.com/api/media/banner.png">
+<img src="/api/media/about-us/photo.jpg" alt="Photo">
 ```
 
 **Other Media:**
 ```markdown
 [Download PDF](/api/media/document.pdf)
-<video src="/api/media/video.mp4"></video>
-<audio src="/api/media/audio.mp3"></audio>
+<video src="/api/media/about-us/video.mp4"></video>
+<audio src="/api/media/about-us/audio.mp3"></audio>
 ```
 
 ## Media Directory Structure
 
+Media files are typically organized by content slug paths:
+
 ```
 public/
   media/
-    image1.jpg              # Images
-    image2.png
-    document.pdf            # Documents
-    video.mp4               # Videos
-    audio.mp3               # Audio files
-    icons/
-      favicon.ico           # Organized in subdirectories
-      logo.svg
+    blog-article/           # Content slug folder
+      hero-image.jpg
+      diagram.png
+      video-intro.mp4
+    another-article/
+      thumbnail.jpg
+      attachment.pdf
+    about-us/
+      team-photo.jpg
+      company-logo.svg
+    shared/                 # Shared media across content
+      icons/
+        favicon.ico
+        social-icons.svg
 ```
+
+**Organization patterns:**
+- **By content slug** (most common): `/media/{content-slug}/filename.ext`
+- **By media type**: `/media/images/`, `/media/documents/`, `/media/videos/`
+- **Shared media**: `/media/shared/` for assets used across multiple content items
+
+**Important:** Media files cannot be placed directly in the root `media/` directory. They must be organized in subdirectories.
 
 ## Using Media in Your Application
 
@@ -120,15 +130,55 @@ Media is referenced in content and automatically works after sync:
 
 ```markdown
 ---
-title: "My Article"
+title: "My Blog Article"
+slug: "my-blog-article" 
 ---
 
-![Hero Image](/api/media/hero.jpg)
+![Hero Image](/api/media/blog/my-blog-article/hero.jpg)
 
-Check out this [PDF guide](/api/media/guide.pdf).
+Check out this [PDF guide](/api/media/blog/my-blog-article/guide.pdf).
+
+![Shared logo](/api/media/shared/icons/logo.svg)
 ```
 
 After sync, these paths are accessible in your built site.
+
+## Media Path Transformation
+
+The LeadCMS SDK automatically handles path transformation between CMS and local formats during pull/push operations:
+
+### CMS Format (LeadCMS Admin UI)
+When editing content in the LeadCMS admin interface, media references use the `/api/media/` prefix:
+
+```markdown
+![Hero Image](/api/media/my-article/hero.jpg)
+[Download PDF](/api/media/my-article/guide.pdf)
+```
+
+### Local Format (After Pull)
+When content is pulled locally, media paths are automatically transformed to the local format without `/api/`:
+
+```markdown
+![Hero Image](/media/my-article/hero.jpg)
+[Download PDF](/media/my-article/guide.pdf)
+```
+
+### Transformation Process
+
+**During Pull (`npx leadcms pull`):**
+- Content with `/api/media/` references is downloaded
+- SDK transformation script converts `/api/media/` → `/media/` in content files
+- Local MDX/JSON files use the `/media/` format for static site compatibility
+
+**During Push (`npx leadcms push`):**
+- Local content with `/media/` references is processed
+- SDK transformation script converts `/media/` → `/api/media/` before uploading
+- CMS receives content with proper `/api/media/` references
+
+**Why This Matters:**
+- **Static Sites**: Need `/media/` paths to reference files in the `public/media/` directory
+- **CMS Admin**: Needs `/api/media/` paths to properly preview and manage media through the LeadCMS API
+- **Seamless Workflow**: Developers work with standard static site paths locally, while CMS maintains API-based references
 
 ### In Components
 
@@ -139,12 +189,14 @@ import Image from 'next/image';
 export default function Article({ content }) {
   return (
     <div>
+      {/* Use local /media/ format in components */}
       <Image 
-        src="/media/hero.jpg" 
+        src="/media/blog/my-article/hero.jpg" 
         alt="Hero" 
         width={800} 
         height={600} 
       />
+      {/* Content body already has transformed /media/ paths */}
       <div dangerouslySetInnerHTML={{ __html: content.body }} />
     </div>
   );
@@ -273,9 +325,6 @@ npx leadcms pull-media
 
 # Full sync (content + media + comments)
 npx leadcms pull
-
-# Check what needs syncing
-npx leadcms status
 ```
 
 ## Security & Authentication
@@ -327,8 +376,11 @@ For CDN deployment, media is served from your CDN:
 # After build
 public/
   media/              # These files go to CDN
-    image.jpg
-    video.mp4
+    my-article/
+      hero-image.jpg
+      diagram.png
+    about-us/
+      team-photo.jpg
 ```
 
 ### Docker Deployment
@@ -358,11 +410,6 @@ grep -r "api/media" .leadcms/content/
 ```bash
 # Verify directory exists and is writable
 ls -la public/media/
-```
-
-**Check sync status:**
-```bash
-npx leadcms status
 ```
 
 ### Media 404 Errors

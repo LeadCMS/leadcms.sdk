@@ -417,7 +417,9 @@ Notes:
 npx leadcms status
 ```
 
-Shows the current sync status between local and remote content without making any changes.
+Shows the current sync status between local and remote **content** without making any changes.
+
+**Note:** The `status` command currently only supports content. Media and comments do not have sync status checking yet.
 
 ### Watch for real-time updates
 ```bash
