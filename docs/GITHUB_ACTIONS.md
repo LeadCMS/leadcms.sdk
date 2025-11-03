@@ -79,9 +79,6 @@ npm test
 
 # With coverage
 npm run test:coverage
-
-# CI mode
-./tests/run-tests.sh
 ```
 
 ### CI

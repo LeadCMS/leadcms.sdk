@@ -61,9 +61,6 @@ npm run test:coverage
 
 # Watch mode
 npm run test:watch
-
-# CI mode (includes mock server tests)
-./tests/run-tests.sh
 ```
 
 ### Test Coverage

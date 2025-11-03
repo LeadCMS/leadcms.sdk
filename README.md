@@ -132,15 +132,6 @@ npm run test:coverage
 
 # Run tests in watch mode
 npm run test:watch
-
-# Run tests with mock server (includes CLI integration tests)
-./tests/run-tests.sh
-
-# Run only unit tests
-npm run test:unit
-
-# Run only CLI integration tests
-npm run test:integration
 ```
 
 ### Test Coverage
@@ -165,9 +156,6 @@ LEADCMS_USE_MOCK=true LEADCMS_CONTENT_DIR=./test-content npx leadcms status
 # Test with different mock scenarios
 LEADCMS_USE_MOCK=true LEADCMS_MOCK_SCENARIO=hasConflicts npx leadcms status
 LEADCMS_USE_MOCK=true LEADCMS_MOCK_SCENARIO=mixedOperations npx leadcms push --dry-run
-
-# Test in development with localhost (automatically uses mock)
-LEADCMS_URL=http://localhost:3001 npx leadcms status
 ```
 
 **Available Mock Scenarios:**
@@ -178,10 +166,9 @@ LEADCMS_URL=http://localhost:3001 npx leadcms status
 - `mixedOperations` - Mix of new, updated, and conflicted content
 - `missingContentTypes` - Content with unknown types
 
-**Mock Mode Auto-Detection:**
+**Mock Mode Activation:**
 - `NODE_ENV=test` - Automatically uses mock mode
 - `LEADCMS_USE_MOCK=true` - Force mock mode
-- `LEADCMS_URL` contains `localhost` - Automatically uses mock mode
 
 The data service abstraction automatically handles switching between real API calls and mock data based on your environment, providing seamless testing without external dependencies.
 
