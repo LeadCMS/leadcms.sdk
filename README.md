@@ -295,7 +295,7 @@ Example session (with existing authentication):
 ```
 🚀 LeadCMS SDK Initialization
 
-Enter your LeadCMS URL: https://your-instance.leadcms.io
+Enter your LeadCMS URL: https://your-instance.leadcms.ai
 
 ✓ API key found in environment
 
@@ -325,7 +325,7 @@ Example session (without authentication):
 ```
 🚀 LeadCMS SDK Initialization
 
-Enter your LeadCMS URL: https://your-instance.leadcms.io
+Enter your LeadCMS URL: https://your-instance.leadcms.ai
 
 ℹ️  No API key found.
    • For read-only access: Continue without API key (public content only)

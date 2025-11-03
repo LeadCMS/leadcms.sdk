@@ -21,7 +21,7 @@ npx leadcms init
 
 ### 1. URL Input
 ```
-Enter your LeadCMS URL: https://your-instance.leadcms.io
+Enter your LeadCMS URL: https://your-instance.leadcms.ai
 ```
 
 ### 2. Authentication (Optional)
@@ -82,14 +82,14 @@ Creates:
 
 ### .env (with API key)
 ```bash
-LEADCMS_URL=https://your-instance.leadcms.io
+LEADCMS_URL=https://your-instance.leadcms.ai
 LEADCMS_API_KEY=your-api-key
 LEADCMS_DEFAULT_LANGUAGE=en-US
 ```
 
 ### .env (without API key)
 ```bash
-LEADCMS_URL=https://your-instance.leadcms.io
+LEADCMS_URL=https://your-instance.leadcms.ai
 LEADCMS_DEFAULT_LANGUAGE=en-US
 # Add LEADCMS_API_KEY for write operations
 ```

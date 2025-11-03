@@ -270,7 +270,7 @@ async function main(): Promise<void> {
   const existingUrlForPrompt = existingConfig.url || '';
   const urlPrompt = existingUrlForPrompt
     ? `Enter your LeadCMS URL [${existingUrlForPrompt}]: `
-    : 'Enter your LeadCMS URL (e.g., https://your-instance.leadcms.io): ';
+    : 'Enter your LeadCMS URL (e.g., https://your-instance.leadcms.ai): ';
 
   while (!config.url) {
     const urlInput = await question(urlPrompt);

@@ -151,13 +151,13 @@ Getting Started:
 
 Configuration Files:
   .env (recommended, created by 'leadcms login'):
-    LEADCMS_URL=https://your-instance.leadcms.io
+    LEADCMS_URL=https://your-instance.leadcms.ai
     LEADCMS_API_KEY=your-token-here
     LEADCMS_DEFAULT_LANGUAGE=en
 
   leadcms.config.json (created by 'leadcms init'):
     {
-      "url": "https://your-instance.leadcms.io",
+      "url": "https://your-instance.leadcms.ai",
       "defaultLanguage": "en",
       "contentDir": "content",
       "mediaDir": "public/media",
