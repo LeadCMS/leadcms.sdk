@@ -33,9 +33,11 @@ Enter your LeadCMS URL: https://your-instance.leadcms.ai
 
 **Without API key:**
 ```
-ℹ️  No API key found.
-   • For read-only access: Continue without API key (public content only)
-   • For full access: Run "leadcms login" after initialization
+🔐 Authentication Setup
+   Authentication is optional and can be skipped for most use cases.
+   • Without authentication: You can pull content and build your site (read-only access)
+   • With authentication: You can also push content changes back to LeadCMS
+   • You can always authenticate later by running: leadcms login
 
 Would you like to authenticate now? (Y/n):
 ```
@@ -55,7 +57,13 @@ Automatically fetches from public `/api/config` endpoint:
    1. English (United States) [en-US] (default)
    2. Russian (Russia) [ru-RU]
 
+Default language code [en-US]: 
 ✓ Using default language: en-US
+
+📦 Supported entity types:
+   ✓ Content
+   ✓ Media
+   ✓ Comments
 ```
 
 ### 4. Directory Configuration
@@ -63,6 +71,7 @@ Automatically fetches from public `/api/config` endpoint:
 ```
 Content directory [.leadcms/content]:
 Media directory [public/media]:
+Comments directory [.leadcms/comments]:
 ```
 
 Press Enter for defaults or specify custom paths.
@@ -70,6 +79,8 @@ Press Enter for defaults or specify custom paths.
 ### 5. File Creation
 
 ```
+📝 Creating configuration files...
+
 ✅ Updated .env
 ℹ️  Using default directories, no leadcms.config.json needed.
 ```
