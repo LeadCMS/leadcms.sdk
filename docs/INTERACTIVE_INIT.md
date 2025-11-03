@@ -2,24 +2,14 @@
 
 ## Overview
 
-The `leadcms init` command provides an interactive setup wizard to configure your LeadCMS SDK project. It automatically connects to your LeadCMS instance, fetches available languages, and sets up your environment with minimal configuration files.
+The `leadcms init` command provides an interactive setup wizard that connects to your LeadCMS instance, fetches configuration, and optionally handles authentication - all in a single command.
 
 ## Features
 
-### 🔌 Auto-Configuration from API
-- Connects to public `/api/config` endpoint (no authentication required)
-- Fetches default language automatically
-- Shows all available languages
-
-### 📁 Smart File Management
-- Creates `.env` or `.env.local` (if exists) with credentials
-- Only creates `leadcms.config.json` if custom directories are used
-- Prompts before overwriting existing files
-
-### ✨ Intelligent Defaults
-- Uses `.leadcms/content` for content directory (LeadCMS standard)
-- Uses `public/media` for media directory (framework-agnostic)
-- Only saves non-default values in config file
+- 🔌 Auto-fetches default language from LeadCMS
+- 🔐 Integrated authentication (optional)
+- 📁 Smart config file management
+- ✨ Intelligent defaults
 
 ## Usage
 
@@ -31,31 +21,32 @@ npx leadcms init
 
 ### 1. URL Input
 ```
-Enter your LeadCMS URL (e.g., https://your-instance.leadcms.io):
+Enter your LeadCMS URL: https://your-instance.leadcms.io
 ```
 
-Validates:
-- URL format (must start with http:// or https://)
-- Trailing slashes are removed automatically
+### 2. Authentication (Optional)
 
-### 2. API Key Input (Optional)
+**With existing API key:**
 ```
-Enter your LeadCMS API Key (or press Enter for anonymous mode):
+✓ API key found in environment
 ```
 
-**Optional field:**
-- Press Enter to skip (anonymous mode - public content only)
-- Or enter API key for full access (read + write operations)
-
-If you skip the API key (anonymous mode):
+**Without API key:**
 ```
-ℹ️  Anonymous mode: Only public content will be accessible.
-   Read operations will work, but write operations (push) will fail.
+ℹ️  No API key found.
+   • For read-only access: Continue without API key (public content only)
+   • For full access: Run "leadcms login" after initialization
+
+Would you like to authenticate now? (Y/n):
 ```
 
-This is perfect for static site generators that only need public content!
+- **Yes**: Runs authentication flow (device auth or manual)
+- **No**: Continues in read-only mode
 
-### 3. CMS Configuration Fetch (Public Endpoint)
+### 3. CMS Configuration
+
+Automatically fetches from public `/api/config` endpoint:
+
 ```
 🔍 Connecting to LeadCMS...
 ✅ Connected successfully!
@@ -67,108 +58,43 @@ This is perfect for static site generators that only need public content!
 ✓ Using default language: en-US
 ```
 
-**Important:** The `/api/config` endpoint is **public** and requires **no authentication**. It works the same in both authenticated and anonymous mode.
-
-Automatically:
-- Fetches and displays available languages
-- Uses CMS default language
-- Shows language codes and names
-- **Works without API key** (public endpoint)
-
-If connection fails:
-- Falls back to manual language input
-- Continues with setup process
-
 ### 4. Directory Configuration
+
 ```
 Content directory [.leadcms/content]:
 Media directory [public/media]:
 ```
 
-- Press Enter to accept defaults
-- Or type custom path
+Press Enter for defaults or specify custom paths.
 
 ### 5. File Creation
-```
-📝 Creating configuration files...
 
+```
 ✅ Updated .env
 ℹ️  Using default directories, no leadcms.config.json needed.
 ```
 
 Creates:
-- **`.env`** with `LEADCMS_URL`, `LEADCMS_API_KEY`, `LEADCMS_DEFAULT_LANGUAGE`
+- **`.env`** with URL, language, and optionally API key
 - **`leadcms.config.json`** only if custom directories specified
 
-## API Endpoint: `/api/config` (Public Endpoint)
+## Configuration Files
 
-The init command calls `/api/config` **without authentication** - this is a public endpoint:
-
-```http
-GET /api/config
-# NO Authorization header sent - this is a public endpoint
-```
-
-Response:
-```json
-{
-  "auth": {
-    "methods": ["Local", "AzureAD"],
-    "msal": { ... }
-  },
-  "entities": ["Contact", "Content", "Comment", ...],
-  "languages": [
-    {
-      "code": "en-US",
-      "name": "English (United States)"
-    },
-    {
-      "code": "ru-RU",
-      "name": "Russian (Russia)"
-    }
-  ],
-  "settings": { ... },
-  "defaultLanguage": "en-US",
-  "modules": [],
-  "capabilities": []
-}
-```
-
-The wizard uses:
-- `defaultLanguage` - Sets `LEADCMS_DEFAULT_LANGUAGE` environment variable
-- `languages[]` - Displays available languages to user
-
-**Security:** This endpoint works without authentication, making it safe to call during initialization even in anonymous mode.
-
-## Configuration Files Created
-
-### .env or .env.local
-
-**With API Key (Authenticated Mode):**
+### .env (with API key)
 ```bash
-# LeadCMS Configuration
-# Generated by leadcms init
-
 LEADCMS_URL=https://your-instance.leadcms.io
-LEADCMS_API_KEY=your-api-key-here
+LEADCMS_API_KEY=your-api-key
 LEADCMS_DEFAULT_LANGUAGE=en-US
 ```
 
-**Without API Key (Anonymous Mode):**
+### .env (without API key)
 ```bash
-# LeadCMS Configuration
-# Generated by leadcms init
-# Running in anonymous mode - only public content accessible
-# Add LEADCMS_API_KEY for write operations and private content
-
 LEADCMS_URL=https://your-instance.leadcms.io
 LEADCMS_DEFAULT_LANGUAGE=en-US
+# Add LEADCMS_API_KEY for write operations
 ```
 
 ### leadcms.config.json (only if needed)
-
-Only created if you specify non-default directories:
-
 ```json
 {
   "contentDir": "custom/content/path",
@@ -176,70 +102,31 @@ Only created if you specify non-default directories:
 }
 ```
 
-If both directories use defaults, no config file is created to keep your project clean.
-
-## Error Handling
-
-### Invalid URL
-```
-❌ Invalid URL format. Must start with http:// or https://
-```
-
-### Connection Failed
-```
-❌ Could not connect to LeadCMS. Please check the URL.
-⚠️  Could not fetch CMS configuration. Continuing with manual setup...
-```
-
-Falls back to manual language entry if API is unreachable.
-
-**Note:** Since `/api/config` is a public endpoint, authentication errors should not occur during the fetch. Connection failures are typically due to network issues or incorrect URL.
-
-## Overwrite Protection
-
-If configuration files already exist:
-```
-⚠️  Configuration files already exist. Overwrite? (y/N):
-```
-
-Type `y` or `yes` to overwrite, any other input cancels initialization.
-
 ## Next Steps
 
-After running `leadcms init`:
+After initialization:
 
-1. **Pull content:**
-   ```bash
-   npx leadcms pull
-   ```
+```bash
+# Pull content
+npx leadcms pull
 
-2. **Start using SDK:**
-   ```typescript
-   import { getCMSContentBySlugForLocale } from '@leadcms/sdk';
+# Use in your app
+import { getCMSContentBySlugForLocale } from '@leadcms/sdk';
+const content = getCMSContentBySlugForLocale('about', 'en-US');
+```
 
-   const content = getCMSContentBySlugForLocale('about', 'en-US');
-   ```
+## Advantages
 
-## Advantages Over Manual Setup
+| Manual Setup | `leadcms init` |
+|--------------|----------------|
+| Must look up default language | Auto-detected |
+| Unknown available languages | Displayed during setup |
+| Multiple steps | Single command |
+| Manual credential storage | Automatic |
+| Always creates config file | Only if needed |
+| Unclear auth requirements | Integrated with guidance |
 
-| Feature | Manual Setup | `leadcms init` |
-|---------|-------------|----------------|
-| Default language | Must look up in CMS | Auto-detected from public API |
-| Available languages | Unknown | Displayed during setup |
-| API key requirement | Unclear | Optional with clear messaging |
-| Anonymous mode | Must configure manually | Automatic setup with guidance |
-| Config validation | Manual | Automatic |
-| File creation | Multiple steps | Single command |
-| Credential storage | Manual .env | Automatic .env update |
-| Config file | Always created | Only if needed |
+## Related Documentation
 
-## Environment Variable Precedence
-
-After `leadcms init`, the SDK loads configuration in this order:
-
-1. Programmatic config (via `configure()`)
-2. Environment variables (`.env`, `.env.local`)
-3. Config file (`leadcms.config.json`)
-4. Default values
-
-This means environment variables override config file settings, which is best practice for security.
+- [README.md](../README.md) - Main documentation
+- [PUBLIC_API_MODE.md](./PUBLIC_API_MODE.md) - Authentication details

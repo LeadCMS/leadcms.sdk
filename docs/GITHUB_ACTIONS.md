@@ -1,265 +1,144 @@
-# GitHub Actions Setup for LeadCMS SDK
+# GitHub Actions & CI/CD Setup
 
-This guide explains how to set up automated CI/CD for the LeadCMS SDK using GitHub Actions.
+This guide explains how to set up automated testing and publishing for the LeadCMS SDK.
 
-## 🚀 Overview
+## Workflows
 
-The repository includes two GitHub Actions workflows:
+### Build & Test (`.github/workflows/build-and-test.yml`)
 
-1. **Build & Test Workflow** (`.github/workflows/build-and-test.yml`) - Runs on every push and PR
-2. **Publish Workflow** (`.github/workflows/publish.yml`) - Runs on releases
+**Triggers:** Push/PR to main/develop branches
 
-## 📋 Prerequisites
+**Features:**
+- Tests on Node.js 18, 20, 22
+- Jest test execution with coverage
+- Package validation
+- CLI functionality tests
+- Docker template generation tests
+- Coverage reports and PR comments
 
-### 1. NPM Account Setup
+### Publish (`.github/workflows/publish.yml`)
 
-1. Create an account on [npmjs.com](https://www.npmjs.com)
-2. Enable 2FA on your npm account
-3. Create an access token:
-   ```bash
-   npm login
-   npm token create --type=automation
-   ```
-   **Important**: Choose "Automation" type for CI/CD usage
+**Triggers:** GitHub releases, manual dispatch
 
-### 2. GitHub Repository Setup
+**Features:**
+- Automated npm publishing
+- Provenance tracking
+- Version validation
+- Deployment summaries
 
-1. Push your code to GitHub:
-   ```bash
-   git add .
-   git commit -m "Initial commit with GitHub Actions"
-   git push origin main
-   ```
+## Setup
 
-2. Set up npm token as a repository secret:
-   - Go to your GitHub repository
-   - Navigate to `Settings` → `Secrets and variables` → `Actions`
-   - Click `New repository secret`
-   - Name: `NPM_TOKEN`
-   - Value: Your npm automation token from step 1
-
-## 🔄 Workflow Details
-
-### Build & Test Workflow (Continuous Integration)
-
-**Triggers:**
-- Push to `main` or `develop` branches
-- Pull requests to `main` or `develop` branches
-
-**What it does:**
-- ✅ Tests on Node.js versions 18, 20, and 22
-- ✅ Builds the project
-- ✅ Verifies CLI functionality
-- ✅ Tests Docker template generation
-- ✅ Validates package structure
-- ✅ Checks TypeScript compilation
-
-### Publish Workflow (Release & Deployment)
-
-**Triggers:**
-- GitHub releases (recommended)
-- Manual workflow dispatch
-
-**What it does:**
-- ✅ Builds the project
-- ✅ Runs tests
-- ✅ Verifies package contents
-- ✅ Publishes to npm with provenance
-- ✅ Creates deployment summary
-
-## 📦 Publishing Process
-
-### Method 1: GitHub Releases (Recommended)
-
-1. **Create a release:**
-   ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
-   ```
-
-2. **Or via GitHub UI:**
-   - Go to your repository on GitHub
-   - Click `Releases` → `Create a new release`
-   - Choose a tag version (e.g., `v1.0.0`)
-   - Fill in release notes
-   - Click `Publish release`
-
-3. **Automatic publishing:**
-   - GitHub Actions will automatically build and publish to npm
-   - Check the `Actions` tab for progress
-
-### Method 2: Manual Dispatch
-
-1. Go to `Actions` tab in your GitHub repository
-2. Select `Publish to NPM` workflow
-3. Click `Run workflow`
-4. Optionally specify a version number
-5. Click `Run workflow`
-
-## 🔍 Verification
-
-After publishing, verify your package:
-
-1. **Check npm registry:**
-   ```bash  
-   npm view @leadcms/sdk
-   ```
-
-2. **Test installation:**
-   ```bash
-   npm install -g @leadcms/sdk@latest
-   leadcms --help
-   ```
-
-3. **Check GitHub deployment:**
-   - Actions tab should show successful deployment
-   - Package should appear in repository's right sidebar
-
-## 🛠️ Local Testing Before Publishing
-
-Always test locally before creating a release:
+### 1. Create NPM Token
 
 ```bash
-# 1. Build and test
-npm run build
+npm login
+npm token create --type=automation
+```
+
+Choose "Automation" type for CI/CD.
+
+### 2. Configure GitHub
+
+1. Push code to GitHub
+2. Go to `Settings` → `Secrets and variables` → `Actions`
+3. Add `NPM_TOKEN` secret with your token
+
+## Publishing
+
+### Using Release Script (Recommended)
+
+```bash
+# Patch (1.0.0 → 1.0.1)
+./scripts/release.sh patch
+
+# Minor (1.0.0 → 1.1.0)
+./scripts/release.sh minor "Add features"
+
+# Major (1.0.0 → 2.0.0)
+./scripts/release.sh major "Breaking changes"
+```
+
+### Manual Release
+
+```bash
+# 1. Create and push tag
+git tag v1.0.0
+git push origin v1.0.0
+
+# 2. Create GitHub release from tag
+# GitHub Actions will automatically publish to npm
+```
+
+## Testing
+
+### Local
+
+```bash
+# Run tests
 npm test
 
-# 2. Test the package locally
-npm pack
-tar -tzf *.tgz  # Verify contents
+# With coverage
+npm run test:coverage
 
-# 3. Test CLI
-./dist/cli/index.js --help
-./dist/cli/index.js docker
-
-# 4. Test in a clean environment
-mkdir /tmp/test-install
-cd /tmp/test-install
-npm install /path/to/your/package.tgz
-npx leadcms --help
+# CI mode
+./tests/run-tests.sh
 ```
 
-## 📊 Monitoring & Maintenance
+### CI
 
-### GitHub Actions Dashboard
+Tests run automatically on:
+- Every push to main/develop
+- Every pull request
+- Before publishing
 
-Monitor your workflows:
-- `Actions` tab shows all workflow runs
-- Green checkmarks = successful builds
-- Red X = failed builds (click for details)
+## Verification
 
-### npm Analytics
+After publishing:
 
-Track package usage:
-- [npm package page](https://www.npmjs.com/package/@leadcms/sdk)
-- Download statistics
-- Version adoption rates
+```bash
+# Check npm registry
+npm view @leadcms/sdk
 
-## 🚨 Troubleshooting
-
-### Common Issues
-
-**1. NPM_TOKEN Invalid**
+# Test installation
+npm install -g @leadcms/sdk@latest
+leadcms --help
 ```
-Error: Unable to authenticate, need: Basic
-```
-**Solution:** Regenerate npm token and update GitHub secret
 
-**2. Permission Denied**
-```
-Error: 403 Forbidden - PUT https://registry.npmjs.org/@leadcms%2fsdk
-```
-**Solution:** Check npm package name isn't taken, verify token permissions
+## Monitoring
 
-**3. Build Failures**
+- **Actions tab** - View workflow runs
+- **npm package page** - Download statistics
+- **Coverage reports** - Archived as artifacts
+
+## Troubleshooting
+
+### NPM_TOKEN Invalid
+```
+Error: Unable to authenticate
+```
+**Solution:** Regenerate token and update GitHub secret
+
+### Permission Denied
+```
+Error: 403 Forbidden
+```
+**Solution:** Verify package name and token permissions
+
+### Build Failures
 ```
 Error: Cannot find module
 ```
-**Solution:** Ensure all dependencies are in package.json, not devDependencies
+**Solution:** Check dependencies in package.json
 
-**4. CLI Not Executable**
-```
-Error: permission denied
-```
-**Solution:** Verify fix-permissions script runs in build process
+## Security
 
-### Debug Steps
+✅ Use automation tokens for CI/CD  
+✅ Enable 2FA on npm account  
+✅ Regularly rotate tokens  
+✅ Use provenance publishing  
+✅ Monitor download activity
 
-1. **Check workflow logs:**
-   - Go to Actions tab
-   - Click on failed workflow
-   - Expand failing step
+## Related Documentation
 
-2. **Test locally:**
-   ```bash
-   npm run build
-   npm pack --dry-run
-   ```
-
-3. **Verify package structure:**
-   ```bash
-   ls -la dist/
-   file dist/cli/index.js
-   ```
-
-## 🔐 Security Best Practices
-
-1. **Use automation tokens** for CI/CD (not personal tokens)
-2. **Enable 2FA** on npm account
-3. **Regularly rotate tokens** (npm tokens don't expire by default)
-4. **Use provenance** publishing (included in workflow)
-5. **Monitor package downloads** for unusual activity
-
-## 📈 Advanced Configuration
-
-### Conditional Publishing
-
-Only publish on version changes:
-
-```yaml
-- name: Check if version changed
-  id: version-check
-  run: |
-    CURRENT_VERSION=$(npm view @leadcms/sdk version 2>/dev/null || echo "0.0.0")
-    PACKAGE_VERSION=$(node -p "require('./package.json').version")
-    if [ "$CURRENT_VERSION" = "$PACKAGE_VERSION" ]; then
-      echo "skip=true" >> $GITHUB_OUTPUT
-    fi
-    
-- name: Publish to NPM
-  if: steps.version-check.outputs.skip != 'true'
-  run: npm publish --provenance --access public
-```
-
-### Beta Releases
-
-For pre-release versions:
-
-```yaml
-- name: Publish beta
-  if: contains(github.ref, 'beta')
-  run: npm publish --tag beta --provenance --access public
-```
-
-### Multiple Package Registries
-
-Publish to multiple registries:
-
-```yaml
-- name: Publish to GitHub Registry
-  run: |
-    echo "@leadcms:registry=https://npm.pkg.github.com" >> .npmrc
-    npm publish
-  env:
-    NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
-
-## 🎯 Next Steps
-
-1. **Set up branch protection** rules for main branch
-2. **Add semantic versioning** with conventional commits
-3. **Set up automated changelog** generation
-4. **Add code coverage** reporting
-5. **Set up dependabot** for dependency updates
-
-Your LeadCMS SDK is now ready for automated publishing! 🚀
+- [DEVELOPMENT.md](./DEVELOPMENT.md) - Local development guide
+- [README.md](../README.md) - Main documentation

@@ -506,235 +506,72 @@ app.get('/api/content/:slug', (req, res) => {
 
 ## API Reference
 
-### Core Functions
+### Content API
+
+Get content from your LeadCMS instance:
 
 ```typescript
-import {
+import { 
   getCMSContentBySlugForLocale,
   getAllContentSlugsForLocale,
-  getAllContentRoutes,
-  getAvailableLanguages,
-  configure
+  getAllContentRoutes 
 } from '@leadcms/sdk';
 
-// Get content by slug and locale
+// Get single content item
 const content = getCMSContentBySlugForLocale('about-us', 'en');
 
-// Get all content slugs for a locale
+// Get all content slugs
 const slugs = getAllContentSlugsForLocale('en');
 
-// Get all routes (framework-agnostic)
+// Get all routes for static generation
 const routes = getAllContentRoutes();
-// Returns: [{ locale: 'en', slug: 'about-us', path: '/about-us', ... }]
-
-// Get available languages (uses configured contentDir)
-const languages = getAvailableLanguages();
-
-// Get content with draft support (userUid must be a valid GUID)
-const draftContent = getCMSContentBySlugForLocaleWithDraftSupport(
-  'about-us',
-  'en',
-  '550e8400-e29b-41d4-a716-446655440000' // Valid GUID format
-);
-
-// Load configuration objects (header, footer, etc.)
-const headerConfig = getHeaderConfig('en');
-const footerConfig = getFooterConfig('en');
 ```
 
-### Advanced Configuration Loading
+**📖 See [Content Management Guide](./docs/CONTENT_MANAGEMENT.md)** for complete API documentation, framework integration examples, and advanced features.
 
-```typescript
-import {
-  loadContentConfig,
-  loadContentConfigStrict
-} from '@leadcms/sdk';
+### Media API
 
-// Generic config loading with auto contentDir resolution (userUid must be valid GUID)
-const menuConfig = loadContentConfig('menu', 'en', '6ba7b810-9dad-11d1-80b4-00c04fd430c8');
-
-// Strict config loading with detailed error information (throws on missing files)
-try {
-  const requiredConfig = loadContentConfigStrict('layout', 'en');
-} catch (error) {
-  console.log('Missing config:', error.configName);
-  console.log('Expected locale:', error.locale);
-  console.log('Expected path:', error.message);
-}
-```
-
-### Comments Support
-
-LeadCMS SDK provides full support for working with comments on your content. Comments are automatically synced when you run `npx leadcms pull` and stored locally in `.leadcms/comments/` directory organized by entity type and ID.
-
-#### Syncing Comments
+Media files are automatically synced during content pull:
 
 ```bash
-# Pull both content and comments (recommended)
+# Sync all media files
 npx leadcms pull
 
-# Pull only comments
+# Sync only media
+npx leadcms pull-media
+```
+
+**📖 See [Media Management Guide](./docs/MEDIA_MANAGEMENT.md)** for media handling, optimization, and deployment strategies.
+
+### Comments API
+
+Work with comments on your content:
+
+```bash
+# Sync comments
+npx leadcms pull
+
+# Sync only comments
 npx leadcms pull-comments
 ```
 
-> **💡 Note:** Comments are fetched **without authentication** for security. If you encounter 403 errors, check that your LeadCMS instance allows public access to comments. See [Public API Mode Guide](./docs/PUBLIC_API_MODE.md#troubleshooting) for troubleshooting.
-
-Comments are stored in the following structure:
-```
-.leadcms/
-  comments/
-    Content/
-      10.json    # Comments for Content with ID 10
-      20.json    # Comments for Content with ID 20
-    Contact/
-      5.json     # Comments for Contact with ID 5
-```
-
-#### Retrieving Comments
-
 ```typescript
-import {
-  getComments,
+import { 
   getCommentsForContent,
-  getCommentsStrict,
-  getCommentsForContentStrict
+  getCommentsTreeForContent 
 } from '@leadcms/sdk';
 
-// Get comments for any commentable entity (returns empty array if not found)
-const contentComments = getComments('Content', 10);
-const contactComments = getComments('Contact', 5);
+// Get flat list of comments
+const comments = getCommentsForContent(contentId);
 
-// Convenience function for content comments (most common use case)
-const comments = getCommentsForContent(20);
-
-// Strict versions that throw errors instead of returning empty arrays
-try {
-  const strictComments = getCommentsStrict('Content', 10);
-  const strictContentComments = getCommentsForContentStrict(20);
-} catch (error) {
-  console.error('Comments not found or invalid:', error.message);
-}
-```
-
-#### Comment Structure
-
-Each comment has the following structure:
-
-```typescript
-interface Comment {
-  id: number;
-  parentId?: number | null;              // For nested/threaded comments
-  authorName: string;
-  authorEmail?: string;
-  body: string;
-  createdAt: string;                     // ISO 8601 format
-  updatedAt?: string | null;             // ISO 8601 format
-  commentableId: number;                 // ID of the entity being commented on
-  commentableType: string;               // Type of entity (e.g., "Content", "Contact")
-  avatarUrl?: string;
-  language: string;
-  translationKey?: string | null;
-  contactId?: number | null;
-  source?: string | null;
-  tags?: string[] | null;
-}
-```
-
-#### Usage Examples
-
-**Display comments on a blog post:**
-
-```typescript
-// Next.js example
-import { getCMSContentBySlugForLocale, getCommentsForContent } from '@leadcms/sdk';
-
-export default function BlogPost({ params }) {
-  const content = getCMSContentBySlugForLocale(params.slug, 'en');
-  const comments = content.id ? getCommentsForContent(content.id) : [];
-
-  return (
-    <article>
-      <h1>{content.title}</h1>
-      <div dangerouslySetInnerHTML={{ __html: content.body }} />
-
-      <section className="comments">
-        <h2>Comments ({comments.length})</h2>
-        {comments.map(comment => (
-          <div key={comment.id} className="comment">
-            <img src={comment.avatarUrl} alt={comment.authorName} />
-            <div>
-              <strong>{comment.authorName}</strong>
-              <time>{new Date(comment.createdAt).toLocaleDateString()}</time>
-              <p>{comment.body}</p>
-            </div>
-          </div>
-        ))}
-      </section>
-    </article>
-  );
-}
-```
-
-**Working with threaded comments:**
-
-```typescript
-import {
-  getCommentsTreeForContent,
-  flattenCommentTree
-} from '@leadcms/sdk';
-
-// Get comments as a tree with nested replies
-const tree = getCommentsTreeForContent(20, {
-  sortOrder: 'newest',        // Sort root comments newest first
-  replySortOrder: 'oldest'    // Sort replies chronologically
-});
-
-// Each node has: id, body, authorName, children, depth, isLeaf, threadCount
-tree.forEach(comment => {
-  console.log(`${comment.authorName}: ${comment.body}`);
-  console.log(`  ${comment.threadCount - 1} replies`);
-});
-
-// Flatten tree for display with indentation
-const flat = flattenCommentTree(tree);
-flat.forEach(comment => {
-  const indent = '  '.repeat(comment.depth);
-  console.log(`${indent}${comment.authorName}: ${comment.body}`);
+// Get comments as tree for threading
+const tree = getCommentsTreeForContent(contentId, undefined, {
+  sortOrder: 'newest',
+  replySortOrder: 'oldest'
 });
 ```
 
-**Advanced comment features:**
-
-```typescript
-import {
-  getCommentsForContent,
-  searchComments,
-  getCommentStatistics,
-  filterComments,
-  getRecentComments
-} from '@leadcms/sdk';
-
-const comments = getCommentsForContent(10);
-
-// Search comments
-const results = searchComments(comments, 'react');
-
-// Get statistics
-const stats = getCommentStatistics(comments);
-console.log(`${stats.total} comments, ${stats.threads} threads, ${stats.authors} authors`);
-
-// Filter by language, tags, date range
-const filtered = filterComments(comments, {
-  language: 'en',
-  tags: ['important'],
-  since: '2024-01-01'
-});
-
-// Get recent comments
-const latest = getRecentComments(comments, 5);
-```
-
-> **📖 See [Comment Tree Documentation](./docs/COMMENT_TREE.md)** for comprehensive guide on tree structures, sorting options, filtering, statistics, and more advanced features.
+**📖 See [Comment Tree Guide](./docs/COMMENT_TREE.md)** for complete documentation on threaded comments, sorting, filtering, and advanced features.
 
 ## Docker Deployment
 
@@ -876,42 +713,52 @@ try {
 - ✅ Configuration is cached across multiple function calls within the same process
 - ✅ Use `loadContentConfig()` for optional configs, `loadContentConfigStrict()` for required configs
 
+## Features & Documentation
+
+### 📚 Complete Guides
+
+- **[Documentation Index](./docs/INDEX.md)** - Central hub for all documentation
+
+#### Content & Media
+- **[Content Management](./docs/CONTENT_MANAGEMENT.md)** - Retrieving, organizing, and working with content
+- **[Media Management](./docs/MEDIA_MANAGEMENT.md)** - Handling media files and optimization
+- **[Draft Handling](./docs/DRAFT_HANDLING.md)** - Working with draft content and user-specific drafts
+
+#### Comments
+- **[Comment Tree Guide](./docs/COMMENT_TREE.md)** - Building threaded comment interfaces with sorting and filtering
+
+#### Setup & Configuration
+- **[Interactive Init](./docs/INTERACTIVE_INIT.md)** - Setup wizard and authentication
+- **[Public API Mode](./docs/PUBLIC_API_MODE.md)** - Security-first approach and operation modes
+
+#### Development
+- **[Development Guide](./docs/DEVELOPMENT.md)** - Local development, testing, and debugging
+- **[GitHub Actions](./docs/GITHUB_ACTIONS.md)** - CI/CD setup and automated publishing
+
 ## Development
 
-For SDK development and contributions:
+For SDK development and contributions, see [Development Guide](./docs/DEVELOPMENT.md).
+
+**Quick Start:**
 
 ```bash
 # Clone and setup
 git clone https://github.com/LeadCMS/leadcms.sdk.git
 cd leadcms.sdk
 npm install
+npm run build
 
-# Development workflow
-npm run build    # Build the SDK
-npm run dev      # Watch mode for development
-npm run test     # Run tests
-npm run clean    # Clean build artifacts
+# Run tests
+npm test
 
-# Local testing with npm link
-npm link
-cd ../your-test-project
-npm link @leadcms/sdk
+# Development mode
+npm run dev
 ```
 
-### Debug Mode
-
-Enable detailed logging during development:
-
-```bash
-LEADCMS_DEBUG=true npm run build
-```
-
-### Contributing
+**Contributing:**
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run tests: `npm run test`
+4. Run tests: `npm test`
 5. Submit a pull request
-
-For detailed development setup, see [DEVELOPMENT.md](./docs/DEVELOPMENT.md).
