@@ -613,39 +613,7 @@ docker run -p 80:80 \
   my-leadcms-site-preview
 ```
 
-### Template Features
-
-✅ **Framework-agnostic** - Works with any static site generator
-✅ **Production optimized** - Nginx with proper caching headers
-✅ **Live preview** - Development mode with hot reload support
-✅ **Multi-service** - Nginx proxy + dev server + LeadCMS watcher
-✅ **Runtime configuration** - Environment variables injected at startup
-✅ **Health checks** - Built-in container health monitoring
-
-### Customizing Templates
-
-After generating templates with `npx leadcms docker`, you can customize:
-
-1. **Source directory** in `Dockerfile`:
-   ```dockerfile
-   # Change 'out' to your framework's build output:
-   COPY dist /usr/share/nginx/html    # Astro
-   COPY public /usr/share/nginx/html  # Gatsby
-   COPY .output/public /usr/share/nginx/html  # Nuxt
-   ```
-
-2. **Nginx configuration** in `nginx.conf` for custom routing rules
-
-3. **Development command** in `preview/supervisord.conf`:
-   ```ini
-   [program:dev-server]
-   command=npm run livepreview    # Your development command
-   ```
-
-## Performance & Debugging
-
-### Configuration Caching
-The SDK automatically caches configuration files for 60 seconds and content files for 30 seconds to improve build performance. Multiple calls to the same configuration functions will use cached results.
+## Debugging
 
 ### Debug Logging
 Control SDK logging verbosity with environment variables:
@@ -697,7 +665,7 @@ try {
 
 ### 📚 Complete Guides
 
-- **[Documentation Index](./docs/INDEX.md)** - Central hub for all documentation
+- **[Documentation Index](./docs/README)** - Central hub for all documentation
 
 #### Content & Media
 - **[Content Management](./docs/CONTENT_MANAGEMENT.md)** - Retrieving, organizing, and working with content

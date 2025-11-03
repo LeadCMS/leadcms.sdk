@@ -80,7 +80,7 @@ npx leadcms pull
 
 ```
 docs/
-├── INDEX.md                    # This file - Documentation hub
+├── README.md                  # This file - Documentation hub
 ├── CONTENT_MANAGEMENT.md      # Content retrieval and organization
 ├── MEDIA_MANAGEMENT.md        # Media file handling
 ├── COMMENT_TREE.md            # Comment tree and threading
