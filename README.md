@@ -271,7 +271,7 @@ Interactive setup wizard that:
 1. **Connects to your LeadCMS instance** - Validates URL and checks for existing authentication
 2. **Fetches configuration** - Retrieves default language and available languages from public `/api/config` endpoint
 3. **Configures directories** - Sets content and media directories (defaults: `.leadcms/content`, `public/media`)
-4. **Creates environment file** - Saves configuration to `.env` or `.env.local`
+4. **Creates environment file** - Saves configuration to `.env`
 5. **Creates config file** - Only if you use non-default directories (keeps your project clean!)
 
 **Note:** The `/api/config` endpoint is public and works without authentication. For write operations and private content, run `leadcms login` after initialization.
@@ -341,7 +341,7 @@ Next steps:
 ```
 
 The wizard creates:
-- **`.env`** (or `.env.local` if exists) with `LEADCMS_URL`, `LEADCMS_DEFAULT_LANGUAGE`, and optionally `LEADCMS_API_KEY`
+- **`.env`** (or `.env` if exists) with `LEADCMS_URL`, `LEADCMS_DEFAULT_LANGUAGE`, and optionally `LEADCMS_API_KEY`
 - **`leadcms.config.json`** only if custom directories are specified
 
 **Anonymous Mode:** Perfect for static sites that only need public content. Omit the API key to skip authentication entirely.

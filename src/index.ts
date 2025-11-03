@@ -4,7 +4,6 @@ export * from './lib/config.js';
 export * from './lib/locale-utils.js';
 export * from './lib/comment-types.js';
 export * from './lib/cms-config-types.js';
-export * from './lib/auth.js';
 
 // Export only public comment tree types (functions are exported from cms.js)
 export type { CommentTreeNode, CommentTreeOptions, CommentStatistics, CommentSortOrder } from './lib/comment-utils.js';
@@ -46,11 +45,5 @@ export type { CommentTreeNode, CommentTreeOptions, CommentStatistics, CommentSor
 // - npx leadcms watch     - Watch for real-time updates
 // - npx leadcms generate-env - Generate environment file
 //
-// Authentication API:
-// - authenticate()        - Complete authentication flow with version detection
-// - deviceAuthFlow()      - Device authentication flow (LeadCMS >= 1.2.88)
-// - manualTokenFlow()     - Manual token extraction (legacy versions)
-// - verifyToken()         - Verify API token
-// - saveTokenToEnv()      - Save token to .env file
-// - getLeadCMSVersion()   - Get LeadCMS instance version
-// - supportsDeviceAuth()  - Check if device auth is supported
+// Note: Authentication functions are internal and only available via CLI commands.
+// Use 'npx leadcms login' for authentication instead of programmatic auth functions.

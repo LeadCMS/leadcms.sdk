@@ -1,240 +1,104 @@
 # Public API Mode & Security
 
-## Security-First Design
+## Overview
 
-The LeadCMS SDK uses a **security-first approach** for all operations:
+The LeadCMS SDK operates in two modes based on API key presence:
 
-### Read Operations (Always Public)
+**Public Mode (No API Key):**
+- ✅ Read operations: Pull public content, comments, media
+- ❌ Write operations: Cannot push content changes
+- ✅ Best for: Static sites, production deployments
 
-**All read operations are performed WITHOUT authentication:**
+**Authenticated Mode (With API Key):**
+- ✅ Read operations: Same public data (API key not sent)
+- ✅ Write operations: Push content using API key
+- ✅ Best for: Development, content management
 
-- ✅ CMS config (`/api/config`)
-- ✅ Content sync (`/api/content/sync`)
-- ✅ Comments sync (`/api/comments/sync`)
-- ✅ Media sync (`/api/media/sync`)
-- ✅ Content types (`/api/content-types`)
+### Security Model
 
-**Why?** This ensures:
-1. Only public data is retrieved
-2. No risk of exposing private data in public builds
-3. Simpler security model
-4. Better separation of concerns
-
-### Write Operations (Require API Key)
-
-**Write operations require authentication:**
-
-- 🔒 Content push (`/api/content`)
-- 🔒 Content updates
-- 🔒 Content deletion
-
-## Operation Modes
-
-### With API Key
-- ✅ Read: Public content only (no API key sent)
-- ✅ Write: Full access using API key
-- ✅ Best for: Development and content management
-
-### Without API Key
-- ✅ Read: Public content only
-- ❌ Write: Will fail
-- ✅ Best for: Public websites and static sites
+All read operations use public endpoints without authentication, ensuring:
+- Only published content is accessible
+- No risk of exposing private data in builds
+- Safe deployment without secrets management
 
 ## Configuration
 
-### Public Mode Setup
-
-Omit `LEADCMS_API_KEY` from configuration:
-
+**Public Mode (no API key):**
 ```bash
 # .env
 LEADCMS_URL=https://your-cms-instance.com
 LEADCMS_DEFAULT_LANGUAGE=en
-# No API key needed
 ```
 
-## CLI Commands
-
-### Work Without API Key
-
+**Authenticated Mode (with API key):**
 ```bash
-npx leadcms init          # Interactive setup
-npx leadcms pull          # Pull public content
-npx leadcms pull-comments # Pull public comments
-npx leadcms status        # Check sync status
-npx leadcms docker        # Generate templates
-```
-
-### Require API Key
-
-```bash
-npx leadcms push          # Push content changes
-npx leadcms watch         # Real-time updates
-```
-
-## Use Cases
-
-### Public Website
-
-Perfect for static sites with public content only:
-
-```bash
-# 1. Initialize (no API key)
-npx leadcms init
-# Press Enter when prompted for API key
-
-# 2. Pull content
-npx leadcms pull
-
-# 3. Build and deploy
-npm run build
-```
-
-**Benefits:**
-- ✅ No secrets in production
-- ✅ Reduced security risk
-- ✅ Simpler deployment
-
-### Development Environment
-
-Use API key for full access:
-
-```bash
-# .env.local
-LEADCMS_URL=https://cms.example.com
-LEADCMS_API_KEY=dev_key
+# .env (development) or CI/CD secrets (production)
+LEADCMS_URL=https://your-cms-instance.com
+LEADCMS_API_KEY=your-api-key
 LEADCMS_DEFAULT_LANGUAGE=en
 ```
 
-**Benefits:**
-- ✅ Access draft content
-- ✅ Push content changes
-- ✅ Full API access
+## CLI Commands by Mode
 
-### CI/CD Pipeline
+| Command | Public Mode | Authenticated Mode |
+|---------|-------------|-------------------|
+| `npx leadcms init` | ✅ Works | ✅ Works |
+| `npx leadcms pull*` | ✅ Works | ✅ Works |
+| `npx leadcms status` | ✅ Works | ✅ Works |
+| `npx leadcms docker` | ✅ Works | ✅ Works |
+| `npx leadcms push` | ❌ Fails (401) | ✅ Works |
+| `npx leadcms watch` | ❌ Fails (401) | ✅ Works |
 
-Separate public and authenticated steps:
+*Includes `pull-content`, `pull-comments`, `pull-media`
 
-```yaml
-jobs:
-  build:
-    steps:
-      # Public pull - no secrets
-      - name: Pull Content
-        run: |
-          echo "LEADCMS_URL=${{ vars.LEADCMS_URL }}" > .env
-          npx leadcms pull
-      
-      - name: Build
-        run: npm run build
+## Typical Workflows
 
-  content-sync:
-    steps:
-      # Authenticated push - uses secrets
-      - name: Push Changes
-        env:
-          LEADCMS_API_KEY: ${{ secrets.LEADCMS_API_KEY }}
-        run: npx leadcms push
+### Production Static Site (Public Mode)
+
+```bash
+# 1. Setup without API key
+npx leadcms init
+# Press Enter when prompted for API key
+
+# 2. Pull and build
+npx leadcms pull
+npm run build
 ```
 
-## API Behavior
+### Development & Preview Environment (Authenticated Mode)
 
-### Read Endpoints
+```bash
+# 1. Setup with API key in .env
+LEADCMS_API_KEY=dev_key
 
-**Always called without authentication:**
-
-```http
-GET /api/config
-GET /api/content/sync
-GET /api/comments/sync
-# No Authorization header sent
-```
-
-Response includes only public data.
-
-### Write Endpoints
-
-**Require authentication:**
-
-```http
-POST /api/content
-Authorization: Bearer your-api-key
+# 2. Full workflow
+npx leadcms pull    # Get latest content
+# Edit content locally
+npx leadcms push    # Upload changes
+npx leadcms watch   # Real-time updates (requires API key)
 ```
 
 ## Security Best Practices
 
-### Public Mode
-
-**Advantages:**
-- No API key exposure risk
-- Safe for public repositories
-- No secrets management
-- Deploy to edge/CDN directly
-
-**Limitations:**
-- Only published content visible
-- Cannot modify content
-- No draft/preview functionality
-
-### Authenticated Mode
-
-**Best Practices:**
-- ✅ Use environment variables only
-- ✅ Use `.env.local` for development (not committed)
+**API Key Management:**
+- ✅ Never commit API keys to version control
+- ✅ Use `.env` for development (gitignored)
 - ✅ Use CI/CD secrets for deployment
 - ✅ Rotate API keys regularly
-- ✅ Use read-only keys where possible
+
+**Mode Selection:**
+- **Production sites**: Use public mode when possible (no secrets required)
+- **Development & Preview**: Use authenticated mode for content editing and `watch` command
+- **Public repositories**: Prefer public mode to avoid secret exposure
 
 ## Troubleshooting
 
-### 403 Forbidden During Sync
-
-```
-[FETCH_COMMENT_SYNC] Failed: 403 Forbidden
-```
-
-**Cause:** LeadCMS instance not configured for public access
-
-**Solution:**
-- Contact LeadCMS administrator
-- Enable public API access
-- Check CORS and IP settings
-
-### 401 During Push
-
-```
-[PUSH] Failed: 401 Unauthorized
-```
-
-**Expected if no API key configured.**
-
-**Solution:**
-- Add `LEADCMS_API_KEY` to `.env`
-- Verify key is valid
-- Check key has write permissions
-
-### Missing Content
-
-**Expected:** Only published content is retrieved.
-
-**Reasons:**
-1. Content is unpublished
-2. Content has `visibility: private`
-3. Content is in draft
-4. Content pending review
-
-**Solution:** Publish content in LeadCMS admin
-
-### "No API key provided" Warning
-
-```
-[LeadCMS] No API key provided
-```
-
-**This is informational, not an error.**
-
-- Ignore if you only need to pull content
-- Add API key if you need to push content
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| `403 Forbidden` during sync | Instance not configured for public access | Contact administrator to enable public API |
+| `401 Unauthorized` during push | No API key (expected in public mode) | Add `LEADCMS_API_KEY` or use authenticated mode |
+| Missing content | Only published content is accessible | Publish content in LeadCMS admin |
+| "No API key provided" warning | Informational message | Normal in public mode; add key for write access |
 
 ## Related Documentation
 

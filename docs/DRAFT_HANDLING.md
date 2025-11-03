@@ -79,36 +79,3 @@ if (content && isContentDraft(content)) {
   console.log('This content is a draft');
 }
 ```
-
-## Content Structure
-
-Include `publishedAt` in your content frontmatter or JSON:
-
-### MDX
-```markdown
----
-title: "My Article"
-type: "article"
-publishedAt: "2024-12-01T10:00:00Z"
----
-
-Content here...
-```
-
-### JSON
-```json
-{
-  "title": "My Article",
-  "type": "article",
-  "publishedAt": "2024-12-01T10:00:00Z",
-  "body": "Content here..."
-}
-```
-
-## Migration
-
-Existing content without `publishedAt` is treated as drafts. To publish:
-- Add `publishedAt` with a past date
-- Or set to current date
-
-The SDK automatically converts string dates to Date objects.

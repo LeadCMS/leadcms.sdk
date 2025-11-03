@@ -65,78 +65,7 @@ npm run test:watch
 
 ### Test Coverage
 
-Current coverage: **60%** (144 tests)
-
 Coverage reports are generated in `coverage/` directory.
-
-## 🔍 Debugging
-
-### CLI Debugging
-
-Add debug logs:
-
-```typescript
-console.log('[DEBUG] Args:', process.argv);
-console.log('[DEBUG] Command:', command);
-```
-
-### Common Issues
-
-**Permission denied:**
-```bash
-chmod +x dist/cli/index.js
-```
-
-**Templates not found:**
-```bash
-# Verify templates exist
-ls -la dist/templates/
-```
-
-**npm link not working:**
-```bash
-# Unlink and relink
-npm unlink -g @leadcms/sdk
-npm link
-npm list -g --depth=0
-```
-
-## 📦 Testing Package Distribution
-
-### Before Publishing
-
-```bash
-# 1. Clean build
-npm run clean
-npm run build
-
-# 2. Pack and inspect
-npm pack
-tar -tzf leadcms-sdk-*.tgz
-
-# 3. Test from tarball
-mkdir ../test-install
-cd ../test-install
-npm install ../leadcms.sdk/leadcms-sdk-*.tgz
-npx leadcms --help
-```
-
-## 🔧 SDK Testing Script
-
-Create `test-sdk.js`:
-
-```javascript
-const { getCMSContentBySlugForLocale, configure } = require('@leadcms/sdk');
-
-configure({
-  url: 'https://test.com',
-  defaultLanguage: 'en',
-  contentDir: '.leadcms/content',
-  mediaDir: 'public/media'
-});
-
-console.log('✅ SDK configured successfully');
-```
 
 ## 🎯 Release Process
 
@@ -166,23 +95,6 @@ For detailed publishing setup, see [GITHUB_ACTIONS.md](./GITHUB_ACTIONS.md).
 ```bash
 npm link
 which leadcms
-```
-
-### ES Module Import Issues
-Use ES module syntax at top of files:
-```typescript
-// ✅ Do this
-import { someFunction } from './module.js';
-
-// ❌ Not this
-const { someFunction } = require('./module.js');
-```
-
-### Environment Variables Not Loading
-```bash
-# Ensure .env exists
-echo "LEADCMS_URL=https://your-instance.com" > .env
-cat .env
 ```
 
 ## 📚 Package Managers
