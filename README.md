@@ -291,46 +291,8 @@ Authenticates with your LeadCMS instance:
 - To update an expired or invalid token
 - When switching between LeadCMS instances
 
-Example session (with existing authentication):
-```
-🚀 LeadCMS SDK Initialization
+Example session:
 
-Enter your LeadCMS URL: https://your-instance.leadcms.ai
-
-✓ API key found in environment
-
-🔍 Connecting to LeadCMS...
-✅ Connected successfully!
-
-📋 Available languages:
-   1. English (United States) [en-US] (default)
-   2. Russian (Russia) [ru-RU]
-
-Default language code [en-US]: 
-✓ Using default language: en-US
-
-📦 Supported entity types:
-   ✓ Content
-   ✓ Media
-   ✓ Comments
-
-Content directory [.leadcms/content]:
-Media directory [public/media]:
-Comments directory [.leadcms/comments]:
-
-📝 Creating configuration files...
-
-✅ Updated .env
-ℹ️  Using default directories, no leadcms.config.json needed.
-
-✨ Configuration complete!
-
-Next steps:
-  1. Run: npx leadcms pull (to download content)
-  2. Start using LeadCMS content in your project
-```
-
-Example session (without authentication):
 ```
 🚀 LeadCMS SDK Initialization
 
