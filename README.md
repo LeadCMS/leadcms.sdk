@@ -424,13 +424,6 @@ Shows the current sync status between local and remote content without making an
 npx leadcms watch
 ```
 
-### Generate environment variables file
-```bash
-npx leadcms generate-env
-```
-
-
-
 ## Framework Integration
 
 The SDK provides framework-agnostic data access. Most frameworks use it as a **development dependency** for build-time static generation:

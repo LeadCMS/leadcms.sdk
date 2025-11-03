@@ -200,12 +200,14 @@ Welcome to our company...
 {
   "title": "About Us",
   "type": "page",
-  "slug": "about-us",
+  "slug": "about-us", 
   "language": "en",
   "publishedAt": "2024-01-01T00:00:00Z",
-  "body": "# About Us\n\nWelcome to our company..."
+  "body": "{\"heading\":\"About Us\",\"description\":\"Welcome to our company\",\"sections\":[{\"title\":\"Our Story\",\"content\":\"We started in 2020...\"}]}"
 }
 ```
+
+Note: In JSON format files, the `body` field contains structured JSON data as a stringified JSON object.
 
 ## Multi-Language Support
 
@@ -314,17 +316,21 @@ npx leadcms push --dry-run
 npx leadcms push --force
 ```
 
-**Required Metadata for Push:**
+**Content frontmatter for Push (required and optional fields):**
 ```yaml
 ---
-type: "article"                    # Required
-title: "Article Title"             # Required
-slug: "article-slug"               # Optional (uses filename if missing)
-language: "en"                     # Optional (uses default)
-publishedAt: "2024-01-01T00:00:00Z" # Required
-updatedAt: "2024-01-01T00:00:00Z"   # Important for conflict detection
+type: "article"                    # required: Content type (must exist in LeadCMS)
+title: "Article Title"             # required: Content title
+slug: "article-slug"               # required: URL slug (unique per locale)
+language: "en"                     # required: Content language
+publishedAt: "2024-01-01T00:00:00Z" # optional: Publication date (omit to create a draft or schedule a future publish)
+# updatedAt: "2024-01-01T00:00:00Z"   # optional: maintained by the server; do not set for new content
 ---
 ```
+
+Notes:
+- `publishedAt` is optional. Omitting it is a valid way to create draft or scheduled content depending on your LeadCMS workflow.
+- `updatedAt` is typically set and maintained by the LeadCMS server after content is created or updated. The SDK will use `updatedAt` when present for conflict detection, but you should not rely on it being set for brand-new local files.
 
 ## Draft Content
 
