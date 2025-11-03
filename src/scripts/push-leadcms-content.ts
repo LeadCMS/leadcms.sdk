@@ -177,6 +177,11 @@ async function parseContentFile(filePath: string, locale: string, baseContentDir
     slug = path.join(relativeDir, basename).replace(/\\/g, '/'); // Normalize to forward slashes
   }
 
+  // Warn if type is missing
+  if (!metadata.type) {
+    console.warn(`[LOCAL] Warning: Content file "${relativePath}" is missing a "type" property. It will be displayed as "unknown".`);
+  }
+
   return {
     filePath,
     slug,
@@ -632,31 +637,31 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
 
     // New content
     for (const op of sortOperations([...operations.create])) {
-      const typeLabel = op.local.type.padEnd(12);
-      const localeLabel = `[${op.local.locale}]`.padEnd(6);
+      const typeLabel = (op.local.type || 'unknown').padEnd(12);
+      const localeLabel = `[${op.local.locale || 'unknown'}]`.padEnd(6);
       colorConsole.log(`        ${statusColors.created('new file:')}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)}`);
     }
 
     // Modified content
     for (const op of sortOperations([...operations.update])) {
-      const typeLabel = op.local.type.padEnd(12);
-      const localeLabel = `[${op.local.locale}]`.padEnd(6);
+      const typeLabel = (op.local.type || 'unknown').padEnd(12);
+      const localeLabel = `[${op.local.locale || 'unknown'}]`.padEnd(6);
       const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
       colorConsole.log(`        ${statusColors.modified('modified:')}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`);
     }
 
     // Renamed content (slug changed)
     for (const op of sortOperations([...operations.rename])) {
-      const typeLabel = op.local.type.padEnd(12);
-      const localeLabel = `[${op.local.locale}]`.padEnd(6);
+      const typeLabel = (op.local.type || 'unknown').padEnd(12);
+      const localeLabel = `[${op.local.locale || 'unknown'}]`.padEnd(6);
       const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
       colorConsole.log(`        ${statusColors.renamed('renamed:')}    ${typeLabel} ${localeLabel} ${colorConsole.gray(op.oldSlug || 'unknown')} -> ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`);
     }
 
     // Type changed content
     for (const op of sortOperations([...operations.typeChange])) {
-      const typeLabel = op.local.type.padEnd(12);
-      const localeLabel = `[${op.local.locale}]`.padEnd(6);
+      const typeLabel = (op.local.type || 'unknown').padEnd(12);
+      const localeLabel = `[${op.local.locale || 'unknown'}]`.padEnd(6);
       const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
       const typeChangeLabel = `(${colorConsole.gray(op.oldType || 'unknown')} -> ${colorConsole.highlight(op.newType || 'unknown')})`;
       colorConsole.log(`        ${statusColors.typeChange('type change:')}${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${typeChangeLabel} ${colorConsole.gray(idLabel)}`);
@@ -699,8 +704,8 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
     });
 
     for (const op of sortedConflicts) {
-      const typeLabel = op.local.type.padEnd(12);
-      const localeLabel = `[${op.local.locale}]`.padEnd(6);
+      const typeLabel = (op.local.type || 'unknown').padEnd(12);
+      const localeLabel = `[${op.local.locale || 'unknown'}]`.padEnd(6);
       colorConsole.log(`        ${statusColors.conflict('conflict:')}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)}`);
       colorConsole.log(`                    ${colorConsole.gray(op.reason || 'Unknown conflict')}`);
     }
