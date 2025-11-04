@@ -9,11 +9,12 @@ const __dirname = path.dirname(__filename);
 
 const command = process.argv[2];
 const commandArgs = process.argv.slice(3);
-const scriptDir = path.join(__dirname, '../scripts');
 
 function runScript(scriptName: string, args: string[] = []) {
-  const scriptPath = path.join(scriptDir, scriptName);
-  const child = spawn('node', [scriptPath, ...args], {
+  // Use the new CLI bin files instead of the scripts directory
+  const binDir = path.join(__dirname, 'bin');
+  const binPath = path.join(binDir, scriptName);
+  const child = spawn('node', [binPath, ...args], {
     stdio: 'inherit',
     env: process.env
   });
@@ -32,8 +33,9 @@ function runScriptSequence(scripts: string[], args: string[] = []) {
     }
 
     const scriptName = scripts[currentIndex];
-    const scriptPath = path.join(scriptDir, scriptName);
-    const child = spawn('node', [scriptPath, ...args], {
+    const binDir = path.join(__dirname, 'bin');
+    const binPath = path.join(binDir, scriptName);
+    const child = spawn('node', [binPath, ...args], {
       stdio: 'inherit',
       env: process.env
     });
@@ -82,23 +84,23 @@ switch (command) {
     runScript('pull-comments.js');
     break;
   case 'push':
-    runScript('push-leadcms-content.js', commandArgs);
+    runScript('push.js', commandArgs);
     break;
   case 'status':
-    runScript('status-leadcms-content.js', commandArgs);
+    runScript('status.js', commandArgs);
     break;
   case 'watch':
-    runScript('sse-watcher.js');
+    runScript('watch.js');
     break;
   case 'generate-env':
-    runScript('generate-env-js.js');
+    runScript('generate-env.js');
     break;
   case 'init':
   case 'config':
-    runScript('init-leadcms.js');
+    runScript('init.js');
     break;
   case 'login':
-    runScript('login-leadcms.js');
+    runScript('login.js');
     break;
   case 'docker':
   case 'templates':

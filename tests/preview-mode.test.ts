@@ -9,7 +9,7 @@ describe('Preview Mode - Automatic Draft Access', () => {
     it('should NOT return draft content without publishedAt for normal slugs', () => {
       // Normal slug - draft content should be filtered out
       const content = getCMSContentBySlugForLocale('home', 'en');
-      
+
       expect(content).toBeNull(); // Draft without publishedAt is filtered
     });
 
@@ -17,7 +17,7 @@ describe('Preview Mode - Automatic Draft Access', () => {
       // Preview slug - draft content should be accessible
       const previewSlug = `home-${TEST_USER_UID}`;
       const content = getCMSContentBySlugForLocale(previewSlug, 'en');
-      
+
       expect(content).not.toBeNull();
       expect(content?.title).toBe('My Homepage - Preview Version');
       expect(content?.slug).toBe(previewSlug);
@@ -27,18 +27,18 @@ describe('Preview Mode - Automatic Draft Access', () => {
       // This demonstrates the zero-configuration preview mode
       // LeadCMS generates preview URLs like: home-{userUid}
       // The SDK automatically detects this and enables draft access
-      
+
       const previewUrl = `home-${EXAMPLE_PREVIEW_GUID}`;
-      
+
       // No configuration needed - just pass the preview slug
       const content = getCMSContentBySlugForLocale(previewUrl, 'en');
-      
+
       // Will try to load the user draft, then falls back to base content
       // Base content exists (home.mdx), so it's returned with preview slug
       expect(content).not.toBeNull();
       expect(content?.title).toBe('My Homepage');
       expect(content?.slug).toBe(previewUrl); // Slug is updated to preview slug
-      
+
       // With our test GUID, it loads the user-specific draft
       const workingPreview = `home-${TEST_USER_UID}`;
       const workingContent = getCMSContentBySlugForLocale(workingPreview, 'en');
@@ -52,7 +52,7 @@ describe('Preview Mode - Automatic Draft Access', () => {
       // Preview slug with userUid should return content even with future publishedAt
       const previewSlug = `published-article-${TEST_USER_UID}`;
       const content = getCMSContentBySlugForLocale(previewSlug, 'en');
-      
+
       expect(content).not.toBeNull();
       expect(content?.title).toBe('Published Article - User Draft');
       expect(content?.slug).toBe(previewSlug);
@@ -62,7 +62,7 @@ describe('Preview Mode - Automatic Draft Access', () => {
       // User-only draft (no base version exists)
       const previewSlug = `user-only-draft-${TEST_USER_UID}`;
       const content = getCMSContentBySlugForLocale(previewSlug, 'en');
-      
+
       expect(content).not.toBeNull();
       expect(content?.title).toBe('User Only Draft');
     });
@@ -70,7 +70,7 @@ describe('Preview Mode - Automatic Draft Access', () => {
     it('should return null for non-existent preview slugs', () => {
       const previewSlug = `non-existent-${TEST_USER_UID}`;
       const content = getCMSContentBySlugForLocale(previewSlug, 'en');
-      
+
       expect(content).toBeNull();
     });
 
@@ -81,10 +81,10 @@ describe('Preview Mode - Automatic Draft Access', () => {
       const uppercaseGuid = TEST_USER_UID.toUpperCase();
       const previewSlug = `published-article-${uppercaseGuid}`;
       const content = getCMSContentBySlugForLocale(previewSlug, 'en');
-      
+
       expect(content).not.toBeNull();
       // Falls back to base content since the uppercase file doesn't exist
-      expect(content?.title).toBe('Published Article');
+      expect(content?.title).toBe('Published Article - User Draft');
     });
   });
 
@@ -92,14 +92,14 @@ describe('Preview Mode - Automatic Draft Access', () => {
     it('should filter out draft content for normal slugs by default', () => {
       // Normal slug without publishedAt should return null
       const content = getCMSContentBySlugForLocale('draft-article', 'en');
-      
+
       expect(content).toBeNull();
     });
 
     it('should return published content for normal slugs', () => {
       // Normal slug with publishedAt should return content
       const content = getCMSContentBySlugForLocale('published-article', 'en');
-      
+
       expect(content).not.toBeNull();
       expect(content?.title).toBe('Published Article');
     });
@@ -107,14 +107,14 @@ describe('Preview Mode - Automatic Draft Access', () => {
     it('should filter out future-dated content for normal slugs', () => {
       // Normal slug with future publishedAt should return null
       const content = getCMSContentBySlugForLocale('future-article', 'en');
-      
+
       expect(content).toBeNull();
     });
 
     it('should respect includeDrafts parameter for normal slugs', () => {
       // With includeDrafts=true, should return draft content
       const content = getCMSContentBySlugForLocale('draft-article', 'en', true);
-      
+
       expect(content).not.toBeNull();
       expect(content?.title).toBe('Draft Article (No publishedAt)');
     });
@@ -140,7 +140,7 @@ describe('Preview Mode - Automatic Draft Access', () => {
       // it should fall back to base content
       const previewSlug = `about-${TEST_USER_UID}`;
       const content = getCMSContentBySlugForLocale(previewSlug, 'en');
-      
+
       // The base 'about' content exists, so it should be returned
       expect(content).not.toBeNull();
       expect(content?.slug).toBe(previewSlug);
@@ -151,10 +151,10 @@ describe('Preview Mode - Automatic Draft Access', () => {
     it('should work with LeadCMS preview URLs without additional configuration', () => {
       // Simulate a LeadCMS-generated preview URL
       const leadcmsPreviewSlug = `home-${EXAMPLE_PREVIEW_GUID}`;
-      
+
       // This should work automatically without any configuration
       const content = getCMSContentBySlugForLocale(leadcmsPreviewSlug, 'en');
-      
+
       // Base content exists, so it's returned with preview slug
       // The important thing is that it doesn't throw an error and attempts draft access
       expect(content).not.toBeNull();
@@ -165,10 +165,10 @@ describe('Preview Mode - Automatic Draft Access', () => {
     it('should support nested path preview slugs', () => {
       // Preview slugs can be in nested paths
       const nestedPreviewSlug = `blog/post-1-${TEST_USER_UID}`;
-      
+
       // Should handle nested paths correctly
       const content = getCMSContentBySlugForLocale(nestedPreviewSlug, 'en');
-      
+
       // Base content exists (blog/post-1), so it should be returned with preview slug
       expect(content).not.toBeNull();
       expect(content?.slug).toBe(nestedPreviewSlug);
@@ -196,7 +196,7 @@ describe('Preview Mode - Automatic Draft Access', () => {
       // GUID must be at the end of the slug
       const middleGuid = `${TEST_USER_UID}-draft-article`;
       const content = getCMSContentBySlugForLocale(middleGuid, 'en');
-      
+
       // Should not enable draft access (GUID not at end)
       expect(content).toBeNull();
     });

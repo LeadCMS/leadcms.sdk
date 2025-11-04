@@ -444,14 +444,8 @@ async function main(): Promise<void> {
 // Export the main function so it can be imported by other modules
 export { main as fetchLeadCMSContent };
 
-// If this script is run directly (not imported), execute the main function
-// Note: This check works in Node.js ESM environment
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error) => {
-    console.error('Error running LeadCMS fetch:', error.message);
-    process.exit(1);
-  });
-}
+// Note: CLI execution moved to CLI entry points
+// This file now only exports the function for programmatic use
 
 // Export types
 export type { ContentSyncResult, MediaSyncResult, MediaItem };

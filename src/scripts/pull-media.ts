@@ -43,12 +43,7 @@ async function main(): Promise<void> {
   console.log(`\n✨ Media pull completed!\n`);
 }
 
-// If this script is run directly, execute the main function
-if (typeof import.meta !== 'undefined' && process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error) => {
-    console.error("Error running LeadCMS media pull:", error.message);
-    process.exit(1);
-  });
-}
+// Note: CLI execution moved to src/cli/bin/pull-media.ts
+// This file now only exports the function for programmatic use
 
 export { main as pullMedia };

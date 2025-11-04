@@ -34,9 +34,7 @@ async function main(): Promise<void> {
   }
 }
 
-// Handle direct script execution
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
-  main();
-}
+// Note: CLI execution moved to src/cli/bin/status.ts
+// This file now only exports the function for programmatic use
 
 export { main as statusLeadCMSContent };

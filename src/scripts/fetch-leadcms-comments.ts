@@ -424,14 +424,8 @@ export async function main(): Promise<void> {
 // Export the main function so it can be imported by other modules
 export { main as fetchLeadCMSComments };
 
-// If this script is run directly (not imported), execute the main function
-// Check if import.meta is available (not in Jest environment)
-if (typeof import.meta !== 'undefined' && process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error) => {
-    console.error("Error running LeadCMS comment fetch:", error.message);
-    process.exit(1);
-  });
-}
+// Note: CLI execution moved to CLI entry points
+// This file now only exports the function for programmatic use
 
 // Export helper functions for testing
 export {
