@@ -443,8 +443,9 @@ export function getCMSContentBySlugForLocale(
   const userUid = extractUserUidFromSlug(slug);
   if (userUid) {
     // Preview slug detected - extract base slug and use draft support
-    // Remove the GUID suffix to get the base slug
-    const baseSlug = slug.substring(0, slug.length - userUid.length - 1); // -1 for the dash
+    // Remove the GUID suffix to get the base slug by finding the last dash before the GUID
+    const lastDashIndex = slug.lastIndexOf('-' + userUid);
+    const baseSlug = slug.slice(0, lastDashIndex);
     
     // Try to get user-specific draft first, then fall back to base content
     // Always enable includeDrafts for preview mode to allow draft content access

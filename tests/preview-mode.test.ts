@@ -1,6 +1,9 @@
 import { getCMSContentBySlugForLocale } from '../src/lib/cms';
 import { TEST_USER_UID } from './setup';
 
+// Additional GUID for testing various preview slug scenarios
+const EXAMPLE_PREVIEW_GUID = '0fb41255-5df0-4777-8212-b01b2d59aac5';
+
 describe('Preview Mode - Automatic Draft Access', () => {
   describe('Problem Statement - Draft content without publishedAt', () => {
     it('should NOT return draft content without publishedAt for normal slugs', () => {
@@ -25,7 +28,7 @@ describe('Preview Mode - Automatic Draft Access', () => {
       // LeadCMS generates preview URLs like: home-{userUid}
       // The SDK automatically detects this and enables draft access
       
-      const previewUrl = `home-0fb41255-5df0-4777-8212-b01b2d59aac5`;
+      const previewUrl = `home-${EXAMPLE_PREVIEW_GUID}`;
       
       // No configuration needed - just pass the preview slug
       const content = getCMSContentBySlugForLocale(previewUrl, 'en');
@@ -147,7 +150,7 @@ describe('Preview Mode - Automatic Draft Access', () => {
   describe('Zero-configuration preview workflow', () => {
     it('should work with LeadCMS preview URLs without additional configuration', () => {
       // Simulate a LeadCMS-generated preview URL
-      const leadcmsPreviewSlug = `home-0fb41255-5df0-4777-8212-b01b2d59aac5`;
+      const leadcmsPreviewSlug = `home-${EXAMPLE_PREVIEW_GUID}`;
       
       // This should work automatically without any configuration
       const content = getCMSContentBySlugForLocale(leadcmsPreviewSlug, 'en');
