@@ -409,6 +409,22 @@ function getCMSContentBySlugForLocaleFromDir(
 
 /**
  * Get content by slug for a specific locale
+ * 
+ * Automatically detects preview slugs (containing userUid/GUID pattern) and enables
+ * draft content access without requiring explicit configuration.
+ * 
+ * @param slug - Content slug (e.g., 'home' or 'home-550e8400-e29b-41d4-a716-446655440000')
+ * @param locale - Optional locale code
+ * @param includeDrafts - Whether to include draft content (default: false)
+ * @returns Content object or null if not found/not published
+ * 
+ * @example
+ * // Normal slug - requires publishedAt
+ * getCMSContentBySlugForLocale('home', 'en')
+ * 
+ * @example
+ * // Preview slug - automatically enables draft access
+ * getCMSContentBySlugForLocale('home-550e8400-e29b-41d4-a716-446655440000', 'en')
  */
 export function getCMSContentBySlugForLocale(
   slug: string,
@@ -423,6 +439,26 @@ export function getCMSContentBySlugForLocale(
     return null;
   }
 
+  // Detect preview slug (contains GUID pattern) and automatically enable draft access
+  const userUid = extractUserUidFromSlug(slug);
+  if (userUid) {
+    // Preview slug detected - extract base slug and use draft support
+    // Remove the GUID suffix to get the base slug
+    const baseSlug = slug.substring(0, slug.length - userUid.length - 1); // -1 for the dash
+    
+    // Try to get user-specific draft first, then fall back to base content
+    // Always enable includeDrafts for preview mode to allow draft content access
+    const content = getCMSContentBySlugForLocaleWithDraftSupport(baseSlug, locale || config.defaultLanguage, userUid, true);
+    
+    // If content was found, update the slug to match the requested preview slug
+    if (content) {
+      content.slug = slug;
+    }
+    
+    return content;
+  }
+
+  // Normal slug - apply standard draft filtering
   const content = getCMSContentBySlugForLocaleFromDir(slug, contentDir, locale);
 
   // Filter out drafts by default unless explicitly requested
