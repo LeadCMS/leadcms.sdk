@@ -192,14 +192,15 @@ describe('LeadCMS SDK - Advanced Draft Scenarios', () => {
   describe('GUID validation edge cases', () => {
     const { extractUserUidFromSlug } = require('../src/lib/cms');
 
-    it('should handle case-insensitive GUIDs', () => {
+    it('should handle case-insensitive GUIDs and normalize to lowercase', () => {
       const lowerGuid = '550e8400-e29b-41d4-a716-446655440000';
       const upperGuid = '550E8400-E29B-41D4-A716-446655440000';
       const mixedGuid = '550e8400-E29B-41d4-A716-446655440000';
 
+      // All GUIDs are normalized to lowercase for consistent file system lookups
       expect(extractUserUidFromSlug(`article-${lowerGuid}`)).toBe(lowerGuid);
-      expect(extractUserUidFromSlug(`article-${upperGuid}`)).toBe(upperGuid);
-      expect(extractUserUidFromSlug(`article-${mixedGuid}`)).toBe(mixedGuid);
+      expect(extractUserUidFromSlug(`article-${upperGuid}`)).toBe(lowerGuid); // normalized to lowercase
+      expect(extractUserUidFromSlug(`article-${mixedGuid}`)).toBe(lowerGuid); // normalized to lowercase
     });
 
     it('should reject invalid GUID formats', () => {

@@ -444,8 +444,9 @@ export function getCMSContentBySlugForLocale(
   if (userUid) {
     // Preview slug detected - extract base slug and use draft support
     // Remove the GUID suffix to get the base slug by finding the last dash before the GUID
-    const lastDashIndex = slug.lastIndexOf('-' + userUid);
-    const baseSlug = slug.slice(0, lastDashIndex);
+    // Use case-insensitive search since GUID might be uppercase in the slug but normalized to lowercase in userUid
+    const guidPattern = new RegExp(`-${userUid.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
+    const baseSlug = slug.replace(guidPattern, '');
     
     // Try to get user-specific draft first, then fall back to base content
     // Always enable includeDrafts for preview mode to allow draft content access
@@ -573,7 +574,8 @@ export function extractUserUidFromSlug(slug: string): string | null {
   const draftSlugPattern = /-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
   const match = slug.match(draftSlugPattern);
-  return match ? match[1] : null;
+  // Normalize GUID to lowercase for consistent file system lookups across platforms
+  return match ? match[1].toLowerCase() : null;
 }
 
 export function getAllContentSlugs(

@@ -75,15 +75,14 @@ describe('Preview Mode - Automatic Draft Access', () => {
     });
 
     it('should work with different GUID formats (case insensitive)', () => {
-      // GUIDs are case-insensitive in pattern matching, but file system lookups are case-sensitive
-      // So uppercase GUID will match the pattern but won't find the user draft file (which is lowercase)
-      // It will fall back to base content instead
+      // GUIDs are case-insensitive in pattern matching, and we normalize to lowercase for file lookups
+      // So uppercase GUID will match the pattern and find the user draft file (normalized to lowercase)
       const uppercaseGuid = TEST_USER_UID.toUpperCase();
       const previewSlug = `published-article-${uppercaseGuid}`;
       const content = getCMSContentBySlugForLocale(previewSlug, 'en');
 
       expect(content).not.toBeNull();
-      // Falls back to base content since the uppercase file doesn't exist
+      // Should find the user draft since we normalize GUIDs to lowercase for file system lookups
       expect(content?.title).toBe('Published Article - User Draft');
     });
   });
