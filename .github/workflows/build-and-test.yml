@@ -34,7 +34,27 @@ jobs:
         run: npm ci
 
       - name: Run build
-        run: npm run build
+        run: |
+          echo "Building project..."
+          npm run build
+          if [ ! -f dist/cli/index.js ]; then
+            echo "❌ Build completed but CLI file was not created!"
+            ls -R dist/ || echo "dist/ directory doesn't exist"
+            exit 1
+          fi
+          echo "✅ Build completed successfully"
+
+      - name: Verify build output
+        run: |
+          echo "Verifying dist/cli/index.js..."
+          ls -la dist/cli/index.js
+          echo "File type:"
+          file dist/cli/index.js || true
+          echo "First 5 lines:"
+          head -n 5 dist/cli/index.js
+          echo "Testing CLI can be executed:"
+          node dist/cli/index.js --version || (echo "❌ CLI cannot be executed!" && exit 1)
+          echo "✅ CLI file verified and executable"
 
       - name: Run tests with coverage
         run: npm run test:coverage
