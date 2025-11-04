@@ -509,6 +509,40 @@ const routes = getAllContentRoutes();
 
 **📖 See [Content Management Guide](./docs/CONTENT_MANAGEMENT.md)** for complete API documentation, framework integration examples, and advanced features.
 
+#### Preview Mode (Zero Configuration)
+
+The SDK automatically detects preview slugs and enables draft content access without requiring explicit configuration:
+
+```typescript
+import { getCMSContentBySlugForLocale } from '@leadcms/sdk';
+
+// Normal slug - only returns published content
+const published = getCMSContentBySlugForLocale('home', 'en');
+// Returns: null if content has no publishedAt
+
+// Preview slug with GUID - automatically enables draft access
+const preview = getCMSContentBySlugForLocale(
+  'home-550e8400-e29b-41d4-a716-446655440000',
+  'en'
+);
+// Returns: draft content even without publishedAt
+```
+
+**How it works:**
+- When a slug contains a GUID pattern (e.g., `home-{userUid}`), the SDK automatically:
+  1. Detects the GUID suffix
+  2. Extracts the base slug and userUid
+  3. Enables draft content access for this request
+  4. Returns user's draft version or falls back to base content
+
+**Benefits:**
+- ✅ Zero configuration - works automatically with LeadCMS preview URLs
+- 🔒 Secure - only preview slugs (with valid GUID) can access drafts
+- 🔄 Backward compatible - normal slugs continue to require `publishedAt`
+- 🚀 Developer-friendly - no additional parameters needed
+
+**📖 See [Draft Handling Guide](./docs/DRAFT_HANDLING.md)** for more details on preview mode and draft content handling.
+
 ### Media API
 
 Media files are automatically synced during content pull:
