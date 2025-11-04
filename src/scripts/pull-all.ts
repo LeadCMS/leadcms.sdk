@@ -88,10 +88,5 @@ async function main(): Promise<void> {
 // Export the main function
 export { main as pullAll };
 
-// If this script is run directly, execute the main function
-if (typeof import.meta !== 'undefined' && process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error) => {
-    console.error("Error running LeadCMS pull:", error.message);
-    process.exit(1);
-  });
-}
+// Note: CLI execution moved to src/cli/bin/pull-all.ts
+// This file now only exports the function for programmatic use

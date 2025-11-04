@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * LeadCMS Login - Interactive token-based authentication
  */
@@ -86,12 +85,7 @@ async function main(): Promise<void> {
   }
 }
 
-// Handle direct script execution
-if (typeof import.meta !== 'undefined' && process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error) => {
-    console.error('Error:', error.message);
-    process.exit(1);
-  });
-}
+// Note: CLI execution moved to src/cli/bin/login.ts
+// This file now only exports the function for programmatic use
 
 export { main as loginLeadCMS };
