@@ -1,6 +1,6 @@
 {
   "name": "@leadcms/sdk",
-  "version": "2.2.5",
+  "version": "3.0.0",
   "description": "Official SDK and CLI tools for LeadCMS - framework-agnostic content management for static site generators",
   "type": "module",
   "main": "dist/index.js",
