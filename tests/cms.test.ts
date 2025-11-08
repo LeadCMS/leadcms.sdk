@@ -3,7 +3,6 @@ import {
   isContentDraft,
   getCMSContentBySlug,
   getCMSContentBySlugForLocale,
-  getCMSContentBySlugForLocaleWithDraftSupport,
   getAllContentSlugs,
   getAllContentSlugsForLocale,
   getContentTranslations,
@@ -82,18 +81,6 @@ describe('LeadCMS SDK Core Functionality', () => {
       expect(content).toBeNull();
     });
 
-    it('should return draft content when includeDrafts is true', () => {
-      const content = getCMSContentBySlug('draft-article', true);
-      expect(content).not.toBeNull();
-      expect(content?.title).toBe('Draft Article (No publishedAt)');
-    });
-
-    it('should return future content when includeDrafts is true', () => {
-      const content = getCMSContentBySlug('future-article', true);
-      expect(content).not.toBeNull();
-      expect(content?.title).toBe('Future Article');
-    });
-
     it('should handle JSON files correctly', () => {
       const content = getCMSContentBySlug('json-article');
       expect(content).not.toBeNull();
@@ -122,70 +109,9 @@ describe('LeadCMS SDK Core Functionality', () => {
       expect(content?.language).toBe('es');
     });
 
-    it('should respect draft filtering by locale', () => {
+    it('should filter out draft content in production mode', () => {
       const content = getCMSContentBySlugForLocale('draft-article', 'en');
-      expect(content).toBeNull();
-
-      const contentWithDrafts = getCMSContentBySlugForLocale('draft-article', 'en', true);
-      expect(contentWithDrafts).not.toBeNull();
-    });
-  });
-
-  describe('getCMSContentBySlugForLocaleWithDraftSupport', () => {
-    it('should return base content when no user draft exists', () => {
-      const content = getCMSContentBySlugForLocaleWithDraftSupport('published-article', 'en');
-      expect(content).not.toBeNull();
-      expect(content?.title).toBe('Published Article');
-    });
-
-    it('should return user draft when it exists, regardless of publishedAt', () => {
-      const content = getCMSContentBySlugForLocaleWithDraftSupport(
-        'published-article',
-        'en',
-        TEST_USER_UID
-      );
-      expect(content).not.toBeNull();
-      expect(content?.title).toBe('Published Article - User Draft');
-      // This draft has a future publishedAt but should still be returned
-      expect(content?.publishedAt).toBeInstanceOf(Date);
-    });
-
-    it('should return user-only draft content', () => {
-      const content = getCMSContentBySlugForLocaleWithDraftSupport(
-        'user-only-draft',
-        'en',
-        TEST_USER_UID
-      );
-      expect(content).not.toBeNull();
-      expect(content?.title).toBe('User Only Draft');
-    });
-
-    it('should return null for user-only draft when wrong userUid', () => {
-      const content = getCMSContentBySlugForLocaleWithDraftSupport(
-        'user-only-draft',
-        'en',
-        TEST_USER_UID_2
-      );
-      expect(content).toBeNull();
-    });
-
-    it('should respect includeDrafts for base content when no user draft', () => {
-      // Future article should be null by default
-      const content1 = getCMSContentBySlugForLocaleWithDraftSupport(
-        'future-article',
-        'en',
-        TEST_USER_UID_2 // Different user, no draft exists
-      );
-      expect(content1).toBeNull();
-
-      // But should be returned when includeDrafts is true
-      const content2 = getCMSContentBySlugForLocaleWithDraftSupport(
-        'future-article',
-        'en',
-        TEST_USER_UID_2,
-        true
-      );
-      expect(content2).not.toBeNull();
+      expect(content).toBeNull(); // Draft content is filtered out in test environment
     });
   });
 
@@ -201,14 +127,6 @@ describe('LeadCMS SDK Core Functionality', () => {
       expect(slugs).not.toContain('blog/post-2-draft');
     });
 
-    it('should include drafts when includeDrafts is true', () => {
-      const slugs = getAllContentSlugs(undefined, true);
-      expect(slugs).toContain('published-article');
-      expect(slugs).toContain('draft-article');
-      expect(slugs).toContain('future-article');
-      expect(slugs).toContain('blog/post-2-draft');
-    });
-
     it('should filter by content types', () => {
       const articleSlugs = getAllContentSlugs(['article']);
       expect(articleSlugs).toContain('published-article');
@@ -222,7 +140,7 @@ describe('LeadCMS SDK Core Functionality', () => {
     });
 
     it('should not include user-specific drafts in general listing', () => {
-      const slugs = getAllContentSlugs(undefined, true);
+      const slugs = getAllContentSlugs();
       expect(slugs).not.toContain(`published-article-${TEST_USER_UID}`);
       expect(slugs).not.toContain(`user-only-draft-${TEST_USER_UID}`);
     });
@@ -241,16 +159,12 @@ describe('LeadCMS SDK Core Functionality', () => {
       expect(slugs).toContain('blog/post-1');
     });
 
-    it('should handle user-specific drafts correctly', () => {
-      // Without includeDrafts, should return base content only
-      const slugs1 = getAllContentSlugsForLocale('en', undefined, false, TEST_USER_UID);
+    it('should handle user-specific content with userUid', () => {
+      // Without preview mode, userUid has no effect
+      const slugs1 = getAllContentSlugsForLocale('en', undefined, TEST_USER_UID);
       expect(slugs1).toContain('published-article');
-      expect(slugs1).not.toContain('draft-article');
-
-      // With includeDrafts and userUid, should return user's drafts
-      const slugs2 = getAllContentSlugsForLocale('en', undefined, true, TEST_USER_UID);
-      expect(slugs2).toContain('published-article'); // Base slug returned, but content would be user's version
-      expect(slugs2).toContain('user-only-draft'); // User-only draft
+      expect(slugs1).not.toContain('draft-article'); // Drafts filtered out in test environment
+      expect(slugs1).not.toContain('user-only-draft'); // User drafts filtered out in test environment
     });
   });
 
@@ -280,12 +194,6 @@ describe('LeadCMS SDK Core Functionality', () => {
       const translations = getContentTranslations('article-2'); // draft-article
       expect(translations).toHaveLength(0);
     });
-
-    it('should return draft translations when includeDrafts is true', () => {
-      const translations = getContentTranslations('article-2', true);
-      expect(translations).toHaveLength(1);
-      expect(translations[0].content.title).toBe('Draft Article (No publishedAt)');
-    });
   });
 
   describe('getAllContentRoutes', () => {
@@ -306,13 +214,6 @@ describe('LeadCMS SDK Core Functionality', () => {
     it('should filter by content types', () => {
       const routes = getAllContentRoutes(['blog']);
       expect(routes.every(r => r.slug.startsWith('blog/'))).toBe(true);
-    });
-
-    it('should handle draft filtering', () => {
-      const routesWithoutDrafts = getAllContentRoutes();
-      const routesWithDrafts = getAllContentRoutes(undefined, true);
-
-      expect(routesWithDrafts.length).toBeGreaterThan(routesWithoutDrafts.length);
     });
   });
 

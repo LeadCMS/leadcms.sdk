@@ -269,4 +269,48 @@ describe('Config Module', () => {
       // defaultLanguage might get overridden if there's a default in the code
     });
   });
+
+  describe('Preview Configuration', () => {
+    it('should load preview setting from environment variables', () => {
+      process.env.LEADCMS_URL = 'https://test.leadcms.com';
+      process.env.LEADCMS_PREVIEW = 'true';
+
+      const config = getConfig();
+
+      expect(config.preview).toBe(true);
+    });
+
+    it('should handle LEADCMS_PREVIEW=false', () => {
+      process.env.LEADCMS_URL = 'https://test.leadcms.com';
+      process.env.LEADCMS_PREVIEW = 'false';
+
+      const config = getConfig();
+
+      expect(config.preview).toBe(false);
+    });
+
+    it('should load preview setting from config file', () => {
+      fs.writeFileSync(testConfigPath, JSON.stringify({
+        url: 'https://test.leadcms.com',
+        preview: true
+      }));
+
+      const config = getConfig();
+
+      expect(config.preview).toBe(true);
+    });
+
+    it('should prioritize environment over config file for preview setting', () => {
+      fs.writeFileSync(testConfigPath, JSON.stringify({
+        url: 'https://test.leadcms.com',
+        preview: false
+      }));
+
+      process.env.LEADCMS_PREVIEW = 'true';
+
+      const config = getConfig();
+
+      expect(config.preview).toBe(true);
+    });
+  });
 });

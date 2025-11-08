@@ -1,4 +1,10 @@
-import { getCMSContentBySlugForLocale } from '../src/lib/cms';
+import {
+  getCMSContentBySlugForLocale,
+  getAllContentSlugsForLocale,
+  getAllContentRoutes,
+  getContentTranslations,
+} from '../src/lib/cms';
+import { configure, isPreviewMode } from '../src/lib/config';
 import { TEST_USER_UID } from './setup';
 
 // Additional GUID for testing various preview slug scenarios
@@ -110,12 +116,11 @@ describe('Preview Mode - Automatic Draft Access', () => {
       expect(content).toBeNull();
     });
 
-    it('should respect includeDrafts parameter for normal slugs', () => {
-      // With includeDrafts=true, should return draft content
-      const content = getCMSContentBySlugForLocale('draft-article', 'en', true);
+    it('should filter out draft content in test environment', () => {
+      // In test environment, draft content is filtered out by default
+      const content = getCMSContentBySlugForLocale('draft-article', 'en');
 
-      expect(content).not.toBeNull();
-      expect(content?.title).toBe('Draft Article (No publishedAt)');
+      expect(content).toBeNull(); // Filtered out in test environment
     });
   });
 
@@ -199,5 +204,205 @@ describe('Preview Mode - Automatic Draft Access', () => {
       // Should not enable draft access (GUID not at end)
       expect(content).toBeNull();
     });
+  });
+});
+
+// Store original environment values to restore after tests
+const originalNodeEnv = process.env.NODE_ENV;
+const originalLeadCMSPreview = process.env.LEADCMS_PREVIEW;
+
+describe('Unified Preview Mode Detection', () => {
+  beforeEach(() => {
+    // Clear any global configuration between tests
+    configure({} as any);
+    delete process.env.NODE_ENV;
+    delete process.env.LEADCMS_PREVIEW;
+  });
+
+  afterEach(() => {
+    // Restore original environment values
+    if (originalNodeEnv !== undefined) {
+      process.env.NODE_ENV = originalNodeEnv;
+    } else {
+      delete process.env.NODE_ENV;
+    }
+
+    if (originalLeadCMSPreview !== undefined) {
+      process.env.LEADCMS_PREVIEW = originalLeadCMSPreview;
+    } else {
+      delete process.env.LEADCMS_PREVIEW;
+    }
+  });
+
+  it('should detect preview mode when NODE_ENV is "development"', () => {
+    process.env.NODE_ENV = 'development';
+    expect(isPreviewMode()).toBe(true);
+  });
+
+  it('should detect preview mode when LEADCMS_PREVIEW is "true"', () => {
+    process.env.NODE_ENV = 'production'; // Ensure we're not in development mode
+    process.env.LEADCMS_PREVIEW = 'true';
+    expect(isPreviewMode()).toBe(true);
+  });
+
+  it('should not detect preview mode when LEADCMS_PREVIEW is "false"', () => {
+    process.env.LEADCMS_PREVIEW = 'false';
+    expect(isPreviewMode()).toBe(false);
+  });
+
+  it('should not detect preview mode in production', () => {
+    process.env.NODE_ENV = 'production';
+    expect(isPreviewMode()).toBe(false);
+  });
+
+  it('should not detect preview mode in production', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.LEADCMS_PREVIEW; // Ensure no override
+    expect(isPreviewMode()).toBe(false);
+  });
+
+  it('should prioritize LEADCMS_PREVIEW over NODE_ENV', () => {
+    process.env.NODE_ENV = 'development';
+    process.env.LEADCMS_PREVIEW = 'false';
+    expect(isPreviewMode()).toBe(false);
+  });
+
+  it('should prioritize global configuration over environment variables', () => {
+    process.env.NODE_ENV = 'preview';
+    process.env.LEADCMS_PREVIEW = 'true';
+    configure({ preview: false });
+    expect(isPreviewMode()).toBe(false);
+  });
+
+  it('should allow global configuration to enable preview mode', () => {
+    process.env.NODE_ENV = 'production';
+    configure({ preview: true });
+    expect(isPreviewMode()).toBe(true);
+  });
+});
+
+describe('Unified Content Retrieval in Different Modes', () => {
+  // Child sections manage their own environment variables
+
+  describe('Production Mode Behavior', () => {
+    beforeEach(() => {
+      configure({} as any);
+      delete process.env.LEADCMS_PREVIEW;
+      process.env.NODE_ENV = 'production';
+    });
+
+    it('should return only published content', () => {
+      const content = getCMSContentBySlugForLocale('published-article', 'en');
+      expect(content).not.toBeNull();
+      expect(content?.slug).toBe('published-article');
+    });
+
+    it('should exclude draft content', () => {
+      const content = getCMSContentBySlugForLocale('draft-article', 'en');
+      expect(content).toBeNull();
+    });
+
+    it('should allow user-specific slugs for preview URLs', () => {
+      // Preview URLs with valid GUIDs should work even in production mode
+      const userSpecificSlug = `published-article-${TEST_USER_UID}`;
+      const content = getCMSContentBySlugForLocale(userSpecificSlug, 'en');
+      expect(content).not.toBeNull();
+      expect(content?.slug).toBe(userSpecificSlug);
+    });
+
+    it('should exclude drafts from slug listings', () => {
+      const slugs = getAllContentSlugsForLocale('en');
+      expect(slugs).toContain('published-article');
+      expect(slugs).not.toContain('draft-article');
+      expect(slugs).not.toContain(`published-article-${TEST_USER_UID}`);
+    });
+  });
+
+  describe('Preview Mode Behavior', () => {
+    beforeEach(() => {
+      configure({} as any);
+      delete process.env.LEADCMS_PREVIEW;
+      process.env.NODE_ENV = 'development';
+    });
+
+    it('should include draft content by default', () => {
+      const content = getCMSContentBySlugForLocale('draft-article', 'en');
+      expect(content).not.toBeNull();
+      expect(content?.slug).toBe('draft-article');
+    });
+
+    it('should handle user-specific slugs', () => {
+      const userSpecificSlug = `published-article-${TEST_USER_UID}`;
+      const content = getCMSContentBySlugForLocale(userSpecificSlug, 'en');
+      expect(content).not.toBeNull();
+      expect(content?.slug).toBe(userSpecificSlug);
+    });
+
+    it('should exclude drafts from listings by default', () => {
+      const slugs = getAllContentSlugsForLocale('en');
+      expect(slugs).toContain('published-article');
+      expect(slugs).not.toContain('draft-article');
+      expect(slugs).not.toContain(`published-article-${TEST_USER_UID}`);
+    });
+
+    it('should exclude drafts in test environment by default', () => {
+      // Override to test environment for this specific test
+      const originalNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'test';
+
+      try {
+        const content = getCMSContentBySlugForLocale('draft-article', 'en');
+        expect(content).toBeNull(); // Filtered out in test environment by default
+      } finally {
+        // Restore original environment
+        if (originalNodeEnv !== undefined) {
+          process.env.NODE_ENV = originalNodeEnv;
+        } else {
+          delete process.env.NODE_ENV;
+        }
+      }
+    });
+  });
+});
+
+describe('Global Configuration Override', () => {
+  beforeEach(() => {
+    configure({} as any);
+    delete process.env.NODE_ENV;
+    delete process.env.LEADCMS_PREVIEW;
+  });
+
+  afterEach(() => {
+    if (originalNodeEnv !== undefined) {
+      process.env.NODE_ENV = originalNodeEnv;
+    } else {
+      delete process.env.NODE_ENV;
+    }
+
+    if (originalLeadCMSPreview !== undefined) {
+      process.env.LEADCMS_PREVIEW = originalLeadCMSPreview;
+    } else {
+      delete process.env.LEADCMS_PREVIEW;
+    }
+  });
+
+  it('should enable preview mode globally even in production', () => {
+    process.env.NODE_ENV = 'production';
+    configure({ preview: true });
+
+    expect(isPreviewMode()).toBe(true);
+
+    const content = getCMSContentBySlugForLocale('draft-article', 'en');
+    expect(content).not.toBeNull();
+  });
+
+  it('should disable preview mode globally even when environment suggests preview', () => {
+    process.env.NODE_ENV = 'preview';
+    configure({ preview: false });
+
+    expect(isPreviewMode()).toBe(false);
+
+    const content = getCMSContentBySlugForLocale('draft-article', 'en');
+    expect(content).toBeNull();
   });
 });

@@ -16,6 +16,8 @@ export interface LeadCMSConfig {
   mediaDir: string;
   /** Enable draft content support */
   enableDrafts: boolean;
+  /** Force preview mode on/off (overrides environment detection) */
+  preview?: boolean;
 }
 
 let globalConfig: LeadCMSConfig | null = null;
@@ -78,6 +80,7 @@ export function loadConfig(): LeadCMSConfig {
     commentsDir: mergedConfig.commentsDir || DEFAULT_CONFIG.commentsDir!,
     mediaDir: mergedConfig.mediaDir || DEFAULT_CONFIG.mediaDir!,
     enableDrafts: mergedConfig.enableDrafts || DEFAULT_CONFIG.enableDrafts!,
+    preview: mergedConfig.preview, // Optional - undefined if not provided
   };
 
   validateConfig(cleanConfig);
@@ -87,8 +90,32 @@ export function loadConfig(): LeadCMSConfig {
 /**
  * Set configuration programmatically
  */
-export function configure(config: LeadCMSConfig): void {
-  globalConfig = { ...globalConfig, ...config };
+export function configure(config: Partial<LeadCMSConfig>): void {
+  globalConfig = { ...globalConfig, ...config } as LeadCMSConfig;
+}
+
+/**
+ * Check if preview mode is enabled
+ * Priority order:
+ * 1. Global configuration (set via configure({ preview: true/false }))
+ * 2. Environment variables (LEADCMS_PREVIEW=false overrides development mode)
+ * 3. Development mode (NODE_ENV === 'development')
+ *
+ * @returns true if preview mode is enabled, false otherwise
+ */
+export function isPreviewMode(): boolean {
+  // 1. Check global configuration override
+  if (globalConfig?.preview !== undefined) {
+    return globalConfig.preview;
+  }
+
+  // 2. Check LEADCMS_PREVIEW=false override
+  if (process.env.LEADCMS_PREVIEW === "false") {
+    return false;
+  }
+
+  // 3. Check if we're in development mode
+  return process.env.NODE_ENV === "development";
 }
 
 
@@ -202,6 +229,10 @@ function loadConfigFromEnv(): Partial<LeadCMSConfig> {
 
   if (process.env.LEADCMS_ENABLE_DRAFTS) {
     config.enableDrafts = process.env.LEADCMS_ENABLE_DRAFTS === "true";
+  }
+
+  if (process.env.LEADCMS_PREVIEW) {
+    config.preview = process.env.LEADCMS_PREVIEW === "true";
   }
 
   return config;

@@ -4,6 +4,9 @@ import * as path from 'path';
 export const TEST_USER_UID = '550e8400-e29b-41d4-a716-446655440000';
 export const TEST_USER_UID_2 = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
 
+// Global config state for testing
+let mockGlobalConfig: any = {};
+
 // Mock the config module to use our test fixtures
 jest.mock('../src/lib/config', () => ({
   getConfig: () => ({
@@ -13,13 +16,36 @@ jest.mock('../src/lib/config', () => ({
     contentDir: path.join(__dirname, 'fixtures/.leadcms/content'),
     mediaDir: 'public/media',
     enableDrafts: true,
+    preview: mockGlobalConfig.preview,
   }),
+  configure: (config: any) => {
+    mockGlobalConfig = config || {};
+  },
+  isPreviewMode: () => {
+    // Check global configuration override first
+    if (mockGlobalConfig?.preview !== undefined) {
+      return mockGlobalConfig.preview;
+    }
+
+    // Check LEADCMS_PREVIEW environment variable for explicit override
+    if (process.env.LEADCMS_PREVIEW === 'false') {
+      return false;
+    }
+    if (process.env.LEADCMS_PREVIEW === 'true') {
+      return true;
+    }
+
+    // Default to development mode behavior
+    return process.env.NODE_ENV === 'development';
+  },
 }));
 
 // Set up environment variables for tests
 process.env.LEADCMS_URL = 'https://test.leadcms.com';
 process.env.LEADCMS_API_KEY = 'test-api-key';
 process.env.LEADCMS_DEFAULT_LANGUAGE = 'en';
+// Explicitly set NODE_ENV to test to ensure consistent behavior
+process.env.NODE_ENV = 'test';
 
 // Test constants for consistent time testing
 export const MOCK_CURRENT_TIME = '2024-10-29T12:00:00Z';

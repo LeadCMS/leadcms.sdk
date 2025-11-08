@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
-import { getConfig, type LeadCMSConfig } from "./config.js";
+import { getConfig, isPreviewMode, type LeadCMSConfig } from "./config.js";
 import { isValidLocaleCode } from "./locale-utils.js";
 
 // Type definitions for configuration objects
@@ -153,14 +153,13 @@ export function getContentDirForLocale(contentDir: string, locale?: string): str
 }
 
 /**
- * Get all content slugs for a specific locale with draft filtering options (internal helper)
+ * Get all content slugs for a specific locale with environment-based draft filtering (internal helper)
  * @internal
  */
 function getAllContentSlugsForLocaleFromDir(
   contentDir: string,
   locale?: string,
   contentTypes?: readonly string[],
-  includeDrafts?: boolean | null,
   draftUserUid?: string | null
 ): string[] {
   const config = getLeadCMSConfig();
@@ -177,21 +176,40 @@ function getAllContentSlugsForLocaleFromDir(
   }
 
   // Apply draft filtering logic
-  return applyDraftFiltering(slugs, includeDrafts, draftUserUid, contentDir, locale);
+  return applyDraftFiltering(slugs, draftUserUid, contentDir, locale);
 }
 
 /**
- * Get all content slugs for a specific locale with draft filtering options
- * @param locale - Locale code
+ * Get all content slugs for a specific locale
+ *
+ * Draft handling is automatic based on environment:
+ * - In production mode: Only returns published content slugs
+ * - In development mode: Only includes drafts when requested with userUid
+ * - Can be overridden with LEADCMS_PREVIEW=false to disable drafts
+ * - Never includes user-specific draft slugs in general listings
+ *
+ * @param locale - Locale code (optional, uses default language if not provided)
  * @param contentTypes - Optional array of content types to filter
- * @param includeDrafts - Whether to include draft content (default: null = false)
- * @param draftUserUid - Specific user UID for draft content (only relevant if includeDrafts is true)
+ * @param userUid - Optional user UID for user-specific draft content
+ * @returns Array of content slugs
+ *
+ * @example
+ * // In production - only published content
+ * getAllContentSlugsForLocale('en')
+ *
+ * @example
+ * // In development mode - published content by default
+ * process.env.NODE_ENV = 'development'
+ * getAllContentSlugsForLocale('en')
+ *
+ * @example
+ * // With user-specific content
+ * getAllContentSlugsForLocale('en', undefined, '550e8400-e29b-41d4-a716-446655440000')
  */
 export function getAllContentSlugsForLocale(
   locale?: string,
   contentTypes?: readonly string[],
-  includeDrafts?: boolean | null,
-  draftUserUid?: string | null
+  userUid?: string | null
 ): string[] {
   const config = getLeadCMSConfig();
   const contentDir = config.contentDir;
@@ -200,27 +218,32 @@ export function getAllContentSlugsForLocale(
     console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
     return [];
   }
-
-  return getAllContentSlugsForLocaleFromDir(contentDir, locale, contentTypes, includeDrafts, draftUserUid);
+  // Use the existing implementation with appropriate draft settings
+  return getAllContentSlugsForLocaleFromDir(
+    contentDir,
+    locale,
+    contentTypes,
+    userUid // draftUserUid
+  );
 }
 
 /**
- * Apply draft filtering logic to a list of slugs
+ * Apply draft filtering logic to a list of slugs based on environment and user context
  * @param slugs - Array of all slugs
- * @param includeDrafts - Whether to include draft content (null/false = filter out drafts)
- * @param draftUserUid - Specific user UID for draft content (only relevant if includeDrafts is true)
+ * @param draftUserUid - Specific user UID for draft content
  * @param contentDir - Content directory to load content from for publishedAt checking
  * @param locale - Locale for content loading
  */
 function applyDraftFiltering(
   slugs: string[],
-  includeDrafts?: boolean | null,
   draftUserUid?: string | null,
   contentDir?: string,
   locale?: string
 ): string[] {
-  // If includeDrafts is false or null, filter out all draft content
-  if (!includeDrafts) {
+  const shouldIncludeDrafts = isPreviewMode() && !!draftUserUid;
+
+  // If not in preview mode or no user UID provided, filter out all draft content
+  if (!shouldIncludeDrafts) {
     let filteredSlugs = filterOutDraftSlugs(slugs);
 
     // Also filter based on publishedAt if contentDir is available
@@ -235,15 +258,15 @@ function applyDraftFiltering(
     return filteredSlugs;
   }
 
-  // If includeDrafts is true and draftUserUid is specified,
+  // If in preview mode and draftUserUid is specified,
   // return base content with user's drafts overriding the originals
   // User-specific drafts are always included regardless of publishedAt
   if (draftUserUid) {
     return getBaseContentWithUserDraftOverrides(slugs, draftUserUid);
   }
 
-  // If includeDrafts is true but no specific user UID, return all slugs as-is
-  return slugs;
+  // Fallback: filter out user-specific drafts but allow published drafts
+  return filterOutDraftSlugs(slugs);
 }
 
 /**
@@ -267,18 +290,33 @@ function filterOutDraftSlugs(slugs: string[]): string[] {
  * Also includes user-only drafts (drafts that don't have a base version)
  */
 function getBaseContentWithUserDraftOverrides(slugs: string[], draftUserUid: string): string[] {
-  // First, get all base slugs (non-draft)
+  // First, get all base slugs (non-draft by GUID pattern)
   const baseSlugs = filterOutDraftSlugs(slugs);
-  const result: string[] = [...baseSlugs]; // Start with all base slugs
 
-  // Find user-only drafts (drafts that don't have a corresponding base slug)
-  const userDraftPattern = new RegExp(`-${draftUserUid}$`);
+  // Filter base slugs to only include published content (not draft by publishedAt)
+  // We need contentDir and locale to check publishedAt, so we get them from config
+  const config = getLeadCMSConfig();
+  const contentDir = config.contentDir;
+
+  let publishedBaseSlugs: string[] = baseSlugs;
+  if (contentDir) {
+    publishedBaseSlugs = baseSlugs.filter(slug => {
+      const localeContentDir = getContentDirForLocale(contentDir, undefined); // Use default locale logic
+      const content = getCMSContentBySlugFromDir(slug, localeContentDir);
+      return content && !isContentDraft(content);
+    });
+  }
+
+  const result: string[] = [...publishedBaseSlugs]; // Start with only published base slugs
+
+  // Find user-specific drafts (drafts that belong to this user)
+  const userDraftPattern = new RegExp(`-${draftUserUid.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
   const userDrafts = slugs.filter(slug => userDraftPattern.test(slug));
 
   for (const userDraft of userDrafts) {
     const baseSlug = userDraft.replace(userDraftPattern, '');
-    // If this is a user-only draft (no base version exists), add the base slug
-    if (!baseSlugs.includes(baseSlug)) {
+    // Add base slug for user-specific drafts (whether they have a base version or not)
+    if (!result.includes(baseSlug)) {
       result.push(baseSlug);
     }
   }
@@ -346,48 +384,6 @@ function getAllContentSlugsExcludingLanguageDirs(
 }
 
 /**
- * Get content by slug for a specific locale with optional draft support
- * @param slug - Content slug
- * @param locale - Locale code
- * @param userUid - Optional user UID for draft content
- * @param includeDrafts - Whether to include content that is draft based on publishedAt (default: false)
- */
-export function getCMSContentBySlugForLocaleWithDraftSupport(
-  slug: string,
-  locale: string,
-  userUid?: string | null,
-  includeDrafts: boolean = false
-): CMSContent | null {
-  const config = getLeadCMSConfig();
-  const contentDir = config.contentDir;
-
-  if (!contentDir) {
-    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
-    return null;
-  }
-
-  // If userUid is provided and this isn't already a draft slug, try draft version first
-  if (userUid && !extractUserUidFromSlug(slug)) {
-    const draftSlug = `${slug}-${userUid}`;
-    const draftContent = getCMSContentBySlugForLocaleFromDir(draftSlug, contentDir, locale);
-    if (draftContent) {
-      // Always return user-specific draft content when found, ignoring publishedAt logic
-      return draftContent;
-    }
-  }
-
-  // Fall back to regular content
-  const content = getCMSContentBySlugForLocaleFromDir(slug, contentDir, locale);
-
-  // Filter out drafts by default unless explicitly requested
-  if (content && !includeDrafts && isContentDraft(content)) {
-    return null;
-  }
-
-  return content;
-}
-
-/**
  * Get content by slug for a specific locale (internal helper)
  * @internal
  */
@@ -410,62 +406,95 @@ function getCMSContentBySlugForLocaleFromDir(
 /**
  * Get content by slug for a specific locale
  *
- * Automatically detects preview slugs (containing userUid/GUID pattern) and enables
- * draft content access without requiring explicit configuration.
+ * Draft handling is automatic based on environment:
+ * - In production mode: Only returns published content
+ * - In development mode: Returns drafts when requested directly by slug
+ * - Can be overridden with LEADCMS_PREVIEW=false to disable drafts in development
+ * - User-specific content is returned when userUid is provided (fallback to default if not found)
  *
  * @param slug - Content slug (e.g., 'home' or 'home-550e8400-e29b-41d4-a716-446655440000')
  * @param locale - Optional locale code
- * @param includeDrafts - Whether to include draft content (default: false)
+ * @param userUid - Optional user UID for user-specific draft content
  * @returns Content object or null if not found/not published
  *
  * @example
- * // Normal slug - requires publishedAt
+ * // In production mode - only published content
  * getCMSContentBySlugForLocale('home', 'en')
  *
  * @example
- * // Preview slug - automatically enables draft access
- * getCMSContentBySlugForLocale('home-550e8400-e29b-41d4-a716-446655440000', 'en')
+ * // In development mode - automatically includes drafts
+ * process.env.NODE_ENV = 'development'
+ * getCMSContentBySlugForLocale('home', 'en')
+ *
+ * @example
+ * // With user-specific content
+ * getCMSContentBySlugForLocale('home', 'en', '550e8400-e29b-41d4-a716-446655440000')
  */
 export function getCMSContentBySlugForLocale(
   slug: string,
   locale?: string,
-  includeDrafts: boolean = false
+  userUid?: string | null
 ): CMSContent | null {
   const config = getLeadCMSConfig();
   const contentDir = config.contentDir;
+  const shouldIncludeDrafts = isPreviewMode();
 
   if (!contentDir) {
     console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
     return null;
   }
 
-  // Detect preview slug (contains GUID pattern) and automatically enable draft access
-  const userUid = extractUserUidFromSlug(slug);
-  if (userUid) {
-    // Preview slug detected - extract base slug and use draft support
-    // Remove the GUID suffix to get the base slug by finding the last dash before the GUID
-    // Use case-insensitive search since GUID might be uppercase in the slug but normalized to lowercase in userUid
-    const guidPattern = new RegExp(`-${userUid.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
+  // Extract user UID from slug if present
+  const extractedUserUid = extractUserUidFromSlug(slug);
+
+  if (extractedUserUid) {
+    // User-specific slug detected - extract base slug
+    const guidPattern = new RegExp(`-${extractedUserUid.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
     const baseSlug = slug.replace(guidPattern, '');
 
-    // Try to get user-specific draft first, then fall back to base content
-    // Always enable includeDrafts for preview mode to allow draft content access
-    const content = getCMSContentBySlugForLocaleWithDraftSupport(baseSlug, locale || config.defaultLanguage, userUid, true);
+    // User-specific slugs with valid GUIDs should always work (for preview URLs)
 
-    // If content was found, update the slug to match the requested preview slug
-    if (content) {
-      content.slug = slug;
+    // Try user-specific draft first, then base content
+    const draftSlug = `${baseSlug}-${extractedUserUid}`;
+    const draftContent = getCMSContentBySlugForLocaleFromDir(draftSlug, contentDir, locale);
+    if (draftContent) {
+      draftContent.slug = slug; // Maintain the original preview slug
+      return draftContent;
     }
 
-    return content;
+    // Fall back to base content
+    const baseContent = getCMSContentBySlugForLocaleFromDir(baseSlug, contentDir, locale);
+    if (baseContent) {
+      baseContent.slug = slug; // Maintain the original preview slug
+      return baseContent;
+    }
+
+    return null;
   }
 
-  // Normal slug - apply standard draft filtering
+  // Handle user-specific content when userUid is provided as parameter
+  if (userUid) {
+    const userSpecificSlug = `${slug}-${userUid}`;
+    const userContent = getCMSContentBySlugForLocaleFromDir(userSpecificSlug, contentDir, locale);
+    if (userContent) {
+      return userContent;
+    }
+    // Fall back to default content
+  }
+
+  // Normal slug handling
   const content = getCMSContentBySlugForLocaleFromDir(slug, contentDir, locale);
 
-  // Filter out drafts by default unless explicitly requested
-  if (content && !includeDrafts && isContentDraft(content)) {
+  if (!content) {
     return null;
+  }
+
+  // Apply draft filtering logic based on environment
+  if (isContentDraft(content)) {
+    // Only include drafts if preview mode is enabled
+    if (!shouldIncludeDrafts) {
+      return null;
+    }
   }
 
   return content;
@@ -474,11 +503,11 @@ export function getCMSContentBySlugForLocale(
 /**
  * Get all translations of a content item by translationKey
  * @param translationKey - The translation key to search for
- * @param includeDrafts - Whether to include draft content (default: false)
+ * @param userUid - Optional user UID for user-specific draft content
  */
 export function getContentTranslations(
   translationKey: string,
-  includeDrafts: boolean = false
+  userUid?: string | null
 ): { locale: string; content: CMSContent }[] {
   const config = getLeadCMSConfig();
   const contentDir = config.contentDir;
@@ -492,19 +521,14 @@ export function getContentTranslations(
   const translations: { locale: string; content: CMSContent }[] = [];
 
   for (const locale of languages) {
-    const localeContentDir = getContentDirForLocale(contentDir, locale);
-
     // Search for content with matching translationKey
     try {
-      const slugs = getAllContentSlugsForLocaleFromDir(contentDir, locale, undefined, includeDrafts);
-      for (const slug of slugs) {
-        const content = getCMSContentBySlugFromDir(slug, localeContentDir);
-        if (content && content.translationKey === translationKey) {
-          // Filter out drafts by default unless explicitly requested
-          if (!includeDrafts && isContentDraft(content)) {
-            continue;
-          }
+      const slugs = getAllContentSlugsForLocale(locale, undefined, userUid);
 
+      for (const slug of slugs) {
+        const content = getCMSContentBySlugForLocale(slug, locale, userUid);
+
+        if (content && content.translationKey === translationKey) {
           content.language = content.language || locale;
           translations.push({ locale, content });
           break; // Found the translation for this locale
@@ -522,14 +546,14 @@ export function getContentTranslations(
 /**
  * Get all content routes for all locales in a framework-agnostic format
  * Returns an array of route objects with locale and slug information
+ *
  * @param contentTypes - Optional array of content types to filter
- * @param includeDrafts - Whether to include draft content (default: false)
- * @param draftUserUid - Specific user UID for draft content (only relevant if includeDrafts is true)
+ * @param userUid - Optional user UID for user-specific draft content
+ * @returns Array of route objects with locale and slug information
  */
 export function getAllContentRoutes(
   contentTypes?: readonly string[],
-  includeDrafts: boolean = false,
-  draftUserUid?: string | null
+  userUid?: string | null
 ): { locale: string; slug: string; slugParts: string[]; isDefaultLocale: boolean; path: string }[] {
   const config = getLeadCMSConfig();
   const contentDir = config.contentDir;
@@ -544,7 +568,7 @@ export function getAllContentRoutes(
   const allRoutes: { locale: string; slug: string; slugParts: string[]; isDefaultLocale: boolean; path: string }[] = [];
 
   for (const locale of languages) {
-    const slugs = getAllContentSlugsForLocaleFromDir(contentDir, locale, contentTypes, includeDrafts, draftUserUid);
+    const slugs = getAllContentSlugsForLocale(locale, contentTypes, userUid);
 
     for (const slug of slugs) {
       const isDefaultLocale = locale === defaultLanguage;
@@ -578,33 +602,18 @@ export function extractUserUidFromSlug(slug: string): string | null {
   return match ? match[1].toLowerCase() : null;
 }
 
+/**
+ * Get all content slugs for the default locale
+ *
+ * @param contentTypes - Optional array of content types to filter
+ * @param userUid - Optional user UID for user-specific draft content
+ */
 export function getAllContentSlugs(
   contentTypes?: readonly string[],
-  includeDrafts: boolean = false
+  userUid?: string | null
 ): string[] {
   const config = getLeadCMSConfig();
-  const contentDir = config.contentDir;
-
-  if (!contentDir) {
-    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
-    return [];
-  }
-
-  const allSlugs = getAllContentSlugsFromDir(contentDir, contentTypes);
-
-  // Always filter out user-specific draft slugs (with GUID pattern) - these should never appear in general listings
-  let filteredSlugs = filterOutDraftSlugs(allSlugs);
-
-  // Filter out draft content based on publishedAt if includeDrafts is false
-  if (!includeDrafts) {
-    // Then filter based on publishedAt
-    return filteredSlugs.filter(slug => {
-      const content = getCMSContentBySlugFromDir(slug, contentDir);
-      return content && !isContentDraft(content);
-    });
-  }
-
-  return filteredSlugs;
+  return getAllContentSlugsForLocale(config.defaultLanguage, contentTypes, userUid);
 }
 
 function getAllContentSlugsFromDir(contentDir: string, contentTypes?: readonly string[]): string[] {
@@ -656,23 +665,15 @@ function getAllContentSlugsFromDir(contentDir: string, contentTypes?: readonly s
   return walk(contentDir);
 }
 
-export function getCMSContentBySlug(slug: string, includeDrafts: boolean = false): CMSContent | null {
+/**
+ * Get content by slug for the default locale
+ *
+ * @param slug - Content slug
+ * @param userUid - Optional user UID for user-specific draft content
+ */
+export function getCMSContentBySlug(slug: string, userUid?: string | null): CMSContent | null {
   const config = getLeadCMSConfig();
-  const contentDir = config.contentDir;
-
-  if (!contentDir) {
-    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
-    return null;
-  }
-
-  const content = getCMSContentBySlugFromDir(slug, contentDir);
-
-  // Filter out drafts by default unless explicitly requested
-  if (content && !includeDrafts && isContentDraft(content)) {
-    return null;
-  }
-
-  return content;
+  return getCMSContentBySlugForLocale(slug, config.defaultLanguage, userUid);
 }
 
 function getCMSContentBySlugFromDir(slug: string, contentDir: string): CMSContent | null {
@@ -999,20 +1000,22 @@ function getFooterConfigInternal(contentDir: string, locale: string, userUid?: s
 }
 
 /**
- * Load header configuration using configured contentDir
+ * Load header configuration using configured contentDir (unified implementation)
  * @param locale - Locale code (optional, uses default language from config if not provided)
- * @param userUid - Optional user UID for draft content
+ * @param userUid - Optional user UID for draft content (for backward compatibility)
  */
 export function getHeaderConfig(locale?: string, userUid?: string | null): HeaderConfig | null {
+  // For backward compatibility, always respect userUid parameter when explicitly provided
   return loadContentConfig<HeaderConfig>('header', locale, userUid);
 }
 
 /**
- * Load footer configuration using configured contentDir
+ * Load footer configuration using configured contentDir (unified implementation)
  * @param locale - Locale code (optional, uses default language from config if not provided)
- * @param userUid - Optional user UID for draft content
+ * @param userUid - Optional user UID for draft content (for backward compatibility)
  */
 export function getFooterConfig(locale?: string, userUid?: string | null): FooterConfig | null {
+  // For backward compatibility, always respect userUid parameter when explicitly provided
   return loadContentConfig<FooterConfig>('footer', locale, userUid);
 }
 
@@ -1258,4 +1261,9 @@ export function getCommentsTreeForContent(
 ): import('./comment-utils.js').CommentTreeNode[] {
   return getCommentsTree("Content", contentId, language, options);
 }
+
+// Export preview mode detection function
+export { isPreviewMode } from "./config.js";
+
+
 
