@@ -321,14 +321,14 @@ describe('LeadCMS SDK - Advanced Draft Scenarios', () => {
       const user2Content = getAllContentForLocale('en', undefined, TEST_USER_UID_2);
       const generalContent = getAllContentForLocale('en');
 
-      // User 1 should get their user-only draft
+      // User 1 should get their user-only draft (with full filename-derived slug)
       const user1Slugs = user1Content.map(c => c.slug);
-      expect(user1Slugs).toContain('user-only-draft');
+      expect(user1Slugs).toContain('user-only-draft-550e8400-e29b-41d4-a716-446655440000');
 
-      // User 2 should get their drafts
+      // User 2 should get their drafts (with full filename-derived slugs)
       const user2Slugs = user2Content.map(c => c.slug);
-      expect(user2Slugs).toContain('secret-draft');
-      expect(user2Slugs).toContain('another-draft');
+      expect(user2Slugs).toContain('secret-draft-6ba7b810-9dad-11d1-80b4-00c04fd430c8');
+      expect(user2Slugs).toContain('another-draft-6ba7b810-9dad-11d1-80b4-00c04fd430c8');
 
       // Users should not see each other's drafts
       expect(user1Slugs).not.toContain('secret-draft');
@@ -376,8 +376,8 @@ describe('LeadCMS SDK - Advanced Draft Scenarios', () => {
       // Test that user gets their draft version when it exists, base version when it doesn\'t
       const userContent = getAllContentForLocale('en', undefined, TEST_USER_UID);
 
-      // Should get user draft version of published-article
-      const publishedArticle = userContent.find(c => c.slug === 'published-article');
+      // Should get user draft version of published-article (with full filename-derived slug)
+      const publishedArticle = userContent.find(c => c.slug === 'published-article-550e8400-e29b-41d4-a716-446655440000');
       expect(publishedArticle).toBeDefined();
       expect(publishedArticle!.title).toBe('Published Article - User Draft'); // User's version
 
@@ -385,6 +385,62 @@ describe('LeadCMS SDK - Advanced Draft Scenarios', () => {
       const jsonArticle = userContent.find(c => c.slug === 'json-article');
       expect(jsonArticle).toBeDefined();
       expect(jsonArticle!.title).toBe('JSON Article'); // Base version
+    });
+
+    it('should preserve filename-derived slugs instead of frontmatter slugs', () => {
+      // Test the issue: getAllContentForLocale should return filename-derived slugs,
+      // not the slug from frontmatter, to match the old getAllContentSlugsForLocale behavior
+
+      // Set up development mode to enable draft handling
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+
+      try {
+        // Get content using the new optimized function
+        const contentFromNewFunction = getAllContentForLocale('en', undefined, TEST_USER_UID);
+
+        // Get content using the old pattern (slugs first, then content)
+        const slugsFromOldPattern = getAllContentSlugsForLocale('en', undefined, TEST_USER_UID);
+        const contentFromOldPattern = slugsFromOldPattern.map(slug =>
+          getCMSContentBySlugForLocale(slug, 'en', TEST_USER_UID)
+        ).filter(content => content !== null);
+
+
+
+        // Find the introducing-leadcms content in both approaches
+        // Note: The bug is that new function returns frontmatter slug, old pattern returns filename slug
+        const newFunctionIntro = contentFromNewFunction.find(c => c.slug.startsWith('introducing-leadcms'));
+        const oldPatternIntro = contentFromOldPattern.find(c => c!.slug.startsWith('introducing-leadcms'));
+
+        // Both should find the content
+        expect(newFunctionIntro).toBeDefined();
+        expect(oldPatternIntro).toBeDefined();
+
+        // CRITICAL: The slug should come from filename, not frontmatter
+        // The file is named "introducing-leadcms-{userUid}.mdx"
+        // So the slug should be the full filename-derived slug with user ID
+        expect(newFunctionIntro!.slug).toBe('introducing-leadcms-550e8400-e29b-41d4-a716-446655440000');
+        expect(oldPatternIntro!.slug).toBe('introducing-leadcms-550e8400-e29b-41d4-a716-446655440000');
+
+        // The title should still come from frontmatter (that's correct behavior)
+        expect(newFunctionIntro!.title).toBe('Introducing LeadCMS - User Draft');
+
+        // Debug: Check what we actually get
+
+
+        // Verify that the frontmatter slug is different (to confirm our test setup)
+        // The frontmatter has slug: "different-slug-from-frontmatter" but filename determines the actual slug
+        expect(newFunctionIntro!.slug).not.toBe('different-slug-from-frontmatter');
+        expect(newFunctionIntro!.slug).not.toBe('also-different-slug-in-base');
+
+      } finally {
+        // Restore environment
+        if (originalEnv !== undefined) {
+          process.env.NODE_ENV = originalEnv;
+        } else {
+          delete process.env.NODE_ENV;
+        }
+      }
     });
 
     it('should respect environment-based draft filtering', () => {

@@ -299,18 +299,21 @@ export function getAllContentForLocale(
 
       if (extractedUserUid) {
         // This is a user-specific preview slug (e.g., "article-user-guid")
+        // For preview URLs, we should maintain the preview slug for consistency
         // Try to get the user's draft version first
         const userSlug = `${slug}-${extractedUserUid}`;
         content = getCMSContentBySlugFromDir(userSlug, localeContentDir);
 
         if (content) {
-          content.slug = slug; // Maintain the preview slug
+          // For preview URLs, maintain the preview slug (the original slug parameter)
+          content.slug = slug;
         } else {
-          // Fall back to base content
+          // Fall back to base content but keep preview slug for URL consistency
           const baseSlug = slug.replace(new RegExp(`-${extractedUserUid.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i'), '');
           content = getCMSContentBySlugFromDir(baseSlug, localeContentDir);
           if (content) {
-            content.slug = slug; // Maintain the preview slug
+            // For preview URLs, maintain the preview slug (the original slug parameter)
+            content.slug = slug;
           }
         }
       } else {
@@ -320,10 +323,12 @@ export function getAllContentForLocale(
 
         if (userDraft) {
           content = userDraft;
-          content.slug = slug; // Use the base slug, not the user-specific one
+          // Keep the filename-derived slug (userSlug) - this is the expected behavior
+          // The user has a draft, so they should see the draft with its filename-derived slug
         } else {
           // Fall back to regular content
           content = getCMSContentBySlugFromDir(slug, localeContentDir);
+          // Keep the base slug - this is correct since there's no user-specific version
         }
       }
     } else {
