@@ -228,6 +228,118 @@ export function getAllContentSlugsForLocale(
 }
 
 /**
+ * Get all content objects for a specific locale
+ *
+ * This function optimizes the common pattern of first getting slugs and then fetching content one by one.
+ * Instead of calling getAllContentSlugsForLocale() followed by multiple getCMSContentBySlugForLocale() calls,
+ * this function returns the actual content objects directly.
+ *
+ * Draft handling is automatic based on environment:
+ * - In production mode: Only returns published content
+ * - In development mode: Only includes drafts when requested with userUid
+ * - Can be overridden with LEADCMS_PREVIEW=false to disable drafts
+ * - Never includes user-specific draft content in general listings
+ *
+ * @param locale - Locale code (optional, uses default language if not provided)
+ * @param contentTypes - Optional array of content types to filter
+ * @param userUid - Optional user UID for user-specific draft content
+ * @returns Array of content objects
+ *
+ * @example
+ * // Get all blog posts directly (instead of slugs + individual fetches)
+ * const blogPosts = getAllContentForLocale('en', ['blog-article']);
+ * 
+ * @example
+ * // Get user-specific content in development mode
+ * const userContent = getAllContentForLocale('en', undefined, userUid);
+ *
+ * @example
+ * // Transform to typed objects
+ * const blogPosts: BlogPost[] = getAllContentForLocale('en', ['blog-article'])
+ *   .filter(content => content.type === 'blog-article')
+ *   .map(content => ({
+ *     slug: content.slug,
+ *     title: content.title || '',
+ *     description: content.description || '',
+ *     // ... other mappings
+ *   }));
+ */
+export function getAllContentForLocale(
+  locale?: string,
+  contentTypes?: readonly string[],
+  userUid?: string | null
+): CMSContent[] {
+  const config = getLeadCMSConfig();
+  const contentDir = config.contentDir;
+
+  if (!contentDir) {
+    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
+    return [];
+  }
+
+  // Get all slugs using the existing logic
+  const slugs = getAllContentSlugsForLocaleFromDir(
+    contentDir,
+    locale,
+    contentTypes,
+    userUid // draftUserUid
+  );
+
+  const localeContentDir = getContentDirForLocale(contentDir, locale);
+  const results: CMSContent[] = [];
+
+  // Fetch content for each slug
+  for (const slug of slugs) {
+    let content: CMSContent | null = null;
+
+    // Handle user-specific content if userUid is provided
+    if (userUid) {
+      // Check if this slug represents user-specific content
+      const extractedUserUid = extractUserUidFromSlug(slug);
+      
+      if (extractedUserUid) {
+        // This is a user-specific preview slug (e.g., "article-user-guid")
+        // Try to get the user's draft version first
+        const userSlug = `${slug}-${extractedUserUid}`;
+        content = getCMSContentBySlugFromDir(userSlug, localeContentDir);
+        
+        if (content) {
+          content.slug = slug; // Maintain the preview slug
+        } else {
+          // Fall back to base content
+          const baseSlug = slug.replace(new RegExp(`-${extractedUserUid.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i'), '');
+          content = getCMSContentBySlugFromDir(baseSlug, localeContentDir);
+          if (content) {
+            content.slug = slug; // Maintain the preview slug
+          }
+        }
+      } else {
+        // Regular slug - check if user has a draft version
+        const userSlug = `${slug}-${userUid}`;
+        const userDraft = getCMSContentBySlugFromDir(userSlug, localeContentDir);
+        
+        if (userDraft) {
+          content = userDraft;
+          content.slug = slug; // Use the base slug, not the user-specific one
+        } else {
+          // Fall back to regular content
+          content = getCMSContentBySlugFromDir(slug, localeContentDir);
+        }
+      }
+    } else {
+      // No userUid provided - get regular content
+      content = getCMSContentBySlugFromDir(slug, localeContentDir);
+    }
+
+    if (content) {
+      results.push(content);
+    }
+  }
+
+  return results;
+}
+
+/**
  * Apply draft filtering logic to a list of slugs based on environment and user context
  * @param slugs - Array of all slugs
  * @param draftUserUid - Specific user UID for draft content

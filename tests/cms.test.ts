@@ -5,6 +5,7 @@ import {
   getCMSContentBySlugForLocale,
   getAllContentSlugs,
   getAllContentSlugsForLocale,
+  getAllContentForLocale,
   getContentTranslations,
   getAllContentRoutes,
   extractUserUidFromSlug,
@@ -165,6 +166,58 @@ describe('LeadCMS SDK Core Functionality', () => {
       expect(slugs1).toContain('published-article');
       expect(slugs1).not.toContain('draft-article'); // Drafts filtered out in test environment
       expect(slugs1).not.toContain('user-only-draft'); // User drafts filtered out in test environment
+    });
+  });
+
+  describe('getAllContentForLocale', () => {
+    it('should return content objects directly', () => {
+      const content = getAllContentForLocale('en');
+      expect(Array.isArray(content)).toBe(true);
+      expect(content.length).toBeGreaterThan(0);
+      
+      // Should contain actual content objects
+      content.forEach(item => {
+        expect(item).toHaveProperty('slug');
+        expect(item).toHaveProperty('title');
+        expect(item).toHaveProperty('type');
+      });
+      
+      // Should contain expected content
+      const slugs = content.map(c => c.slug);
+      expect(slugs).toContain('published-article');
+      expect(slugs).toContain('json-article');
+    });
+
+    it('should filter by content type', () => {
+      const articles = getAllContentForLocale('en', ['article']);
+      const blogs = getAllContentForLocale('en', ['blog']);
+      
+      // All articles should have article type
+      articles.forEach(content => {
+        expect(content.type).toBe('article');
+      });
+      
+      // All blogs should have blog type  
+      blogs.forEach(content => {
+        expect(content.type).toBe('blog');
+      });
+    });
+
+    it('should be equivalent to getAllContentSlugsForLocale + individual fetches', () => {
+      // Compare new method with old pattern
+      const directContent = getAllContentForLocale('en', ['article']);
+      
+      const slugs = getAllContentSlugsForLocale('en', ['article']);
+      const individualContent = slugs
+        .map(slug => getCMSContentBySlugForLocale(slug, 'en'))
+        .filter(content => content !== null);
+      
+      expect(directContent.length).toBe(individualContent.length);
+      
+      // Should have same slugs
+      const directSlugs = directContent.map(c => c.slug).sort();
+      const individualSlugs = individualContent.map(c => c!.slug).sort();
+      expect(directSlugs).toEqual(individualSlugs);
     });
   });
 

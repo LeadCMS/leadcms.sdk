@@ -1,6 +1,7 @@
 import {
   getAllContentSlugsForLocale,
   getCMSContentBySlugForLocale,
+  getAllContentForLocale,
   getAllContentRoutes,
 } from '../src/lib/cms';
 import { TEST_USER_UID, TEST_USER_UID_2 } from './setup';
@@ -258,6 +259,168 @@ describe('LeadCMS SDK - Advanced Draft Scenarios', () => {
       expect(user2Slugs).not.toContain('future-article'); // Future article, not user-specific
       expect(user1Slugs).not.toContain('blog/post-2-draft'); // Blog draft, not user-specific
       expect(user2Slugs).not.toContain('blog/post-2-draft'); // Blog draft, not user-specific
+    });
+  });
+
+  describe('getAllContentForLocale - Optimized Content Retrieval', () => {
+    beforeEach(() => {
+      // Set up development mode for draft testing
+      process.env.NODE_ENV = 'development';
+    });
+
+    afterEach(() => {
+      // Clean up
+      delete process.env.NODE_ENV;
+    });
+
+    it('should return content objects directly instead of requiring slug + individual fetches', () => {
+      // Test the optimization: get content directly instead of slugs + multiple fetches
+      const contentObjects = getAllContentForLocale('en', ['article']);
+      
+      expect(Array.isArray(contentObjects)).toBe(true);
+      expect(contentObjects.length).toBeGreaterThan(0);
+      
+      // Should contain actual content objects with expected properties
+      contentObjects.forEach(content => {
+        expect(content).toHaveProperty('slug');
+        expect(content).toHaveProperty('title');
+        expect(content).toHaveProperty('type');
+        expect(content.type).toBe('article');
+      });
+      
+      // Should contain expected articles
+      const slugs = contentObjects.map(c => c.slug);
+      expect(slugs).toContain('published-article');
+      expect(slugs).toContain('json-article');
+    });
+
+    it('should respect content type filtering', () => {
+      // Test filtering by content type
+      const blogContent = getAllContentForLocale('en', ['blog']);
+      const articleContent = getAllContentForLocale('en', ['article']);
+      const allContent = getAllContentForLocale('en');
+
+      // Blog content should only contain blog type
+      blogContent.forEach(content => {
+        expect(content.type).toBe('blog');
+      });
+
+      // Article content should only contain article type
+      articleContent.forEach(content => {
+        expect(content.type).toBe('article');
+      });
+
+      // All content should contain more items than filtered results
+      expect(allContent.length).toBeGreaterThan(blogContent.length);
+      expect(allContent.length).toBeGreaterThan(articleContent.length);
+    });
+
+    it('should handle user-specific drafts correctly', () => {
+      // Test user-specific draft handling
+      const user1Content = getAllContentForLocale('en', undefined, TEST_USER_UID);
+      const user2Content = getAllContentForLocale('en', undefined, TEST_USER_UID_2);
+      const generalContent = getAllContentForLocale('en');
+
+      // User 1 should get their user-only draft
+      const user1Slugs = user1Content.map(c => c.slug);
+      expect(user1Slugs).toContain('user-only-draft');
+
+      // User 2 should get their drafts
+      const user2Slugs = user2Content.map(c => c.slug);  
+      expect(user2Slugs).toContain('secret-draft');
+      expect(user2Slugs).toContain('another-draft');
+
+      // Users should not see each other's drafts
+      expect(user1Slugs).not.toContain('secret-draft');
+      expect(user1Slugs).not.toContain('another-draft');
+      expect(user2Slugs).not.toContain('user-only-draft');
+
+      // General content should not include user-specific drafts
+      const generalSlugs = generalContent.map(c => c.slug);
+      expect(generalSlugs).not.toContain('user-only-draft');
+      expect(generalSlugs).not.toContain('secret-draft');
+      expect(generalSlugs).not.toContain('another-draft');
+    });
+
+    it('should be equivalent to getAllContentSlugsForLocale + getCMSContentBySlugForLocale pattern', () => {
+      // Test that the new function produces the same results as the old pattern
+      
+      // Old pattern: get slugs then fetch content
+      const slugs = getAllContentSlugsForLocale('en', ['article']);
+      const oldPatternContent = slugs
+        .map(slug => getCMSContentBySlugForLocale(slug, 'en'))
+        .filter(content => content !== null);
+
+      // New pattern: get content directly
+      const newPatternContent = getAllContentForLocale('en', ['article']);
+
+      // Should have the same number of results
+      expect(newPatternContent.length).toBe(oldPatternContent.length);
+
+      // Should contain the same slugs
+      const oldSlugs = oldPatternContent.map(c => c!.slug).sort();
+      const newSlugs = newPatternContent.map(c => c.slug).sort();
+      expect(newSlugs).toEqual(oldSlugs);
+
+      // Content objects should be equivalent
+      oldPatternContent.forEach(oldContent => {
+        const newContent = newPatternContent.find(c => c.slug === oldContent!.slug);
+        expect(newContent).toBeDefined();
+        expect(newContent!.title).toBe(oldContent!.title);
+        expect(newContent!.type).toBe(oldContent!.type);
+        expect(newContent!.body).toBe(oldContent!.body);
+      });
+    });
+
+    it('should handle user-specific draft overrides correctly', () => {
+      // Test that user gets their draft version when it exists, base version when it doesn\'t
+      const userContent = getAllContentForLocale('en', undefined, TEST_USER_UID);
+      
+      // Should get user draft version of published-article
+      const publishedArticle = userContent.find(c => c.slug === 'published-article');
+      expect(publishedArticle).toBeDefined();
+      expect(publishedArticle!.title).toBe('Published Article - User Draft'); // User's version
+
+      // Should get base version of articles without user drafts
+      const jsonArticle = userContent.find(c => c.slug === 'json-article');
+      expect(jsonArticle).toBeDefined();
+      expect(jsonArticle!.title).toBe('JSON Article'); // Base version
+    });
+
+    it('should respect environment-based draft filtering', () => {
+      // Test production mode - should exclude drafts
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+
+      const productionContent = getAllContentForLocale('en');
+      const productionSlugs = productionContent.map(c => c.slug);
+
+      // Should not include draft content in production
+      expect(productionSlugs).not.toContain('draft-article');
+      expect(productionSlugs).not.toContain('future-article');
+      expect(productionSlugs).not.toContain('blog/post-2-draft');
+
+      // Should include published content
+      expect(productionSlugs).toContain('published-article');
+      expect(productionSlugs).toContain('json-article');
+
+      // Restore environment
+      if (originalEnv !== undefined) {
+        process.env.NODE_ENV = originalEnv;
+      } else {
+        delete process.env.NODE_ENV;
+      }
+    });
+
+    it('should handle empty results gracefully', () => {
+      // Test with non-existent content type
+      const emptyResults = getAllContentForLocale('en', ['non-existent-type']);
+      expect(emptyResults).toEqual([]);
+
+      // Test with non-existent locale
+      const nonExistentLocaleResults = getAllContentForLocale('xx', ['article']);
+      expect(Array.isArray(nonExistentLocaleResults)).toBe(true);
+      // Results may be empty or contain default language content depending on implementation
     });
   });
 
