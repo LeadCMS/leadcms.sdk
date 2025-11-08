@@ -174,14 +174,14 @@ describe('LeadCMS SDK Core Functionality', () => {
       const content = getAllContentForLocale('en');
       expect(Array.isArray(content)).toBe(true);
       expect(content.length).toBeGreaterThan(0);
-      
+
       // Should contain actual content objects
       content.forEach(item => {
         expect(item).toHaveProperty('slug');
         expect(item).toHaveProperty('title');
         expect(item).toHaveProperty('type');
       });
-      
+
       // Should contain expected content
       const slugs = content.map(c => c.slug);
       expect(slugs).toContain('published-article');
@@ -191,13 +191,13 @@ describe('LeadCMS SDK Core Functionality', () => {
     it('should filter by content type', () => {
       const articles = getAllContentForLocale('en', ['article']);
       const blogs = getAllContentForLocale('en', ['blog']);
-      
+
       // All articles should have article type
       articles.forEach(content => {
         expect(content.type).toBe('article');
       });
-      
-      // All blogs should have blog type  
+
+      // All blogs should have blog type
       blogs.forEach(content => {
         expect(content.type).toBe('blog');
       });
@@ -206,14 +206,14 @@ describe('LeadCMS SDK Core Functionality', () => {
     it('should be equivalent to getAllContentSlugsForLocale + individual fetches', () => {
       // Compare new method with old pattern
       const directContent = getAllContentForLocale('en', ['article']);
-      
+
       const slugs = getAllContentSlugsForLocale('en', ['article']);
       const individualContent = slugs
         .map(slug => getCMSContentBySlugForLocale(slug, 'en'))
         .filter(content => content !== null);
-      
+
       expect(directContent.length).toBe(individualContent.length);
-      
+
       // Should have same slugs
       const directSlugs = directContent.map(c => c.slug).sort();
       const individualSlugs = individualContent.map(c => c!.slug).sort();

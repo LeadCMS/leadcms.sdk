@@ -276,10 +276,10 @@ describe('LeadCMS SDK - Advanced Draft Scenarios', () => {
     it('should return content objects directly instead of requiring slug + individual fetches', () => {
       // Test the optimization: get content directly instead of slugs + multiple fetches
       const contentObjects = getAllContentForLocale('en', ['article']);
-      
+
       expect(Array.isArray(contentObjects)).toBe(true);
       expect(contentObjects.length).toBeGreaterThan(0);
-      
+
       // Should contain actual content objects with expected properties
       contentObjects.forEach(content => {
         expect(content).toHaveProperty('slug');
@@ -287,7 +287,7 @@ describe('LeadCMS SDK - Advanced Draft Scenarios', () => {
         expect(content).toHaveProperty('type');
         expect(content.type).toBe('article');
       });
-      
+
       // Should contain expected articles
       const slugs = contentObjects.map(c => c.slug);
       expect(slugs).toContain('published-article');
@@ -326,7 +326,7 @@ describe('LeadCMS SDK - Advanced Draft Scenarios', () => {
       expect(user1Slugs).toContain('user-only-draft');
 
       // User 2 should get their drafts
-      const user2Slugs = user2Content.map(c => c.slug);  
+      const user2Slugs = user2Content.map(c => c.slug);
       expect(user2Slugs).toContain('secret-draft');
       expect(user2Slugs).toContain('another-draft');
 
@@ -344,7 +344,7 @@ describe('LeadCMS SDK - Advanced Draft Scenarios', () => {
 
     it('should be equivalent to getAllContentSlugsForLocale + getCMSContentBySlugForLocale pattern', () => {
       // Test that the new function produces the same results as the old pattern
-      
+
       // Old pattern: get slugs then fetch content
       const slugs = getAllContentSlugsForLocale('en', ['article']);
       const oldPatternContent = slugs
@@ -375,7 +375,7 @@ describe('LeadCMS SDK - Advanced Draft Scenarios', () => {
     it('should handle user-specific draft overrides correctly', () => {
       // Test that user gets their draft version when it exists, base version when it doesn\'t
       const userContent = getAllContentForLocale('en', undefined, TEST_USER_UID);
-      
+
       // Should get user draft version of published-article
       const publishedArticle = userContent.find(c => c.slug === 'published-article');
       expect(publishedArticle).toBeDefined();

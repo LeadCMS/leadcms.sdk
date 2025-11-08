@@ -12,7 +12,7 @@ export type { CommentTreeNode, CommentTreeOptions, CommentStatistics, CommentSor
 //
 // Core functions for accessing LeadCMS content:
 // - getCMSContentBySlugForLocale() - Get content by slug
-// - getAllContentSlugsForLocale() - Get all content slugs  
+// - getAllContentSlugsForLocale() - Get all content slugs
 // - getAllContentForLocale() - Get content objects directly (optimized)
 // - getAllContentRoutes() - Get all routes for static generation
 // - getAvailableLanguages() - Get supported languages

@@ -248,7 +248,7 @@ export function getAllContentSlugsForLocale(
  * @example
  * // Get all blog posts directly (instead of slugs + individual fetches)
  * const blogPosts = getAllContentForLocale('en', ['blog-article']);
- * 
+ *
  * @example
  * // Get user-specific content in development mode
  * const userContent = getAllContentForLocale('en', undefined, userUid);
@@ -296,13 +296,13 @@ export function getAllContentForLocale(
     if (userUid) {
       // Check if this slug represents user-specific content
       const extractedUserUid = extractUserUidFromSlug(slug);
-      
+
       if (extractedUserUid) {
         // This is a user-specific preview slug (e.g., "article-user-guid")
         // Try to get the user's draft version first
         const userSlug = `${slug}-${extractedUserUid}`;
         content = getCMSContentBySlugFromDir(userSlug, localeContentDir);
-        
+
         if (content) {
           content.slug = slug; // Maintain the preview slug
         } else {
@@ -317,7 +317,7 @@ export function getAllContentForLocale(
         // Regular slug - check if user has a draft version
         const userSlug = `${slug}-${userUid}`;
         const userDraft = getCMSContentBySlugFromDir(userSlug, localeContentDir);
-        
+
         if (userDraft) {
           content = userDraft;
           content.slug = slug; // Use the base slug, not the user-specific one
