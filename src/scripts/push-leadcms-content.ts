@@ -46,6 +46,7 @@ interface ContentOperations {
   rename: MatchOperation[]; // Slug changed but same content
   typeChange: MatchOperation[]; // Content type changed
   conflict: MatchOperation[];
+  delete: MatchOperation[]; // Remote content not present locally
 }
 
 interface PushOptions {
@@ -55,6 +56,8 @@ interface PushOptions {
   targetSlug?: string;    // Target specific content by slug
   showDetailedPreview?: boolean;  // Show detailed diff preview for all files
   dryRun?: boolean;       // Show API calls without executing them
+  allowDelete?: boolean;  // Allow deletion of remote content not present locally
+  showDelete?: boolean;   // Show deletion operations in status output
 }
 
 interface ExecutionOptions {
@@ -253,14 +256,15 @@ async function hasActualContentChanges(local: LocalContentItem, remote: RemoteCo
 /**
  * Match local content with remote content
  */
-async function matchContent(localContent: LocalContentItem[], remoteContent: RemoteContentItem[], typeMap?: Record<string, string>): Promise<ContentOperations> {
+async function matchContent(localContent: LocalContentItem[], remoteContent: RemoteContentItem[], typeMap?: Record<string, string>, allowDelete: boolean = false): Promise<ContentOperations> {
 
   const operations: ContentOperations = {
     create: [],
     update: [],
     rename: [],
     typeChange: [],
-    conflict: []
+    conflict: [],
+    delete: []
   };
 
   for (const local of localContent) {
@@ -361,6 +365,40 @@ async function matchContent(localContent: LocalContentItem[], remoteContent: Rem
       operations.create.push({
         local
       });
+    }
+  }
+
+  // Check for deleted content (remote but not local) if deletion is allowed
+  if (allowDelete) {
+    // Create a set of local content IDs and slugs for quick lookup
+    const localIds = new Set(localContent.map(c => c.metadata.id).filter(id => id));
+    const localSlugs = new Map<string, string>();
+    for (const local of localContent) {
+      const key = `${local.slug}:${local.locale}`;
+      localSlugs.set(key, local.slug);
+    }
+
+    for (const remote of remoteContent) {
+      const isMatchedById = remote.id && localIds.has(remote.id);
+      const key = `${remote.slug}:${remote.language || defaultLanguage}`;
+      const isMatchedBySlug = localSlugs.has(key);
+
+      if (!isMatchedById && !isMatchedBySlug) {
+        // This remote content doesn't exist locally anymore
+        operations.delete.push({
+          local: {
+            filePath: '',
+            slug: remote.slug,
+            locale: remote.language || defaultLanguage,
+            type: remote.type,
+            metadata: {},
+            body: '',
+            isLocal: true
+          },
+          remote,
+          reason: 'Content removed locally'
+        });
+      }
     }
   }
 
@@ -485,7 +523,8 @@ function filterContentOperations(operations: ContentOperations, targetId?: strin
     update: operations.update.filter(matchesTarget),
     rename: operations.rename.filter(matchesTarget),
     typeChange: operations.typeChange.filter(matchesTarget),
-    conflict: operations.conflict.filter(matchesTarget)
+    conflict: operations.conflict.filter(matchesTarget),
+    delete: operations.delete.filter(matchesTarget)
   };
 }
 
@@ -574,7 +613,7 @@ async function displayDetailedDiff(operation: MatchOperation, operationType: str
 /**
  * Display status/preview of changes
  */
-async function displayStatus(operations: ContentOperations, isStatusOnly: boolean = false, isSingleFile: boolean = false, showDetailedPreview: boolean = false, typeMap?: Record<string, string>): Promise<void> {
+async function displayStatus(operations: ContentOperations, isStatusOnly: boolean = false, isSingleFile: boolean = false, showDetailedPreview: boolean = false, typeMap?: Record<string, string>, showDelete: boolean = false): Promise<void> {
   if (isSingleFile) {
     colorConsole.important('\n📄 LeadCMS File Status');
   } else {
@@ -614,9 +653,12 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
     return;
   }
 
+  // Filter delete operations if showDelete is false
+  const deleteOpsToShow = showDelete ? operations.delete : [];
+
   // Changes to be synced (like git's "Changes to be committed")
-  if (operations.create.length > 0 || operations.update.length > 0 || operations.rename.length > 0 || operations.typeChange.length > 0) {
-    const syncableChanges = operations.create.length + operations.update.length + operations.rename.length + operations.typeChange.length;
+  if (operations.create.length > 0 || operations.update.length > 0 || operations.rename.length > 0 || operations.typeChange.length > 0 || deleteOpsToShow.length > 0) {
+    const syncableChanges = operations.create.length + operations.update.length + operations.rename.length + operations.typeChange.length + deleteOpsToShow.length;
     console.log(`Changes to be synced (${syncableChanges} files):`);
     if (!isStatusOnly) {
       console.log('  (use "leadcms status" to see sync status)');
@@ -667,6 +709,14 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
       colorConsole.log(`        ${statusColors.typeChange('type change:')}${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${typeChangeLabel} ${colorConsole.gray(idLabel)}`);
     }
 
+    // Deleted content (remote but not local) - only show if showDelete is true
+    for (const op of sortOperations([...deleteOpsToShow])) {
+      const typeLabel = (op.remote?.type || 'unknown').padEnd(12);
+      const localeLabel = `[${op.remote?.language || 'unknown'}]`.padEnd(6);
+      const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
+      colorConsole.log(`        ${statusColors.conflict('deleted:')}    ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.remote?.slug || 'unknown')} ${colorConsole.gray(idLabel)}`);
+    }
+
     // Show detailed previews if requested (and not in single file mode which already shows them)
     if (showDetailedPreview && !isSingleFile) {
       console.log('');
@@ -706,7 +756,8 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
     for (const op of sortedConflicts) {
       const typeLabel = (op.local.type || 'unknown').padEnd(12);
       const localeLabel = `[${op.local.locale || 'unknown'}]`.padEnd(6);
-      colorConsole.log(`        ${statusColors.conflict('conflict:')}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)}`);
+      const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
+      colorConsole.log(`        ${statusColors.conflict('conflict:')}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`);
       colorConsole.log(`                    ${colorConsole.gray(op.reason || 'Unknown conflict')}`);
     }
     colorConsole.log('');
@@ -739,7 +790,7 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
 async function showDryRunOperations(operations: ContentOperations): Promise<void> {
   // Check if there are any operations to show
   const totalOperations = operations.create.length + operations.update.length +
-                         operations.rename.length + operations.typeChange.length;
+                         operations.rename.length + operations.typeChange.length + operations.delete.length;
 
   if (totalOperations === 0) {
     return; // Don't show dry run preview if there are no operations
@@ -804,7 +855,16 @@ async function showDryRunOperations(operations: ContentOperations): Promise<void
     }
   }
 
-
+  // Delete operations
+  if (operations.delete.length > 0) {
+    colorConsole.progress(`\n🗑️  DELETE Operations (${operations.delete.length}):`);
+    for (const op of operations.delete) {
+      if (op.remote?.id) {
+        colorConsole.log(`\n${colorConsole.red('DELETE')} ${colorConsole.highlight(`/api/content/${op.remote.id}`)}`);
+        colorConsole.log(`${colorConsole.gray('Note:')} Deleting ${colorConsole.highlight(op.remote.slug)} (${op.remote.type})`);
+      }
+    }
+  }
 
   colorConsole.log('\n');
   colorConsole.important('💡 No actual API calls were made. Use without --dry-run to execute.');
@@ -814,7 +874,7 @@ async function showDryRunOperations(operations: ContentOperations): Promise<void
  * Main function for push command
  */
 async function pushMain(options: PushOptions = {}): Promise<void> {
-  const { statusOnly = false, force = false, targetId, targetSlug, showDetailedPreview = false, dryRun = false } = options;
+  const { statusOnly = false, force = false, targetId, targetSlug, showDetailedPreview = false, dryRun = false, allowDelete = false, showDelete = false } = options;
 
   try {
     const isSingleFileMode = !!(targetId || targetSlug);
@@ -877,7 +937,10 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     const remoteContent = await fetchRemoteContent();
 
     // Match local vs remote content with type mapping for proper content transformation
-    const operations = await matchContent(filteredLocalContent, remoteContent, remoteTypeMap);
+    // In status mode, enable deletion detection if showDelete is true (for display purposes)
+    // In push mode, only detect deletions if allowDelete is true (for execution)
+    const shouldDetectDeletions = statusOnly ? (showDelete || allowDelete) : allowDelete;
+    const operations = await matchContent(filteredLocalContent, remoteContent, remoteTypeMap, shouldDetectDeletions);
 
     // Filter operations if targeting specific content
     const finalOperations = isSingleFileMode ?
@@ -900,7 +963,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     }
 
     // Display status
-    await displayStatus(finalOperations, statusOnly, isSingleFileMode, showDetailedPreview, remoteTypeMap);
+    await displayStatus(finalOperations, statusOnly, isSingleFileMode, showDetailedPreview, remoteTypeMap, statusOnly ? showDelete : true);
 
     // If status only, we're done
     if (statusOnly) {
@@ -1084,6 +1147,26 @@ async function executeIndividualOperations(operations: ContentOperations, option
       } catch (error: any) {
         failed++;
         colorConsole.error(`❌ Failed to change type for ${op.local.slug}: ${error.message}`);
+      }
+    }
+  }
+
+  // Delete remote content
+  if (operations.delete.length > 0) {
+    console.log(`\n🗑️  Deleting ${operations.delete.length} remote items...`);
+    for (const op of operations.delete) {
+      try {
+        if (op.remote?.id) {
+          await leadCMSDataService.deleteContent(op.remote.id);
+          successful++;
+          colorConsole.success(`✅ Deleted: ${colorConsole.highlight(`${op.remote.type}/${op.remote.slug}`)}`);
+        } else {
+          failed++;
+          colorConsole.error(`❌ Failed to delete ${colorConsole.highlight(`${op.remote?.type}/${op.remote?.slug}`)}: No remote ID`);
+        }
+      } catch (error: any) {
+        failed++;
+        colorConsole.error(`❌ Failed to delete ${op.remote?.type}/${op.remote?.slug}: ${error.message}`);
       }
     }
   }

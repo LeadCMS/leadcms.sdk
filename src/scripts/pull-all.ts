@@ -9,6 +9,11 @@ import axios from "axios";
 import { leadCMSUrl } from "./leadcms-helpers.js";
 import { setCMSConfig, isContentSupported, isMediaSupported, isCommentsSupported } from "../lib/cms-config-types.js";
 
+interface PullAllOptions {
+  targetId?: string;
+  targetSlug?: string;
+}
+
 /**
  * Fetch CMS config to determine which entities are supported
  */
@@ -49,7 +54,17 @@ async function fetchAndCacheCMSConfig(): Promise<{
 /**
  * Main orchestrator function
  */
-async function main(): Promise<void> {
+async function main(options: PullAllOptions = {}): Promise<void> {
+  const { targetId, targetSlug } = options;
+
+  // If pulling specific content by ID or slug, use pull-content logic directly
+  if (targetId || targetSlug) {
+    console.log(`\n🚀 LeadCMS Pull - Fetching specific content\n`);
+    const { pullContent } = await import('./pull-content.js');
+    await pullContent({ targetId, targetSlug });
+    return;
+  }
+
   console.log(`\n🚀 LeadCMS Pull - Fetching all content\n`);
 
   // Check which entities are supported

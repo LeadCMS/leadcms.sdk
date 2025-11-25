@@ -63,16 +63,31 @@ interface ContentType {
   name: string;
 }
 
+export interface MediaItem {
+  id: number;
+  location: string;
+  scopeUid: string;
+  name: string;
+  description?: string | null;
+  size: number;
+  extension: string;
+  mimeType: string;
+  createdAt: string;
+  updatedAt?: string | null;
+}
+
 interface MockScenario {
   name: string;
   description: string;
   remoteContent: ContentItem[];
   contentTypes: Record<string, string>;
+  remoteMedia: MediaItem[];
 }
 
 interface MockData {
   remoteContent: ContentItem[];
   contentTypes: Record<string, string>;
+  remoteMedia: MediaItem[];
   scenario: string;
 }
 
@@ -90,7 +105,8 @@ const MOCK_SCENARIOS: Record<string, MockScenario> = {
     name: 'All Content New',
     description: 'Local content that doesn\'t exist remotely',
     remoteContent: [],
-    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' }
+    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' },
+    remoteMedia: []
   },
   noChanges: {
     name: 'No Changes',
@@ -106,7 +122,21 @@ const MOCK_SCENARIOS: Record<string, MockScenario> = {
         body: 'This article exists both locally and remotely.'
       }
     ],
-    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' }
+    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' },
+    remoteMedia: [
+      {
+        id: 1,
+        location: '/api/media/blog/hero.jpg',
+        scopeUid: 'blog',
+        name: 'hero.jpg',
+        description: null,
+        size: 245760,
+        extension: '.jpg',
+        mimeType: 'image/jpeg',
+        createdAt: '2024-10-29T10:00:00Z',
+        updatedAt: null
+      }
+    ]
   },
   hasConflicts: {
     name: 'Has Conflicts',
@@ -122,7 +152,8 @@ const MOCK_SCENARIOS: Record<string, MockScenario> = {
         body: 'This is the remote version that was updated after the local version.'
       }
     ],
-    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' }
+    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' },
+    remoteMedia: []
   },
   hasUpdates: {
     name: 'Has Updates',
@@ -138,7 +169,8 @@ const MOCK_SCENARIOS: Record<string, MockScenario> = {
         body: 'This is the original content.'
       }
     ],
-    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' }
+    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' },
+    remoteMedia: []
   },
   mixedOperations: {
     name: 'Mixed Operations',
@@ -154,13 +186,28 @@ const MOCK_SCENARIOS: Record<string, MockScenario> = {
         body: 'Original post content.'
       }
     ],
-    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' }
+    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' },
+    remoteMedia: [
+      {
+        id: 1,
+        location: '/api/media/privacy-policy/bg-image.avif',
+        scopeUid: 'privacy-policy',
+        name: 'bg-image.avif',
+        description: null,
+        size: 780720,
+        extension: '.avif',
+        mimeType: 'image/avif',
+        createdAt: '2025-06-16T06:57:41.017481Z',
+        updatedAt: '2025-06-16T06:59:09.014782Z'
+      }
+    ]
   },
   missingContentTypes: {
     name: 'Missing Content Types',
     description: 'Content with unknown content types',
     remoteContent: [],
-    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' }
+    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' },
+    remoteMedia: []
   }
 };
 
@@ -227,6 +274,7 @@ class LeadCMSDataService {
     this.mockData = {
       remoteContent: JSON.parse(JSON.stringify(scenario.remoteContent)),
       contentTypes: { ...scenario.contentTypes },
+      remoteMedia: JSON.parse(JSON.stringify(scenario.remoteMedia)),
       scenario: scenario.name
     };
   }
@@ -334,6 +382,63 @@ class LeadCMSDataService {
       console.error('[API] Failed to fetch content types:', error.message);
       throw error;
     }
+  }
+
+  /**
+   * Get a specific content item by ID
+   */
+  async getContentById(id: number): Promise<ContentItem | null> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      console.log(`[MOCK] Getting content with ID: ${id}`);
+      await new Promise(resolve => setTimeout(resolve, 50));
+      const content = this.mockData.remoteContent.find(c => c.id === id);
+      return content || null;
+    }
+
+    try {
+      console.log(`[API] Fetching content with ID: ${id}`);
+
+      if (!this.baseURL) {
+        throw new Error('LeadCMS URL is not configured.');
+      }
+
+      const response: AxiosResponse<ContentItem> = await axios.get(
+        `${this.baseURL}/api/content/${id}`,
+        {
+          headers: this.getApiHeaders()
+        }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        console.log(`[API] Content with ID ${id} not found`);
+        return null;
+      }
+
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      console.error(`[API] Failed to fetch content by ID ${id}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get content by slug and language
+   */
+  async getContentBySlug(slug: string, language?: string): Promise<ContentItem | null> {
+    this._initialize();
+
+    const allContent = await this.getAllContent();
+    const content = allContent.find(c =>
+      c.slug === slug && (!language || c.language === language)
+    );
+
+    return content || null;
   }
 
   /**
@@ -454,7 +559,57 @@ class LeadCMSDataService {
     }
   }
 
+  /**
+   * Delete content from LeadCMS
+   */
+  async deleteContent(id: number): Promise<void> {
+    this._initialize();
 
+    if (this.useMock && this.mockData) {
+      console.log(`[MOCK] Deleting content with ID: ${id}`);
+      await new Promise(resolve => setTimeout(resolve, 80));
+
+      // Remove from mock data
+      const index = this.mockData.remoteContent.findIndex(c => c.id === id);
+      if (index !== -1) {
+        this.mockData.remoteContent.splice(index, 1);
+      }
+      return;
+    }
+
+    try {
+      console.log(`[API] Deleting content with ID: ${id}`);
+
+      if (!this.baseURL) {
+        throw new Error('LeadCMS URL is not configured.');
+      }
+
+      await axios.delete(
+        `${this.baseURL}/api/content/${id}`,
+        {
+          headers: this.getApiHeaders()
+        }
+      );
+
+      console.log('[API] Content deleted successfully');
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      if (error.response?.status === 422) {
+        const enhancedError = new Error(
+          `Content validation failed: ${formatApiValidationErrors(error.response)}`
+        );
+        (enhancedError as any).status = 422;
+        (enhancedError as any).validationErrors = error.response.data.errors;
+        throw enhancedError;
+      }
+
+      console.error('[API] Failed to delete content:', error.message);
+      throw error;
+    }
+  }
 
   /**
    * Create content type in LeadCMS or mock
@@ -483,6 +638,258 @@ class LeadCMSDataService {
       return response.data;
     } catch (error: any) {
       console.error(`[API] Failed to create content type:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all media from LeadCMS using sync API (without token for full fetch)
+   */
+  async getAllMedia(scopeUid?: string): Promise<MediaItem[]> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      console.log('[MOCK] Returning mock media data');
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      let media = [...this.mockData.remoteMedia];
+      if (scopeUid) {
+        media = media.filter(m => m.scopeUid === scopeUid);
+      }
+      return media;
+    }
+
+    try {
+      console.log('[API] Fetching media from LeadCMS using sync API...');
+
+      if (!this.baseURL) {
+        throw new Error('LeadCMS URL is not configured.');
+      }
+
+      const allMedia: MediaItem[] = [];
+      let syncToken = '';
+      let page = 0;
+
+      // Paginate through all media using sync API
+      while (true) {
+        const url = new URL('/api/media/sync', this.baseURL);
+        url.searchParams.set('filter[limit]', '100');
+        url.searchParams.set('syncToken', syncToken);
+        if (scopeUid) {
+          url.searchParams.set('query', `scopeUid=${scopeUid}`);
+        }
+
+        const response = await axios.get(url.toString());
+
+        if (response.status === 204) {
+          break; // No more data
+        }
+
+        const data = response.data;
+        if (data.items && Array.isArray(data.items)) {
+          allMedia.push(...data.items);
+        }
+
+        const nextToken = response.headers['x-next-sync-token'] || syncToken;
+        if (!nextToken || nextToken === syncToken) {
+          break; // No more pages
+        }
+
+        syncToken = nextToken;
+        page++;
+      }
+
+      console.log(`[API] Fetched ${allMedia.length} media items`);
+      return allMedia;
+    } catch (error: any) {
+      console.error('[API] Failed to fetch media:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Upload media file to LeadCMS
+   */
+  async uploadMedia(formData: any): Promise<MediaItem> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      console.log('[MOCK] Uploading media file');
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Extract data from FormData for mock
+      const scopeUid = formData.get('ScopeUid') as string;
+      const fileName = (formData.get('File') as any)?.name || 'mock-file.jpg';
+      const description = formData.get('Description') as string | null;
+
+      const newMedia: MediaItem = {
+        id: this.mockData.remoteMedia.length + 1,
+        location: `/api/media/${scopeUid}/${fileName}`,
+        scopeUid,
+        name: fileName,
+        description,
+        size: 100000, // Mock size
+        extension: fileName.substring(fileName.lastIndexOf('.')),
+        mimeType: 'image/jpeg',
+        createdAt: new Date().toISOString(),
+        updatedAt: null
+      };
+
+      this.mockData.remoteMedia.push(newMedia);
+      return newMedia;
+    }
+
+    try {
+      console.log('[API] Uploading media file...');
+
+      if (!this.baseURL) {
+        throw new Error('LeadCMS URL is not configured.');
+      }
+
+      const response: AxiosResponse<MediaItem> = await axios.post(
+        `${this.baseURL}/api/media`,
+        formData,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            // Don't set Content-Type, let axios set it with boundary for multipart
+          }
+        }
+      );
+
+      console.log('[API] Media uploaded successfully');
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      if (error.response?.status === 422) {
+        const validationMessage = formatApiValidationErrors(error.response);
+        const enhancedError = new Error(`Media validation failed${validationMessage}`);
+        (enhancedError as any).status = 422;
+        throw enhancedError;
+      }
+
+      console.error('[API] Failed to upload media:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Update existing media file in LeadCMS
+   */
+  async updateMedia(formData: any): Promise<MediaItem> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      console.log('[MOCK] Updating media file');
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const scopeUid = formData.get('ScopeUid') as string;
+      const fileName = formData.get('FileName') as string;
+
+      const existingIndex = this.mockData.remoteMedia.findIndex(
+        m => m.scopeUid === scopeUid && m.name === fileName
+      );
+
+      if (existingIndex === -1) {
+        throw new Error(`Media file ${scopeUid}/${fileName} not found`);
+      }
+
+      const updatedMedia = {
+        ...this.mockData.remoteMedia[existingIndex],
+        updatedAt: new Date().toISOString()
+      };
+
+      this.mockData.remoteMedia[existingIndex] = updatedMedia;
+      return updatedMedia;
+    }
+
+    try {
+      console.log('[API] Updating media file...');
+
+      if (!this.baseURL) {
+        throw new Error('LeadCMS URL is not configured.');
+      }
+
+      const response: AxiosResponse<MediaItem> = await axios.patch(
+        `${this.baseURL}/api/media`,
+        formData,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+          }
+        }
+      );
+
+      console.log('[API] Media updated successfully');
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      if (error.response?.status === 422) {
+        const validationMessage = formatApiValidationErrors(error.response);
+        const enhancedError = new Error(`Media validation failed${validationMessage}`);
+        (enhancedError as any).status = 422;
+        throw enhancedError;
+      }
+
+      console.error('[API] Failed to update media:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete media file from LeadCMS
+   */
+  async deleteMedia(pathToFile: string): Promise<void> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      console.log(`[MOCK] Deleting media file: ${pathToFile}`);
+      await new Promise(resolve => setTimeout(resolve, 80));
+
+      // Parse path to extract scopeUid and name
+      // Path format: /api/media/scopeUid/filename or scopeUid/filename
+      const cleanPath = pathToFile.replace('/api/media/', '');
+      const lastSlash = cleanPath.lastIndexOf('/');
+      const scopeUid = cleanPath.substring(0, lastSlash);
+      const name = cleanPath.substring(lastSlash + 1);
+
+      const index = this.mockData.remoteMedia.findIndex(
+        m => m.scopeUid === scopeUid && m.name === name
+      );
+
+      if (index !== -1) {
+        this.mockData.remoteMedia.splice(index, 1);
+      }
+      return;
+    }
+
+    try {
+      console.log(`[API] Deleting media file: ${pathToFile}`);
+
+      if (!this.baseURL) {
+        throw new Error('LeadCMS URL is not configured.');
+      }
+
+      await axios.delete(
+        `${this.baseURL}/api/media/${pathToFile}`,
+        {
+          headers: this.getApiHeaders()
+        }
+      );
+
+      console.log('[API] Media deleted successfully');
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      console.error('[API] Failed to delete media:', error.message);
       throw error;
     }
   }
@@ -522,6 +929,7 @@ class LeadCMSDataService {
     this.mockData = {
       remoteContent: JSON.parse(JSON.stringify(scenario.remoteContent)),
       contentTypes: { ...scenario.contentTypes },
+      remoteMedia: JSON.parse(JSON.stringify(scenario.remoteMedia)),
       scenario: scenario.name
     };
 
@@ -542,6 +950,7 @@ class LeadCMSDataService {
     return {
       remoteContent: [...this.mockData.remoteContent],
       contentTypes: { ...this.mockData.contentTypes },
+      remoteMedia: [...this.mockData.remoteMedia],
       scenario: this.currentScenario?.name || ''
     };
   }

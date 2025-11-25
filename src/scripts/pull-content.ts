@@ -8,12 +8,71 @@ import axios from "axios";
 import { leadCMSUrl } from "./leadcms-helpers.js";
 import { setCMSConfig, isContentSupported } from "../lib/cms-config-types.js";
 import { fetchLeadCMSContent } from "./fetch-leadcms-content.js";
+import { leadCMSDataService } from "../lib/data-service.js";
+import { saveContentFile } from "../lib/content-transformation.js";
+import { CONTENT_DIR, fetchContentTypes } from "./leadcms-helpers.js";
+
+interface PullContentOptions {
+  targetId?: string;
+  targetSlug?: string;
+}
 
 /**
  * Main function
  */
-async function main(): Promise<void> {
+async function main(options: PullContentOptions = {}): Promise<void> {
+  const { targetId, targetSlug } = options;
+
   console.log(`\n📄 LeadCMS Pull Content\n`);
+
+  // If pulling specific content by ID or slug
+  if (targetId || targetSlug) {
+    console.log(`🎯 Pulling specific content: ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`}`);
+
+    try {
+      let content = null;
+
+      if (targetId) {
+        const id = parseInt(targetId, 10);
+        if (isNaN(id)) {
+          console.error(`❌ Invalid ID: ${targetId}`);
+          return;
+        }
+        content = await leadCMSDataService.getContentById(id);
+      } else if (targetSlug) {
+        content = await leadCMSDataService.getContentBySlug(targetSlug);
+      }
+
+      if (!content) {
+        console.log(`⚠️  Content not found: ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`}`);
+        return;
+      }
+
+      console.log(`✅ Found content: ${content.title} (${content.type})`);
+      console.log(`   - Slug: ${content.slug}`);
+      console.log(`   - Language: ${content.language || 'default'}`);
+      console.log(`   - Type: ${content.type}`);
+      console.log(`   - Last updated: ${content.updatedAt || 'unknown'}`);
+
+      // Fetch content types for transformation
+      const typeMap = await fetchContentTypes();
+
+      // Save the content file (force overwrite)
+      await saveContentFile({
+        content,
+        typeMap,
+        contentDir: CONTENT_DIR,
+      });
+
+      console.log(`\n✅ Content file saved successfully!`);
+      console.log(`   Location: ${CONTENT_DIR}/${content.language || 'default'}/${content.type}/${content.slug}`);
+      console.log(`\n✨ Pull completed!\n`);
+      return;
+    } catch (error: any) {
+      console.error(`❌ Failed to pull content:`, error.message);
+      throw error;
+    }
+  }
 
   // Check if content is supported
   try {

@@ -299,6 +299,12 @@ npx leadcms pull
 # Pull only content (no media, no comments)
 npx leadcms pull-content
 
+# Pull specific content by ID
+npx leadcms pull-content --id 123
+
+# Pull specific content by slug
+npx leadcms pull-content --slug my-article
+
 # Check content sync status
 npx leadcms status
 ```

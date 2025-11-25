@@ -6,7 +6,7 @@ The LeadCMS SDK automatically handles media file synchronization, storing files 
 
 ## Quick Start
 
-### Sync Media Files
+### Pull Media Files
 
 ```bash
 # Pull all media files
@@ -14,6 +14,22 @@ npx leadcms pull
 
 # Pull only media (no content, no comments)
 npx leadcms pull-media
+```
+
+### Push Media Files
+
+```bash
+# Check media status (what would be pushed)
+npx leadcms status-media
+
+# Preview changes without applying them
+npx leadcms push-media --dry-run
+
+# Push media files to LeadCMS
+npx leadcms push-media --force
+
+# Push media for specific scope
+npx leadcms push-media --scope blog --force
 ```
 
 ## Configuration
@@ -252,7 +268,7 @@ Media files maintain their original:
 
 ## Media Sync Process
 
-### How Media Sync Works
+### Pulling Media from LeadCMS
 
 1. **Content Analysis**: SDK scans all content for media references
 2. **URL Detection**: Identifies media URLs matching LeadCMS patterns
@@ -260,6 +276,108 @@ Media files maintain their original:
 4. **Download**: Fetches missing or updated media
 5. **Storage**: Saves to configured media directory
 6. **Verification**: Ensures files are accessible
+
+### Pushing Media to LeadCMS
+
+The SDK provides bidirectional media sync, allowing you to upload local media files to LeadCMS:
+
+1. **Local Scan**: SDK recursively scans configured media directory
+2. **Remote Fetch**: Retrieves current media inventory from LeadCMS using sync API
+3. **File Matching**: Compares local vs remote by path (`scopeUid/filename`) and size
+4. **Operation Detection**: 
+   - **Create**: New files not present remotely
+   - **Update**: Files with changed size
+   - **Delete**: Files removed locally but still exist remotely
+   - **Skip**: Files with no changes
+5. **Validation**: Checks file sizes against LeadCMS limits
+6. **Upload/Update**: Sends files to LeadCMS API with authentication
+
+#### Push Media Commands
+
+**Check Status:**
+```bash
+# Show all media changes
+npx leadcms status-media
+
+# Show changes for specific scope
+npx leadcms status-media --scope blog
+```
+
+**Dry Run (Preview):**
+```bash
+# Preview all changes without applying
+npx leadcms push-media --dry-run
+
+# Preview changes for specific scope
+npx leadcms push-media --dry-run --scope pages/about
+```
+
+**Execute Push:**
+```bash
+# Push all media changes (requires API key)
+npx leadcms push-media --force
+
+# Push media for specific scope
+npx leadcms push-media --scope blog --force
+```
+
+#### Push Media Output
+
+The push command displays detailed status:
+
+```
+📊 Media Status:
+────────────────────────────────────────────────────────────────────────────────
+
+✨ 2 file(s) to upload:
+   + blog/hero.jpg (245.50KB)
+   + pages/about/team.jpg (180.25KB)
+
+📝 1 file(s) to update:
+   ↻ blog/featured.jpg (320.75KB)
+     File size changed (local: 320750, remote: 315200)
+
+🗑️  1 file(s) to delete:
+   - blog/old-image.jpg
+
+✓ 5 file(s) up to date
+
+────────────────────────────────────────────────────────────────────────────────
+Ready to apply 4 change(s).
+```
+
+#### Media File Matching Logic
+
+Files are matched by **scope UID + filename** combination:
+- **Scope UID**: Directory path relative to media root (e.g., `blog`, `pages/about`)
+- **Filename**: File name with extension (e.g., `hero.jpg`)
+- **Size Comparison**: Used to detect modifications (no checksum calculation)
+
+Example matching:
+```
+Local:  media/blog/hero.jpg (245KB)
+Remote: /api/media/blog/hero.jpg (245KB)
+Result: No changes (same scopeUid=blog, name=hero.jpg, size=245KB)
+
+Local:  media/blog/hero.jpg (320KB)
+Remote: /api/media/blog/hero.jpg (245KB)
+Result: Update needed (size changed)
+
+Local:  media/blog/new-image.jpg
+Remote: (not exists)
+Result: Create (new file)
+```
+
+#### Authentication Requirements
+
+**Pull Operations**: Public, no API key required
+**Push Operations**: Require authentication
+
+```bash
+# Set up authentication for push
+LEADCMS_API_KEY=your-api-key-here
+npx leadcms push-media --force
+```
 
 ### Incremental Sync
 

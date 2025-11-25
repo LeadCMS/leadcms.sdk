@@ -1,6 +1,6 @@
 {
   "name": "@leadcms/sdk",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "description": "Official SDK and CLI tools for LeadCMS - framework-agnostic content management for static site generators",
   "type": "module",
   "main": "dist/index.js",
@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build": "npm run clean && npm run compile",
-    "compile": "tsc && cp -r src/templates dist/ && chmod +x dist/cli/index.js",
+    "compile": "tsc && cp -r src/templates dist/ && chmod +x dist/cli/index.js dist/cli/bin/*.js",
     "clean": "rm -rf dist",
     "dev": "npm run build && tsc --watch",
     "test": "jest",

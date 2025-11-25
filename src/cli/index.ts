@@ -72,10 +72,10 @@ switch (command) {
     break;
   case 'pull':
   case 'fetch': // Alias for backward compatibility
-    runScript('pull-all.js');
+    runScript('pull-all.js', commandArgs);
     break;
   case 'pull-content':
-    runScript('pull-content.js');
+    runScript('pull-content.js', commandArgs);
     break;
   case 'pull-media':
     runScript('pull-media.js');
@@ -84,10 +84,22 @@ switch (command) {
     runScript('pull-comments.js');
     break;
   case 'push':
-    runScript('push.js', commandArgs);
+    runScript('push-all.js', commandArgs);
+    break;
+  case 'push-content':
+    runScript('push-content.js', commandArgs);
+    break;
+  case 'push-media':
+    runScript('push-media.js', commandArgs);
     break;
   case 'status':
-    runScript('status.js', commandArgs);
+    runScript('status-all.js', commandArgs);
+    break;
+  case 'status-content':
+    runScript('status-content.js', commandArgs);
+    break;
+  case 'status-media':
+    runScript('status-media.js', commandArgs);
     break;
   case 'watch':
     runScript('watch.js');
@@ -117,24 +129,41 @@ Usage:
   leadcms docker         - Generate Docker deployment templates
 
   Pull commands:
-  leadcms pull           - Pull all content, media, and comments from LeadCMS
-  leadcms pull-content   - Pull only content from LeadCMS
+  leadcms pull [options] - Pull all content, media, and comments from LeadCMS
+    --id <content-id>    - Pull specific content by ID (force update)
+    --slug <slug>        - Pull specific content by slug (force update)
+  leadcms pull-content [options] - Pull only content from LeadCMS
+    --id <content-id>    - Pull specific content by ID
+    --slug <slug>        - Pull specific content by slug
   leadcms pull-media     - Pull only media files from LeadCMS
   leadcms pull-comments  - Pull only comments from LeadCMS
   leadcms fetch          - Alias for 'pull' (backward compatibility)
 
   Push commands:
-  leadcms push [options] - Push local content to LeadCMS
+  leadcms push [options] - Push all local changes (content + media) to LeadCMS
+  leadcms push-content [options] - Push only content to LeadCMS
     --force              - Override remote changes (skip conflict check)
     --dry-run            - Show API calls without executing them (preview mode)
+    --delete             - Delete remote content/media not present locally
     --id <content-id>    - Target specific content by ID
     --slug <slug>        - Target specific content by slug
+  leadcms push-media [options] - Push only media files to LeadCMS
+    --force              - Skip confirmation prompt
+    --dry-run            - Show what would be changed without making changes
+    --delete             - Delete remote media files not present locally
+    --scope <scopeUid>   - Filter by specific scope UID (e.g., "blog", "pages/about")
 
   Status & monitoring:
-  leadcms status [options] - Show sync status between local and remote content
+  leadcms status [options] - Show sync status for all entities (content + media)
+    --delete             - Show deletion operations (files to be deleted)
+  leadcms status-content [options] - Show content sync status only
     --preview            - Show detailed change previews for all files
+    --delete             - Show content deletion operations
     --id <content-id>    - Show detailed status for specific content by ID
     --slug <slug>        - Show detailed status for specific content by slug
+  leadcms status-media [options] - Show media file status only
+    --delete             - Show media deletion operations
+    --scope <scopeUid>   - Filter by specific scope UID
   leadcms watch          - Watch for real-time updates via Server-Sent Events
 
   Utilities:
@@ -149,6 +178,7 @@ Getting Started:
 
   3. Start syncing:
      leadcms pull              - Download content from LeadCMS
+     leadcms status            - Check what needs to be pushed
      leadcms push              - Upload local changes
 
 Configuration Files:
