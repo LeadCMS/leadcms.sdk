@@ -6,23 +6,10 @@ import { leadCMSDataService, MediaItem } from '../lib/data-service.js';
 import { loadConfig, LeadCMSConfig } from '../lib/config.js';
 import { success, error, warn, info } from '../lib/console-colors.js';
 
-// Create readline interface for user prompts
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
-
-// Promisify readline question
-function question(prompt: string): Promise<string> {
-  return new Promise((resolve) => {
-    rl.question(prompt, resolve);
-  });
-}
-
 /**
  * Represents a local media file with metadata
  */
-interface LocalMediaFile {
+export interface LocalMediaFile {
   filePath: string;      // Relative path from media directory (e.g., 'blog/hero.jpg')
   absolutePath: string;  // Full filesystem path
   scopeUid: string;      // Scope identifier (e.g., 'blog', 'pages/about')
@@ -35,11 +22,104 @@ interface LocalMediaFile {
 /**
  * Represents operation to perform on a media file
  */
-interface MediaOperation {
+export interface MediaOperation {
   type: 'create' | 'update' | 'delete' | 'skip';
   local?: LocalMediaFile;
   remote?: MediaItem;
   reason: string;
+}
+
+/**
+ * Result of media status check
+ */
+export interface MediaStatusResult {
+  operations: MediaOperation[];
+  localFiles: LocalMediaFile[];
+  remoteFiles: MediaItem[];
+  summary: {
+    creates: number;
+    updates: number;
+    deletes: number;
+    skips: number;
+    total: number;
+  };
+}
+
+/**
+ * Result of media push execution
+ */
+export interface MediaPushResult {
+  operations: MediaOperation[];
+  executed: {
+    successful: number;
+    failed: number;
+    skipped: number;
+  };
+  errors: Array<{ operation: MediaOperation; error: string }>;
+}
+
+/**
+ * Dependencies that can be injected for testing
+ */
+export interface MediaDependencies {
+  /** Function to fetch remote media - defaults to leadCMSDataService.getAllMedia */
+  fetchRemoteMedia?: () => Promise<MediaItem[]>;
+  /** Function to upload media - defaults to leadCMSDataService.uploadMedia */
+  uploadMedia?: (formData: any) => Promise<MediaItem>;
+  /** Function to update media - defaults to leadCMSDataService.updateMedia */
+  updateMedia?: (formData: any) => Promise<MediaItem>;
+  /** Function to delete media - defaults to leadCMSDataService.deleteMedia */
+  deleteMedia?: (pathToFile: string) => Promise<void>;
+  /** Logger for info messages - defaults to console info */
+  logInfo?: (message: string) => void;
+  /** Logger for warnings - defaults to console warn */
+  logWarn?: (message: string) => void;
+  /** Logger for errors - defaults to console error */
+  logError?: (message: string) => void;
+  /** Logger for success messages - defaults to console success */
+  logSuccess?: (message: string) => void;
+  /** Function to prompt user for confirmation - defaults to readline prompt */
+  promptConfirmation?: (message: string) => Promise<boolean>;
+}
+
+/**
+ * Default dependencies using real implementations
+ */
+function getDefaultDependencies(): Required<MediaDependencies> {
+  // Create readline interface for user prompts
+  let rl: readline.Interface | null = null;
+
+  const getReadline = () => {
+    if (!rl) {
+      rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+    }
+    return rl;
+  };
+
+  return {
+    fetchRemoteMedia: () => leadCMSDataService.getAllMedia(),
+    uploadMedia: (formData: any) => leadCMSDataService.uploadMedia(formData),
+    updateMedia: (formData: any) => leadCMSDataService.updateMedia(formData),
+    deleteMedia: (pathToFile: string) => leadCMSDataService.deleteMedia(pathToFile),
+    logInfo: info,
+    logWarn: warn,
+    logError: error,
+    logSuccess: success,
+    promptConfirmation: async (message: string) => {
+      const readline = getReadline();
+      return new Promise((resolve) => {
+        readline.question(message, (answer) => {
+          readline.close();
+          rl = null;
+          const confirmed = answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes';
+          resolve(confirmed);
+        });
+      });
+    }
+  };
 }
 
 /**
@@ -156,11 +236,10 @@ function shouldIgnoreFile(filename: string): boolean {
 /**
  * Recursively scan directory for media files
  */
-function scanLocalMedia(mediaDir: string, config: LeadCMSConfig): LocalMediaFile[] {
+export function scanLocalMedia(mediaDir: string, config: LeadCMSConfig): LocalMediaFile[] {
   const files: LocalMediaFile[] = [];
 
   if (!fs.existsSync(mediaDir)) {
-    warn(`Media directory not found: ${mediaDir}`);
     return files;
   }
 
@@ -203,18 +282,6 @@ function scanLocalMedia(mediaDir: string, config: LeadCMSConfig): LocalMediaFile
 
   scanDirectory(mediaDir);
   return files;
-}
-
-/**
- * Fetch remote media using sync API
- */
-async function fetchRemoteMedia(): Promise<MediaItem[]> {
-  try {
-    return await leadCMSDataService.getAllMedia();
-  } catch (err: any) {
-    error(`Failed to fetch remote media: ${err.message}`);
-    throw error;
-  }
 }
 
 /**
@@ -292,7 +359,17 @@ export function matchMediaFiles(
 /**
  * Display media status in formatted output
  */
-export function displayMediaStatus(operations: MediaOperation[], dryRun: boolean = false, showDelete: boolean = false) {
+export function displayMediaStatus(
+  operations: MediaOperation[],
+  dryRun: boolean = false,
+  showDelete: boolean = false,
+  deps?: Partial<MediaDependencies>
+): void {
+  const log = deps?.logInfo || info;
+  const logWarning = deps?.logWarn || warn;
+  const logErr = deps?.logError || error;
+  const logOk = deps?.logSuccess || success;
+
   const creates = operations.filter(op => op.type === 'create');
   const updates = operations.filter(op => op.type === 'update');
   const deletes = showDelete ? operations.filter(op => op.type === 'delete') : [];
@@ -302,7 +379,7 @@ export function displayMediaStatus(operations: MediaOperation[], dryRun: boolean
   console.log('─'.repeat(80));
 
   if (creates.length > 0) {
-    info(`\n✨ ${creates.length} file(s) to upload:`);
+    log(`\n✨ ${creates.length} file(s) to upload:`);
     creates.forEach(op => {
       const sizeKB = ((op.local!.size / 1024).toFixed(2));
       console.log(`   + ${op.local!.scopeUid}/${op.local!.name} (${sizeKB}KB)`);
@@ -310,7 +387,7 @@ export function displayMediaStatus(operations: MediaOperation[], dryRun: boolean
   }
 
   if (updates.length > 0) {
-    warn(`\n📝 ${updates.length} file(s) to update:`);
+    logWarning(`\n📝 ${updates.length} file(s) to update:`);
     updates.forEach(op => {
       const sizeKB = ((op.local!.size / 1024).toFixed(2));
       console.log(`   ↻ ${op.local!.scopeUid}/${op.local!.name} (${sizeKB}KB)`);
@@ -319,26 +396,26 @@ export function displayMediaStatus(operations: MediaOperation[], dryRun: boolean
   }
 
   if (deletes.length > 0) {
-    error(`\n🗑️  ${deletes.length} file(s) to delete:`);
+    logErr(`\n🗑️  ${deletes.length} file(s) to delete:`);
     deletes.forEach(op => {
       console.log(`   - ${op.remote!.scopeUid}/${op.remote!.name}`);
     });
   }
 
   if (skips.length > 0) {
-    info(`\n✓ ${skips.length} file(s) up to date`);
+    log(`\n✓ ${skips.length} file(s) up to date`);
   }
 
   console.log('\n' + '─'.repeat(80));
 
   const totalOperations = creates.length + updates.length + deletes.length;
   if (totalOperations === 0) {
-    success('All media files are in sync! ✨');
+    logOk('All media files are in sync! ✨');
   } else {
     if (dryRun) {
-      info(`\nDry run complete. Run without --dry-run to apply ${totalOperations} change(s).`);
+      log(`\nDry run complete. Run without --dry-run to apply ${totalOperations} change(s).`);
     } else {
-      info(`\nReady to apply ${totalOperations} change(s).`);
+      log(`\nReady to apply ${totalOperations} change(s).`);
     }
   }
 
@@ -346,31 +423,48 @@ export function displayMediaStatus(operations: MediaOperation[], dryRun: boolean
 }
 
 /**
- * Execute media push operations
+ * Execute media push operations and return detailed results
  */
 export async function executeMediaPush(
   operations: MediaOperation[],
-  dryRun: boolean = false
-): Promise<void> {
+  dryRun: boolean = false,
+  deps?: Partial<MediaDependencies>
+): Promise<MediaPushResult> {
+  const defaults = getDefaultDependencies();
+  const uploadMedia = deps?.uploadMedia || defaults.uploadMedia;
+  const updateMedia = deps?.updateMedia || defaults.updateMedia;
+  const deleteMedia = deps?.deleteMedia || defaults.deleteMedia;
+  const logErr = deps?.logError || defaults.logError;
+  const logOk = deps?.logSuccess || defaults.logSuccess;
+  const logWarning = deps?.logWarn || defaults.logWarn;
+
+  const result: MediaPushResult = {
+    operations,
+    executed: { successful: 0, failed: 0, skipped: 0 },
+    errors: []
+  };
+
   if (dryRun) {
-    displayMediaStatus(operations, true);
-    return;
+    displayMediaStatus(operations, true, true, deps);
+    result.executed.skipped = operations.length;
+    return result;
   }
 
   const creates = operations.filter(op => op.type === 'create');
   const updates = operations.filter(op => op.type === 'update');
   const deletes = operations.filter(op => op.type === 'delete');
+  const skips = operations.filter(op => op.type === 'skip');
 
-  let successCount = 0;
-  let errorCount = 0;
+  result.executed.skipped = skips.length;
 
   // Upload new files
   for (const op of creates) {
     try {
       const validation = validateFileSize(op.local!);
       if (!validation.valid) {
-        error(`✗ ${op.local!.scopeUid}/${op.local!.name}: ${validation.message}`);
-        errorCount++;
+        logErr(`✗ ${op.local!.scopeUid}/${op.local!.name}: ${validation.message}`);
+        result.executed.failed++;
+        result.errors.push({ operation: op, error: validation.message! });
         continue;
       }
 
@@ -378,12 +472,13 @@ export async function executeMediaPush(
       formData.append('File', fs.createReadStream(op.local!.absolutePath));
       formData.append('ScopeUid', op.local!.scopeUid);
 
-      await leadCMSDataService.uploadMedia(formData);
-      success(`✓ Uploaded ${op.local!.scopeUid}/${op.local!.name}`);
-      successCount++;
+      await uploadMedia(formData);
+      logOk(`✓ Uploaded ${op.local!.scopeUid}/${op.local!.name}`);
+      result.executed.successful++;
     } catch (err: any) {
-      error(`✗ Failed to upload ${op.local!.scopeUid}/${op.local!.name}: ${err.message}`);
-      errorCount++;
+      logErr(`✗ Failed to upload ${op.local!.scopeUid}/${op.local!.name}: ${err.message}`);
+      result.executed.failed++;
+      result.errors.push({ operation: op, error: err.message });
     }
   }
 
@@ -392,8 +487,9 @@ export async function executeMediaPush(
     try {
       const validation = validateFileSize(op.local!);
       if (!validation.valid) {
-        error(`✗ ${op.local!.scopeUid}/${op.local!.name}: ${validation.message}`);
-        errorCount++;
+        logErr(`✗ ${op.local!.scopeUid}/${op.local!.name}: ${validation.message}`);
+        result.executed.failed++;
+        result.errors.push({ operation: op, error: validation.message! });
         continue;
       }
 
@@ -402,12 +498,13 @@ export async function executeMediaPush(
       formData.append('ScopeUid', op.local!.scopeUid);
       formData.append('FileName', op.local!.name);
 
-      await leadCMSDataService.updateMedia(formData);
-      success(`✓ Updated ${op.local!.scopeUid}/${op.local!.name}`);
-      successCount++;
+      await updateMedia(formData);
+      logOk(`✓ Updated ${op.local!.scopeUid}/${op.local!.name}`);
+      result.executed.successful++;
     } catch (err: any) {
-      error(`✗ Failed to update ${op.local!.scopeUid}/${op.local!.name}: ${err.message}`);
-      errorCount++;
+      logErr(`✗ Failed to update ${op.local!.scopeUid}/${op.local!.name}: ${err.message}`);
+      result.executed.failed++;
+      result.errors.push({ operation: op, error: err.message });
     }
   }
 
@@ -415,115 +512,71 @@ export async function executeMediaPush(
   for (const op of deletes) {
     try {
       const pathToFile = `${op.remote!.scopeUid}/${op.remote!.name}`;
-      await leadCMSDataService.deleteMedia(pathToFile);
-      success(`✓ Deleted ${pathToFile}`);
-      successCount++;
+      await deleteMedia(pathToFile);
+      logOk(`✓ Deleted ${pathToFile}`);
+      result.executed.successful++;
     } catch (err: any) {
-      error(`✗ Failed to delete ${op.remote!.scopeUid}/${op.remote!.name}: ${err.message}`);
-      errorCount++;
+      logErr(`✗ Failed to delete ${op.remote!.scopeUid}/${op.remote!.name}: ${err.message}`);
+      result.executed.failed++;
+      result.errors.push({ operation: op, error: err.message });
     }
   }
 
   // Summary
   console.log('\n' + '─'.repeat(80));
-  if (errorCount === 0) {
-    success(`\n✨ Media push complete! ${successCount} operation(s) successful.`);
+  if (result.executed.failed === 0) {
+    logOk(`\n✨ Media push complete! ${result.executed.successful} operation(s) successful.`);
   } else {
-    warn(`\n⚠️  Media push completed with errors: ${successCount} succeeded, ${errorCount} failed.`);
+    logWarning(`\n⚠️  Media push completed with errors: ${result.executed.successful} succeeded, ${result.executed.failed} failed.`);
   }
   console.log('');
+
+  return result;
 }
 
 /**
- * Main function to push media files to LeadCMS
+ * Options for statusMedia function
  */
-export async function pushMedia(options: {
-  dryRun?: boolean;
-  force?: boolean;
+export interface StatusMediaOptions {
   scopeUid?: string;
-  allowDelete?: boolean;
-} = {}): Promise<void> {
-  try {
-    const config = loadConfig();
-
-    // Determine media directory
-    const mediaDir = path.resolve(process.cwd(), config.mediaDir || 'media');
-
-    info(`Scanning local media: ${mediaDir}`);
-    const localFiles = scanLocalMedia(mediaDir, config);
-
-    if (localFiles.length === 0) {
-      warn('No media files found locally.');
-      return;
-    }
-
-    info(`Fetching remote media from LeadCMS...`);
-    const remoteFiles = await fetchRemoteMedia();
-
-    // Filter by scopeUid if specified
-    let filteredLocal = localFiles;
-    let filteredRemote = remoteFiles;
-
-    if (options.scopeUid) {
-      filteredLocal = localFiles.filter(f => f.scopeUid === options.scopeUid);
-      filteredRemote = remoteFiles.filter(f => f.scopeUid === options.scopeUid);
-      info(`Filtering by scope: ${options.scopeUid}`);
-    }
-
-    // Match and determine operations
-    const operations = matchMediaFiles(filteredLocal, filteredRemote, options.allowDelete || false);
-
-    // Display and execute (always show deletes in push mode)
-    displayMediaStatus(operations, options.dryRun, true);
-
-    if (!options.dryRun) {
-      const totalOps = operations.filter(op => op.type !== 'skip').length;
-
-      if (totalOps === 0) {
-        return;
-      }
-
-      // Confirm changes unless --force is used
-      if (!options.force) {
-        const confirmMsg = `\nProceed with applying ${totalOps} change(s) to LeadCMS? (y/N): `;
-        const confirmation = await question(confirmMsg);
-
-        if (confirmation.toLowerCase() !== 'y' && confirmation.toLowerCase() !== 'yes') {
-          console.log('🚫 Push cancelled.');
-          return;
-        }
-      }
-
-      await executeMediaPush(operations, false);
-    }
-
-  } catch (err: any) {
-    error(`Media push failed: ${err.message}`);
-    throw err;
-  } finally {
-    // Always close readline interface
-    rl.close();
-  }
+  showDelete?: boolean;
+  /** Custom media directory path (absolute). If not provided, uses config.mediaDir */
+  mediaDir?: string;
 }
 
 /**
- * Status-only function (no modifications)
+ * Status-only function (no modifications) - returns results for testing
  */
-export async function statusMedia(options: { scopeUid?: string; showDelete?: boolean } = {}): Promise<void> {
+export async function statusMedia(
+  options: StatusMediaOptions = {},
+  deps?: Partial<MediaDependencies>
+): Promise<MediaStatusResult> {
+  const defaults = getDefaultDependencies();
+  const fetchRemoteMedia = deps?.fetchRemoteMedia || defaults.fetchRemoteMedia;
+  const logInfoFn = deps?.logInfo || defaults.logInfo;
+  const logWarnFn = deps?.logWarn || defaults.logWarn;
+  const logErrFn = deps?.logError || defaults.logError;
+
   try {
     const config = loadConfig();
 
-    const mediaDir = path.resolve(process.cwd(), config.mediaDir || 'media');
+    // Use provided mediaDir or resolve from config
+    const mediaDir = options.mediaDir || path.resolve(process.cwd(), config.mediaDir || 'media');
 
-    info(`Scanning local media: ${mediaDir}`);
+    logInfoFn(`Scanning local media: ${mediaDir}`);
     const localFiles = scanLocalMedia(mediaDir, config);
 
     if (localFiles.length === 0) {
-      warn('No media files found locally.');
-      return;
+      logWarnFn('No media files found locally.');
+      return {
+        operations: [],
+        localFiles: [],
+        remoteFiles: [],
+        summary: { creates: 0, updates: 0, deletes: 0, skips: 0, total: 0 }
+      };
     }
 
-    info(`Fetching remote media from LeadCMS...`);
+    logInfoFn(`Fetching remote media from LeadCMS...`);
     const remoteFiles = await fetchRemoteMedia();
 
     let filteredLocal = localFiles;
@@ -536,10 +589,132 @@ export async function statusMedia(options: { scopeUid?: string; showDelete?: boo
 
     // Show deletes only if showDelete flag is provided
     const operations = matchMediaFiles(filteredLocal, filteredRemote, options.showDelete || false);
-    displayMediaStatus(operations, false, options.showDelete || false);
+    displayMediaStatus(operations, false, options.showDelete || false, deps);
+
+    const creates = operations.filter(op => op.type === 'create').length;
+    const updates = operations.filter(op => op.type === 'update').length;
+    const deletes = operations.filter(op => op.type === 'delete').length;
+    const skips = operations.filter(op => op.type === 'skip').length;
+
+    return {
+      operations,
+      localFiles: filteredLocal,
+      remoteFiles: filteredRemote,
+      summary: {
+        creates,
+        updates,
+        deletes,
+        skips,
+        total: creates + updates + deletes
+      }
+    };
 
   } catch (err: any) {
-    error(`Media status check failed: ${err.message}`);
+    logErrFn(`Media status check failed: ${err.message}`);
+    throw err;
+  }
+}
+
+/**
+ * Options for pushMedia function
+ */
+export interface PushMediaOptions {
+  dryRun?: boolean;
+  force?: boolean;
+  scopeUid?: string;
+  allowDelete?: boolean;
+  /** Custom media directory path (absolute). If not provided, uses config.mediaDir */
+  mediaDir?: string;
+}
+
+/**
+ * Main function to push media files to LeadCMS - returns results for testing
+ */
+export async function pushMedia(
+  options: PushMediaOptions = {},
+  deps?: Partial<MediaDependencies>
+): Promise<MediaPushResult> {
+  const defaults = getDefaultDependencies();
+  const fetchRemoteMedia = deps?.fetchRemoteMedia || defaults.fetchRemoteMedia;
+  const logInfoFn = deps?.logInfo || defaults.logInfo;
+  const logWarnFn = deps?.logWarn || defaults.logWarn;
+  const logErrFn = deps?.logError || defaults.logError;
+  const promptConfirmation = deps?.promptConfirmation || defaults.promptConfirmation;
+
+  try {
+    const config = loadConfig();
+
+    // Use provided mediaDir or resolve from config
+    const mediaDir = options.mediaDir || path.resolve(process.cwd(), config.mediaDir || 'media');
+
+    logInfoFn(`Scanning local media: ${mediaDir}`);
+    const localFiles = scanLocalMedia(mediaDir, config);
+
+    if (localFiles.length === 0) {
+      logWarnFn('No media files found locally.');
+      return {
+        operations: [],
+        executed: { successful: 0, failed: 0, skipped: 0 },
+        errors: []
+      };
+    }
+
+    logInfoFn(`Fetching remote media from LeadCMS...`);
+    const remoteFiles = await fetchRemoteMedia();
+
+    // Filter by scopeUid if specified
+    let filteredLocal = localFiles;
+    let filteredRemote = remoteFiles;
+
+    if (options.scopeUid) {
+      filteredLocal = localFiles.filter(f => f.scopeUid === options.scopeUid);
+      filteredRemote = remoteFiles.filter(f => f.scopeUid === options.scopeUid);
+      logInfoFn(`Filtering by scope: ${options.scopeUid}`);
+    }
+
+    // Match and determine operations
+    const operations = matchMediaFiles(filteredLocal, filteredRemote, options.allowDelete || false);
+
+    // Display and execute (always show deletes in push mode)
+    displayMediaStatus(operations, options.dryRun, true, deps);
+
+    if (options.dryRun) {
+      return {
+        operations,
+        executed: { successful: 0, failed: 0, skipped: operations.length },
+        errors: []
+      };
+    }
+
+    const totalOps = operations.filter(op => op.type !== 'skip').length;
+
+    if (totalOps === 0) {
+      return {
+        operations,
+        executed: { successful: 0, failed: 0, skipped: operations.length },
+        errors: []
+      };
+    }
+
+    // Confirm changes unless --force is used
+    if (!options.force) {
+      const confirmMsg = `\nProceed with applying ${totalOps} change(s) to LeadCMS? (y/N): `;
+      const confirmed = await promptConfirmation(confirmMsg);
+
+      if (!confirmed) {
+        console.log('🚫 Push cancelled.');
+        return {
+          operations,
+          executed: { successful: 0, failed: 0, skipped: operations.length },
+          errors: []
+        };
+      }
+    }
+
+    return await executeMediaPush(operations, false, deps);
+
+  } catch (err: any) {
+    logErrFn(`Media push failed: ${err.message}`);
     throw err;
   }
 }

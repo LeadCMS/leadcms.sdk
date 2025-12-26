@@ -4,20 +4,30 @@ import * as path from 'path';
 export const TEST_USER_UID = '550e8400-e29b-41d4-a716-446655440000';
 export const TEST_USER_UID_2 = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
 
+// Path constants for fixtures
+export const FIXTURES_DIR = path.join(__dirname, 'fixtures');
+export const FIXTURES_CONTENT_DIR = path.join(FIXTURES_DIR, '.leadcms/content');
+export const FIXTURES_MEDIA_DIR = path.join(FIXTURES_DIR, 'public/media');
+
 // Global config state for testing
 let mockGlobalConfig: any = {};
 
+// Helper to get the current test config
+const getTestConfig = () => ({
+  url: 'https://test.leadcms.com',
+  apiKey: 'test-api-key',
+  defaultLanguage: 'en',
+  contentDir: FIXTURES_CONTENT_DIR,
+  mediaDir: FIXTURES_MEDIA_DIR,
+  commentsDir: path.join(FIXTURES_DIR, '.leadcms/comments'),
+  enableDrafts: true,
+  preview: mockGlobalConfig.preview,
+});
+
 // Mock the config module to use our test fixtures
 jest.mock('../src/lib/config', () => ({
-  getConfig: () => ({
-    url: 'https://test.leadcms.com',
-    apiKey: 'test-api-key',
-    defaultLanguage: 'en',
-    contentDir: path.join(__dirname, 'fixtures/.leadcms/content'),
-    mediaDir: 'public/media',
-    enableDrafts: true,
-    preview: mockGlobalConfig.preview,
-  }),
+  getConfig: () => getTestConfig(),
+  loadConfig: () => getTestConfig(),
   configure: (config: any) => {
     mockGlobalConfig = config || {};
   },
