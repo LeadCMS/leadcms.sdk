@@ -4,6 +4,7 @@
  */
 
 import { jest } from '@jest/globals';
+import { countPushChanges } from '../src/scripts/push-leadcms-content';
 
 // Create a mock module that we can test the push logic with
 const mockPushLogic = {
@@ -566,6 +567,35 @@ heroImage: /media/hero.jpg
       const result = await mockPushLogic.executePush(analysisResult);
       expect(result.created).toBe(3);
       expect(result.updated).toBe(2);
+    });
+  });
+
+  describe('Change Counting Logic', () => {
+    it('should include conflicts only when enabled', () => {
+      const operations: any = {
+        create: [],
+        update: [],
+        rename: [],
+        typeChange: [],
+        conflict: [{ local: {}, remote: {} }, { local: {}, remote: {} }],
+        delete: []
+      };
+
+      expect(countPushChanges(operations, false)).toBe(0);
+      expect(countPushChanges(operations, true)).toBe(2);
+    });
+
+    it('should count regular operations without conflicts', () => {
+      const operations: any = {
+        create: [{ local: {} }],
+        update: [{ local: {}, remote: {} }, { local: {}, remote: {} }],
+        rename: [{ local: {}, remote: {}, oldSlug: 'old' }],
+        typeChange: [{ local: {}, remote: {}, oldType: 'old', newType: 'new' }],
+        conflict: [{ local: {}, remote: {} }],
+        delete: []
+      };
+
+      expect(countPushChanges(operations, false)).toBe(5);
     });
   });
 });

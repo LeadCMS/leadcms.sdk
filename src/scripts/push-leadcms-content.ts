@@ -405,6 +405,14 @@ async function matchContent(localContent: LocalContentItem[], remoteContent: Rem
   return operations;
 }
 
+function countPushChanges(operations: ContentOperations, includeConflicts: boolean = false): number {
+  return operations.create.length +
+    operations.update.length +
+    operations.rename.length +
+    operations.typeChange.length +
+    (includeConflicts ? operations.conflict.length : 0);
+}
+
 /**
  * Validate that all required content types exist remotely
  */
@@ -790,7 +798,7 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
 async function showDryRunOperations(operations: ContentOperations): Promise<void> {
   // Check if there are any operations to show
   const totalOperations = operations.create.length + operations.update.length +
-                         operations.rename.length + operations.typeChange.length + operations.delete.length;
+    operations.rename.length + operations.typeChange.length + operations.delete.length;
 
   if (totalOperations === 0) {
     return; // Don't show dry run preview if there are no operations
@@ -949,9 +957,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
 
     // Check if we found the target content
     if (isSingleFileMode) {
-      const totalChanges = finalOperations.create.length + finalOperations.update.length +
-                          finalOperations.rename.length + finalOperations.typeChange.length +
-                          finalOperations.conflict.length;
+      const totalChanges = countPushChanges(finalOperations, true);
 
       if (totalChanges === 0 && filteredLocalContent.length > 0) {
         // We have local content but no operations - it's in sync
@@ -982,7 +988,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
       return;
     }
 
-    const totalChanges = finalOperations.create.length + finalOperations.update.length + finalOperations.rename.length + finalOperations.typeChange.length;
+    const totalChanges = countPushChanges(finalOperations, force);
     if (totalChanges === 0) {
       if (isSingleFileMode) {
         console.log('✅ File is already in sync.');
@@ -1233,6 +1239,7 @@ export { pushMain as pushLeadCMSContent };
 
 // Export internal functions for testing
 export { hasActualContentChanges };
+export { countPushChanges };
 // Re-export formatContentForAPI from utility module for testing
 export { formatContentForAPI } from '../lib/content-api-formatting.js';
 // Re-export the new comparison function for consistency
