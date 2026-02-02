@@ -1,22 +1,17 @@
 name: Publish to NPM
 
 on:
-  release:
-    types: [created]
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to publish (leave empty for package.json version)'
-        required: false
-        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write # Required for OIDC trusted publishing
+  contents: read
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      id-token: write # Required for npm provenance
 
     steps:
       - name: Checkout code
@@ -25,9 +20,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -35,8 +30,8 @@ jobs:
       - name: Run build
         run: npm run build
 
-      - name: Run tests (if any)
-        run: npm test --if-present
+      - name: Run tests
+        run: npm test
 
       - name: Verify package contents
         run: |
@@ -44,24 +39,8 @@ jobs:
           echo "Package contents:"
           tar -tzf $(npm pack --silent) | head -20
 
-      - name: Check and update npm version
-        if: github.event.inputs.version
-        run: |
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
-          TARGET_VERSION="${{ github.event.inputs.version }}"
-          echo "Current version: $CURRENT_VERSION"
-          echo "Target version: $TARGET_VERSION"
-          if [ "$CURRENT_VERSION" != "$TARGET_VERSION" ]; then
-            echo "Updating version from $CURRENT_VERSION to $TARGET_VERSION"
-            npm version $TARGET_VERSION --no-git-tag-version
-          else
-            echo "Version already set to $TARGET_VERSION. Skipping npm version."
-          fi
-
       - name: Publish to NPM
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
 
       - name: Create package info
         run: |
