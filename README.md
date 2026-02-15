@@ -5,6 +5,7 @@ A comprehensive, framework-agnostic SDK and CLI tools for integrating with LeadC
 ## Installation
 
 ### For Build-Time Usage (Most Common)
+
 If you only use LeadCMS SDK during the build process (static site generation):
 
 ```bash
@@ -12,6 +13,7 @@ npm install --save-dev @leadcms/sdk
 ```
 
 ### For Runtime Usage
+
 If you need LeadCMS SDK in your production application (SSR, API routes, live preview):
 
 ```bash
@@ -19,6 +21,7 @@ npm install @leadcms/sdk
 ```
 
 ### Global CLI Installation
+
 For CLI tools and project setup:
 
 ```bash
@@ -28,18 +31,21 @@ npm install -g @leadcms/sdk
 ### When to Use Each Installation Method
 
 **Development Dependency (`--save-dev`)** - Recommended for:
+
 - ✅ Static Site Generators (Next.js, Astro, Gatsby, Nuxt)
 - ✅ Build-time content fetching and processing
 - ✅ Static route generation
 - ✅ Content pre-processing during build
 
 **Production Dependency (`--save`)** - Use when you need:
+
 - 🔄 Server-Side Rendering (SSR) with dynamic content
 - 🔄 API routes that fetch LeadCMS content at runtime
 - 🔄 Live preview functionality in production
 - 🔄 Runtime content loading and processing
 
 **Global Installation (`-g`)** - Best for:
+
 - 🛠️ CLI commands across multiple projects
 - 🛠️ Project initialization and setup
 - 🛠️ Content fetching and Docker template generation
@@ -49,18 +55,23 @@ npm install -g @leadcms/sdk
 Get started with LeadCMS in 3 simple steps:
 
 ### 1. Initialize Your Project
+
 ```bash
 npx leadcms init
 ```
+
 This will:
+
 - Connect to your LeadCMS instance
 - Detect available entity types (content, media, comments)
 - Create configuration files (`.env` and optionally `leadcms.config.json`)
 
 ### 2. Authenticate (for write access)
+
 ```bash
 npx leadcms login
 ```
+
 - **LeadCMS v1.2.88+**: Automatic device authentication via browser
 - **Older versions**: Guided manual token extraction
 - Saves your API token securely to `.env`
@@ -68,9 +79,11 @@ npx leadcms login
 **Skip this step** if you only need read-only access to public content.
 
 ### 3. Download Your Content
+
 ```bash
 npx leadcms pull
 ```
+
 Downloads all content, media, and comments to your local project.
 
 **That's it!** You're ready to use LeadCMS content in your application. See [Usage Examples](#usage-examples) below.
@@ -82,18 +95,21 @@ Downloads all content, media, and comments to your local project.
 The LeadCMS SDK includes comprehensive CI/CD workflows for GitHub Actions that provide:
 
 ### 🧪 Automated Testing
+
 - **Multi-Node Support**: Tests run on Node.js 18, 20, and 22
 - **Coverage Reports**: Automatic coverage reporting with visual coverage diffs on PRs
 - **Test Results**: Interactive test results displayed directly in GitHub Actions
 - **JUnit XML**: Structured test output for integration with external tools
 
 ### 📊 Coverage Reporting
+
 - **LCOV Reports**: Line and branch coverage tracking
 - **PR Comments**: Automatic coverage comments on pull requests showing coverage changes
 - **Coverage Artifacts**: HTML coverage reports archived for 30 days
 - **Multiple Formats**: Coverage available in LCOV, HTML, and Clover formats
 
 ### 🔧 Quality Checks
+
 - **TypeScript Compilation**: Ensures type safety across all Node.js versions
 - **Package Validation**: Verifies package structure and CLI functionality
 - **Docker Template Testing**: Validates generated Docker configurations
@@ -115,8 +131,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
       - run: npm ci
       - run: npm test
 ```
@@ -137,6 +153,7 @@ npm run test:watch
 ### Test Coverage
 
 The SDK maintains high test coverage with comprehensive unit tests covering:
+
 - 📄 Content retrieval and parsing
 - 🌍 Multi-language support and translations
 - 📝 Draft content handling and user-specific overrides
@@ -159,6 +176,7 @@ LEADCMS_USE_MOCK=true LEADCMS_MOCK_SCENARIO=mixedOperations npx leadcms push --d
 ```
 
 **Available Mock Scenarios:**
+
 - `allNew` - Local content that doesn't exist remotely (default)
 - `noChanges` - All content is in sync
 - `hasConflicts` - Remote content is newer than local
@@ -167,6 +185,7 @@ LEADCMS_USE_MOCK=true LEADCMS_MOCK_SCENARIO=mixedOperations npx leadcms push --d
 - `missingContentTypes` - Content with unknown types
 
 **Mock Mode Activation:**
+
 - `NODE_ENV=test` - Automatically uses mock mode
 - `LEADCMS_USE_MOCK=true` - Force mock mode
 
@@ -228,15 +247,15 @@ npx leadcms init
 For advanced use cases, you can configure the SDK programmatically:
 
 ```typescript
-import { configure } from '@leadcms/sdk';
+import { configure } from "@leadcms/sdk";
 
 configure({
-  url: 'https://your-leadcms-instance.com',
-  apiKey: 'your-api-key',
-  defaultLanguage: 'en',
-  contentDir: '.leadcms/content',
-  mediaDir: 'public/media',
-  enableDrafts: false
+  url: "https://your-leadcms-instance.com",
+  apiKey: "your-api-key",
+  defaultLanguage: "en",
+  contentDir: ".leadcms/content",
+  mediaDir: "public/media",
+  enableDrafts: false,
 });
 ```
 
@@ -254,6 +273,7 @@ configure({
 ## CLI Usage
 
 ### Check SDK version
+
 ```bash
 npx leadcms version
 # or
@@ -263,11 +283,13 @@ npx leadcms --version
 ```
 
 ### Initialize configuration
+
 ```bash
 npx leadcms init
 ```
 
 Interactive setup wizard that:
+
 1. **Connects to your LeadCMS instance** - Validates URL and checks for existing authentication
 2. **Fetches configuration** - Retrieves default language and available languages from public `/api/config` endpoint
 3. **Configures directories** - Sets content and media directories (defaults: `.leadcms/content`, `public/media`)
@@ -277,16 +299,19 @@ Interactive setup wizard that:
 **Note:** The `/api/config` endpoint is public and works without authentication. For write operations and private content, run `leadcms login` after initialization.
 
 ### Login to LeadCMS
+
 ```bash
 npx leadcms login
 ```
 
 Authenticates with your LeadCMS instance:
+
 - **Device Authentication** (LeadCMS v1.2.88+) - Opens a browser link for secure authentication
 - **Manual Token** (older versions) - Guides you through extracting an API token
 - **Saves token** - Automatically stores the token in your `.env` file
 
 **When to use:**
+
 - After running `leadcms init` if you need write access
 - To update an expired or invalid token
 - When switching between LeadCMS instances
@@ -315,7 +340,7 @@ Would you like to authenticate now? (Y/n): n
    1. English (United States) [en-US] (default)
    2. Russian (Russia) [ru-RU]
 
-Default language code [en-US]: 
+Default language code [en-US]:
 ✓ Using default language: en-US
 
 📦 Supported entity types:
@@ -341,12 +366,14 @@ Next steps:
 ```
 
 The wizard creates:
+
 - **`.env`** (or `.env` if exists) with `LEADCMS_URL`, `LEADCMS_DEFAULT_LANGUAGE`, and optionally `LEADCMS_API_KEY`
 - **`leadcms.config.json`** only if custom directories are specified
 
 **Anonymous Mode:** Perfect for static sites that only need public content. Omit the API key to skip authentication entirely.
 
 ### Generate Docker deployment templates
+
 ```bash
 npx leadcms docker
 # Creates Docker files for production and preview deployments
@@ -373,6 +400,7 @@ npx leadcms pull-comments
 > **Note:** `npx leadcms fetch` is still supported as an alias for backward compatibility.
 
 What each command does:
+
 - `npx leadcms pull` - Syncs content, media and comments into your project using the configured directories. Updates incremental sync tokens so subsequent runs are faster.
 - `npx leadcms pull-content` - Downloads only content entities (MDX/JSON files) and updates local metadata.
 - `npx leadcms pull-media` - Downloads media files to your `mediaDir` (e.g., `public/media`). Use this when you changed media or want to refresh assets separately from content.
@@ -381,11 +409,13 @@ What each command does:
 > **Note:** The CLI uses incremental sync tokens to avoid re-downloading unchanged items where supported by the LeadCMS API.
 
 ### Push local content to LeadCMS
+
 ```bash
 npx leadcms push [options]
 ```
 
 Push your local content changes to LeadCMS. This command will:
+
 - Analyze local MDX/JSON files and compare with remote content
 - Detect new content, updates, and conflicts using `updatedAt` timestamps
 - Prompt for confirmation before making changes
@@ -393,26 +423,29 @@ Push your local content changes to LeadCMS. This command will:
 - Update local files with remote metadata (id, createdAt, updatedAt) after sync
 
 **Options:**
+
 - `--force` - Override remote changes (skip conflict check)
 
-
 **Content frontmatter / metadata (required and optional fields):**
+
 ```yaml
 ---
-type: "article"                    # required: Content type (must exist in LeadCMS)
-title: "Article Title"             # required: Content title
-slug: "article-slug"               # required: URL slug (unique per locale)
-language: "en"                     # required: Content language
+type: "article" # required: Content type (must exist in LeadCMS)
+title: "Article Title" # required: Content title
+slug: "article-slug" # required: URL slug (unique per locale)
+language: "en" # required: Content language
 publishedAt: "2024-10-29T10:00:00Z" # optional: Publication date (omit to create a draft or schedule a future publish)
 # updatedAt: "2024-10-29T10:00:00Z"   # optional: maintained by the server; do not set for new content
 ---
 ```
 
 Notes:
+
 - `publishedAt` is optional. Omitting it is a valid way to create draft or scheduled content depending on your LeadCMS workflow.
 - `updatedAt` is typically set and maintained by the LeadCMS server after content is created or updated. The SDK will use `updatedAt` when present for conflict detection, but you should not rely on it being set for brand-new local files.
 
 ### Check sync status
+
 ```bash
 npx leadcms status
 ```
@@ -422,6 +455,7 @@ Shows the current sync status between local and remote **content** without makin
 **Note:** The `status` command currently only supports content. Media and comments do not have sync status checking yet.
 
 ### Watch for real-time updates
+
 ```bash
 npx leadcms watch
 ```
@@ -435,9 +469,9 @@ The SDK provides framework-agnostic data access. Most frameworks use it as a **d
 export function generateStaticParams() {
   // This runs at BUILD TIME, not runtime
   const routes = getAllContentRoutes();
-  return routes.map(route => ({
+  return routes.map((route) => ({
     slug: route.slugParts,
-    ...(route.isDefaultLocale ? {} : { locale: route.locale })
+    ...(route.isDefaultLocale ? {} : { locale: route.locale }),
   }));
 }
 
@@ -445,9 +479,9 @@ export function generateStaticParams() {
 export function getStaticPaths() {
   // This runs at BUILD TIME, not runtime
   const routes = getAllContentRoutes();
-  return routes.map(route => ({
+  return routes.map((route) => ({
     params: { slug: route.slug },
-    props: { locale: route.locale, path: route.path }
+    props: { locale: route.locale, path: route.path },
   }));
 }
 
@@ -456,11 +490,11 @@ exports.createPages = async ({ actions }) => {
   const { createPage } = actions;
   const routes = getAllContentRoutes();
 
-  routes.forEach(route => {
+  routes.forEach((route) => {
     createPage({
       path: route.path,
-      component: path.resolve('./src/templates/content.js'),
-      context: { slug: route.slug, locale: route.locale }
+      component: path.resolve("./src/templates/content.js"),
+      context: { slug: route.slug, locale: route.locale },
     });
   });
 };
@@ -468,18 +502,18 @@ exports.createPages = async ({ actions }) => {
 // Runtime Usage Examples (Production dependency required)
 
 // Next.js API Route (Runtime)
-import { getCMSContentBySlugForLocale } from '@leadcms/sdk';
+import { getCMSContentBySlugForLocale } from "@leadcms/sdk";
 
 export async function GET(request) {
   // This runs at REQUEST TIME, needs production dependency
-  const content = getCMSContentBySlugForLocale('about', 'en');
+  const content = getCMSContentBySlugForLocale("about", "en");
   return Response.json(content);
 }
 
 // Express.js Server (Runtime)
-app.get('/api/content/:slug', (req, res) => {
+app.get("/api/content/:slug", (req, res) => {
   // This runs at REQUEST TIME, needs production dependency
-  const content = getCMSContentBySlugForLocale(req.params.slug, 'en');
+  const content = getCMSContentBySlugForLocale(req.params.slug, "en");
   res.json(content);
 });
 ```
@@ -491,17 +525,17 @@ app.get('/api/content/:slug', (req, res) => {
 Get content from your LeadCMS instance:
 
 ```typescript
-import { 
+import {
   getCMSContentBySlugForLocale,
   getAllContentSlugsForLocale,
-  getAllContentRoutes 
-} from '@leadcms/sdk';
+  getAllContentRoutes,
+} from "@leadcms/sdk";
 
 // Get single content item
-const content = getCMSContentBySlugForLocale('about-us', 'en');
+const content = getCMSContentBySlugForLocale("about-us", "en");
 
 // Get all content slugs
-const slugs = getAllContentSlugsForLocale('en');
+const slugs = getAllContentSlugsForLocale("en");
 
 // Get all routes for static generation
 const routes = getAllContentRoutes();
@@ -514,21 +548,22 @@ const routes = getAllContentRoutes();
 The SDK automatically detects preview slugs and enables draft content access without requiring explicit configuration:
 
 ```typescript
-import { getCMSContentBySlugForLocale } from '@leadcms/sdk';
+import { getCMSContentBySlugForLocale } from "@leadcms/sdk";
 
 // Normal slug - only returns published content
-const published = getCMSContentBySlugForLocale('home', 'en');
+const published = getCMSContentBySlugForLocale("home", "en");
 // Returns: null if content has no publishedAt
 
 // Preview slug with GUID - automatically enables draft access
 const preview = getCMSContentBySlugForLocale(
-  'home-550e8400-e29b-41d4-a716-446655440000',
-  'en'
+  "home-550e8400-e29b-41d4-a716-446655440000",
+  "en",
 );
 // Returns: draft content even without publishedAt
 ```
 
 **How it works:**
+
 - When a slug contains a GUID pattern (e.g., `home-{userUid}`), the SDK automatically:
   1. Detects the GUID suffix
   2. Extracts the base slug and userUid
@@ -536,6 +571,7 @@ const preview = getCMSContentBySlugForLocale(
   4. Returns user's draft version or falls back to base content
 
 **Benefits:**
+
 - ✅ Zero configuration - works automatically with LeadCMS preview URLs
 - 🔒 Secure - only preview slugs (with valid GUID) can access drafts
 - 🔄 Backward compatible - normal slugs continue to require `publishedAt`
@@ -570,18 +606,15 @@ npx leadcms pull-comments
 ```
 
 ```typescript
-import { 
-  getCommentsForContent,
-  getCommentsTreeForContent 
-} from '@leadcms/sdk';
+import { getCommentsForContent, getCommentsTreeForContent } from "@leadcms/sdk";
 
 // Get flat list of comments
 const comments = getCommentsForContent(contentId);
 
 // Get comments as tree for threading
 const tree = getCommentsTreeForContent(contentId, undefined, {
-  sortOrder: 'newest',
-  replySortOrder: 'oldest'
+  sortOrder: "newest",
+  replySortOrder: "oldest",
 });
 ```
 
@@ -598,6 +631,7 @@ npx leadcms docker
 ```
 
 This creates:
+
 - `Dockerfile` - Production static site deployment
 - `nginx.conf` - Optimized nginx configuration
 - `scripts/inject-runtime-env.sh` - Runtime environment injection
@@ -650,6 +684,7 @@ docker run -p 80:80 \
 ## Debugging
 
 ### Debug Logging
+
 Control SDK logging verbosity with environment variables:
 
 ```bash
@@ -663,32 +698,35 @@ NODE_ENV=production npm run build
 Debug mode is automatically enabled when `NODE_ENV=development` or `LEADCMS_DEBUG=true`.
 
 ### Error Handling
+
 The SDK provides detailed error information for missing configuration files:
 
 ```typescript
-import { loadContentConfig, loadContentConfigStrict } from '@leadcms/sdk';
+import { loadContentConfig, loadContentConfigStrict } from "@leadcms/sdk";
 
 // Graceful handling - returns null for missing files
-const config = loadContentConfig('layout'); // Returns null if missing
+const config = loadContentConfig("layout"); // Returns null if missing
 
 // Strict handling - throws detailed errors for debugging
 try {
-  const config = loadContentConfigStrict('layout');
+  const config = loadContentConfigStrict("layout");
 } catch (error) {
-  console.log('Missing configuration:', error.configName);
-  console.log('Expected locale:', error.locale);
-  console.log('Full error:', error.message);
+  console.log("Missing configuration:", error.configName);
+  console.log("Expected locale:", error.locale);
+  console.log("Full error:", error.message);
   // Error message includes: configName, locale, and expected file path
 }
 ```
 
 **Error Details Include:**
+
 - `configName` - The specific configuration name that was requested
 - `locale` - The locale that was being loaded
 - `message` - Full descriptive error including expected file path
 - Clear console logging of missing files with exact paths
 
 ### Performance Tips
+
 - ✅ Use configuration files instead of programmatic configuration for better caching
 - ✅ The SDK caches file reads automatically - no manual optimization needed
 - ✅ In production builds, logging is minimal to reduce noise
@@ -702,18 +740,22 @@ try {
 - **[Documentation Index](./docs/README)** - Central hub for all documentation
 
 #### Content & Media
+
 - **[Content Management](./docs/CONTENT_MANAGEMENT.md)** - Retrieving, organizing, and working with content
 - **[Media Management](./docs/MEDIA_MANAGEMENT.md)** - Handling media files and optimization
 - **[Draft Handling](./docs/DRAFT_HANDLING.md)** - Working with draft content and user-specific drafts
 
 #### Comments
+
 - **[Comment Tree Guide](./docs/COMMENT_TREE.md)** - Building threaded comment interfaces with sorting and filtering
 
 #### Setup & Configuration
+
 - **[Interactive Init](./docs/INTERACTIVE_INIT.md)** - Setup wizard and authentication
 - **[Public API Mode](./docs/PUBLIC_API_MODE.md)** - Security-first approach and operation modes
 
 #### Development
+
 - **[Development Guide](./docs/DEVELOPMENT.md)** - Local development, testing, and debugging
 - **[GitHub Actions](./docs/GITHUB_ACTIONS.md)** - CI/CD setup and automated publishing
 
