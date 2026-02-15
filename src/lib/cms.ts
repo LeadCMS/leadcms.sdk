@@ -1079,44 +1079,6 @@ export function loadContentConfig<T>(
 }
 
 /**
- * Load header configuration for a specific locale with optional draft support
- * @param contentDir - Content directory path
- * @param locale - Locale code
- * @param userUid - Optional user UID for draft content
- * @internal
- */
-function getHeaderConfigInternal(contentDir: string, locale: string, userUid?: string | null): HeaderConfig | null {
-  try {
-    return loadConfigWithDraftSupport<HeaderConfig>(contentDir, locale, 'header', userUid);
-  } catch (error) {
-    // Handle missing configuration files gracefully for internal functions
-    if (error instanceof Error && error.name === 'MissingConfigurationFile') {
-      return null;
-    }
-    throw error;
-  }
-}
-
-/**
- * Load footer configuration for a specific locale with optional draft support
- * @param contentDir - Content directory path
- * @param locale - Locale code
- * @param userUid - Optional user UID for draft content
- * @internal
- */
-function getFooterConfigInternal(contentDir: string, locale: string, userUid?: string | null): FooterConfig | null {
-  try {
-    return loadConfigWithDraftSupport<FooterConfig>(contentDir, locale, 'footer', userUid);
-  } catch (error) {
-    // Handle missing configuration files gracefully for internal functions
-    if (error instanceof Error && error.name === 'MissingConfigurationFile') {
-      return null;
-    }
-    throw error;
-  }
-}
-
-/**
  * Load header configuration using configured contentDir (unified implementation)
  * @param locale - Locale code (optional, uses default language from config if not provided)
  * @param userUid - Optional user UID for draft content (for backward compatibility)

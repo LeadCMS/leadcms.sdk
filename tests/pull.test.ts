@@ -398,22 +398,28 @@ This is the content with ![image](/media/inline/test.jpg).`;
       const remoteContent = {
         ...mockPullData.content[0],
         // Remote might have additional fields that local doesn't have
-        extraField: 'should not appear',
-        anotherField: 'also should not appear'
+        extraField: 'extra value',
+        anotherField: 'another value'
       };
 
       const typeMap = { 'article': 'MDX' };
 
       const result = await transformRemoteForComparison(remoteContent, localContent, typeMap);
 
-      // Should only include fields that exist in local content
+      // Should include standard fields from both local and remote
       expect(result).toContain('title: Test Article');
       expect(result).toContain('coverImageUrl: /media/blog/covers/test-article.jpg');
       expect(result).toContain('publishedAt: \'2024-01-01T00:00:00Z\'');
 
-      // Should NOT include extra fields that don't exist in local
-      expect(result).not.toContain('extraField');
-      expect(result).not.toContain('anotherField');
+      // Should include additional remote fields so that field removals can be detected.
+      // False positive protection for truly new remote fields comes from the
+      // timestamp check in matchContent (remote newer -> conflict), not from
+      // filtering here.
+      expect(result).toContain('extraField');
+      expect(result).toContain('anotherField');
+
+      // System fields should still be excluded
+      expect(result).not.toContain('isLocal');
 
       // URLs should still be transformed
       expect(result).toContain('/media/inline/test.jpg');

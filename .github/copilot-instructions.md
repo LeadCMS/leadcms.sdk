@@ -11,15 +11,17 @@
 ## Code Organization
 
 ### Core Structure
+
 - **`/src/lib/`** - Main library (`cms.ts`, `config.ts`, `data-service.ts`, transformations)
-- **`/src/scripts/`** - Content operations (push, pull, helpers, SSE watcher)  
+- **`/src/scripts/`** - Content operations (push, pull, helpers, SSE watcher)
 - **`/src/cli/`** - Command line interface
 - **`/src/swagger.json`** - OpenAPI 3.0 specification for LeadCMS API (see API Reference section below)
-- **`/tests/`** - Test suites: core, feature-specific, integration, validation (144 tests, 60% coverage)
+- **`/tests/`** - Test suites: core, feature-specific, integration, validation
 
 ## API Reference
 
 ### swagger.json - Source of Truth
+
 The **`/src/swagger.json`** file contains the complete OpenAPI 3.0 specification for the LeadCMS API. Use it to understand:
 
 - **API Endpoints**: All available endpoints with HTTP methods and paths
@@ -30,11 +32,15 @@ The **`/src/swagger.json`** file contains the complete OpenAPI 3.0 specification
 - **Error Responses**: Expected error codes (400, 401, 404, 422, 500) and structures
 
 **Examples:**
+
 - `/api/users/me` → Returns `UserDetailsDto` with `displayName`, `email`, `userName` (all required)
-- `/api/content` → Accepts `ContentCreateDto`, returns `ContentDetailsDto`
-- `/api/comments/sync` → Sync endpoint with timestamp parameter
+- `/api/content` → Accepts `ContentCreateDto` (required: `title`, `description`, `body`, `slug`, `type`, `author`, `language`), returns `ContentDetailsDto`
+- `/api/comments/sync` → Sync endpoint with timestamp parameter, returns `CommentDetailsDto` (includes `status`, `answerStatus`)
+- `/api/identity/device/*` → Device auth flow used by CLI login (`initiate`, `verify`, `poll`, `deny`)
+- `/api/media/sync` → Media sync endpoint for bidirectional media management
 
 **When implementing new features:**
+
 1. Check swagger.json for endpoint structure
 2. Use the exact DTO schema names and field types
 3. Validate required fields match the specification
@@ -43,12 +49,14 @@ The **`/src/swagger.json`** file contains the complete OpenAPI 3.0 specification
 ## Development Guidelines
 
 ### Test-Driven Development (TDD)
+
 - **Test-First**: Always write failing tests before implementing features or fixes
 - **Bug Fix Protocol**: Reproduce bug with test → fix → verify
 - **Coverage Goal**: Improve from current 60% to >80%
 - **Test Data**: Minimal, generic, privacy-compliant test data only
 
 ### Error Handling
+
 - **Public APIs**: Return `null`/empty arrays, don't throw
 - **Strict Variants**: Provide `*Strict` functions that throw detailed errors
 - **Logging**: Debug mode for development, minimal for production
@@ -56,21 +64,30 @@ The **`/src/swagger.json`** file contains the complete OpenAPI 3.0 specification
 ## Content Model
 
 ```typescript
+// SDK interface (framework-agnostic, used by consumers)
 interface CMSContent {
-  id?: number;
+  id: string | number;
   slug: string;
   type: string;
-  title: string;
-  body: string;
+  title?: string;
+  description?: string;
+  coverImageUrl?: string;
+  coverImageAlt?: string;
   language?: string;
+  translationKey?: string;
   publishedAt?: Date | string;
-  createdAt?: Date | string;
-  updatedAt?: Date | string;
-  [key: string]: any; // Allow additional user-defined fields
+  draft?: boolean;
+  body: string;
+  [key: string]: any;
 }
+
+// Maps to swagger ContentDetailsDto which additionally includes:
+// author (required), category, tags, allowComments, source,
+// createdAt, updatedAt, comments, translations
 ```
 
 ### File Formats
+
 - **MDX**: YAML frontmatter + content
 - **JSON**: Pure JSON structure
 - **Localization**: Both formats in `content/{locale}/` subdirectories
@@ -95,15 +112,18 @@ LEADCMS_USE_MOCK=true  # Testing
 ## Performance & Security
 
 ### Caching
+
 - Config files: 60s, Content: 30s, Process-level caching for builds
 
 ### Security
+
 - **API Keys**: Environment variables only, never hardcode
 - **Validation**: GUID format, prevent path traversal, sanitize content
 
 ## Common Anti-Patterns to Avoid
 
 ### ❌ Testing Anti-Patterns
+
 ```typescript
 // DON'T: Implement features without tests
 export function newFeature() {
@@ -111,7 +131,7 @@ export function newFeature() {
 } // ❌ No test coverage
 
 // DON'T: Write tests after implementation
-it('should work', () => {
+it("should work", () => {
   // Test written after feature is already working
   expect(existingFeature()).toBeTruthy(); // ❌ Not TDD
 });
@@ -123,10 +143,11 @@ const complexTestData = {
 ```
 
 ### ❌ Error Handling Anti-Patterns
+
 ```typescript
 // DON'T: Throw on missing content in public APIs
 if (!content) {
-  throw new Error('Content not found'); // ❌ Should return null for user-facing APIs
+  throw new Error("Content not found"); // ❌ Should return null for user-facing APIs
 }
 
 // DON'T: Swallow errors silently
@@ -137,10 +158,11 @@ try {
 }
 
 // DON'T: Generic error messages
-throw new Error('Something went wrong'); // ❌ Provide context
+throw new Error("Something went wrong"); // ❌ Provide context
 ```
 
 ### ❌ Code Organization Anti-Patterns
+
 ```typescript
 // DON'T: Mix business logic with framework-specific code
 export function getNextJSContent(slug: string) {} // ❌ Not framework-agnostic
@@ -153,12 +175,15 @@ export function fetchParseValidateAndCacheContent() {} // ❌ Does too many thin
 ```
 
 ### ❌ Development Workflow Anti-Patterns
+
 ```typescript
 // DON'T: Skip tests for "simple" bug fixes
 // "This is just a one-line fix, no need for a test" // ❌ All changes need tests
 
 // DON'T: Write implementation-specific tests
-expect(mockFunction).toHaveBeenCalledWith(/* specific implementation details */); // ❌ Too tightly coupled
+expect(
+  mockFunction,
+).toHaveBeenCalledWith(/* specific implementation details */); // ❌ Too tightly coupled
 
 // DON'T: Leave TODO comments in production code
 // TODO: Fix this later // ❌ Should be tracked in issues or fixed immediately
@@ -167,6 +192,7 @@ expect(mockFunction).toHaveBeenCalledWith(/* specific implementation details */)
 ## SDK Development Workflow
 
 ### 1. Feature Development Process
+
 1. **Requirement Analysis**: Understand the feature requirements and edge cases
 2. **Test Planning**: Design test cases that cover all scenarios including edge cases
 3. **Test Implementation**: Write comprehensive failing tests first
@@ -175,6 +201,7 @@ expect(mockFunction).toHaveBeenCalledWith(/* specific implementation details */)
 6. **Integration Testing**: Ensure feature works with existing functionality
 
 ### 2. Bug Fix Protocol
+
 1. **Issue Reproduction**: Create a test that demonstrates the bug
 2. **Root Cause Analysis**: Understand why the bug occurs
 3. **Test Creation**: Write a test that fails due to the bug
@@ -183,6 +210,7 @@ expect(mockFunction).toHaveBeenCalledWith(/* specific implementation details */)
 6. **Documentation Update**: Update relevant documentation if needed
 
 ### 3. Code Quality Standards
+
 - **TypeScript Strict Mode**: Use strict TypeScript settings for type safety
 - **Interface Consistency**: Maintain consistent API patterns across modules
 - **Generic Types**: Use proper generic types for reusable functions
@@ -190,6 +218,7 @@ expect(mockFunction).toHaveBeenCalledWith(/* specific implementation details */)
 - **Dependency Injection**: Use dependency injection for better testability
 
 ### 4. Testing Best Practices
+
 - **Test Isolation**: Each test should be independent and not rely on others
 - **Descriptive Names**: Test names should clearly describe what they test
 - **Arrange-Act-Assert**: Structure tests with clear setup, execution, and verification
@@ -199,18 +228,21 @@ expect(mockFunction).toHaveBeenCalledWith(/* specific implementation details */)
 ## Current Development Practices
 
 ### Test Coverage & Quality
-- **Current Coverage**: 60% across all modules with 144 comprehensive tests
+
+- **Current Coverage**: 393 comprehensive tests across 23 test suites
 - **Mock Data Service**: Comprehensive `data-service.ts` with scenario-based testing
 - **CI/CD Integration**: GitHub Actions with automated testing on Node.js 18, 20, 22
 - **Jest Configuration**: TypeScript support, coverage reporting, JUnit XML output
 
 ### Code Organization Patterns
+
 - **Framework Agnostic**: All functions work across Next.js, Astro, Gatsby, Nuxt, vanilla JS
 - **TypeScript Strict**: Full type safety with comprehensive interface definitions
 - **Modular Architecture**: Clear separation between core library, CLI, and content management
 - **Configuration Management**: Environment-based config with fallback hierarchy
 
 ### Development Tools & Practices
+
 - **Build System**: TypeScript compilation with template copying and executable permissions
 - **Testing Framework**: Jest with ts-jest, multiple test categories and scenarios
 - **Package Distribution**: NPM package with CLI binary and TypeScript declarations

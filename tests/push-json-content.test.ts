@@ -1,19 +1,22 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { jest } from '@jest/globals';
+import { createTestConfig, createDataServiceMock } from './test-helpers';
 
-// Test for JSON content type push functionality
-// This should reproduce the issue where JSON files are incorrectly formatted for API
+const tmpRoot = path.join(__dirname, 'tmp-json-push-test');
+const contentDir = path.join(tmpRoot, '.leadcms', 'content');
+
+jest.mock('../src/lib/config.js', () => ({
+  getConfig: jest.fn(() => createTestConfig({ contentDir })),
+}));
+
+jest.mock('../src/lib/data-service.js', () => ({
+  leadCMSDataService: createDataServiceMock(),
+}));
+
+import { parseContentFile, formatContentForAPI } from '../src/scripts/push-leadcms-content';
 
 describe('Push JSON Content', () => {
-  const tmpRoot = path.join(__dirname, 'tmp-json-push-test');
-  const contentDir = path.join(tmpRoot, '.leadcms', 'content');
-
-  beforeAll(() => {
-    // Mock the config
-    process.env.LEADCMS_CONTENT_DIR = contentDir;
-    process.env.LEADCMS_DEFAULT_LANGUAGE = 'en';
-    process.env.LEADCMS_USE_MOCK = 'true';
-  });
 
   afterAll(async () => {
     // Cleanup
@@ -52,28 +55,9 @@ describe('Push JSON Content', () => {
     const jsonFilePath = path.join(contentDir, 'test-component.json');
     await fs.writeFile(jsonFilePath, JSON.stringify(jsonContent, null, 2));
 
-    // Import the formatContentForAPI function
-    const { formatContentForAPI } = await import('../src/lib/content-api-formatting');
-
-    // Parse the file like the push logic would
-    const fileContent = await fs.readFile(jsonFilePath, 'utf-8');
-    const jsonData = JSON.parse(fileContent);
-    const body = jsonData.body || '';
-    const metadata = { ...jsonData };
-    delete metadata.body;
-
-    const localContentItem = {
-      filePath: jsonFilePath,
-      slug: 'test-component',
-      locale: 'en',
-      type: 'component',
-      metadata,
-      body,
-      isLocal: true
-    };
-
-    // Format for API
-    const apiFormattedContent = formatContentForAPI(localContentItem);
+    const parsed = await parseContentFile(jsonFilePath, 'en', contentDir);
+    expect(parsed).not.toBeNull();
+    const apiFormattedContent = formatContentForAPI(parsed!);
 
     // Test the expected behavior: body should contain JSON string, not MDX frontmatter
     expect(apiFormattedContent.body).toBe(jsonContent.body);
@@ -112,27 +96,9 @@ describe('Push JSON Content', () => {
     const jsonFilePath = path.join(contentDir, 'footer-test.json');
     await fs.writeFile(jsonFilePath, JSON.stringify(footerJsonContent, null, 2));
 
-    const { formatContentForAPI } = await import('../src/lib/content-api-formatting');
-
-    // Parse the file
-    const fileContent = await fs.readFile(jsonFilePath, 'utf-8');
-    const jsonData = JSON.parse(fileContent);
-    const body = jsonData.body || '';
-    const metadata = { ...jsonData };
-    delete metadata.body;
-
-    const localContentItem = {
-      filePath: jsonFilePath,
-      slug: 'footer-test',
-      locale: 'en',
-      type: 'component',
-      metadata,
-      body,
-      isLocal: true
-    };
-
-    // Format for API
-    const apiFormattedContent = formatContentForAPI(localContentItem);
+    const parsed = await parseContentFile(jsonFilePath, 'en', contentDir);
+    expect(parsed).not.toBeNull();
+    const apiFormattedContent = formatContentForAPI(parsed!);
 
     // CRITICAL: Custom fields like footerData should NOT be at root level
     // They should be serialized in the body as JSON string
@@ -177,27 +143,9 @@ describe('Push JSON Content', () => {
     const jsonFilePath = path.join(contentDir, 'media-test.json');
     await fs.writeFile(jsonFilePath, JSON.stringify(jsonWithMedia, null, 2));
 
-    const { formatContentForAPI } = await import('../src/lib/content-api-formatting');
-
-    // Parse the file
-    const fileContent = await fs.readFile(jsonFilePath, 'utf-8');
-    const jsonData = JSON.parse(fileContent);
-    const body = jsonData.body || '';
-    const metadata = { ...jsonData };
-    delete metadata.body;
-
-    const localContentItem = {
-      filePath: jsonFilePath,
-      slug: 'media-test',
-      locale: 'en',
-      type: 'component',
-      metadata,
-      body,
-      isLocal: true
-    };
-
-    // Format for API
-    const apiFormattedContent = formatContentForAPI(localContentItem);
+    const parsed = await parseContentFile(jsonFilePath, 'en', contentDir);
+    expect(parsed).not.toBeNull();
+    const apiFormattedContent = formatContentForAPI(parsed!);
 
     // URLs should be transformed from /media/ to /api/media/
     expect(apiFormattedContent.body).toContain('/api/media/test.jpg');
@@ -243,25 +191,9 @@ describe('Push JSON Content', () => {
       const jsonFilePath = path.join(contentDir, 'ru', 'footer.json');
       await fs.writeFile(jsonFilePath, JSON.stringify(footerJsonContent, null, 2));
 
-      const { formatContentForAPI } = await import('../src/lib/content-api-formatting');
-
-      const fileContent = await fs.readFile(jsonFilePath, 'utf-8');
-      const jsonData = JSON.parse(fileContent);
-      const body = jsonData.body || '';
-      const metadata = { ...jsonData };
-      delete metadata.body;
-
-      const localContentItem = {
-        filePath: jsonFilePath,
-        slug: 'footer',
-        locale: 'ru',
-        type: 'component',
-        metadata,
-        body,
-        isLocal: true
-      };
-
-      const apiFormattedContent = formatContentForAPI(localContentItem);
+      const parsed = await parseContentFile(jsonFilePath, 'ru', path.join(contentDir, 'ru'));
+      expect(parsed).not.toBeNull();
+      const apiFormattedContent = formatContentForAPI(parsed!);
 
       // FIXED: footerData should NOT appear at root level
       expect(apiFormattedContent).not.toHaveProperty('footerData');
@@ -318,27 +250,9 @@ describe('Push JSON Content', () => {
       const jsonFilePath = path.join(contentDir, 'test-header.json');
       await fs.writeFile(jsonFilePath, JSON.stringify(complexJsonContent, null, 2));
 
-      const { formatContentForAPI } = await import('../src/lib/content-api-formatting');
-
-      // Parse the file exactly like the push logic would
-      const fileContent = await fs.readFile(jsonFilePath, 'utf-8');
-      const jsonData = JSON.parse(fileContent);
-      const body = jsonData.body || '';
-      const metadata = { ...jsonData };
-      delete metadata.body;
-
-      const localContentItem = {
-        filePath: jsonFilePath,
-        slug: 'test-header',
-        locale: 'en',
-        type: 'component',
-        metadata,
-        body,
-        isLocal: true
-      };
-
-      // Format for API
-      const apiFormattedContent = formatContentForAPI(localContentItem);
+      const parsed = await parseContentFile(jsonFilePath, 'en', contentDir);
+      expect(parsed).not.toBeNull();
+      const apiFormattedContent = formatContentForAPI(parsed!);
 
       // Verify API structure with all fields
       // Note: id, createdAt, updatedAt are removed (read-only, managed by API)
@@ -389,25 +303,9 @@ describe('Push JSON Content', () => {
       const jsonFilePath = path.join(contentDir, 'published-test.json');
       await fs.writeFile(jsonFilePath, JSON.stringify(jsonWithPublishedAt, null, 2));
 
-      const { formatContentForAPI } = await import('../src/lib/content-api-formatting');
-
-      const fileContent = await fs.readFile(jsonFilePath, 'utf-8');
-      const jsonData = JSON.parse(fileContent);
-      const body = jsonData.body || '';
-      const metadata = { ...jsonData };
-      delete metadata.body;
-
-      const localContentItem = {
-        filePath: jsonFilePath,
-        slug: 'published-test',
-        locale: 'en',
-        type: 'component',
-        metadata,
-        body,
-        isLocal: true
-      };
-
-      const apiFormattedContent = formatContentForAPI(localContentItem);
+      const parsed = await parseContentFile(jsonFilePath, 'en', contentDir);
+      expect(parsed).not.toBeNull();
+      const apiFormattedContent = formatContentForAPI(parsed!);
 
       // publishedAt should be a top-level field, not in body
       expect(apiFormattedContent.publishedAt).toBe("2025-01-01T00:00:00Z");

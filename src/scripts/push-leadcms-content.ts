@@ -1212,9 +1212,12 @@ async function updateLocalMetadata(localContent: LocalContentItem, remoteRespons
       const fileContent = await fs.readFile(filePath, 'utf-8');
       const parsed = matter(fileContent);
 
-      // Update metadata with response data (only non-system fields)
+      // Update metadata with response data
       parsed.data.id = remoteResponse.id;
-      // Do not add system fields (createdAt, updatedAt, publishedAt) to local files
+      // Sync updatedAt so future conflict detection uses the correct baseline
+      if (remoteResponse.updatedAt) {
+        parsed.data.updatedAt = remoteResponse.updatedAt;
+      }
 
       // Rebuild the file
       const newContent = matter.stringify(parsed.content, parsed.data);
@@ -1223,9 +1226,12 @@ async function updateLocalMetadata(localContent: LocalContentItem, remoteRespons
     } else if (ext === '.json') {
       const jsonData = JSON.parse(await fs.readFile(filePath, 'utf-8'));
 
-      // Update metadata (only non-system fields)
+      // Update metadata
       jsonData.id = remoteResponse.id;
-      // Do not add system fields (createdAt, updatedAt, publishedAt) to local files
+      // Sync updatedAt so future conflict detection uses the correct baseline
+      if (remoteResponse.updatedAt) {
+        jsonData.updatedAt = remoteResponse.updatedAt;
+      }
 
       await fs.writeFile(filePath, JSON.stringify(jsonData, null, 2), 'utf-8');
     }
@@ -1240,6 +1246,13 @@ export { pushMain as pushLeadCMSContent };
 // Export internal functions for testing
 export { hasActualContentChanges };
 export { countPushChanges };
+export { matchContent };
+export { updateLocalMetadata };
+export { readLocalContent };
+export { parseContentFile };
+export { isLocaleDirectory };
+export { getLocalContentTypes };
+export { filterContentOperations };
 // Re-export formatContentForAPI from utility module for testing
 export { formatContentForAPI } from '../lib/content-api-formatting.js';
 // Re-export the new comparison function for consistency

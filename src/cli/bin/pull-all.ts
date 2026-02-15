@@ -10,6 +10,7 @@ const args = process.argv.slice(2);
 // Parse target ID or slug
 let targetId: string | undefined;
 let targetSlug: string | undefined;
+let reset = false;
 
 const idIndex = args.findIndex(arg => arg === '--id');
 if (idIndex !== -1 && args[idIndex + 1]) {
@@ -21,7 +22,11 @@ if (slugIndex !== -1 && args[slugIndex + 1]) {
   targetSlug = args[slugIndex + 1];
 }
 
-pullAll({ targetId, targetSlug }).catch((error: any) => {
+if (args.includes('--reset')) {
+  reset = true;
+}
+
+pullAll({ targetId, targetSlug, reset }).catch((error: any) => {
   console.error('Error running LeadCMS pull:', error.message);
   process.exit(1);
 });

@@ -591,8 +591,8 @@ Some content here.`;
       expect(normalizedLocal).toBe(normalizedRemote);
     });
 
-    it('should reproduce the false positive changes issue from real-world scenario', async () => {
-      // Create a real-world local file with timestamps (like the user's actual files)
+    it('should detect differences when remote has fields not present in local file', async () => {
+      // Create a local file that is missing some remote fields (e.g., updatedAt)
       const localFilePath = path.join(tempDir, 'real-world-content.mdx');
       const localContent = `---
 id: 25
@@ -612,11 +612,11 @@ Test page content.`;
 
       await fs.writeFile(localFilePath, localContent);
 
-      // Remote content with exactly the same data (should result in no changes)
+      // Remote content has all the same fields plus updatedAt
       const remoteContent = {
         id: 25,
         createdAt: '2025-09-10T09:32:54.223364Z',
-        updatedAt: '2025-10-15T14:22:33.123456Z', // This field might not be in local
+        updatedAt: '2025-10-15T14:22:33.123456Z', // Not in local
         title: 'Test Page',
         description: 'Test page description',
         slug: 'test-page',
@@ -632,24 +632,73 @@ Test page content.`
 
       const typeMap = { page: 'MDX' as const };
 
-      // OLD METHOD (causing false positives): Transform without considering local fields
-      const transformedRemoteOld = await transformRemoteToLocalFormat(remoteContent, typeMap);
       const localFileContent = await fs.readFile(localFilePath, 'utf-8');
 
-      const hasChangesOld = localFileContent.trim() !== transformedRemoteOld.trim();
+      // transformRemoteForComparison now includes ALL non-system remote fields
+      // so that field removals from local content are properly detected.
+      // False positive protection for new server fields comes from the
+      // timestamp check in matchContent (remote newer -> conflict).
+      const transformedRemote = await transformRemoteForComparison(remoteContent, localFileContent, typeMap);
 
-      // NEW METHOD (fixed): Transform only including fields present in local file
-      const transformedRemoteNew = await transformRemoteForComparison(remoteContent, localFileContent, typeMap);
+      // updatedAt should be present in the transform output even though local doesn't have it
+      expect(transformedRemote).toContain('updatedAt');
+      expect(localFileContent).not.toContain('updatedAt');
 
-      const hasChangesNew = localFileContent.trim() !== transformedRemoteNew.trim();
+      // The comparison correctly detects a difference
+      const hasChanges = localFileContent.trim() !== transformedRemote.trim();
+      expect(hasChanges).toBe(true);
 
-      // Verify the old method shows false positive and new method fixes it
-      expect(hasChangesOld).toBe(true); // Old method shows false positive
-      expect(hasChangesNew).toBe(false); // New method correctly shows no changes
+      // System field 'isLocal' should still be excluded
+      expect(transformedRemote).not.toContain('isLocal');
+    });
 
-      expect(transformedRemoteOld).toContain('updatedAt'); // Old method includes updatedAt
-      expect(transformedRemoteNew).not.toContain('updatedAt'); // New method excludes it (since not in local)
-      expect(localFileContent).not.toContain('updatedAt'); // Local doesn't have updatedAt
+    it('should show no changes when local file matches remote content exactly', async () => {
+      // Create a local file that has ALL the same fields as remote (typical after pull)
+      const localFilePath = path.join(tempDir, 'synced-content.mdx');
+      const localContent = `---
+id: 25
+createdAt: '2025-09-10T09:32:54.223364Z'
+updatedAt: '2025-10-15T14:22:33.123456Z'
+title: Test Page
+description: Test page description
+slug: test-page
+type: page
+author: Test Author
+language: en
+publishedAt: '2025-09-09T18:30:00Z'
+---
+
+# Test Page
+
+Test page content.`;
+
+      await fs.writeFile(localFilePath, localContent);
+
+      const remoteContent = {
+        id: 25,
+        createdAt: '2025-09-10T09:32:54.223364Z',
+        updatedAt: '2025-10-15T14:22:33.123456Z',
+        title: 'Test Page',
+        description: 'Test page description',
+        slug: 'test-page',
+        type: 'page',
+        author: 'Test Author',
+        language: 'en',
+        publishedAt: '2025-09-09T18:30:00Z',
+        isLocal: false,
+        body: `# Test Page
+
+Test page content.`
+      };
+
+      const typeMap = { page: 'MDX' as const };
+
+      const localFileContent = await fs.readFile(localFilePath, 'utf-8');
+      const transformedRemote = await transformRemoteForComparison(remoteContent, localFileContent, typeMap);
+
+      // When local content has ALL the same fields as remote, no changes should be detected
+      const { hasContentDifferences } = await import('../src/lib/content-transformation.js');
+      expect(hasContentDifferences(localFileContent, transformedRemote)).toBe(false);
     });
 
     it('should not include null values in transformed frontmatter', async () => {

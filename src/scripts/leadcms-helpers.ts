@@ -106,7 +106,7 @@ export async function downloadMediaFileDirect(
       try {
         await fs.unlink(destPath);
         console.log(`Deleted missing file: ${destPath}`);
-      } catch {}
+      } catch { }
       return false;
     }
 
@@ -118,14 +118,5 @@ export async function downloadMediaFileDirect(
   }
 }
 
-// Old downloadMediaFile function removed - replaced with downloadMediaFileDirect
-// No longer using meta.json for media file caching, using sync API instead
-
-
-
-
-
-
-
 // Export types for use in other modules
-export type { LeadCMSConfig, ContentType, ContentItem };
+export type { ContentItem };

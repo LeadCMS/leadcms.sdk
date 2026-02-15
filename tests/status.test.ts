@@ -1,822 +1,581 @@
 /**
- * Unit tests for LeadCMS status functionality
- * These tests focus on testing the status analysis logic by mocking external dependencies
+ * Unit tests for LeadCMS status / matchContent functionality
+ * Tests the real matchContent logic from push-leadcms-content.ts
  */
 
 import { jest } from '@jest/globals';
+import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
+import matter from 'gray-matter';
+import { createTestConfig, createDataServiceMock } from './test-helpers';
 
-describe('LeadCMS Status Analysis', () => {
-  describe('Status Analysis', () => {
-    it('should correctly identify new content to create', async () => {
-      const mockLocalContent = [
-        {
-          slug: 'new-article',
-          type: 'article',
-          language: 'en',
-          title: 'New Article',
-          updatedAt: '2024-10-29T10:00:00Z'
-        }
-      ];
+// Mock the data service before importing the module under test
+jest.mock('../src/lib/data-service.js', () => ({
+  leadCMSDataService: createDataServiceMock(),
+}));
 
-      const mockRemoteContent: any[] = [];
+jest.mock('../src/lib/config.js', () => ({
+  getConfig: jest.fn(() => createTestConfig()),
+}));
 
-      // Simulate the core matching logic
-      const analysis = {
-        toCreate: mockLocalContent.filter(local =>
-          !mockRemoteContent.find(remote =>
-            remote.slug === local.slug &&
-            remote.type === local.type &&
-            remote.language === local.language
-          )
-        ),
-        toUpdate: [],
-        conflicts: [],
-        inSync: []
-      };
+// Import after mocks are set up
+import { matchContent, countPushChanges } from '../src/scripts/push-leadcms-content';
+import { transformRemoteForComparison, hasContentDifferences } from '../src/lib/content-transformation';
 
-      expect(analysis.toCreate).toHaveLength(1);
-      expect(analysis.toCreate[0].slug).toBe('new-article');
-      expect(analysis.toUpdate).toHaveLength(0);
-      expect(analysis.conflicts).toHaveLength(0);
+// Helper types matching the internal SDK types
+interface LocalContentItem {
+  filePath: string;
+  slug: string;
+  locale: string;
+  type: string;
+  metadata: Record<string, any>;
+  body: string;
+  isLocal: boolean;
+}
+
+interface RemoteContentItem {
+  id: number;
+  slug: string;
+  type: string;
+  language: string;
+  title: string;
+  body: string;
+  updatedAt: string;
+  createdAt: string;
+  isLocal: false;
+  [key: string]: any;
+}
+
+function makeLocal(overrides: Partial<LocalContentItem> & { slug: string }): LocalContentItem {
+  return {
+    filePath: `/tmp/test-content/${overrides.slug}.mdx`,
+    locale: 'en',
+    type: overrides.metadata?.type || overrides.type || 'article',
+    body: '# Test content',
+    metadata: { type: overrides.type || 'article' },
+    isLocal: true,
+    ...overrides,
+  };
+}
+
+function makeRemote(overrides: Partial<RemoteContentItem> & { id: number; slug: string }): RemoteContentItem {
+  return {
+    type: 'article',
+    language: 'en',
+    title: 'Remote Article',
+    body: '# Test content',
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z',
+    isLocal: false,
+    ...overrides,
+  };
+}
+
+describe('LeadCMS Status Analysis (Real SDK Logic)', () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'leadcms-status-test-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  describe('matchContent - New Content Detection', () => {
+    it('should detect new content that does not exist remotely', async () => {
+      const filePath = path.join(tmpDir, 'new-article.mdx');
+      await fs.writeFile(filePath, matter.stringify('# New Article', { title: 'New Article', type: 'article' }));
+
+      const local = [makeLocal({
+        slug: 'new-article',
+        filePath,
+        metadata: { title: 'New Article', type: 'article' },
+      })];
+
+      const ops = await (matchContent as any)(local, []);
+
+      expect(ops.create).toHaveLength(1);
+      expect(ops.create[0].local.slug).toBe('new-article');
+      expect(ops.update).toHaveLength(0);
+      expect(ops.conflict).toHaveLength(0);
     });
 
-    it('should correctly identify content to update', async () => {
-      const mockLocalContent = [
-        {
-          id: 1,
-          slug: 'existing-article',
-          type: 'article',
-          language: 'en',
-          title: 'Updated Article',
-          updatedAt: '2024-10-29T12:00:00Z'
-        }
+    it('should detect multiple new content items', async () => {
+      const file1 = path.join(tmpDir, 'article-1.mdx');
+      const file2 = path.join(tmpDir, 'page-1.mdx');
+      await fs.writeFile(file1, matter.stringify('Content 1', { title: 'Article 1', type: 'article' }));
+      await fs.writeFile(file2, matter.stringify('Content 2', { title: 'Page 1', type: 'page' }));
+
+      const local = [
+        makeLocal({ slug: 'article-1', filePath: file1, type: 'article', metadata: { title: 'Article 1', type: 'article' } }),
+        makeLocal({ slug: 'page-1', filePath: file2, type: 'page', metadata: { title: 'Page 1', type: 'page' } }),
       ];
 
-      const mockRemoteContent = [
-        {
-          id: 1,
-          slug: 'existing-article',
-          type: 'article',
-          language: 'en',
-          title: 'Original Article',
-          updatedAt: '2024-10-29T10:00:00Z' // Older than local
-        }
-      ];
+      const ops = await (matchContent as any)(local, []);
 
-      // Simulate the core matching logic
-      const analysis = {
-        toCreate: [],
-        toUpdate: mockLocalContent.filter(local => {
-          const remote = mockRemoteContent.find(r =>
-            r.slug === local.slug &&
-            r.type === local.type &&
-            r.language === local.language
-          );
-          return remote &&
-                 local.id === remote.id &&
-                 new Date(local.updatedAt) > new Date(remote.updatedAt);
-        }),
-        conflicts: [],
-        inSync: []
-      };
-
-      expect(analysis.toUpdate).toHaveLength(1);
-      expect(analysis.toUpdate[0].slug).toBe('existing-article');
-      expect(analysis.toCreate).toHaveLength(0);
-      expect(analysis.conflicts).toHaveLength(0);
-    });
-
-    it('should correctly identify conflicts', async () => {
-      const mockLocalContent = [
-        {
-          id: 1,
-          slug: 'conflicted-article',
-          type: 'article',
-          language: 'en',
-          title: 'Local Version',
-          updatedAt: '2024-10-29T10:00:00Z'
-        }
-      ];
-
-      const mockRemoteContent = [
-        {
-          id: 1,
-          slug: 'conflicted-article',
-          type: 'article',
-          language: 'en',
-          title: 'Remote Version',
-          updatedAt: '2024-10-29T12:00:00Z' // Newer than local
-        }
-      ];
-
-      // Simulate the core conflict detection logic
-      const analysis = {
-        toCreate: [],
-        toUpdate: [],
-        conflicts: mockLocalContent.filter(local => {
-          const remote = mockRemoteContent.find(r =>
-            r.slug === local.slug &&
-            r.type === local.type &&
-            r.language === local.language
-          );
-          return remote &&
-                 local.id === remote.id &&
-                 new Date(local.updatedAt) < new Date(remote.updatedAt);
-        }),
-        inSync: []
-      };
-
-      expect(analysis.conflicts).toHaveLength(1);
-      expect(analysis.conflicts[0].slug).toBe('conflicted-article');
-      expect(analysis.toCreate).toHaveLength(0);
-      expect(analysis.toUpdate).toHaveLength(0);
-    });
-
-    it('should correctly identify content in sync', async () => {
-      const mockLocalContent = [
-        {
-          id: 1,
-          slug: 'synced-article',
-          type: 'article',
-          language: 'en',
-          title: 'Synced Article',
-          updatedAt: '2024-10-29T10:00:00Z'
-        }
-      ];
-
-      const mockRemoteContent = [
-        {
-          id: 1,
-          slug: 'synced-article',
-          type: 'article',
-          language: 'en',
-          title: 'Synced Article',
-          updatedAt: '2024-10-29T10:00:00Z' // Same timestamp
-        }
-      ];
-
-      // Simulate the core sync detection logic
-      const analysis = {
-        toCreate: [],
-        toUpdate: [],
-        conflicts: [],
-        inSync: mockLocalContent.filter(local => {
-          const remote = mockRemoteContent.find(r =>
-            r.slug === local.slug &&
-            r.type === local.type &&
-            r.language === local.language
-          );
-          return remote &&
-                 local.id === remote.id &&
-                 new Date(local.updatedAt).getTime() === new Date(remote.updatedAt).getTime();
-        })
-      };
-
-      expect(analysis.inSync).toHaveLength(1);
-      expect(analysis.inSync[0].slug).toBe('synced-article');
-      expect(analysis.toCreate).toHaveLength(0);
-      expect(analysis.toUpdate).toHaveLength(0);
-      expect(analysis.conflicts).toHaveLength(0);
+      expect(ops.create).toHaveLength(2);
     });
   });
 
-  describe('Content Type Validation', () => {
-    it('should identify missing content types', () => {
-      const localContentTypes = ['article', 'blog', 'custom-type'];
-      const remoteContentTypes = [
-        { uid: 'article', format: 'MDX', name: 'Article' },
-        { uid: 'blog', format: 'MDX', name: 'Blog' }
-      ];
+  describe('matchContent - Conflict Detection', () => {
+    it('should detect conflict when remote updatedAt is newer than local', async () => {
+      const filePath = path.join(tmpDir, 'conflicted.mdx');
+      await fs.writeFile(filePath, matter.stringify('Local content', {
+        title: 'Conflicted Article',
+        type: 'article',
+        updatedAt: '2024-01-01T00:00:00Z',
+      }));
 
-      const missingTypes = localContentTypes.filter(localType =>
-        !remoteContentTypes.find(remote => remote.uid === localType)
-      );
-
-      expect(missingTypes).toEqual(['custom-type']);
-    });
-
-    it('should validate content format compatibility', () => {
-      const localContent = [
-        { type: 'article', filePath: 'test.mdx' },
-        { type: 'page', filePath: 'test.json' }
-      ];
-
-      const remoteContentTypes = [
-        { uid: 'article', format: 'MDX', name: 'Article' },
-        { uid: 'page', format: 'JSON', name: 'Page' }
-      ];
-
-      const validationResults = localContent.map(content => {
-        const contentType = remoteContentTypes.find(ct => ct.uid === content.type);
-        const expectedExtension = contentType?.format === 'MDX' ? '.mdx' : '.json';
-        const actualExtension = content.filePath.substring(content.filePath.lastIndexOf('.'));
-
-        return {
-          content,
-          isValid: actualExtension === expectedExtension,
-          expectedFormat: contentType?.format,
-          actualFormat: actualExtension
-        };
-      });
-
-      expect(validationResults[0].isValid).toBe(true); // MDX article
-      expect(validationResults[1].isValid).toBe(true); // JSON page
-    });
-  });
-
-  describe('Multi-language Content Handling', () => {
-    it('should handle content in multiple languages', () => {
-      const multiLangContent = [
-        { slug: 'article-1', type: 'article', language: 'en', title: 'English Article' },
-        { slug: 'article-1', type: 'article', language: 'es', title: 'Artículo en Español' },
-        { slug: 'article-1', type: 'article', language: 'fr', title: 'Article en Français' }
-      ];
-
-      // Group by slug and type
-      const groupedContent = multiLangContent.reduce((acc: any, content) => {
-        const key = `${content.type}/${content.slug}`;
-        if (!acc[key]) {
-          acc[key] = [];
-        }
-        acc[key].push(content);
-        return acc;
-      }, {});
-
-      expect(Object.keys(groupedContent)).toHaveLength(1);
-      expect(groupedContent['article/article-1']).toHaveLength(3);
-      expect(groupedContent['article/article-1'].map((c: any) => c.language).sort()).toEqual(['en', 'es', 'fr']);
-    });
-
-    it('should detect language-specific conflicts', () => {
-      const localContent = [
-        { id: 1, slug: 'article', type: 'article', language: 'en', updatedAt: '2024-10-29T10:00:00Z' },
-        { id: 2, slug: 'article', type: 'article', language: 'es', updatedAt: '2024-10-29T12:00:00Z' }
-      ];
-
-      const remoteContent = [
-        { id: 1, slug: 'article', type: 'article', language: 'en', updatedAt: '2024-10-29T12:00:00Z' }, // Remote newer
-        { id: 2, slug: 'article', type: 'article', language: 'es', updatedAt: '2024-10-29T10:00:00Z' }  // Local newer
-      ];
-
-      const conflicts = localContent.filter(local => {
-        const remote = remoteContent.find(r =>
-          r.slug === local.slug &&
-          r.type === local.type &&
-          r.language === local.language
-        );
-        return remote &&
-               local.id === remote.id &&
-               new Date(local.updatedAt) < new Date(remote.updatedAt);
-      });
-
-      const updates = localContent.filter(local => {
-        const remote = remoteContent.find(r =>
-          r.slug === local.slug &&
-          r.type === local.type &&
-          r.language === local.language
-        );
-        return remote &&
-               local.id === remote.id &&
-               new Date(local.updatedAt) > new Date(remote.updatedAt);
-      });
-
-      expect(conflicts).toHaveLength(1);
-      expect(conflicts[0].language).toBe('en');
-      expect(updates).toHaveLength(1);
-      expect(updates[0].language).toBe('es');
-    });
-  });
-
-  describe('Content Parsing and Formatting', () => {
-    it('should correctly parse MDX frontmatter', () => {
-      const mdxContent = `---
-title: "Test Article"
-slug: "test-article"
-type: "article"
-language: "en"
-publishedAt: "2024-10-29T10:00:00Z"
-updatedAt: "2024-10-29T10:00:00Z"
----
-
-# Test Article
-
-This is the content.`;
-
-      // Simulate gray-matter parsing
-      const parsed = {
-        data: {
-          title: "Test Article",
-          slug: "test-article",
-          type: "article",
-          language: "en",
-          publishedAt: "2024-10-29T10:00:00Z",
-          updatedAt: "2024-10-29T10:00:00Z"
+      const local = [makeLocal({
+        slug: 'conflicted',
+        filePath,
+        metadata: {
+          id: 1,
+          title: 'Conflicted Article',
+          type: 'article',
+          updatedAt: '2024-01-01T00:00:00Z',
         },
-        content: "# Test Article\n\nThis is the content."
-      };
+      })];
 
-      expect(parsed.data.title).toBe("Test Article");
-      expect(parsed.data.slug).toBe("test-article");
-      expect(parsed.data.type).toBe("article");
-      expect(parsed.content).toBe("# Test Article\n\nThis is the content.");
+      const remote = [makeRemote({
+        id: 1,
+        slug: 'conflicted',
+        title: 'Conflicted Article',
+        updatedAt: '2024-06-15T12:00:00Z',
+      })];
+
+      const ops = await (matchContent as any)(local, remote);
+
+      expect(ops.conflict).toHaveLength(1);
+      expect(ops.conflict[0].local.slug).toBe('conflicted');
+      expect(ops.conflict[0].reason).toContain('Remote content was updated after local content');
+      expect(ops.update).toHaveLength(0);
     });
 
-    it('should format content for API submission', () => {
-      const localContent = {
-        title: "Test Article",
-        slug: "test-article",
-        type: "article",
-        language: "en",
-        publishedAt: "2024-10-29T10:00:00Z",
-        updatedAt: "2024-10-29T10:00:00Z",
-        body: "# Test Article\n\nThis is the content."
-      };
+    it('should detect conflict with slug change when remote is newer', async () => {
+      const filePath = path.join(tmpDir, 'new-slug.mdx');
+      await fs.writeFile(filePath, matter.stringify('Content', {
+        title: 'My Article',
+        type: 'article',
+        updatedAt: '2024-01-01T00:00:00Z',
+      }));
 
-      const apiContent = {
-        slug: localContent.slug,
-        type: localContent.type,
-        language: localContent.language,
-        body: localContent.body,
-        title: localContent.title,
-        publishedAt: localContent.publishedAt,
-        updatedAt: localContent.updatedAt
-      };
+      const local = [makeLocal({
+        slug: 'new-slug',
+        filePath,
+        metadata: {
+          id: 1,
+          title: 'My Article',
+          type: 'article',
+          updatedAt: '2024-01-01T00:00:00Z',
+        },
+      })];
 
-      expect(apiContent).toEqual({
-        slug: "test-article",
-        type: "article",
-        language: "en",
-        body: "# Test Article\n\nThis is the content.",
-        title: "Test Article",
-        publishedAt: "2024-10-29T10:00:00Z",
-        updatedAt: "2024-10-29T10:00:00Z"
-      });
+      const remote = [makeRemote({
+        id: 1,
+        slug: 'old-slug',
+        title: 'My Article',
+        updatedAt: '2024-06-15T12:00:00Z',
+      })];
+
+      const ops = await (matchContent as any)(local, remote);
+
+      expect(ops.conflict).toHaveLength(1);
+      expect(ops.conflict[0].reason).toContain('Slug changed remotely');
     });
-  });
 
-  describe('Error Handling and Edge Cases', () => {
-    it('should handle empty local content gracefully', () => {
-      const localContent: any[] = [];
-      const remoteContent = [
-        { id: 1, slug: 'remote-only', type: 'article', language: 'en' }
+    it('should detect language-specific conflicts independently', async () => {
+      const fileEn = path.join(tmpDir, 'article-en.mdx');
+      const fileEs = path.join(tmpDir, 'article-es.mdx');
+      await fs.writeFile(fileEn, matter.stringify('English content', {
+        title: 'English Article',
+        type: 'article',
+        updatedAt: '2024-01-01T00:00:00Z',
+      }));
+      await fs.writeFile(fileEs, matter.stringify('Spanish content', {
+        title: 'Spanish Article',
+        type: 'article',
+        updatedAt: '2024-06-15T00:00:00Z',
+      }));
+
+      const local = [
+        makeLocal({
+          slug: 'article',
+          filePath: fileEn,
+          locale: 'en',
+          metadata: { id: 1, type: 'article', title: 'English Article', updatedAt: '2024-01-01T00:00:00Z' },
+        }),
+        makeLocal({
+          slug: 'article',
+          filePath: fileEs,
+          locale: 'es',
+          metadata: { id: 2, type: 'article', title: 'Spanish Article', updatedAt: '2024-06-15T00:00:00Z' },
+        }),
       ];
 
-      const analysis = {
-        toCreate: localContent.filter(local =>
-          !remoteContent.find(remote =>
-            remote.slug === local.slug &&
-            remote.type === local.type &&
-            remote.language === local.language
-          )
-        ),
-        toUpdate: [],
-        conflicts: [],
-        inSync: []
-      };
+      const remote = [
+        makeRemote({ id: 1, slug: 'article', language: 'en', updatedAt: '2024-06-15T12:00:00Z' }),
+        makeRemote({ id: 2, slug: 'article', language: 'es', updatedAt: '2024-01-01T00:00:00Z' }),
+      ];
 
-      expect(analysis.toCreate).toHaveLength(0);
-    });
+      const ops = await (matchContent as any)(local, remote);
 
-    it('should handle missing required frontmatter fields', () => {
-      const invalidContent = {
-        title: "Test Article",
-        // Missing slug, type, language
-        publishedAt: "2024-10-29T10:00:00Z",
-        updatedAt: "2024-10-29T10:00:00Z"
-      };
-
-      const requiredFields = ['slug', 'type', 'language'];
-      const missingFields = requiredFields.filter(field => !invalidContent.hasOwnProperty(field));
-
-      expect(missingFields).toEqual(['slug', 'type', 'language']);
-    });
-
-    it('should handle invalid date formats gracefully', () => {
-      const contentWithInvalidDate = {
-        updatedAt: 'invalid-date'
-      };
-
-      const contentWithValidDate = {
-        updatedAt: '2024-10-29T10:00:00Z'
-      };
-
-      const isValidDate = (dateString: string) => {
-        const date = new Date(dateString);
-        return !isNaN(date.getTime());
-      };
-
-      expect(isValidDate(contentWithInvalidDate.updatedAt)).toBe(false);
-      expect(isValidDate(contentWithValidDate.updatedAt)).toBe(true);
+      // EN should be conflict (remote newer)
+      const enConflict = ops.conflict.find((op: any) => op.local.locale === 'en');
+      expect(enConflict).toBeDefined();
+      // ES should NOT be conflict (local newer)
+      expect(ops.conflict.filter((op: any) => op.local.locale === 'es')).toHaveLength(0);
     });
   });
 
-  describe('Advanced Change Detection', () => {
-    describe('Slug Changes (Renames)', () => {
-      it('should detect slug changes when content matched by ID', () => {
-        const localContent = [
-          {
-            slug: 'new-article-slug',
-            type: 'article',
-            locale: 'en',
-            metadata: { id: 123, title: 'My Article', updatedAt: '2024-01-02T00:00:00Z' },
-            body: 'Content here',
-            filePath: 'new-article-slug.mdx',
-            isLocal: true
-          }
-        ];
+  describe('matchContent - Slug Changes (Renames)', () => {
+    it('should detect slug rename when matched by ID and local is newer', async () => {
+      const filePath = path.join(tmpDir, 'new-article-slug.mdx');
+      await fs.writeFile(filePath, matter.stringify('Content', {
+        title: 'My Article',
+        type: 'article',
+        updatedAt: '2024-06-15T00:00:00Z',
+      }));
 
-        const remoteContent = [
-          {
-            id: 123,
-            slug: 'old-article-slug',
-            type: 'article',
-            language: 'en',
-            title: 'My Article',
-            updatedAt: '2024-01-01T00:00:00Z',
-            isLocal: false
-          }
-        ];
-
-        // Mock the expected operations result
-        const operations = {
-          create: [],
-          update: [],
-          rename: [{
-            local: localContent[0],
-            remote: remoteContent[0],
-            oldSlug: 'old-article-slug'
-          }],
-          typeChange: [],
-          conflict: []
-        };
-
-        expect(operations.rename).toHaveLength(1);
-        expect(operations.rename[0].oldSlug).toBe('old-article-slug');
-        expect(operations.rename[0].local.slug).toBe('new-article-slug');
-      });
-
-      it('should detect slug changes when content matched by title', () => {
-        const localContent = [
-          {
-            slug: 'about-us-page',
-            type: 'page',
-            locale: 'da',
-            metadata: { title: 'Om Os', updatedAt: '2024-01-02T00:00:00Z' },
-            body: 'Content here',
-            filePath: 'about-us-page.mdx',
-            isLocal: true
-          }
-        ];
-
-        const remoteContent = [
-          {
-            id: 456,
-            slug: 'om-os',
-            type: 'page',
-            language: 'da',
-            title: 'Om Os',
-            updatedAt: '2024-01-01T00:00:00Z',
-            isLocal: false
-          }
-        ];
-
-        // Mock the expected operations result
-        const operations = {
-          create: [],
-          update: [],
-          rename: [{
-            local: localContent[0],
-            remote: remoteContent[0],
-            oldSlug: 'om-os'
-          }],
-          typeChange: [],
-          conflict: []
-        };
-
-        expect(operations.rename).toHaveLength(1);
-        expect(operations.rename[0].oldSlug).toBe('om-os');
-        expect(operations.rename[0].local.slug).toBe('about-us-page');
-      });
-
-      it('should prioritize filename slug over frontmatter slug for rename detection', () => {
-        // Scenario: File renamed from old-post.mdx to new-post.mdx
-        // but frontmatter still has old slug
-        const localContent = [
-          {
-            slug: 'new-post', // This comes from filename (basename)
-            type: 'blog-article',
-            locale: 'en',
-            metadata: {
-              slug: 'old-post', // Old slug in frontmatter
-              id: 789,
-              title: 'My Blog Post',
-              updatedAt: '2024-01-02T00:00:00Z'
-            },
-            body: 'Content here',
-            filePath: 'content/blog/new-post.mdx', // Filename reflects new slug
-            isLocal: true
-          }
-        ];
-
-        const remoteContent = [
-          {
-            id: 789,
-            slug: 'old-post', // Remote still has old slug
-            type: 'blog-article',
-            language: 'en',
-            title: 'My Blog Post',
-            updatedAt: '2024-01-01T00:00:00Z',
-            isLocal: false
-          }
-        ];
-
-        // Mock the expected operations result - should be detected as rename
-        const operations = {
-          create: [],
-          update: [],
-          rename: [{
-            local: localContent[0],
-            remote: remoteContent[0],
-            oldSlug: 'old-post'
-          }],
-          typeChange: [],
-          conflict: []
-        };
-
-        expect(operations.rename).toHaveLength(1);
-        expect(operations.rename[0].oldSlug).toBe('old-post');
-        expect(operations.rename[0].local.slug).toBe('new-post');
-        expect(operations.rename[0].local.metadata.slug).toBe('old-post'); // Frontmatter has old slug
-      });
-
-      it('should use new file-based slug for API request in rename operations', () => {
-        // This test verifies that when formatting content for API during rename,
-        // the new slug from the file path is used, not the old slug from frontmatter
-
-        const mockLocalContent = {
-          slug: 'blog-1', // New slug from file path
-          type: 'blog-index',
-          locale: 'en',
-          body: 'Blog content here',
-          metadata: {
-            slug: 'blog', // Old slug in frontmatter
-            title: 'Blog Title',
-            id: 56
-          },
-          filePath: '/path/to/blog-1.mdx',
-          isLocal: true
-        };
-
-        // Simulate the corrected formatContentForAPI function behavior
-        const formatContentForAPI = (localContent: any) => {
-          const contentData: any = {
-            slug: localContent.slug,
-            type: localContent.type,
-            language: localContent.locale,
-            body: localContent.body,
-            ...localContent.metadata
-          };
-
-          // Preserve the file-based slug over metadata slug (the fix)
-          if (localContent.slug !== localContent.metadata?.slug) {
-            contentData.slug = localContent.slug;
-          }
-
-          delete contentData.filePath;
-          delete contentData.isLocal;
-          return contentData;
-        };
-
-        const result = formatContentForAPI(mockLocalContent);
-
-        // After the fix, this should pass - using file-based slug for rename
-        expect(result.slug).toBe('blog-1'); // Should use file-based slug for rename
-        expect(result.type).toBe('blog-index');
-        expect(result.id).toBe(56);
-      });
-
-      it('should preserve metadata slug when it matches file-based slug', () => {
-        // This test ensures we don't break normal cases where slugs match
-
-        const mockLocalContent = {
-          slug: 'normal-article', // Same slug in file path
+      const local = [makeLocal({
+        slug: 'new-article-slug',
+        filePath,
+        metadata: {
+          id: 123,
+          title: 'My Article',
           type: 'article',
-          locale: 'en',
-          body: 'Article content here',
-          metadata: {
-            slug: 'normal-article', // Same slug in frontmatter
-            title: 'Normal Article',
-            id: 123
+          updatedAt: '2024-06-15T00:00:00Z',
+        },
+      })];
+
+      const remote = [makeRemote({
+        id: 123,
+        slug: 'old-article-slug',
+        title: 'My Article',
+        updatedAt: '2024-01-01T00:00:00Z',
+      })];
+
+      const ops = await (matchContent as any)(local, remote);
+
+      expect(ops.rename).toHaveLength(1);
+      expect(ops.rename[0].oldSlug).toBe('old-article-slug');
+      expect(ops.rename[0].local.slug).toBe('new-article-slug');
+    });
+
+    it('should detect slug rename when matched by title', async () => {
+      const filePath = path.join(tmpDir, 'about-us-page.mdx');
+      await fs.writeFile(filePath, matter.stringify('About content', {
+        title: 'About Us',
+        type: 'page',
+        updatedAt: '2024-06-15T00:00:00Z',
+      }));
+
+      const local = [makeLocal({
+        slug: 'about-us-page',
+        filePath,
+        type: 'page',
+        metadata: {
+          title: 'About Us',
+          type: 'page',
+          updatedAt: '2024-06-15T00:00:00Z',
+        },
+      })];
+
+      const remote = [makeRemote({
+        id: 456,
+        slug: 'about-us',
+        type: 'page',
+        title: 'About Us',
+        updatedAt: '2024-01-01T00:00:00Z',
+      })];
+
+      const ops = await (matchContent as any)(local, remote);
+
+      expect(ops.rename).toHaveLength(1);
+      expect(ops.rename[0].oldSlug).toBe('about-us');
+      expect(ops.rename[0].local.slug).toBe('about-us-page');
+    });
+  });
+
+  describe('matchContent - Content Type Changes', () => {
+    it('should detect content type change when local is newer', async () => {
+      const filePath = path.join(tmpDir, 'header.json');
+      await fs.writeFile(filePath, JSON.stringify({
+        title: 'Header Component',
+        type: 'component',
+        updatedAt: '2024-06-15T00:00:00Z',
+        body: '{}',
+      }));
+
+      const local = [makeLocal({
+        slug: 'header',
+        filePath,
+        type: 'component',
+        metadata: {
+          id: 789,
+          title: 'Header Component',
+          type: 'component',
+          updatedAt: '2024-06-15T00:00:00Z',
+        },
+      })];
+
+      const remote = [makeRemote({
+        id: 789,
+        slug: 'header',
+        type: 'layout',
+        title: 'Header Component',
+        updatedAt: '2024-01-01T00:00:00Z',
+      })];
+
+      const ops = await (matchContent as any)(local, remote);
+
+      expect(ops.typeChange).toHaveLength(1);
+      expect(ops.typeChange[0].oldType).toBe('layout');
+      expect(ops.typeChange[0].newType).toBe('component');
+    });
+
+    it('should detect combined slug and type changes', async () => {
+      const filePath = path.join(tmpDir, 'featured-blog-post.mdx');
+      await fs.writeFile(filePath, matter.stringify('Blog content', {
+        title: 'Featured Post',
+        type: 'blog-article',
+        updatedAt: '2024-06-15T00:00:00Z',
+      }));
+
+      const local = [makeLocal({
+        slug: 'featured-blog-post',
+        filePath,
+        type: 'blog-article',
+        metadata: {
+          id: 999,
+          title: 'Featured Post',
+          type: 'blog-article',
+          updatedAt: '2024-06-15T00:00:00Z',
+        },
+      })];
+
+      const remote = [makeRemote({
+        id: 999,
+        slug: 'featured-post',
+        type: 'article',
+        title: 'Featured Post',
+        updatedAt: '2024-01-01T00:00:00Z',
+      })];
+
+      const ops = await (matchContent as any)(local, remote);
+
+      expect(ops.typeChange).toHaveLength(1);
+      expect(ops.typeChange[0].oldSlug).toBe('featured-post');
+      expect(ops.typeChange[0].oldType).toBe('article');
+      expect(ops.typeChange[0].newType).toBe('blog-article');
+    });
+  });
+
+  describe('matchContent - Deletion Detection', () => {
+    it('should detect remote-only content when allowDelete is true', async () => {
+      const remote = [makeRemote({
+        id: 100,
+        slug: 'only-on-remote',
+        title: 'Remote Only Article',
+      })];
+
+      const ops = await (matchContent as any)([], remote, undefined, true);
+
+      expect(ops.delete).toHaveLength(1);
+      expect(ops.delete[0].remote?.slug).toBe('only-on-remote');
+    });
+
+    it('should NOT detect deletions when allowDelete is false', async () => {
+      const remote = [makeRemote({
+        id: 100,
+        slug: 'only-on-remote',
+        title: 'Remote Only Article',
+      })];
+
+      const ops = await (matchContent as any)([], remote, undefined, false);
+
+      expect(ops.delete).toHaveLength(0);
+    });
+  });
+
+  describe('countPushChanges', () => {
+    it('should count all operations excluding conflicts by default', () => {
+      const ops = {
+        create: [{ local: {} }],
+        update: [{ local: {} }, { local: {} }],
+        rename: [{ local: {} }],
+        typeChange: [{ local: {} }],
+        conflict: [{ local: {} }, { local: {} }],
+        delete: [],
+      };
+
+      expect(countPushChanges(ops as any, false)).toBe(5);
+      expect(countPushChanges(ops as any, true)).toBe(7);
+    });
+
+    it('should return 0 for empty operations', () => {
+      const ops = {
+        create: [],
+        update: [],
+        rename: [],
+        typeChange: [],
+        conflict: [],
+        delete: [],
+      };
+
+      expect(countPushChanges(ops as any, false)).toBe(0);
+      expect(countPushChanges(ops as any, true)).toBe(0);
+    });
+  });
+
+  describe('matchContent - JSON Field Removal Detection', () => {
+    it('should detect removal of coverImageUrl and coverImageAlt from JSON content', async () => {
+      // Simulate a JSON component where the user removed coverImageUrl and coverImageAlt locally.
+      // Key order MUST match what transformToJSONFormat produces after a pull:
+      // body fields first (pricing, labels), then remote fields in their iteration order.
+      // With makeRemote, remote keys are: type, language, title, body, createdAt, updatedAt, isLocal,
+      // then overrides: id, slug, description, coverImageUrl(removed), coverImageAlt(removed),
+      // author, publishedAt, category, tags, allowComments.
+      // The pulled file would also have coverImageUrl and coverImageAlt; user removes them.
+      const localJsonContent = {
+        pricing: {
+          currency: 'USD',
+          websiteTypes: [{ id: 'saas-product', label: 'SaaS Product', baseCost: 3500 }]
+        },
+        labels: { title: 'Website Cost Calculator' },
+        type: 'component',
+        language: 'en',
+        title: 'Site Calculator Configuration',
+        createdAt: '2026-02-06T11:48:52.627633Z',
+        updatedAt: '2026-02-06T12:00:00Z',
+        id: 97,
+        slug: 'site-calculator-config',
+        description: 'Pricing weights and labels for the website cost calculator component.',
+        // coverImageUrl and coverImageAlt removed by user (would appear here in the original pulled file)
+        author: 'LeadCMS Team',
+        publishedAt: '2026-02-06T00:00:00Z',
+        category: '',
+        tags: [] as string[],
+        allowComments: false,
+      };
+
+      const filePath = path.join(tmpDir, 'site-calculator-config.json');
+      await fs.writeFile(filePath, JSON.stringify(localJsonContent, null, 2));
+
+      const local = [makeLocal({
+        slug: 'site-calculator-config',
+        filePath,
+        type: 'component',
+        metadata: {
+          id: 97,
+          title: 'Site Calculator Configuration',
+          type: 'component',
+          updatedAt: '2026-02-06T12:00:00Z',
+        },
+      })];
+
+      // Remote still has coverImageUrl and coverImageAlt
+      const remote = [makeRemote({
+        id: 97,
+        slug: 'site-calculator-config',
+        type: 'component',
+        title: 'Site Calculator Configuration',
+        description: 'Pricing weights and labels for the website cost calculator component.',
+        coverImageUrl: '/media/common/calculator-config.jpg',
+        coverImageAlt: 'Website cost calculator configuration',
+        language: 'en',
+        author: 'LeadCMS Team',
+        createdAt: '2026-02-06T11:48:52.627633Z',
+        updatedAt: '2026-02-06T12:00:00Z',
+        publishedAt: '2026-02-06T00:00:00Z',
+        category: '',
+        tags: [],
+        allowComments: false,
+        body: JSON.stringify({
+          pricing: {
+            currency: 'USD',
+            websiteTypes: [{ id: 'saas-product', label: 'SaaS Product', baseCost: 3500 }]
           },
-          filePath: '/path/to/normal-article.mdx',
-          isLocal: true
-        };
+          labels: { title: 'Website Cost Calculator' },
+        }),
+      })];
 
-        // Simulate the corrected formatContentForAPI function behavior
-        const formatContentForAPI = (localContent: any) => {
-          const contentData: any = {
-            slug: localContent.slug,
-            type: localContent.type,
-            language: localContent.locale,
-            body: localContent.body,
-            ...localContent.metadata
-          };
+      // Pass typeMap so JSON comparison path is used
+      const typeMap = { component: 'JSON' };
+      const ops = await (matchContent as any)(local, remote, typeMap);
 
-          // Preserve the file-based slug over metadata slug (the fix)
-          if (localContent.slug !== localContent.metadata?.slug) {
-            contentData.slug = localContent.slug;
-          }
-
-          delete contentData.filePath;
-          delete contentData.isLocal;
-          return contentData;
-        };
-
-        const result = formatContentForAPI(mockLocalContent);
-
-        // Should still work correctly when slugs match
-        expect(result.slug).toBe('normal-article');
-        expect(result.type).toBe('article');
-        expect(result.id).toBe(123);
-      });
+      // The removal of coverImageUrl and coverImageAlt should be detected as an update
+      expect(ops.update).toHaveLength(1);
+      expect(ops.update[0].local.slug).toBe('site-calculator-config');
+      expect(ops.create).toHaveLength(0);
+      expect(ops.conflict).toHaveLength(0);
     });
 
-    describe('Content Type Changes', () => {
-      it('should detect content type changes', () => {
-        const localContent = [
-          {
-            slug: 'header',
-            type: 'component',
-            locale: 'en',
-            metadata: { id: 789, title: 'Header Component', updatedAt: '2024-01-02T00:00:00Z' },
-            body: 'JSON content here',
-            filePath: 'header.json',
-            isLocal: true
-          }
-        ];
+    it('should detect removal of a standard API field from JSON content via transformRemoteForComparison', async () => {
+      // Local JSON file without coverImageUrl - key order matches transform output
+      const localContent = JSON.stringify({
+        pricing: { currency: 'USD' },
+        id: 1,
+        slug: 'test',
+        type: 'component',
+        title: 'Test',
+        updatedAt: '2026-01-01T00:00:00Z',
+      }, null, 2);
 
-        const remoteContent = [
-          {
-            id: 789,
-            slug: 'header',
-            type: 'layout',
-            language: 'en',
-            title: 'Header Component',
-            updatedAt: '2024-01-01T00:00:00Z',
-            isLocal: false
-          }
-        ];
+      // Remote content has coverImageUrl
+      const remote = {
+        id: 1,
+        slug: 'test',
+        type: 'component',
+        title: 'Test',
+        coverImageUrl: '/media/test.jpg',
+        updatedAt: '2026-01-01T00:00:00Z',
+        body: JSON.stringify({ pricing: { currency: 'USD' } }),
+      };
 
-        // Mock the expected operations result
-        const operations = {
-          create: [],
-          update: [],
-          rename: [],
-          typeChange: [{
-            local: localContent[0],
-            remote: remoteContent[0],
-            oldType: 'layout',
-            newType: 'component'
-          }],
-          conflict: []
-        };
+      const typeMap = { component: 'JSON' };
+      const transformed = await transformRemoteForComparison(remote, localContent, typeMap);
 
-        expect(operations.typeChange).toHaveLength(1);
-        expect(operations.typeChange[0].oldType).toBe('layout');
-        expect(operations.typeChange[0].newType).toBe('component');
-      });
+      // The transformed remote should include coverImageUrl since it exists remotely
+      expect(transformed).toContain('coverImageUrl');
 
-      it('should handle combined slug and type changes', () => {
-        const localContent = [
-          {
-            slug: 'featured-blog-post',
-            type: 'blog-article',
-            locale: 'en',
-            metadata: { id: 999, title: 'Featured Post', updatedAt: '2024-01-02T00:00:00Z' },
-            body: 'MDX content here',
-            filePath: 'featured-blog-post.mdx',
-            isLocal: true
-          }
-        ];
-
-        const remoteContent = [
-          {
-            id: 999,
-            slug: 'featured-post',
-            type: 'article',
-            language: 'en',
-            title: 'Featured Post',
-            updatedAt: '2024-01-01T00:00:00Z',
-            isLocal: false
-          }
-        ];
-
-        // Mock the expected operations result
-        const operations = {
-          create: [],
-          update: [],
-          rename: [],
-          typeChange: [{
-            local: localContent[0],
-            remote: remoteContent[0],
-            oldSlug: 'featured-post',
-            oldType: 'article',
-            newType: 'blog-article'
-          }],
-          conflict: []
-        };
-
-        expect(operations.typeChange).toHaveLength(1);
-        expect(operations.typeChange[0].oldSlug).toBe('featured-post');
-        expect(operations.typeChange[0].oldType).toBe('article');
-        expect(operations.typeChange[0].newType).toBe('blog-article');
-      });
+      const hasDiff = hasContentDifferences(localContent, transformed);
+      // Should detect the difference (coverImageUrl exists in remote but not in local)
+      expect(hasDiff).toBe(true);
     });
 
-    describe('Advanced Conflict Detection', () => {
-      it('should detect conflicts when both slug and remote content changed', () => {
-        const localContent = [
-          {
-            slug: 'updated-article',
-            type: 'article',
-            locale: 'en',
-            metadata: { id: 111, title: 'Updated Article', updatedAt: '2024-01-01T00:00:00Z' },
-            body: 'Local content',
-            filePath: 'updated-article.mdx',
-            isLocal: true
-          }
-        ];
+    it('should still show no changes when JSON content is identical', async () => {
+      // Both local and remote have the same fields
+      // Key order matches what transformToJSONFormat would produce:
+      // body fields first (pricing), then remote fields in their iteration order
+      const localContent = JSON.stringify({
+        pricing: { currency: 'USD' },
+        id: 1,
+        slug: 'test',
+        type: 'component',
+        title: 'Test',
+        coverImageUrl: '/media/test.jpg',
+        updatedAt: '2026-01-01T00:00:00Z',
+      }, null, 2);
 
-        const remoteContent = [
-          {
-            id: 111,
-            slug: 'remote-updated-article',
-            type: 'article',
-            language: 'en',
-            title: 'Updated Article',
-            updatedAt: '2024-01-02T00:00:00Z', // Newer than local
-            isLocal: false
-          }
-        ];
+      const remote = {
+        id: 1,
+        slug: 'test',
+        type: 'component',
+        title: 'Test',
+        coverImageUrl: '/api/media/test.jpg',
+        updatedAt: '2026-01-01T00:00:00Z',
+        body: JSON.stringify({ pricing: { currency: 'USD' } }),
+      };
 
-        // Mock the expected operations result
-        const operations = {
-          create: [],
-          update: [],
-          rename: [],
-          typeChange: [],
-          conflict: [{
-            local: localContent[0],
-            remote: remoteContent[0],
-            reason: 'Slug changed remotely after local changes'
-          }]
-        };
+      const typeMap = { component: 'JSON' };
+      const transformed = await transformRemoteForComparison(remote, localContent, typeMap);
+      const hasDiff = hasContentDifferences(localContent, transformed);
 
-        expect(operations.conflict).toHaveLength(1);
-        expect(operations.conflict[0].reason).toBe('Slug changed remotely after local changes');
-      });
-
-      it('should detect conflicts when content type changed remotely', () => {
-        const localContent = [
-          {
-            slug: 'navigation',
-            type: 'component',
-            locale: 'en',
-            metadata: { id: 222, title: 'Navigation', updatedAt: '2024-01-01T00:00:00Z' },
-            body: 'JSON content',
-            filePath: 'navigation.json',
-            isLocal: true
-          }
-        ];
-
-        const remoteContent = [
-          {
-            id: 222,
-            slug: 'navigation',
-            type: 'layout',
-            language: 'en',
-            title: 'Navigation',
-            updatedAt: '2024-01-02T00:00:00Z', // Newer than local
-            isLocal: false
-          }
-        ];
-
-        // Mock the expected operations result
-        const operations = {
-          create: [],
-          update: [],
-          rename: [],
-          typeChange: [],
-          conflict: [{
-            local: localContent[0],
-            remote: remoteContent[0],
-            reason: 'Content type changed remotely after local changes'
-          }]
-        };
-
-        expect(operations.conflict).toHaveLength(1);
-        expect(operations.conflict[0].reason).toBe('Content type changed remotely after local changes');
-      });
+      // No differences - content is the same (coverImageUrl present in both, /api/media/ transformed to /media/)
+      expect(hasDiff).toBe(false);
     });
   });
 });

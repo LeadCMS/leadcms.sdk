@@ -1,6 +1,4 @@
 import "dotenv/config";
-import fs from "fs/promises";
-import path from "path";
 import { EventSource } from "eventsource";
 import {
   leadCMSUrl,

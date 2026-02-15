@@ -3,7 +3,6 @@ import fs from "fs/promises";
 import path from "path";
 import axios, { AxiosResponse } from "axios";
 import {
-  extractMediaUrlsFromContent,
   downloadMediaFileDirect,
   leadCMSUrl,
   leadCMSApiKey,
@@ -27,8 +26,14 @@ interface MediaItem {
   [key: string]: any;
 }
 
+interface MediaDeletedItem {
+  scopeUid: string;
+  name: string;
+}
+
 interface MediaSyncResponse {
   items?: MediaItem[];
+  deleted?: MediaDeletedItem[];
   nextSyncToken?: string;
 }
 
@@ -40,6 +45,7 @@ interface ContentSyncResult {
 
 interface MediaSyncResult {
   items: MediaItem[];
+  deleted: MediaDeletedItem[];
   nextSyncToken: string;
 }
 
@@ -85,15 +91,49 @@ axios.interceptors.response.use(
   }
 );
 
-const SYNC_TOKEN_PATH = path.resolve(".leadcms/sync-token.txt");
-const MEDIA_SYNC_TOKEN_PATH = path.resolve(".leadcms/media-sync-token.txt");
+// ── Sync token paths ───────────────────────────────────────────────────
+// New location: tokens live *inside* the corresponding data directory.
+const SYNC_TOKEN_PATH = path.join(CONTENT_DIR, ".sync-token");
+const MEDIA_SYNC_TOKEN_PATH = path.join(MEDIA_DIR, ".sync-token");
 
-async function readSyncToken(): Promise<string | undefined> {
+// Legacy location (SDK ≤ 3.2): tokens lived in the parent of contentDir.
+// We check these once for migration and then delete them after a successful pull.
+const LEGACY_SYNC_TOKEN_PATH = path.join(path.dirname(CONTENT_DIR), "sync-token.txt");
+const LEGACY_MEDIA_SYNC_TOKEN_PATH = path.join(path.dirname(CONTENT_DIR), "media-sync-token.txt");
+
+/**
+ * Read a file and return its trimmed contents, or undefined if it doesn't exist.
+ */
+async function readFileOrUndefined(filePath: string): Promise<string | undefined> {
   try {
-    return (await fs.readFile(SYNC_TOKEN_PATH, "utf8")).trim();
+    return (await fs.readFile(filePath, "utf8")).trim() || undefined;
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Silently delete a file (no-op if missing).
+ */
+async function unlinkSafe(filePath: string): Promise<void> {
+  try {
+    await fs.unlink(filePath);
+  } catch { /* not found — ok */ }
+}
+
+/**
+ * Read content sync token. Checks new location first, then falls back to legacy.
+ */
+async function readSyncToken(): Promise<{ token: string | undefined; migrated: boolean }> {
+  const token = await readFileOrUndefined(SYNC_TOKEN_PATH);
+  if (token) return { token, migrated: false };
+
+  const legacy = await readFileOrUndefined(LEGACY_SYNC_TOKEN_PATH);
+  if (legacy) {
+    console.log(`[SYNC] Migrating content sync token from legacy location`);
+    return { token: legacy, migrated: true };
+  }
+  return { token: undefined, migrated: false };
 }
 
 async function writeSyncToken(token: string): Promise<void> {
@@ -101,17 +141,38 @@ async function writeSyncToken(token: string): Promise<void> {
   await fs.writeFile(SYNC_TOKEN_PATH, token, "utf8");
 }
 
-async function readMediaSyncToken(): Promise<string | undefined> {
-  try {
-    return (await fs.readFile(MEDIA_SYNC_TOKEN_PATH, "utf8")).trim();
-  } catch {
-    return undefined;
+/**
+ * Clean up legacy content sync token after successful migration.
+ */
+async function cleanupLegacySyncToken(): Promise<void> {
+  await unlinkSafe(LEGACY_SYNC_TOKEN_PATH);
+}
+
+/**
+ * Read media sync token. Checks new location first, then falls back to legacy.
+ */
+async function readMediaSyncToken(): Promise<{ token: string | undefined; migrated: boolean }> {
+  const token = await readFileOrUndefined(MEDIA_SYNC_TOKEN_PATH);
+  if (token) return { token, migrated: false };
+
+  const legacy = await readFileOrUndefined(LEGACY_MEDIA_SYNC_TOKEN_PATH);
+  if (legacy) {
+    console.log(`[SYNC] Migrating media sync token from legacy location`);
+    return { token: legacy, migrated: true };
   }
+  return { token: undefined, migrated: false };
 }
 
 async function writeMediaSyncToken(token: string): Promise<void> {
   await fs.mkdir(path.dirname(MEDIA_SYNC_TOKEN_PATH), { recursive: true });
   await fs.writeFile(MEDIA_SYNC_TOKEN_PATH, token, "utf8");
+}
+
+/**
+ * Clean up legacy media sync token after successful migration.
+ */
+async function cleanupLegacyMediaSyncToken(): Promise<void> {
+  await unlinkSafe(LEGACY_MEDIA_SYNC_TOKEN_PATH);
 }
 
 async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> {
@@ -183,6 +244,7 @@ async function fetchMediaSync(syncToken?: string): Promise<MediaSyncResult> {
   console.log(`[FETCH_MEDIA_SYNC] Starting with syncToken: ${syncToken || "NONE"}`);
   console.log(`[FETCH_MEDIA_SYNC] Fetching public media (no authentication)`);
   let allItems: MediaItem[] = [];
+  let allDeleted: MediaDeletedItem[] = [];
   let token = syncToken || "";
   let nextSyncToken: string | undefined = undefined;
   let page = 0;
@@ -206,10 +268,14 @@ async function fetchMediaSync(syncToken?: string): Promise<MediaSyncResult> {
 
       const data = res.data;
       console.log(
-        `[FETCH_MEDIA_SYNC] Page ${page} - Got ${data.items?.length || 0} items`
+        `[FETCH_MEDIA_SYNC] Page ${page} - Got ${data.items?.length || 0} items, ${data.deleted?.length || 0} deleted`
       );
 
       if (data.items && Array.isArray(data.items)) allItems.push(...data.items);
+
+      if (data.deleted && Array.isArray(data.deleted)) {
+        allDeleted.push(...data.deleted);
+      }
 
       const newSyncToken = res.headers["x-next-sync-token"] || token;
       console.log(`[FETCH_MEDIA_SYNC] Next sync token: ${newSyncToken}`);
@@ -230,10 +296,11 @@ async function fetchMediaSync(syncToken?: string): Promise<MediaSyncResult> {
   }
 
   console.log(
-    `[FETCH_MEDIA_SYNC] Completed - Total items: ${allItems.length}`
+    `[FETCH_MEDIA_SYNC] Completed - Total items: ${allItems.length}, deleted: ${allDeleted.length}`
   );
   return {
     items: allItems,
+    deleted: allDeleted,
     nextSyncToken: nextSyncToken || token,
   };
 }
@@ -260,6 +327,128 @@ async function fetchCMSConfigForEntities(): Promise<{ content: boolean; media: b
     console.warn(`[FETCH_CONTENT_SYNC] Assuming content and media are supported (backward compatibility)`);
   }
   return { content: false, media: false };
+}
+
+/**
+ * A map from content ID (as string) to an array of file paths containing that ID.
+ */
+export type ContentIdIndex = Map<string, string[]>;
+
+/**
+ * Build an index mapping content IDs to their local file paths.
+ * Walks the directory tree once and parses every content file to extract its ID,
+ * so that subsequent lookups are O(1) instead of scanning the filesystem again.
+ */
+async function buildContentIdIndex(dir: string): Promise<ContentIdIndex> {
+  const index: ContentIdIndex = new Map();
+
+  async function walk(currentDir: string): Promise<void> {
+    let entries;
+    try {
+      entries = await fs.readdir(currentDir, { withFileTypes: true });
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') {
+        console.warn(`Warning: Could not read directory ${currentDir}:`, err.message);
+      }
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(fullPath);
+      } else if (entry.isFile()) {
+        try {
+          const content = await fs.readFile(fullPath, "utf8");
+          const id = extractContentId(content);
+          if (id !== undefined) {
+            const existing = index.get(id);
+            if (existing) {
+              existing.push(fullPath);
+            } else {
+              index.set(id, [fullPath]);
+            }
+          }
+        } catch { /* skip unreadable files */ }
+      }
+    }
+  }
+
+  await walk(dir);
+  return index;
+}
+
+/**
+ * Extract the content ID from a file's text content.
+ * Supports both YAML frontmatter (`id: 42`) and JSON (`"id": 42`) formats.
+ * Returns the ID as a string, or undefined if not found.
+ */
+function extractContentId(content: string): string | undefined {
+  // YAML frontmatter: id: 42 or id: '42'
+  const yamlMatch = content.match(/(?:^|\n)id:\s*['"]?(\d+)['"]?(?:\n|$)/);
+  if (yamlMatch) return yamlMatch[1];
+
+  // JSON: "id": 42 or "id": "42"
+  const jsonMatch = content.match(/"id"\s*:\s*['"]?(\d+)['"]?/);
+  if (jsonMatch) return jsonMatch[1];
+
+  return undefined;
+}
+
+/**
+ * Delete all files associated with a given content ID using a pre-built index.
+ * Also removes the entry from the index so subsequent calls stay consistent.
+ */
+async function deleteContentFilesById(index: ContentIdIndex, idStr: string): Promise<void> {
+  const paths = index.get(idStr);
+  if (!paths || paths.length === 0) return;
+
+  for (const filePath of paths) {
+    try {
+      await fs.unlink(filePath);
+      console.log(`Deleted: ${filePath}`);
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') {
+        console.warn(`Warning: Could not delete ${filePath}:`, err.message);
+      }
+    }
+  }
+  index.delete(idStr);
+}
+
+/**
+ * Recursively search for content files with a given ID and delete them.
+ * Used during sync to remove locally-cached content that was deleted remotely.
+ *
+ * Note: For batch operations prefer buildContentIdIndex() + deleteContentFilesById()
+ * to avoid repeated filesystem walks.
+ */
+async function findAndDeleteContentFile(dir: string, idStr: string): Promise<void> {
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await findAndDeleteContentFile(fullPath, idStr);
+      } else if (entry.isFile()) {
+        try {
+          const content = await fs.readFile(fullPath, "utf8");
+          // Exact-match YAML frontmatter: lines like `id: 10` or `id: '10'`
+          const yamlRegex = new RegExp(`(^|\\n)id:\\s*['\"]?${idStr}['\"]?(\\n|$)`);
+          // Exact-match JSON: "id": 10 or "id": "10"
+          const jsonRegex = new RegExp(`\\"id\\"\\s*:\\s*['\"]?${idStr}['\"]?\\s*(,|\\}|\\n|$)`);
+          if (yamlRegex.test(content) || jsonRegex.test(content)) {
+            await fs.unlink(fullPath);
+            console.log(`Deleted: ${fullPath}`);
+          }
+        } catch { }
+      }
+    }
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') {
+      console.warn(`Warning: Could not read directory ${dir}:`, err.message);
+    }
+  }
 }
 
 async function main(): Promise<void> {
@@ -302,14 +491,15 @@ async function main(): Promise<void> {
 
   const typeMap = await fetchContentTypes();
 
-  const lastSyncToken = await readSyncToken();
-  const lastMediaSyncToken = await readMediaSyncToken();
+  const { token: lastSyncToken, migrated: contentTokenMigrated } = await readSyncToken();
+  const { token: lastMediaSyncToken, migrated: mediaTokenMigrated } = await readMediaSyncToken();
 
   let items: ContentItem[] = [],
     deleted: number[] = [],
     nextSyncToken: string = "";
 
   let mediaItems: MediaItem[] = [],
+    mediaDeleted: MediaDeletedItem[] = [],
     nextMediaSyncToken: string = "";
 
   // Sync content (only if supported)
@@ -336,10 +526,10 @@ async function main(): Promise<void> {
     try {
       if (lastMediaSyncToken) {
         console.log(`Syncing media from LeadCMS using sync token: ${lastMediaSyncToken}`);
-        ({ items: mediaItems, nextSyncToken: nextMediaSyncToken } = await fetchMediaSync(lastMediaSyncToken));
+        ({ items: mediaItems, deleted: mediaDeleted, nextSyncToken: nextMediaSyncToken } = await fetchMediaSync(lastMediaSyncToken));
       } else {
         console.log("No media sync token found. Doing full fetch from LeadCMS...");
-        ({ items: mediaItems, nextSyncToken: nextMediaSyncToken } = await fetchMediaSync(undefined));
+        ({ items: mediaItems, deleted: mediaDeleted, nextSyncToken: nextMediaSyncToken } = await fetchMediaSync(undefined));
       }
     } catch (error: any) {
       console.error(`[MAIN] Failed to fetch media:`, error.message);
@@ -352,59 +542,36 @@ async function main(): Promise<void> {
   }
 
   console.log(`\x1b[32mFetched ${items.length} content items, ${deleted.length} deleted.\x1b[0m`);
-  console.log(`\x1b[32mFetched ${mediaItems.length} media items.\x1b[0m`);
+  console.log(`\x1b[32mFetched ${mediaItems.length} media items, ${mediaDeleted.length} deleted.\x1b[0m`);
 
-  // Save content files and collect all media URLs from content
-  const allMediaUrls = new Set<string>();
+  // Build an ID→filepath index once instead of walking the tree per item.
+  // This turns O(items × files) disk reads into O(files + items).
+  const contentIdIndex = (items.length > 0 || deleted.length > 0)
+    ? await buildContentIdIndex(CONTENT_DIR)
+    : new Map<string, string[]>();
+
+  // Save content files
   for (const content of items) {
     if (content && typeof content === "object") {
+      // Before saving, remove any existing file with the same id.
+      // This handles slug renames, type changes (MDX↔JSON), and language
+      // changes — the old file at the previous path is cleaned up before the
+      // new version is written at the (potentially different) new path.
+      if (content.id != null) {
+        await deleteContentFilesById(contentIdIndex, String(content.id));
+      }
+
       await saveContentFile({
         content,
         typeMap,
         contentDir: CONTENT_DIR,
       });
-      for (const url of extractMediaUrlsFromContent(content)) {
-        allMediaUrls.add(url);
-      }
     }
   }
 
   // Remove deleted content files from all language directories
   for (const id of deleted) {
-    const idStr = String(id);
-
-    // Function to recursively search for files in a directory
-    async function findAndDeleteContentFile(dir: string): Promise<void> {
-      try {
-        const entries = await fs.readdir(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry.name);
-          if (entry.isDirectory()) {
-            // Recursively search subdirectories
-            await findAndDeleteContentFile(fullPath);
-          } else if (entry.isFile()) {
-            try {
-              const content = await fs.readFile(fullPath, "utf8");
-              // Exact-match YAML frontmatter: lines like `id: 10` or `id: '10'`
-              const yamlRegex = new RegExp(`(^|\\n)id:\\s*['\"]?${idStr}['\"]?(\\n|$)`);
-              // Exact-match JSON: "id": 10 or "id": "10"
-              const jsonRegex = new RegExp(`\\"id\\"\\s*:\\s*['\"]?${idStr}['\"]?\\s*(,|\\}|\\n|$)`);
-              if (yamlRegex.test(content) || jsonRegex.test(content)) {
-                await fs.unlink(fullPath);
-                console.log(`Deleted: ${fullPath}`);
-              }
-            } catch {}
-          }
-        }
-      } catch (err: any) {
-        // Directory might not exist, that's okay
-        if (err.code !== 'ENOENT') {
-          console.warn(`Warning: Could not read directory ${dir}:`, err.message);
-        }
-      }
-    }
-
-    await findAndDeleteContentFile(CONTENT_DIR);
+    await deleteContentFilesById(contentIdIndex, String(id));
   }
 
   // Handle media sync results
@@ -429,6 +596,28 @@ async function main(): Promise<void> {
     console.log(`\nNo media changes detected.\n`);
   }
 
+  // Remove deleted media files from local filesystem
+  if (mediaDeleted.length > 0) {
+    console.log(`\nRemoving ${mediaDeleted.length} deleted media files...`);
+    let removedCount = 0;
+    for (const deletedMedia of mediaDeleted) {
+      const relPath = deletedMedia.scopeUid
+        ? path.join(deletedMedia.scopeUid, deletedMedia.name)
+        : deletedMedia.name;
+      const fullPath = path.join(MEDIA_DIR, relPath);
+      try {
+        await fs.unlink(fullPath);
+        console.log(`Deleted media: ${fullPath}`);
+        removedCount++;
+      } catch (err: any) {
+        if (err.code !== 'ENOENT') {
+          console.warn(`Warning: Could not delete media file ${fullPath}:`, err.message);
+        }
+      }
+    }
+    console.log(`Done. ${removedCount} media files removed.\n`);
+  }
+
   // Save new sync tokens
   if (nextSyncToken) {
     await writeSyncToken(nextSyncToken);
@@ -439,13 +628,27 @@ async function main(): Promise<void> {
     await writeMediaSyncToken(nextMediaSyncToken);
     console.log(`Media sync token updated: ${nextMediaSyncToken}`);
   }
+
+  // Clean up legacy sync tokens after a successful pull
+  if (contentTokenMigrated) {
+    await cleanupLegacySyncToken();
+    console.log(`[SYNC] Removed legacy content sync token`);
+  }
+  if (mediaTokenMigrated) {
+    await cleanupLegacyMediaSyncToken();
+    console.log(`[SYNC] Removed legacy media sync token`);
+  }
 }
 
 // Export the main function so it can be imported by other modules
 export { main as fetchLeadCMSContent };
 
+// Export internal functions for testing
+export { findAndDeleteContentFile };
+export { buildContentIdIndex, deleteContentFilesById, extractContentId };
+
 // Note: CLI execution moved to CLI entry points
 // This file now only exports the function for programmatic use
 
 // Export types
-export type { ContentSyncResult, MediaSyncResult, MediaItem };
+export type { ContentSyncResult, MediaSyncResult, MediaItem, MediaDeletedItem };

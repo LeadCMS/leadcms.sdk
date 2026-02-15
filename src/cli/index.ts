@@ -132,6 +132,7 @@ Usage:
   leadcms pull [options] - Pull all content, media, and comments from LeadCMS
     --id <content-id>    - Pull specific content by ID (force update)
     --slug <slug>        - Pull specific content by slug (force update)
+    --reset              - Delete all local files and sync tokens, then pull everything fresh
   leadcms pull-content [options] - Pull only content from LeadCMS
     --id <content-id>    - Pull specific content by ID
     --slug <slug>        - Pull specific content by slug

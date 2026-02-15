@@ -85,17 +85,15 @@ export async function transformRemoteForComparison(
 }
 
 /**
- * Transform remote content to MDX format, but only include fields present in local content
+ * Transform remote content to MDX format for comparison with local content.
+ * Includes ALL non-system remote fields so that field removals in local content
+ * are properly detected as changes.
  */
 function transformToMDXFormatForComparison(remote: RemoteContentData, localContent: string): string {
-  // Parse local content to see which fields it has
-  let localFields: Set<string>;
-
+  // Validate that local content is parseable MDX, fall back to full transform if not
   try {
-    const parsed = matter(localContent);
-    localFields = new Set(Object.keys(parsed.data));
+    matter(localContent);
   } catch (error) {
-    // If we can't parse local content, fall back to including all fields
     return transformToMDXFormat(remote);
   }
 
@@ -123,17 +121,12 @@ function transformToMDXFormatForComparison(remote: RemoteContentData, localConte
   const systemFields = ['body', 'isLocal'];
   systemFields.forEach(field => delete mergedFrontmatter[field]);
 
-  // IMPORTANT: Only include fields that exist in the local file
-  // This prevents false positives when remote has additional fields like updatedAt
-  const localFieldsOnlyFrontmatter: Record<string, any> = {};
-  for (const [key, value] of Object.entries(mergedFrontmatter)) {
-    if (localFields.has(key)) {
-      localFieldsOnlyFrontmatter[key] = value;
-    }
-  }
+  // Include ALL non-system remote fields so that field removals are detected.
+  // The timestamp check in matchContent already prevents false positives from
+  // server-side field additions (remote newer → conflict, not comparison).
 
   // Filter out null and undefined values to prevent them from appearing in frontmatter
-  const filteredFrontmatter = filterNullValues(localFieldsOnlyFrontmatter);
+  const filteredFrontmatter = filterNullValues(mergedFrontmatter);
 
   // Apply media path replacements to both frontmatter and body content
   const cleanedFrontmatter = replaceApiMediaPaths(filteredFrontmatter);
@@ -144,17 +137,15 @@ function transformToMDXFormatForComparison(remote: RemoteContentData, localConte
 }
 
 /**
- * Transform remote content to JSON format, but only include fields present in local content
+ * Transform remote content to JSON format for comparison with local content.
+ * Includes ALL non-system remote fields so that field removals in local content
+ * are properly detected as changes.
  */
 function transformToJSONFormatForComparison(remote: RemoteContentData, localContent: string): string {
-  // Parse local content to see which fields it has
-  let localFields: Set<string>;
-
+  // Validate that local content is parseable JSON, fall back to full transform if not
   try {
-    const localData = JSON.parse(localContent);
-    localFields = new Set(Object.keys(localData));
+    JSON.parse(localContent);
   } catch (error) {
-    // If we can't parse local content, fall back to including all fields
     return transformToJSONFormat(remote);
   }
 
@@ -173,8 +164,11 @@ function transformToJSONFormatForComparison(remote: RemoteContentData, localCont
   // Exclude system/internal fields that should not appear in local files
   const systemFields = ['body', 'isLocal'];
 
+  // Include ALL non-system remote fields so that field removals are detected.
+  // The timestamp check in matchContent already prevents false positives from
+  // server-side field additions (remote newer → conflict, not comparison).
   for (const [k, v] of Object.entries(remote)) {
-    if (!systemFields.includes(k) && localFields.has(k)) {
+    if (!systemFields.includes(k)) {
       merged[k] = replaceApiMediaPaths(v);
     }
   }
@@ -335,18 +329,6 @@ function filterNullValues(obj: Record<string, any>): Record<string, any> {
   }
   return filtered;
 }
-
-/**
- * System fields that should be excluded from local files
- * These are truly internal fields, not user content fields
- */
-export const SYSTEM_FIELDS = ['body', 'isLocal'] as const;
-
-/**
- * User content fields that should be preserved in local files
- * These are timestamp fields that represent user content metadata
- */
-export const USER_CONTENT_FIELDS = ['createdAt', 'updatedAt', 'publishedAt'] as const;
 
 /**
  * Options for saving content files

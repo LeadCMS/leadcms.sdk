@@ -220,6 +220,8 @@ Thumbs.db
 
 # Local development
 leadcms-content/
+.leadcms/
+.leadcms-test/
 
 # Test files
 test-results/

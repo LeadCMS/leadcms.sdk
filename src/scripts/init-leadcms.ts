@@ -458,9 +458,15 @@ async function main(): Promise<void> {
   rl.close();
 }
 
-// Run the script
-main().catch((error) => {
-  console.error('❌ Initialization failed:', error.message);
-  rl.close();
-  process.exit(1);
-});
+// Export pure functions for testing
+export { isValidUrl };
+
+// Run the script only when executed directly
+const isDirectRun = typeof require !== 'undefined' && require.main === module;
+if (isDirectRun) {
+  main().catch((error) => {
+    console.error('❌ Initialization failed:', error.message);
+    rl.close();
+    process.exit(1);
+  });
+}

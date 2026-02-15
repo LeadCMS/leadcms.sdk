@@ -11,7 +11,6 @@ import type {
   CommentSyncResponse,
   CommentSyncResult,
   StoredComment,
-  CommentsByEntity,
 } from "../lib/comment-types.js";
 import { getConfig } from "../lib/config.js";
 import { isValidLocaleCode } from "../lib/locale-utils.js";
@@ -19,25 +18,49 @@ import { isValidLocaleCode } from "../lib/locale-utils.js";
 // Load config to get commentsDir
 const config = getConfig();
 const COMMENTS_DIR = path.resolve(config.commentsDir);
-const COMMENT_SYNC_TOKEN_PATH = path.resolve(".leadcms/comment-sync-token.txt");
+
+// ── Comment sync token paths ──────────────────────────────────────────
+// New location: token lives inside the commentsDir.
+const COMMENT_SYNC_TOKEN_PATH = path.join(COMMENTS_DIR, ".sync-token");
+// Legacy location (SDK ≤ 3.2): token lived in the parent of commentsDir.
+const LEGACY_COMMENT_SYNC_TOKEN_PATH = path.join(path.dirname(COMMENTS_DIR), "comment-sync-token.txt");
 
 /**
- * Read the last comment sync token from disk
+ * Read the last comment sync token from disk.
+ * Checks new location first, then falls back to legacy for migration.
  */
-async function readCommentSyncToken(): Promise<string | undefined> {
+async function readCommentSyncToken(): Promise<{ token: string | undefined; migrated: boolean }> {
   try {
-    return (await fs.readFile(COMMENT_SYNC_TOKEN_PATH, "utf8")).trim();
-  } catch {
-    return undefined;
-  }
+    const token = (await fs.readFile(COMMENT_SYNC_TOKEN_PATH, "utf8")).trim();
+    if (token) return { token, migrated: false };
+  } catch { /* not found */ }
+
+  try {
+    const legacy = (await fs.readFile(LEGACY_COMMENT_SYNC_TOKEN_PATH, "utf8")).trim();
+    if (legacy) {
+      console.log(`[SYNC] Migrating comment sync token from legacy location`);
+      return { token: legacy, migrated: true };
+    }
+  } catch { /* not found */ }
+
+  return { token: undefined, migrated: false };
 }
 
 /**
- * Write the comment sync token to disk
+ * Write the comment sync token to disk (new location inside commentsDir)
  */
 async function writeCommentSyncToken(token: string): Promise<void> {
   await fs.mkdir(path.dirname(COMMENT_SYNC_TOKEN_PATH), { recursive: true });
   await fs.writeFile(COMMENT_SYNC_TOKEN_PATH, token, "utf8");
+}
+
+/**
+ * Clean up legacy comment sync token after successful migration.
+ */
+async function cleanupLegacyCommentSyncToken(): Promise<void> {
+  try {
+    await fs.unlink(LEGACY_COMMENT_SYNC_TOKEN_PATH);
+  } catch { /* not found — ok */ }
 }
 
 /**
@@ -348,7 +371,7 @@ export async function main(): Promise<void> {
 
   await fs.mkdir(COMMENTS_DIR, { recursive: true });
 
-  const lastSyncToken = await readCommentSyncToken();
+  const { token: lastSyncToken, migrated: commentTokenMigrated } = await readCommentSyncToken();
 
   let items: Comment[] = [],
     deleted: number[] = [],
@@ -418,6 +441,12 @@ export async function main(): Promise<void> {
     console.log(`Comment sync token updated: ${nextSyncToken}`);
   }
 
+  // Clean up legacy sync token after successful migration
+  if (commentTokenMigrated) {
+    await cleanupLegacyCommentSyncToken();
+    console.log(`[SYNC] Removed legacy comment sync token`);
+  }
+
   console.log(`\nComment sync completed successfully.`);
 }
 
@@ -433,6 +462,7 @@ export {
   saveCommentsForEntity,
   groupCommentsByEntityAndLanguage,
   toStoredComment,
+  deleteComment,
 };
 
 // Export types

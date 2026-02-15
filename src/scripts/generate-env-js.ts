@@ -8,17 +8,34 @@ import dotenv from "dotenv";
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 try {
   dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
-} catch {}
+} catch { }
 
-const envVars: Record<string, string | undefined> = Object.keys(process.env)
-  .filter((key) => key.startsWith("NEXT_PUBLIC_"))
-  .reduce((acc: Record<string, string | undefined>, key) => {
-    acc[key] = process.env[key];
-    return acc;
-  }, {});
+/**
+ * Filter environment variables by prefix (e.g. NEXT_PUBLIC_)
+ */
+export function filterEnvVars(env: Record<string, string | undefined>, prefix: string = "NEXT_PUBLIC_"): Record<string, string | undefined> {
+  return Object.keys(env)
+    .filter((key) => key.startsWith(prefix))
+    .reduce((acc: Record<string, string | undefined>, key) => {
+      acc[key] = env[key];
+      return acc;
+    }, {});
+}
 
-const jsContent = `window.__env = ${JSON.stringify(envVars, null, 2)};\n`;
+/**
+ * Generate the window.__env JS content string
+ */
+export function generateEnvJsContent(vars: Record<string, string | undefined>): string {
+  return `window.__env = ${JSON.stringify(vars, null, 2)};\n`;
+}
 
-const outPath = path.resolve(process.cwd(), "public", "__env.js");
-fs.writeFileSync(outPath, jsContent);
-console.log("Generated public/__env.js with NEXT_PUBLIC_ env variables.");
+// Only run when executed directly (not when imported for testing)
+const isDirectRun = typeof require !== 'undefined' && require.main === module;
+if (isDirectRun) {
+  const envVars = filterEnvVars(process.env);
+  const jsContent = generateEnvJsContent(envVars);
+
+  const outPath = path.resolve(process.cwd(), "public", "__env.js");
+  fs.writeFileSync(outPath, jsContent);
+  console.log("Generated public/__env.js with NEXT_PUBLIC_ env variables.");
+}

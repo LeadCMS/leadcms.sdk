@@ -5,13 +5,18 @@
  */
 
 import "dotenv/config";
+import fs from "fs/promises";
+import path from "path";
 import axios from "axios";
 import { leadCMSUrl } from "./leadcms-helpers.js";
 import { setCMSConfig, isContentSupported, isMediaSupported, isCommentsSupported } from "../lib/cms-config-types.js";
+import { getConfig } from "../lib/config.js";
 
 interface PullAllOptions {
   targetId?: string;
   targetSlug?: string;
+  /** When true, delete all local files and sync tokens before pulling, effectively doing a fresh pull from scratch. */
+  reset?: boolean;
 }
 
 /**
@@ -52,10 +57,57 @@ async function fetchAndCacheCMSConfig(): Promise<{
 }
 
 /**
+ * Delete all local content, media, comments, and sync tokens.
+ * Used by --reset to do a clean pull from scratch.
+ */
+async function resetLocalState(): Promise<void> {
+  const config = getConfig();
+  const contentDir = path.resolve(config.contentDir);
+  const mediaDir = path.resolve(config.mediaDir);
+  const commentsDir = path.resolve(config.commentsDir);
+
+  console.log(`🗑️  Resetting local state...`);
+
+  // Delete content directory (includes content sync token at contentDir/.sync-token)
+  try {
+    await fs.rm(contentDir, { recursive: true, force: true });
+    console.log(`   ✓ Cleared content directory: ${contentDir}`);
+  } catch { /* directory may not exist */ }
+
+  // Delete media directory (includes media sync token at mediaDir/.sync-token)
+  try {
+    await fs.rm(mediaDir, { recursive: true, force: true });
+    console.log(`   ✓ Cleared media directory: ${mediaDir}`);
+  } catch { /* directory may not exist */ }
+
+  // Delete comments directory (includes comment sync token at commentsDir/.sync-token)
+  try {
+    await fs.rm(commentsDir, { recursive: true, force: true });
+    console.log(`   ✓ Cleared comments directory: ${commentsDir}`);
+  } catch { /* directory may not exist */ }
+
+  // Also clean up any legacy sync tokens (SDK ≤ 3.2) that may linger
+  // in parent-of-contentDir and parent-of-commentsDir
+  const legacyTokenFiles = [
+    path.join(path.dirname(contentDir), 'sync-token.txt'),
+    path.join(path.dirname(contentDir), 'media-sync-token.txt'),
+    path.join(path.dirname(commentsDir), 'comment-sync-token.txt'),
+  ];
+  for (const legacyFile of legacyTokenFiles) {
+    try {
+      await fs.unlink(legacyFile);
+      console.log(`   ✓ Removed legacy sync token: ${legacyFile}`);
+    } catch { /* not found — ok */ }
+  }
+
+  console.log(`   ✅ Local state reset complete\n`);
+}
+
+/**
  * Main orchestrator function
  */
 async function main(options: PullAllOptions = {}): Promise<void> {
-  const { targetId, targetSlug } = options;
+  const { targetId, targetSlug, reset } = options;
 
   // If pulling specific content by ID or slug, use pull-content logic directly
   if (targetId || targetSlug) {
@@ -65,7 +117,13 @@ async function main(options: PullAllOptions = {}): Promise<void> {
     return;
   }
 
-  console.log(`\n🚀 LeadCMS Pull - Fetching all content\n`);
+  // Handle --reset flag: clear everything before pulling
+  if (reset) {
+    console.log(`\n🔄 LeadCMS Pull --reset - Fresh pull from scratch\n`);
+    await resetLocalState();
+  } else {
+    console.log(`\n🚀 LeadCMS Pull - Fetching all content\n`);
+  }
 
   // Check which entities are supported
   const { content, media, comments } = await fetchAndCacheCMSConfig();
@@ -102,6 +160,9 @@ async function main(options: PullAllOptions = {}): Promise<void> {
 
 // Export the main function
 export { main as pullAll };
+
+// Export resetLocalState for testing and programmatic use
+export { resetLocalState };
 
 // Note: CLI execution moved to src/cli/bin/pull-all.ts
 // This file now only exports the function for programmatic use
