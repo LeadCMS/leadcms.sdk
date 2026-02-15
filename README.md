@@ -152,14 +152,17 @@ npm run test:watch
 
 ### Test Coverage
 
-The SDK maintains high test coverage with comprehensive unit tests covering:
+The SDK maintains high test coverage with **481 tests across 30 test suites**, covering:
 
-- 📄 Content retrieval and parsing
+- 📄 Content retrieval, parsing, and transformation
 - 🌍 Multi-language support and translations
 - 📝 Draft content handling and user-specific overrides
 - 🏗️ Build-time optimizations and caching
 - 🔧 Configuration management and validation
 - 🔄 Push/Pull synchronization with conflict detection
+- 🗂️ Content rename, type change, and deletion handling
+- 🗑️ Media deletion sync and file cleanup
+- 🔁 Sync token migration and edge cases
 - 🖥️ CLI command functionality with mocked API responses
 
 ### Testing with Mock Data
@@ -395,6 +398,9 @@ npx leadcms pull-media
 
 # Pull only comments
 npx leadcms pull-comments
+
+# Reset and pull everything from scratch
+npx leadcms pull --reset
 ```
 
 > **Note:** `npx leadcms fetch` is still supported as an alias for backward compatibility.
@@ -402,11 +408,17 @@ npx leadcms pull-comments
 What each command does:
 
 - `npx leadcms pull` - Syncs content, media and comments into your project using the configured directories. Updates incremental sync tokens so subsequent runs are faster.
+- `npx leadcms pull --reset` - Deletes all local content, media, comments, and sync tokens, then performs a full pull from scratch. Useful when local state has become inconsistent or after configuration changes.
 - `npx leadcms pull-content` - Downloads only content entities (MDX/JSON files) and updates local metadata.
 - `npx leadcms pull-media` - Downloads media files to your `mediaDir` (e.g., `public/media`). Use this when you changed media or want to refresh assets separately from content.
 - `npx leadcms pull-comments` - Downloads comments to the comments directory (e.g., `.leadcms/comments/`). Useful when you only need comment updates.
 
-> **Note:** The CLI uses incremental sync tokens to avoid re-downloading unchanged items where supported by the LeadCMS API.
+**Intelligent sync handling:**
+
+- **Incremental sync** — Sync tokens avoid re-downloading unchanged items on subsequent pulls.
+- **Rename & type-change cleanup** — When content is renamed (slug change), moved to a different type, or switched format (MDX ↔ JSON), the old file is automatically removed before the new version is written.
+- **Deleted content removal** — Content and media deleted on the server are removed locally during the next pull.
+- **Sync token migration** — When upgrading from SDK ≤ 3.1, legacy sync tokens are automatically migrated to their new location inside each data directory.
 
 ### Push local content to LeadCMS
 
