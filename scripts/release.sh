@@ -58,7 +58,8 @@ git commit -m "$COMMIT_MESSAGE $NEW_VERSION"
 # Create and push tag
 echo -e "${BLUE}🏷️  Creating git tag...${NC}"
 git tag $NEW_VERSION
-git push origin main --tags
+git push origin main
+git push origin $NEW_VERSION
 
 echo -e "${GREEN}✅ Release $NEW_VERSION created successfully!${NC}"
 echo
