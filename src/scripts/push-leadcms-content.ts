@@ -414,9 +414,49 @@ function countPushChanges(operations: ContentOperations, includeConflicts: boole
 }
 
 /**
+ * Auto-detected defaults for content type creation based on local content files
+ */
+interface ContentTypeDefaults {
+  format: 'MDX' | 'JSON';
+  supportsCoverImage: boolean;
+  supportsComments: boolean;
+}
+
+/**
+ * Analyze local content files to auto-detect content type parameters.
+ *
+ * - format: JSON if all files are .json, MDX if all are .mdx, MDX if mixed
+ * - supportsCoverImage: true if any file has a non-empty coverImageUrl
+ * - supportsComments: false for JSON format; for MDX, true if any file has allowComments: true
+ */
+function analyzeContentTypeFromFiles(localContent: LocalContentItem[], typeName: string): ContentTypeDefaults {
+  const filesOfType = localContent.filter(c => c.type === typeName);
+
+  // Determine format from file extensions
+  const hasJson = filesOfType.some(c => c.filePath.endsWith('.json'));
+  const hasMdx = filesOfType.some(c => c.filePath.endsWith('.mdx'));
+  const format: 'MDX' | 'JSON' = (hasJson && !hasMdx) ? 'JSON' : 'MDX';
+
+  // Check if any file has a non-empty coverImageUrl
+  const supportsCoverImage = filesOfType.some(c => {
+    const url = c.metadata?.coverImageUrl;
+    return typeof url === 'string' && url.trim().length > 0;
+  });
+
+  // For JSON format, default to no comments
+  // For MDX format, check if any file has allowComments set to true
+  let supportsComments = false;
+  if (format === 'MDX') {
+    supportsComments = filesOfType.some(c => c.metadata?.allowComments === true);
+  }
+
+  return { format, supportsCoverImage, supportsComments };
+}
+
+/**
  * Validate that all required content types exist remotely
  */
-async function validateContentTypes(localTypes: Set<string>, remoteTypeMap: Record<string, string>, dryRun: boolean = false): Promise<void> {
+async function validateContentTypes(localTypes: Set<string>, remoteTypeMap: Record<string, string>, localContent: LocalContentItem[], dryRun: boolean = false): Promise<void> {
   const missingTypes: string[] = [];
 
   for (const type of localTypes) {
@@ -432,6 +472,7 @@ async function validateContentTypes(localTypes: Set<string>, remoteTypeMap: Reco
     if (dryRun) {
       colorConsole.info('\n🧪 In dry run mode - showing what content type creation would look like:');
       for (const type of missingTypes) {
+        const defaults = analyzeContentTypeFromFiles(localContent, type);
         colorConsole.progress(`\n📋 CREATE CONTENT TYPE (Dry Run):`);
         colorConsole.log(`\n${colorConsole.cyan('POST')} ${colorConsole.highlight('/api/content-types')}`);
         colorConsole.log(`${colorConsole.gray('Content-Type:')} application/json`);
@@ -439,9 +480,9 @@ async function validateContentTypes(localTypes: Set<string>, remoteTypeMap: Reco
         const sampleContentTypeData = {
           uid: type,
           name: type.charAt(0).toUpperCase() + type.slice(1),
-          format: 'MDX',
-          supportsCoverImage: false,
-          supportsComments: false
+          format: defaults.format,
+          supportsCoverImage: defaults.supportsCoverImage,
+          supportsComments: defaults.supportsComments
         };
         colorConsole.log(JSON.stringify(sampleContentTypeData, null, 2));
         colorConsole.success(`✅ Would create content type: ${colorConsole.highlight(type)}`);
@@ -449,11 +490,11 @@ async function validateContentTypes(localTypes: Set<string>, remoteTypeMap: Reco
       return; // Skip interactive creation in dry run mode
     }
 
-    const createChoice = await question('\nWould you like me to create these content types automatically? (y/N): ');
+    const createChoice = await question('\nWould you like me to create these content types automatically? (y/n) [y]: ');
 
-    if (createChoice.toLowerCase() === 'y' || createChoice.toLowerCase() === 'yes') {
+    if (createChoice.trim() === '' || isYes(createChoice)) {
       for (const type of missingTypes) {
-        await createContentTypeInteractive(type, dryRun);
+        await createContentTypeInteractive(type, localContent, dryRun);
       }
     } else {
       colorConsole.info('\nPlease create the missing content types manually in your LeadCMS instance and try again.');
@@ -463,21 +504,52 @@ async function validateContentTypes(localTypes: Set<string>, remoteTypeMap: Reco
 }
 
 /**
+ * Check if a user response is affirmative (case-insensitive)
+ */
+function isYes(input: string): boolean {
+  const trimmed = input.trim().toLowerCase();
+  return trimmed === 'y' || trimmed === 'yes';
+}
+
+/**
+ * Normalize format input to 'MDX' or 'JSON' (case-insensitive)
+ */
+function normalizeFormat(input: string, fallback: 'MDX' | 'JSON' = 'MDX'): 'MDX' | 'JSON' {
+  const trimmed = input.trim().toUpperCase();
+  if (trimmed === 'JSON') return 'JSON';
+  if (trimmed === 'MDX') return 'MDX';
+  if (trimmed === '') return fallback;
+  return fallback;
+}
+
+/**
  * Create a content type in remote LeadCMS
  */
-async function createContentTypeInteractive(typeName: string, dryRun: boolean = false): Promise<void> {
-  colorConsole.progress(`\n📝 Creating content type: ${colorConsole.highlight(typeName)}`);
+async function createContentTypeInteractive(typeName: string, localContent: LocalContentItem[], dryRun: boolean = false): Promise<void> {
+  const defaults = analyzeContentTypeFromFiles(localContent, typeName);
 
-  const format = await question(`What format should '${colorConsole.highlight(typeName)}' use? (MDX/JSON) [MDX]: `) || 'MDX';
-  const supportsCoverImage = await question(`Should '${colorConsole.highlight(typeName)}' support cover images? (y/N): `);
-  const supportsComments = await question(`Should '${colorConsole.highlight(typeName)}' support comments? (y/N): `);
+  colorConsole.progress(`\n📝 Creating content type: ${colorConsole.highlight(typeName)}`);
+  colorConsole.info(`   Auto-detected defaults: format=${defaults.format}, coverImage=${defaults.supportsCoverImage ? 'yes' : 'no'}, comments=${defaults.supportsComments ? 'yes' : 'no'}`);
+
+  const formatDefault = defaults.format;
+  const coverDefaultLabel = defaults.supportsCoverImage ? 'y' : 'n';
+  const commentsDefaultLabel = defaults.supportsComments ? 'y' : 'n';
+
+  const formatInput = await question(`What format should '${colorConsole.highlight(typeName)}' use? (MDX/JSON) [${formatDefault}]: `);
+  const format = normalizeFormat(formatInput, formatDefault);
+
+  const coverInput = await question(`Should '${colorConsole.highlight(typeName)}' support cover images? (y/n) [${coverDefaultLabel}]: `);
+  const supportsCoverImage = coverInput.trim() === '' ? defaults.supportsCoverImage : isYes(coverInput);
+
+  const commentsInput = await question(`Should '${colorConsole.highlight(typeName)}' support comments? (y/n) [${commentsDefaultLabel}]: `);
+  const supportsComments = commentsInput.trim() === '' ? defaults.supportsComments : isYes(commentsInput);
 
   const contentTypeData = {
     uid: typeName,
     name: typeName.charAt(0).toUpperCase() + typeName.slice(1),
-    format: format.toUpperCase(),
-    supportsCoverImage: supportsCoverImage.toLowerCase() === 'y',
-    supportsComments: supportsComments.toLowerCase() === 'y'
+    format,
+    supportsCoverImage,
+    supportsComments
   };
 
   if (dryRun) {
@@ -938,7 +1010,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
       // Get local content types and validate them
       const localTypes = getLocalContentTypes(localContent);
       console.log(`[LOCAL] Found content types: ${Array.from(localTypes).join(', ')}`);
-      await validateContentTypes(localTypes, remoteTypeMap, dryRun);
+      await validateContentTypes(localTypes, remoteTypeMap, localContent, dryRun);
     }
 
     // Fetch remote content for comparison
@@ -1253,6 +1325,9 @@ export { parseContentFile };
 export { isLocaleDirectory };
 export { getLocalContentTypes };
 export { filterContentOperations };
+export { analyzeContentTypeFromFiles };
+export { isYes };
+export { normalizeFormat };
 // Re-export formatContentForAPI from utility module for testing
 export { formatContentForAPI } from '../lib/content-api-formatting.js';
 // Re-export the new comparison function for consistency
