@@ -1,8 +1,14 @@
 /**
- * Tests for init-leadcms.ts - isValidUrl
+ * Tests for init-leadcms.ts - isValidUrl and initLeadCMS export
  */
 
-import { isValidUrl } from '../src/scripts/init-leadcms';
+import { isValidUrl, initLeadCMS } from '../src/scripts/init-leadcms';
+
+describe('init-leadcms - initLeadCMS export', () => {
+    it('should export initLeadCMS as a function', () => {
+        expect(typeof initLeadCMS).toBe('function');
+    });
+});
 
 describe('init-leadcms - isValidUrl', () => {
     it('should accept valid https URL', () => {

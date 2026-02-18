@@ -319,7 +319,6 @@ async function startSSEWatcher(): Promise<void> {
   };
 }
 
-startSSEWatcher();
-
-// Export types
+// Export the watcher function and types
+export { startSSEWatcher };
 export type { SSEEventData, ConnectedEventData, HeartbeatEventData, DraftEventData };

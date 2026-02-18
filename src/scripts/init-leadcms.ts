@@ -27,20 +27,6 @@ interface UserConfig {
   commentsDir: string;
 }
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
-
-/**
- * Promisified question function
- */
-function question(query: string): Promise<string> {
-  return new Promise((resolve) => {
-    rl.question(query, resolve);
-  });
-}
-
 /**
  * Fetch CMS configuration from API
  * This is a public endpoint that does not require authentication
@@ -236,7 +222,21 @@ function readExistingConfig(): Partial<UserConfig> {
 /**
  * Main initialization flow
  */
-async function main(): Promise<void> {
+export async function initLeadCMS(): Promise<void> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  /**
+   * Promisified question function
+   */
+  function question(query: string): Promise<string> {
+    return new Promise((resolve) => {
+      rl.question(query, resolve);
+    });
+  }
+
   console.log('\n🚀 LeadCMS SDK Initialization\n');
 
   // Check if config already exists
@@ -460,13 +460,3 @@ async function main(): Promise<void> {
 
 // Export pure functions for testing
 export { isValidUrl };
-
-// Run the script only when executed directly
-const isDirectRun = typeof require !== 'undefined' && require.main === module;
-if (isDirectRun) {
-  main().catch((error) => {
-    console.error('❌ Initialization failed:', error.message);
-    rl.close();
-    process.exit(1);
-  });
-}

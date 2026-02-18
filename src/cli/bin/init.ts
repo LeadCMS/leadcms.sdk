@@ -3,5 +3,9 @@
  * LeadCMS Init CLI Entry Point
  */
 
-// Import and run the init script directly since it doesn't export a main function
-import '../../scripts/init-leadcms.js';
+import { initLeadCMS } from '../../scripts/init-leadcms.js';
+
+initLeadCMS().catch((error) => {
+  console.error('❌ Initialization failed:', error.message);
+  process.exit(1);
+});

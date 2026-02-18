@@ -3,5 +3,6 @@
  * LeadCMS SSE Watcher CLI Entry Point
  */
 
-// Import and run the SSE watcher script directly
-import '../../scripts/sse-watcher.js';
+import { startSSEWatcher } from '../../scripts/sse-watcher.js';
+
+startSSEWatcher();
