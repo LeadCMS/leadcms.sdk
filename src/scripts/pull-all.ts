@@ -57,48 +57,76 @@ async function fetchAndCacheCMSConfig(): Promise<{
 }
 
 /**
- * Delete all local content, media, comments, and sync tokens.
- * Used by --reset to do a clean pull from scratch.
+ * Reset content directory and its sync tokens.
+ * Deletes content files, the sync token inside contentDir, and any legacy sync tokens.
  */
-async function resetLocalState(): Promise<void> {
+async function resetContentState(): Promise<void> {
   const config = getConfig();
   const contentDir = path.resolve(config.contentDir);
-  const mediaDir = path.resolve(config.mediaDir);
-  const commentsDir = path.resolve(config.commentsDir);
 
-  console.log(`🗑️  Resetting local state...`);
-
-  // Delete content directory (includes content sync token at contentDir/.sync-token)
   try {
     await fs.rm(contentDir, { recursive: true, force: true });
     console.log(`   ✓ Cleared content directory: ${contentDir}`);
   } catch { /* directory may not exist */ }
 
-  // Delete media directory (includes media sync token at mediaDir/.sync-token)
+  // Clean up legacy content sync token (SDK ≤ 3.2)
+  try {
+    await fs.unlink(path.join(path.dirname(contentDir), 'sync-token.txt'));
+    console.log(`   ✓ Removed legacy content sync token`);
+  } catch { /* not found — ok */ }
+}
+
+/**
+ * Reset media directory and its sync tokens.
+ * Deletes media files, the sync token inside mediaDir, and any legacy sync tokens.
+ */
+async function resetMediaState(): Promise<void> {
+  const config = getConfig();
+  const mediaDir = path.resolve(config.mediaDir);
+  const contentDir = path.resolve(config.contentDir);
+
   try {
     await fs.rm(mediaDir, { recursive: true, force: true });
     console.log(`   ✓ Cleared media directory: ${mediaDir}`);
   } catch { /* directory may not exist */ }
 
-  // Delete comments directory (includes comment sync token at commentsDir/.sync-token)
+  // Clean up legacy media sync token (SDK ≤ 3.2, stored next to content dir)
+  try {
+    await fs.unlink(path.join(path.dirname(contentDir), 'media-sync-token.txt'));
+    console.log(`   ✓ Removed legacy media sync token`);
+  } catch { /* not found — ok */ }
+}
+
+/**
+ * Reset comments directory and its sync tokens.
+ * Deletes comment files, the sync token inside commentsDir, and any legacy sync tokens.
+ */
+async function resetCommentsState(): Promise<void> {
+  const config = getConfig();
+  const commentsDir = path.resolve(config.commentsDir);
+
   try {
     await fs.rm(commentsDir, { recursive: true, force: true });
     console.log(`   ✓ Cleared comments directory: ${commentsDir}`);
   } catch { /* directory may not exist */ }
 
-  // Also clean up any legacy sync tokens (SDK ≤ 3.2) that may linger
-  // in parent-of-contentDir and parent-of-commentsDir
-  const legacyTokenFiles = [
-    path.join(path.dirname(contentDir), 'sync-token.txt'),
-    path.join(path.dirname(contentDir), 'media-sync-token.txt'),
-    path.join(path.dirname(commentsDir), 'comment-sync-token.txt'),
-  ];
-  for (const legacyFile of legacyTokenFiles) {
-    try {
-      await fs.unlink(legacyFile);
-      console.log(`   ✓ Removed legacy sync token: ${legacyFile}`);
-    } catch { /* not found — ok */ }
-  }
+  // Clean up legacy comment sync token (SDK ≤ 3.2)
+  try {
+    await fs.unlink(path.join(path.dirname(commentsDir), 'comment-sync-token.txt'));
+    console.log(`   ✓ Removed legacy comment sync token`);
+  } catch { /* not found — ok */ }
+}
+
+/**
+ * Delete all local content, media, comments, and sync tokens.
+ * Used by --reset to do a clean pull from scratch.
+ */
+async function resetLocalState(): Promise<void> {
+  console.log(`🗑️  Resetting local state...`);
+
+  await resetContentState();
+  await resetMediaState();
+  await resetCommentsState();
 
   console.log(`   ✅ Local state reset complete\n`);
 }
@@ -161,8 +189,8 @@ async function main(options: PullAllOptions = {}): Promise<void> {
 // Export the main function
 export { main as pullAll };
 
-// Export resetLocalState for testing and programmatic use
-export { resetLocalState };
+// Export reset functions for individual pull commands and testing
+export { resetLocalState, resetContentState, resetMediaState, resetCommentsState };
 
 // Note: CLI execution moved to src/cli/bin/pull-all.ts
 // This file now only exports the function for programmatic use

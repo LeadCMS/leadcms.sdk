@@ -5,7 +5,10 @@
 
 import { pullMedia } from '../../scripts/pull-media.js';
 
-pullMedia().catch((error: any) => {
+const args = process.argv.slice(2);
+const reset = args.includes('--reset');
+
+pullMedia({ reset }).catch((error: any) => {
   console.error('Error running LeadCMS pull media:', error.message);
   process.exit(1);
 });

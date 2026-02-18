@@ -5,6 +5,10 @@ export * from './lib/locale-utils.js';
 export * from './lib/comment-types.js';
 export * from './lib/cms-config-types.js';
 
+// Content merge utilities for three-way merge support
+export { threeWayMerge, threeWayMergeJson, isLocallyModified } from './lib/content-merge.js';
+export type { MergeResult } from './lib/content-merge.js';
+
 // Export only public comment tree types (functions are exported from cms.js)
 export type { CommentTreeNode, CommentTreeOptions, CommentStatistics, CommentSortOrder } from './lib/comment-utils.js';
 

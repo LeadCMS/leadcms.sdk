@@ -21,7 +21,9 @@ if (slugIndex !== -1 && args[slugIndex + 1]) {
   targetSlug = args[slugIndex + 1];
 }
 
-pullContent({ targetId, targetSlug }).catch((error: any) => {
+const reset = args.includes('--reset');
+
+pullContent({ targetId, targetSlug, reset }).catch((error: any) => {
   console.error('Error running LeadCMS pull content:', error.message);
   process.exit(1);
 });

@@ -7,13 +7,27 @@ import "dotenv/config";
 import axios from "axios";
 import { leadCMSUrl } from "./leadcms-helpers.js";
 import { setCMSConfig, isMediaSupported } from "../lib/cms-config-types.js";
+import { resetMediaState } from "./pull-all.js";
+
+interface PullMediaOptions {
+  /** When true, delete all local media files and sync tokens before pulling, effectively doing a fresh pull. */
+  reset?: boolean;
+}
 
 /**
  * Main function - currently media is fetched as part of content sync
  * This is a placeholder for future dedicated media sync
  */
-async function main(): Promise<void> {
+async function main(options: PullMediaOptions = {}): Promise<void> {
+  const { reset } = options;
+
   console.log(`\n🖼️  LeadCMS Pull Media\n`);
+
+  // Handle --reset flag: clear media before pulling
+  if (reset) {
+    console.log(`🔄 Resetting media state...\n`);
+    await resetMediaState();
+  }
 
   // Check if media is supported
   try {

@@ -35,7 +35,7 @@ jest.mock('../src/lib/config.js', () => ({
 jest.mock('axios', () => harness.axiosMock);
 
 import { pullAll } from '../src/scripts/pull-all';
-import { resetLocalState } from '../src/scripts/pull-all';
+import { resetLocalState, resetContentState, resetMediaState, resetCommentsState } from '../src/scripts/pull-all';
 
 // ── Shared setup / teardown ────────────────────────────────────────────
 beforeEach(() => harness.setup());
@@ -155,6 +155,142 @@ describe('resetLocalState', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════════
+//  Scoped reset function unit tests
+// ════════════════════════════════════════════════════════════════════════
+
+describe('resetContentState', () => {
+  it('should delete content directory and sync token', async () => {
+    const articleDir = path.join(contentDir, 'en', 'article');
+    await fsPromises.mkdir(articleDir, { recursive: true });
+    await fsPromises.writeFile(path.join(articleDir, 'test.mdx'), '# Test');
+    await fsPromises.writeFile(contentSyncTokenPath, 'content-token', 'utf8');
+
+    await resetContentState();
+
+    const files = await listContentFiles(contentDir);
+    expect(files).toHaveLength(0);
+    await expect(fsPromises.access(contentSyncTokenPath)).rejects.toThrow();
+  });
+
+  it('should delete legacy content sync token', async () => {
+    const parentDir = path.dirname(contentDir);
+    await fsPromises.mkdir(parentDir, { recursive: true });
+    await fsPromises.writeFile(legacyContentSyncTokenPath, 'legacy-token', 'utf8');
+
+    await resetContentState();
+
+    await expect(fsPromises.access(legacyContentSyncTokenPath)).rejects.toThrow();
+  });
+
+  it('should not touch media or comments directories', async () => {
+    await fsPromises.mkdir(mediaDir, { recursive: true });
+    await fsPromises.writeFile(path.join(mediaDir, 'photo.jpg'), 'img-data');
+    await fsPromises.mkdir(commentsDir, { recursive: true });
+    await fsPromises.writeFile(path.join(commentsDir, 'c.json'), '{}');
+
+    await resetContentState();
+
+    const mediaFiles = await listAllFiles(mediaDir);
+    expect(mediaFiles.length).toBeGreaterThan(0);
+    const commentFiles = await listAllFiles(commentsDir);
+    expect(commentFiles.length).toBeGreaterThan(0);
+  });
+
+  it('should not throw if content directory does not exist', async () => {
+    await fsPromises.rm(contentDir, { recursive: true, force: true });
+    await expect(resetContentState()).resolves.not.toThrow();
+  });
+});
+
+describe('resetMediaState', () => {
+  it('should delete media directory and sync token', async () => {
+    await fsPromises.mkdir(mediaDir, { recursive: true });
+    await fsPromises.writeFile(path.join(mediaDir, 'photo.jpg'), 'img-data');
+    await fsPromises.writeFile(mediaSyncTokenPath, 'media-token', 'utf8');
+
+    await resetMediaState();
+
+    const files = await listAllFiles(mediaDir);
+    expect(files).toHaveLength(0);
+    await expect(fsPromises.access(mediaSyncTokenPath)).rejects.toThrow();
+  });
+
+  it('should delete legacy media sync token', async () => {
+    const parentDir = path.dirname(contentDir);
+    await fsPromises.mkdir(parentDir, { recursive: true });
+    await fsPromises.writeFile(legacyMediaSyncTokenPath, 'legacy-media-token', 'utf8');
+
+    await resetMediaState();
+
+    await expect(fsPromises.access(legacyMediaSyncTokenPath)).rejects.toThrow();
+  });
+
+  it('should not touch content or comments directories', async () => {
+    const articleDir = path.join(contentDir, 'en', 'article');
+    await fsPromises.mkdir(articleDir, { recursive: true });
+    await fsPromises.writeFile(path.join(articleDir, 'test.mdx'), '# Test');
+    await fsPromises.mkdir(commentsDir, { recursive: true });
+    await fsPromises.writeFile(path.join(commentsDir, 'c.json'), '{}');
+
+    await resetMediaState();
+
+    const contentFiles = await listContentFiles(contentDir);
+    expect(contentFiles.length).toBeGreaterThan(0);
+    const commentFiles = await listAllFiles(commentsDir);
+    expect(commentFiles.length).toBeGreaterThan(0);
+  });
+
+  it('should not throw if media directory does not exist', async () => {
+    await fsPromises.rm(mediaDir, { recursive: true, force: true });
+    await expect(resetMediaState()).resolves.not.toThrow();
+  });
+});
+
+describe('resetCommentsState', () => {
+  it('should delete comments directory and sync token', async () => {
+    await fsPromises.mkdir(commentsDir, { recursive: true });
+    await fsPromises.writeFile(path.join(commentsDir, 'c.json'), '{}');
+    await fsPromises.writeFile(commentSyncTokenPath, 'comment-token', 'utf8');
+
+    await resetCommentsState();
+
+    const files = await listAllFiles(commentsDir);
+    expect(files).toHaveLength(0);
+    await expect(fsPromises.access(commentSyncTokenPath)).rejects.toThrow();
+  });
+
+  it('should delete legacy comment sync token', async () => {
+    const parentDir = path.dirname(commentsDir);
+    await fsPromises.mkdir(parentDir, { recursive: true });
+    await fsPromises.writeFile(legacyCommentSyncTokenPath, 'legacy-comment-token', 'utf8');
+
+    await resetCommentsState();
+
+    await expect(fsPromises.access(legacyCommentSyncTokenPath)).rejects.toThrow();
+  });
+
+  it('should not touch content or media directories', async () => {
+    const articleDir = path.join(contentDir, 'en', 'article');
+    await fsPromises.mkdir(articleDir, { recursive: true });
+    await fsPromises.writeFile(path.join(articleDir, 'test.mdx'), '# Test');
+    await fsPromises.mkdir(mediaDir, { recursive: true });
+    await fsPromises.writeFile(path.join(mediaDir, 'photo.jpg'), 'img-data');
+
+    await resetCommentsState();
+
+    const contentFiles = await listContentFiles(contentDir);
+    expect(contentFiles.length).toBeGreaterThan(0);
+    const mediaFiles = await listAllFiles(mediaDir);
+    expect(mediaFiles.length).toBeGreaterThan(0);
+  });
+
+  it('should not throw if comments directory does not exist', async () => {
+    await fsPromises.rm(commentsDir, { recursive: true, force: true });
+    await expect(resetCommentsState()).resolves.not.toThrow();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
 //  pull --reset integration tests
 // ════════════════════════════════════════════════════════════════════════
 
@@ -240,6 +376,90 @@ describe('pullAll with --reset', () => {
 
     const files = await listContentFiles(contentDir);
     expect(files).toHaveLength(1);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+//  pullContent with --reset integration tests
+// ════════════════════════════════════════════════════════════════════════
+
+describe('pullContent with --reset', () => {
+  it('should clear content and do a fresh content pull', async () => {
+    const v1Article = {
+      id: 1,
+      slug: 'hello-world',
+      type: 'article',
+      language: 'en',
+      title: 'Hello World',
+      body: '---\ntitle: Hello World\n---\n# Hello World',
+      publishedAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+    };
+
+    harness.addContentSync([v1Article], [], 'token-1');
+
+    const { pullContent } = await import('../src/scripts/pull-content');
+    await pullContent();
+
+    let files = await listContentFiles(contentDir);
+    expect(files).toHaveLength(1);
+
+    // Queue a fresh-pull response that only has the new article
+    const v2Article = {
+      id: 2,
+      slug: 'fresh-article',
+      type: 'article',
+      language: 'en',
+      title: 'Fresh Article',
+      body: '---\ntitle: Fresh Article\n---\n# Fresh Article',
+      publishedAt: '2024-02-01T00:00:00Z',
+      updatedAt: '2024-02-01T00:00:00Z',
+    };
+
+    harness.addContentSync([v2Article], [], 'token-2');
+    await pullContent({ reset: true });
+
+    files = await listContentFiles(contentDir);
+    expect(files).toHaveLength(1);
+    expect(files[0]).toContain('fresh-article');
+  });
+
+  it('should not touch media or comments when resetting content', async () => {
+    // Set up media and comment files
+    await fsPromises.mkdir(mediaDir, { recursive: true });
+    await fsPromises.writeFile(path.join(mediaDir, 'photo.jpg'), 'img-data');
+    await fsPromises.writeFile(mediaSyncTokenPath, 'media-token', 'utf8');
+
+    await fsPromises.mkdir(commentsDir, { recursive: true });
+    await fsPromises.writeFile(path.join(commentsDir, 'c.json'), '{}');
+    await fsPromises.writeFile(commentSyncTokenPath, 'comment-token', 'utf8');
+
+    const article = {
+      id: 1,
+      slug: 'test',
+      type: 'article',
+      language: 'en',
+      title: 'Test',
+      body: '---\ntitle: Test\n---\n# Test',
+      publishedAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+    };
+
+    harness.addContentSync([article], [], 'token-1');
+
+    const { pullContent } = await import('../src/scripts/pull-content');
+    await pullContent({ reset: true });
+
+    // Media and comments should be untouched
+    const mediaFiles = await listAllFiles(mediaDir);
+    expect(mediaFiles.length).toBeGreaterThan(0);
+    const mediaToken = await fsPromises.readFile(mediaSyncTokenPath, 'utf8');
+    expect(mediaToken).toBe('media-token');
+
+    const commentFiles = await listAllFiles(commentsDir);
+    expect(commentFiles.length).toBeGreaterThan(0);
+    const commentToken = await fsPromises.readFile(commentSyncTokenPath, 'utf8');
+    expect(commentToken).toBe('comment-token');
   });
 });
 

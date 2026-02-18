@@ -34,7 +34,8 @@
     "diff": "^8.0.2",
     "dotenv": "^16.6.1",
     "eventsource": "^4.0.0",
-    "gray-matter": "^4.0.3"
+    "gray-matter": "^4.0.3",
+    "node-diff3": "^3.2.0"
   },
   "devDependencies": {
     "@types/diff": "^7.0.2",

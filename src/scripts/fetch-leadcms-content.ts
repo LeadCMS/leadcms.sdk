@@ -12,12 +12,15 @@ import {
   fetchContentTypes,
   ContentItem,
 } from "./leadcms-helpers.js";
-import { saveContentFile } from "../lib/content-transformation.js";
+import { saveContentFile, transformRemoteToLocalFormat, type ContentTypeMap } from "../lib/content-transformation.js";
+import { threeWayMerge, threeWayMergeJson, isLocallyModified } from "../lib/content-merge.js";
+import { getConfig } from "../lib/config.js";
 
 // Type definitions
 interface SyncResponse {
   items?: ContentItem[];
   deleted?: number[];
+  baseItems?: Record<string, ContentItem>;
   nextSyncToken?: string;
 }
 
@@ -40,6 +43,7 @@ interface MediaSyncResponse {
 interface ContentSyncResult {
   items: ContentItem[];
   deleted: number[];
+  baseItems: Record<string, ContentItem>;
   nextSyncToken: string;
 }
 
@@ -180,6 +184,7 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
   console.log(`[FETCH_CONTENT_SYNC] Fetching public content (no authentication)`);
   let allItems: ContentItem[] = [];
   let allDeleted: number[] = [];
+  let allBaseItems: Record<string, ContentItem> = {};
   let token = syncToken || "";
   let nextSyncToken: string | undefined = undefined;
   let page = 0;
@@ -188,6 +193,11 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
     const url = new URL("/api/content/sync", leadCMSUrl);
     url.searchParams.set("filter[limit]", "100");
     url.searchParams.set("syncToken", token);
+
+    // Request base versions for three-way merge when doing incremental sync
+    if (syncToken) {
+      url.searchParams.set("includeBase", "true");
+    }
 
     console.log(`[FETCH_CONTENT_SYNC] Page ${page}, URL: ${url.toString()}`);
 
@@ -212,6 +222,12 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
         allDeleted.push(...data.deleted);
       }
 
+      // Collect base items for three-way merge support
+      if (data.baseItems && typeof data.baseItems === 'object') {
+        Object.assign(allBaseItems, data.baseItems);
+        console.log(`[FETCH_CONTENT_SYNC] Page ${page} - Got ${Object.keys(data.baseItems).length} base items for merge`);
+      }
+
       const newSyncToken = res.headers["x-next-sync-token"] || token;
       console.log(`[FETCH_CONTENT_SYNC] Next sync token: ${newSyncToken}`);
 
@@ -231,11 +247,12 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
   }
 
   console.log(
-    `[FETCH_CONTENT_SYNC] Completed - Total items: ${allItems.length}, deleted: ${allDeleted.length}`
+    `[FETCH_CONTENT_SYNC] Completed - Total items: ${allItems.length}, deleted: ${allDeleted.length}, base items: ${Object.keys(allBaseItems).length}`
   );
   return {
     items: allItems,
     deleted: allDeleted,
+    baseItems: allBaseItems,
     nextSyncToken: nextSyncToken || token,
   };
 }
@@ -496,6 +513,7 @@ async function main(): Promise<void> {
 
   let items: ContentItem[] = [],
     deleted: number[] = [],
+    baseItems: Record<string, ContentItem> = {},
     nextSyncToken: string = "";
 
   let mediaItems: MediaItem[] = [],
@@ -507,10 +525,10 @@ async function main(): Promise<void> {
     try {
       if (lastSyncToken) {
         console.log(`Syncing content from LeadCMS using sync token: ${lastSyncToken}`);
-        ({ items, deleted, nextSyncToken } = await fetchContentSync(lastSyncToken));
+        ({ items, deleted, baseItems, nextSyncToken } = await fetchContentSync(lastSyncToken));
       } else {
         console.log("No content sync token found. Doing full fetch from LeadCMS...");
-        ({ items, deleted, nextSyncToken } = await fetchContentSync(undefined));
+        ({ items, deleted, baseItems, nextSyncToken } = await fetchContentSync(undefined));
       }
     } catch (error: any) {
       console.error(`[MAIN] Failed to fetch content:`, error.message);
@@ -550,23 +568,103 @@ async function main(): Promise<void> {
     ? await buildContentIdIndex(CONTENT_DIR)
     : new Map<string, string[]>();
 
-  // Save content files
+  // Save content files (with three-way merge support)
+  const hasBaseItems = Object.keys(baseItems).length > 0;
+  let mergedCount = 0;
+  let conflictCount = 0;
+  let overwrittenCount = 0;
+  let newCount = 0;
+
+  // Build a ContentTypeMap for transformation
+  const contentTypeMap: ContentTypeMap = {};
+  for (const [key, value] of Object.entries(typeMap)) {
+    contentTypeMap[key] = value === 'JSON' ? 'JSON' : 'MDX';
+  }
+
   for (const content of items) {
     if (content && typeof content === "object") {
+      const idStr = content.id != null ? String(content.id) : undefined;
+
+      // Determine the file path where this content would be saved
+      const contentConfig = getConfig();
+      const contentLanguage = content.language || contentConfig.defaultLanguage;
+      let targetContentDir = CONTENT_DIR;
+      if (contentLanguage !== contentConfig.defaultLanguage) {
+        targetContentDir = path.join(CONTENT_DIR, contentLanguage);
+      }
+      const contentType = contentTypeMap[content.type] || 'MDX';
+      const extension = contentType === 'MDX' ? '.mdx' : '.json';
+      const expectedPath = path.join(targetContentDir, `${content.slug}${extension}`);
+
+      // Check if local file exists before deleting old paths
+      let localContent: string | null = null;
+      try {
+        localContent = await fs.readFile(expectedPath, 'utf8');
+      } catch {
+        // File does not exist — this is new content
+      }
+
       // Before saving, remove any existing file with the same id.
       // This handles slug renames, type changes (MDX↔JSON), and language
       // changes — the old file at the previous path is cleaned up before the
       // new version is written at the (potentially different) new path.
-      if (content.id != null) {
-        await deleteContentFilesById(contentIdIndex, String(content.id));
+      if (idStr != null) {
+        await deleteContentFilesById(contentIdIndex, idStr);
       }
 
-      await saveContentFile({
-        content,
-        typeMap,
-        contentDir: CONTENT_DIR,
-      });
+      // Try three-way merge if we have a base version and local file exists
+      const baseContent = idStr ? baseItems[idStr] : undefined;
+
+      if (localContent && baseContent && hasBaseItems) {
+        // Transform both base and remote to local file format for comparison
+        const baseTransformed = await transformRemoteToLocalFormat(baseContent, contentTypeMap);
+        const remoteTransformed = await transformRemoteToLocalFormat(content, contentTypeMap);
+
+        if (!isLocallyModified(baseTransformed, localContent)) {
+          // Local file is unchanged from base — safe to overwrite with remote
+          await saveContentFile({ content, typeMap, contentDir: CONTENT_DIR });
+          overwrittenCount++;
+        } else {
+          // Local file was modified — perform three-way merge
+          // Use structural merge for JSON (avoids false conflicts from adjacent lines)
+          // and line-based merge for MDX
+          const mergeResult = contentType === 'JSON'
+            ? threeWayMergeJson(baseTransformed, localContent, remoteTransformed)
+            : threeWayMerge(baseTransformed, localContent, remoteTransformed);
+
+          if (mergeResult.success) {
+            // Clean merge — write the merged result
+            await fs.mkdir(path.dirname(expectedPath), { recursive: true });
+            await fs.writeFile(expectedPath, mergeResult.merged, 'utf8');
+            console.log(`🔀 Auto-merged: ${content.slug} (local + remote changes combined)`);
+            mergedCount++;
+          } else {
+            // Conflicts — write merged content with conflict markers
+            await fs.mkdir(path.dirname(expectedPath), { recursive: true });
+            await fs.writeFile(expectedPath, mergeResult.merged, 'utf8');
+            console.warn(`⚠️  Conflict in: ${content.slug} (${mergeResult.conflictCount} conflict(s) — manual resolution needed)`);
+            conflictCount++;
+          }
+        }
+      } else {
+        // No base available or file is new — overwrite (current behavior)
+        await saveContentFile({ content, typeMap, contentDir: CONTENT_DIR });
+        if (localContent) {
+          overwrittenCount++;
+        } else {
+          newCount++;
+        }
+      }
     }
+  }
+
+  // Print merge summary
+  if (hasBaseItems && items.length > 0) {
+    console.log(`\n📊 Content sync summary:`);
+    if (newCount > 0) console.log(`   ✨ New: ${newCount}`);
+    if (overwrittenCount > 0) console.log(`   📝 Updated (no local changes): ${overwrittenCount}`);
+    if (mergedCount > 0) console.log(`   🔀 Auto-merged: ${mergedCount}`);
+    if (conflictCount > 0) console.log(`   ⚠️  Conflicts (need manual resolution): ${conflictCount}`);
   }
 
   // Remove deleted content files from all language directories

@@ -4,12 +4,6 @@ import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 
-// Load env from .env, .env.local, etc. (dotenv will not overwrite existing process.env)
-dotenv.config({ path: path.resolve(process.cwd(), ".env") });
-try {
-  dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
-} catch { }
-
 /**
  * Filter environment variables by prefix (e.g. NEXT_PUBLIC_)
  */
@@ -29,10 +23,18 @@ export function generateEnvJsContent(vars: Record<string, string | undefined>): 
   return `window.__env = ${JSON.stringify(vars, null, 2)};\n`;
 }
 
-// Only run when executed directly (not when imported for testing)
-const isDirectRun = typeof require !== 'undefined' && require.main === module;
-if (isDirectRun) {
-  const envVars = filterEnvVars(process.env);
+/**
+ * Generate a __env.js file with all environment variables matching the prefix.
+ * Loads .env and .env.local files, filters by prefix, and writes to public/__env.js.
+ */
+export function generateEnv(prefix: string = "NEXT_PUBLIC_"): void {
+  // Load env from .env, .env.local, etc. (dotenv will not overwrite existing process.env)
+  dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+  try {
+    dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+  } catch { }
+
+  const envVars = filterEnvVars(process.env, prefix);
   const jsContent = generateEnvJsContent(envVars);
 
   const outPath = path.resolve(process.cwd(), "public", "__env.js");

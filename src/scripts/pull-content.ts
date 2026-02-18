@@ -11,19 +11,28 @@ import { fetchLeadCMSContent } from "./fetch-leadcms-content.js";
 import { leadCMSDataService } from "../lib/data-service.js";
 import { saveContentFile } from "../lib/content-transformation.js";
 import { CONTENT_DIR, fetchContentTypes } from "./leadcms-helpers.js";
+import { resetContentState } from "./pull-all.js";
 
 interface PullContentOptions {
   targetId?: string;
   targetSlug?: string;
+  /** When true, delete all local content files and sync tokens before pulling, effectively doing a fresh pull. */
+  reset?: boolean;
 }
 
 /**
  * Main function
  */
 async function main(options: PullContentOptions = {}): Promise<void> {
-  const { targetId, targetSlug } = options;
+  const { targetId, targetSlug, reset } = options;
 
   console.log(`\n📄 LeadCMS Pull Content\n`);
+
+  // Handle --reset flag: clear content before pulling
+  if (reset) {
+    console.log(`🔄 Resetting content state...\n`);
+    await resetContentState();
+  }
 
   // If pulling specific content by ID or slug
   if (targetId || targetSlug) {

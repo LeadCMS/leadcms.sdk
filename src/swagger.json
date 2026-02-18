@@ -2,7 +2,7 @@
   "openapi": "3.0.1",
   "info": {
     "title": "LeadCMS API",
-    "version": "1.3.17.0"
+    "version": "1.3.18.0"
   },
   "paths": {
     "/api/accounts/{id}/comments": {
@@ -153,6 +153,70 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accounts/sync": {
+      "get": {
+        "tags": [
+          "Accounts"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "500": {
             "description": "Server Error",
@@ -718,58 +782,6 @@
             "description": "Server Error",
             "content": {
               "text/csv": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/accounts/sync": {
-      "get": {
-        "tags": [
-          "Accounts"
-        ],
-        "parameters": [
-          {
-            "name": "syncToken",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -1460,7 +1472,19 @@
         ],
         "responses": {
           "200": {
-            "description": "Success"
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
           },
           "204": {
             "description": "No Content"
@@ -2526,6 +2550,70 @@
         }
       }
     },
+    "/api/contacts/sync": {
+      "get": {
+        "tags": [
+          "Contacts"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/contacts/import": {
       "post": {
         "tags": [
@@ -2726,58 +2814,6 @@
             "description": "Server Error",
             "content": {
               "text/csv": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/contacts/sync": {
-      "get": {
-        "tags": [
-          "Contacts"
-        ],
-        "parameters": [
-          {
-            "name": "syncToken",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -4042,11 +4078,32 @@
               "type": "string",
               "default": "relative"
             }
+          },
+          {
+            "name": "includeBase",
+            "in": "query",
+            "description": "Include base versions of modified items for three-way merge support",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Success"
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
           },
           "204": {
             "description": "No Content"
@@ -5345,6 +5402,70 @@
         }
       }
     },
+    "/api/content-types/sync": {
+      "get": {
+        "tags": [
+          "ContentTypes"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentTypeDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentTypeDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/content-types/import": {
       "post": {
         "tags": [
@@ -5545,58 +5666,6 @@
             "description": "Server Error",
             "content": {
               "text/csv": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/content-types/sync": {
-      "get": {
-        "tags": [
-          "ContentTypes"
-        ],
-        "parameters": [
-          {
-            "name": "syncToken",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -9287,6 +9356,70 @@
         }
       }
     },
+    "/api/deal-pipelines/sync": {
+      "get": {
+        "tags": [
+          "DealPipelines"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealPipelineDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealPipelineDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/deal-pipelines/{id}": {
       "get": {
         "tags": [
@@ -9754,58 +9887,6 @@
         }
       }
     },
-    "/api/deal-pipelines/sync": {
-      "get": {
-        "tags": [
-          "DealPipelines"
-        ],
-        "parameters": [
-          {
-            "name": "syncToken",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/deal-pipeline-stages": {
       "post": {
         "tags": [
@@ -10152,6 +10233,70 @@
         }
       }
     },
+    "/api/deal-pipeline-stages/sync": {
+      "get": {
+        "tags": [
+          "DealPipelineStages"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealPipelineStageDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealPipelineStageDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/deal-pipeline-stages/bulk": {
       "delete": {
         "tags": [
@@ -10259,58 +10404,6 @@
             "description": "Server Error",
             "content": {
               "text/csv": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/deal-pipeline-stages/sync": {
-      "get": {
-        "tags": [
-          "DealPipelineStages"
-        ],
-        "parameters": [
-          {
-            "name": "syncToken",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -10671,6 +10764,70 @@
         }
       }
     },
+    "/api/deals/sync": {
+      "get": {
+        "tags": [
+          "Deals"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/deals/bulk": {
       "delete": {
         "tags": [
@@ -10778,58 +10935,6 @@
             "description": "Server Error",
             "content": {
               "text/csv": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/deals/sync": {
-      "get": {
-        "tags": [
-          "Deals"
-        ],
-        "parameters": [
-          {
-            "name": "syncToken",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -11193,6 +11298,70 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/domains/sync": {
+      "get": {
+        "tags": [
+          "Domains"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "500": {
             "description": "Server Error",
@@ -11772,58 +11941,6 @@
         }
       }
     },
-    "/api/domains/sync": {
-      "get": {
-        "tags": [
-          "Domains"
-        ],
-        "parameters": [
-          {
-            "name": "syncToken",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/email/verify/{email}": {
       "get": {
         "tags": [
@@ -12025,6 +12142,70 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/email-groups/sync": {
+      "get": {
+        "tags": [
+          "EmailGroups"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailGroupDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailGroupDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "500": {
             "description": "Server Error",
@@ -12511,58 +12692,6 @@
         }
       }
     },
-    "/api/email-groups/sync": {
-      "get": {
-        "tags": [
-          "EmailGroups"
-        ],
-        "parameters": [
-          {
-            "name": "syncToken",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/email-templates/{id}/ai-translation-draft/{language}": {
       "get": {
         "tags": [
@@ -13010,6 +13139,70 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/email-templates/sync": {
+      "get": {
+        "tags": [
+          "EmailTemplates"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailTemplateDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailTemplateDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "500": {
             "description": "Server Error",
@@ -13482,58 +13675,6 @@
             "description": "Server Error",
             "content": {
               "text/csv": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/email-templates/sync": {
-      "get": {
-        "tags": [
-          "EmailTemplates"
-        ],
-        "parameters": [
-          {
-            "name": "syncToken",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -14350,6 +14491,70 @@
         }
       }
     },
+    "/api/links/sync": {
+      "get": {
+        "tags": [
+          "Links"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/links/import": {
       "post": {
         "tags": [
@@ -14757,58 +14962,6 @@
             "description": "Server Error",
             "content": {
               "text/csv": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/links/sync": {
-      "get": {
-        "tags": [
-          "Links"
-        ],
-        "parameters": [
-          {
-            "name": "syncToken",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -16971,6 +17124,70 @@
         }
       }
     },
+    "/api/order-items/sync": {
+      "get": {
+        "tags": [
+          "OrderItems"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderItemDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderItemDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/order-items/import": {
       "post": {
         "tags": [
@@ -17086,58 +17303,6 @@
             "description": "Server Error",
             "content": {
               "text/csv": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/order-items/sync": {
-      "get": {
-        "tags": [
-          "OrderItems"
-        ],
-        "parameters": [
-          {
-            "name": "syncToken",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -17353,6 +17518,70 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orders/sync": {
+      "get": {
+        "tags": [
+          "Orders"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
           },
           "401": {
             "description": "Unauthorized"
@@ -17935,10 +18164,10 @@
         }
       }
     },
-    "/api/orders/sync": {
+    "/api/promotions/sync": {
       "get": {
         "tags": [
-          "Orders"
+          "Promotions"
         ],
         "parameters": [
           {
@@ -17958,7 +18187,19 @@
         ],
         "responses": {
           "200": {
-            "description": "Success"
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
           },
           "204": {
             "description": "No Content"
@@ -18440,58 +18681,6 @@
             "description": "Server Error",
             "content": {
               "text/csv": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/promotions/sync": {
-      "get": {
-        "tags": [
-          "Promotions"
-        ],
-        "parameters": [
-          {
-            "name": "syncToken",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -19152,6 +19341,70 @@
         }
       }
     },
+    "/api/segments/sync": {
+      "get": {
+        "tags": [
+          "Segments"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SegmentDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SegmentDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/segments/bulk": {
       "delete": {
         "tags": [
@@ -19259,58 +19512,6 @@
             "description": "Server Error",
             "content": {
               "text/csv": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/segments/sync": {
-      "get": {
-        "tags": [
-          "Segments"
-        ],
-        "parameters": [
-          {
-            "name": "syncToken",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -19867,6 +20068,70 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/sync": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
           },
           "401": {
             "description": "Unauthorized"
@@ -20449,58 +20714,6 @@
         }
       }
     },
-    "/api/settings/sync": {
-      "get": {
-        "tags": [
-          "Settings"
-        ],
-        "parameters": [
-          {
-            "name": "syncToken",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/sse/supported-entities": {
       "get": {
         "tags": [
@@ -20941,6 +21154,70 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/unsubscribes/sync": {
+      "get": {
+        "tags": [
+          "Unsubscribes"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnsubscribeDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnsubscribeDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
           },
           "401": {
             "description": "Unauthorized"
@@ -21509,58 +21786,6 @@
             "description": "Server Error",
             "content": {
               "text/csv": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/unsubscribes/sync": {
-      "get": {
-        "tags": [
-          "Unsubscribes"
-        ],
-        "parameters": [
-          {
-            "name": "syncToken",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
@@ -22866,6 +23091,35 @@
         },
         "additionalProperties": false
       },
+      "AccountDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AccountDetailsDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "AccountImportDto": {
         "type": "object",
         "properties": {
@@ -24117,6 +24371,35 @@
             ],
             "type": "string",
             "example": "Unanswered"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommentDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommentDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CommentDetailsDto"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -25434,6 +25717,35 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/OrderDetailsDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContactDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContactDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ContactDetailsDto"
             },
             "nullable": true
           }
@@ -26943,6 +27255,35 @@
         },
         "additionalProperties": false
       },
+      "ContentDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContentDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ContentDetailsDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "ContentDistributionItemDto": {
         "type": "object",
         "properties": {
@@ -27479,6 +27820,35 @@
             "type": "integer",
             "format": "int32",
             "example": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContentTypeDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContentTypeDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ContentTypeDetailsDto"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -28258,6 +28628,35 @@
         },
         "additionalProperties": false
       },
+      "DealDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DealDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DealDetailsDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "DealPipelineCreateDto": {
         "required": [
           "name"
@@ -28311,6 +28710,35 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DealPipelineStageDetailsDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "DealPipelineDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DealPipelineDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DealPipelineDetailsDto"
             },
             "nullable": true
           }
@@ -28395,6 +28823,35 @@
           },
           "dealPipeline": {
             "$ref": "#/components/schemas/DealPipelineDetailsDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DealPipelineStageDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DealPipelineStageDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DealPipelineStageDetailsDto"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -29214,6 +29671,35 @@
         },
         "additionalProperties": false
       },
+      "DomainDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DomainDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DomainDetailsDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "DomainImportDto": {
         "required": [
           "name"
@@ -29661,6 +30147,35 @@
         },
         "additionalProperties": false
       },
+      "EmailGroupDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailGroupDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/EmailGroupDetailsDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "EmailGroupUpdateDto": {
         "type": "object",
         "properties": {
@@ -29836,6 +30351,35 @@
           },
           "emailGroup": {
             "$ref": "#/components/schemas/EmailGroupDetailsDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EmailTemplateDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailTemplateDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/EmailTemplateDetailsDto"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -30253,6 +30797,35 @@
             "format": "date-time",
             "nullable": true,
             "example": "2023-04-18T12:00:00.0000000Z"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LinkDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/LinkDetailsDto"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -30852,6 +31425,14 @@
             "items": {
               "$ref": "#/components/schemas/MediaDeletedDto"
             }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MediaDetailsDto"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -31236,6 +31817,35 @@
         },
         "additionalProperties": false
       },
+      "OrderDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/OrderDetailsDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "OrderImportDto": {
         "required": [
           "currency"
@@ -31543,6 +32153,35 @@
           },
           "order": {
             "$ref": "#/components/schemas/OrderDetailsDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OrderItemDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItemDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/OrderItemDetailsDto"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -31965,6 +32604,35 @@
         },
         "additionalProperties": false
       },
+      "PromotionDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromotionDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PromotionDetailsDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "PromotionUpdateDto": {
         "type": "object",
         "properties": {
@@ -32320,6 +32988,35 @@
         },
         "additionalProperties": false
       },
+      "SegmentDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SegmentDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SegmentDetailsDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "SegmentPreviewResultDto": {
         "type": "object",
         "properties": {
@@ -32517,6 +33214,35 @@
             "type": "boolean",
             "readOnly": true,
             "example": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "SettingDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SettingDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SettingDetailsDto"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -32984,6 +33710,35 @@
             "type": "string",
             "format": "date-time",
             "example": "2023-04-18T12:00:00.0000000Z"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UnsubscribeDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnsubscribeDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/UnsubscribeDetailsDto"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false

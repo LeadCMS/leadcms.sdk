@@ -78,10 +78,10 @@ switch (command) {
     runScript('pull-content.js', commandArgs);
     break;
   case 'pull-media':
-    runScript('pull-media.js');
+    runScript('pull-media.js', commandArgs);
     break;
   case 'pull-comments':
-    runScript('pull-comments.js');
+    runScript('pull-comments.js', commandArgs);
     break;
   case 'push':
     runScript('push-all.js', commandArgs);
@@ -136,8 +136,11 @@ Usage:
   leadcms pull-content [options] - Pull only content from LeadCMS
     --id <content-id>    - Pull specific content by ID
     --slug <slug>        - Pull specific content by slug
-  leadcms pull-media     - Pull only media files from LeadCMS
-  leadcms pull-comments  - Pull only comments from LeadCMS
+    --reset              - Delete local content files and sync token, then pull fresh
+  leadcms pull-media [options] - Pull only media files from LeadCMS
+    --reset              - Delete local media files and sync token, then pull fresh
+  leadcms pull-comments [options] - Pull only comments from LeadCMS
+    --reset              - Delete local comment files and sync token, then pull fresh
   leadcms fetch          - Alias for 'pull' (backward compatibility)
 
   Push commands:
