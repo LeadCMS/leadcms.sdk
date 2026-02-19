@@ -296,14 +296,20 @@ export function replaceLocalMediaPaths(obj: any): any {
 }
 
 /**
- * Normalize content for comparison by handling whitespace differences
+ * Normalize content for comparison by handling whitespace and timestamp precision differences
  */
 export function normalizeContentForComparison(content: string): string {
   return content
     .trim()
     .replace(/\r\n/g, '\n')  // Normalize line endings
     .replace(/\s+\n/g, '\n') // Remove trailing whitespace on lines
-    .replace(/\n\n+/g, '\n\n'); // Normalize multiple newlines to double newlines
+    .replace(/\n\n+/g, '\n\n') // Normalize multiple newlines to double newlines
+    // Normalize ISO timestamp precision: truncate fractional seconds to 6 decimal
+    // places (microsecond precision) then strip trailing zeros.
+    // e.g. "2026-02-19T16:57:53.0635946Z" → "2026-02-19T16:57:53.063594Z"
+    // Prevents false diffs when server returns 7-digit precision but local has 6.
+    .replace(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{1,6})\d*Z/g, '$1Z')
+    .replace(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+?)0+Z/g, '$1Z');
 }
 
 /**

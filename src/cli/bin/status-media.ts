@@ -6,6 +6,7 @@
 import 'dotenv/config';
 import { statusMedia } from '../../scripts/push-media.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
+import { startSpinner } from '../../lib/spinner.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
@@ -20,7 +21,11 @@ if (scopeIndex !== -1 && args[scopeIndex + 1]) {
 // Check for --delete flag
 const showDelete = args.includes('--delete');
 
-statusMedia({ scopeUid, showDelete }).catch((error: any) => {
-  console.error('Error checking media status:', error.message);
-  process.exit(1);
-});
+const spinner = startSpinner('Checking media status…');
+statusMedia({ scopeUid, showDelete })
+  .then(() => spinner.stop())
+  .catch((error: any) => {
+    spinner.fail('Failed to check media status');
+    console.error(error.message);
+    process.exit(1);
+  });

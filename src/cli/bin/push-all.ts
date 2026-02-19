@@ -9,6 +9,7 @@ import { pushLeadCMSContent } from '../../scripts/push-leadcms-content.js';
 import { pushMedia } from '../../scripts/push-media.js';
 import { pushEmailTemplates } from '../../scripts/push-email-templates.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
+import { startSpinner } from '../../lib/spinner.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
@@ -40,11 +41,11 @@ if (scopeIndex !== -1 && args[scopeIndex + 1]) {
 }
 
 async function pushAll() {
+  const spinner = startSpinner('Pushing to LeadCMS…');
   try {
-    console.log('🚀 Starting push operation...\n');
+    spinner.update('Pushing content…');
 
     // Push content first
-    console.log('📝 Pushing content...');
     await pushLeadCMSContent({
       statusOnly: false,
       force,
@@ -55,6 +56,7 @@ async function pushAll() {
     });
 
     console.log('\n📧 Pushing email templates...');
+    spinner.update('Pushing email templates…');
     await pushEmailTemplates({
       dryRun,
       force,
@@ -62,6 +64,7 @@ async function pushAll() {
     });
 
     console.log('\n📷 Pushing media...');
+    spinner.update('Pushing media…');
     await pushMedia({
       dryRun,
       force,
@@ -69,9 +72,10 @@ async function pushAll() {
       allowDelete
     });
 
-    console.log('\n✅ Push operation completed successfully!');
+    spinner.succeed('Push operation completed successfully!');
   } catch (error: any) {
-    console.error('\n❌ Push operation failed:', error.message);
+    spinner.fail('Push operation failed');
+    console.error(error.message);
     process.exit(1);
   }
 }

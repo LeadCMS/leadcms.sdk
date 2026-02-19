@@ -6,6 +6,7 @@
 import 'dotenv/config';
 import { pushMedia } from '../../scripts/push-media.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
+import { startSpinner } from '../../lib/spinner.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
@@ -20,7 +21,11 @@ if (scopeIndex !== -1 && args[scopeIndex + 1]) {
   scopeUid = args[scopeIndex + 1];
 }
 
-pushMedia({ dryRun, force, scopeUid, allowDelete }).catch((error: any) => {
-  console.error('Error pushing media:', error.message);
-  process.exit(1);
-});
+const spinner = startSpinner('Pushing media to LeadCMS…');
+pushMedia({ dryRun, force, scopeUid, allowDelete })
+  .then(() => spinner.stop())
+  .catch((error: any) => {
+    spinner.fail('Media push failed');
+    console.error(error.message);
+    process.exit(1);
+  });

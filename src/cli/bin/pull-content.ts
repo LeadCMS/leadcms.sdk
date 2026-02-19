@@ -5,6 +5,7 @@
 
 import { pullContent } from '../../scripts/pull-content.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
+import { startSpinner } from '../../lib/spinner.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
@@ -25,7 +26,11 @@ if (slugIndex !== -1 && args[slugIndex + 1]) {
 
 const reset = args.includes('--reset');
 
-pullContent({ targetId, targetSlug, reset }).catch((error: any) => {
-  console.error('Error running LeadCMS pull content:', error.message);
-  process.exit(1);
-});
+const spinner = startSpinner('Pulling content from LeadCMS…');
+pullContent({ targetId, targetSlug, reset })
+  .then(() => spinner.stop())
+  .catch((error: any) => {
+    spinner.fail('Content pull failed');
+    console.error(error.message);
+    process.exit(1);
+  });

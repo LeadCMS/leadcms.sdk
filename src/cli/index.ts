@@ -107,6 +107,9 @@ switch (command) {
   case 'status-media':
     runScript('status-media.js', commandArgs);
     break;
+  case 'status-email-templates':
+    runScript('status-email-templates.js', commandArgs);
+    break;
   case 'watch':
     runScript('watch.js');
     break;
@@ -181,6 +184,10 @@ Usage:
   leadcms status-media [options] - Show media file status only
     --delete             - Show media deletion operations
     --scope <scopeUid>   - Filter by specific scope UID
+  leadcms status-email-templates [options] - Show email template status only
+    --preview            - Show detailed metadata for each change
+    --delete             - Show email template deletion operations
+    --id <template-id>   - Show detailed status for specific template by ID
   leadcms watch          - Watch for real-time updates via Server-Sent Events
 
   Utilities:

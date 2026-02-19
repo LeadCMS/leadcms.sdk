@@ -1,6 +1,7 @@
 import "dotenv/config";
 import fs from "fs/promises";
 import path from "path";
+import * as Diff from "diff";
 import {
   EMAIL_TEMPLATES_DIR,
   defaultLanguage,
@@ -9,10 +10,13 @@ import {
   parseEmailTemplateFileContent,
   transformEmailTemplateRemoteToLocalFormat,
   formatEmailTemplateForApi,
+  type EmailTemplateRemoteData,
 } from "../lib/email-template-transformation.js";
-import { hasContentDifferences } from "../lib/content-transformation.js";
+import { hasContentDifferences, normalizeContentForComparison } from "../lib/content-transformation.js";
+import { threeWayMerge, isLocallyModified } from "../lib/content-merge.js";
 import { leadCMSDataService } from "../lib/data-service.js";
-import { colorConsole, statusColors } from "../lib/console-colors.js";
+import { fetchEmailTemplateSync } from "./fetch-leadcms-email-templates.js";
+import { colorConsole, statusColors, diffColors } from "../lib/console-colors.js";
 import { logger } from "../lib/logger.js";
 
 interface LocalEmailTemplateItem {
@@ -52,6 +56,8 @@ interface PushOptions {
 
 interface StatusOptions {
   showDelete?: boolean;
+  targetId?: string;
+  showDetailedPreview?: boolean;
 }
 
 interface EmailTemplateOperation {
@@ -303,6 +309,142 @@ async function hasTemplateChanges(local: LocalEmailTemplateItem, remote: RemoteE
   return hasContentDifferences(localContent, remoteTransformed);
 }
 
+/**
+ * Update a local email template file with data from the API response.
+ * Ensures updatedAt, id, and other metadata stay in sync after push.
+ */
+async function updateLocalFileFromResponse(
+  local: LocalEmailTemplateItem,
+  response: RemoteEmailTemplateItem,
+  emailGroups: EmailGroupItem[]
+): Promise<void> {
+  try {
+    // Enrich the response with group name if missing
+    if (response.emailGroupId != null && !response.emailGroup?.name) {
+      const group = emailGroups.find(g => Number(g.id) === Number(response.emailGroupId));
+      if (group) {
+        response.emailGroup = { id: group.id, name: group.name, language: group.language };
+      }
+    }
+
+    const transformed = transformEmailTemplateRemoteToLocalFormat(response);
+    await fs.writeFile(local.filePath, transformed, 'utf8');
+    logger.verbose(`[PUSH] Updated local file: ${local.filePath}`);
+  } catch (error: any) {
+    logger.verbose(`[PUSH] Failed to update local file ${local.filePath}: ${error.message}`);
+  }
+}
+
+/**
+ * Enrich remote templates with email group data.
+ * The list/sync APIs often return emailGroup: null even when emailGroupId is set.
+ */
+function enrichRemoteTemplatesWithGroups(
+  remoteTemplates: RemoteEmailTemplateItem[],
+  emailGroups: EmailGroupItem[]
+): void {
+  const groupById = new Map(emailGroups.map(g => [Number(g.id), g]));
+  for (const template of remoteTemplates) {
+    if (template.emailGroupId != null && !template.emailGroup?.name) {
+      const group = groupById.get(Number(template.emailGroupId));
+      if (group) {
+        template.emailGroup = { id: group.id, name: group.name, language: group.language };
+      }
+    }
+  }
+}
+
+interface AutoMergeResult {
+  canMerge: boolean;
+  merged?: string;
+  hasConflicts?: boolean;
+  conflictCount?: number;
+  localUnmodified?: boolean;
+}
+
+/**
+ * Fetch base items from the sync endpoint for three-way merge.
+ * Base items represent the server's state at the time of the last pull sync token.
+ * Returns an empty record if no sync token exists or the fetch fails.
+ */
+async function fetchBaseItemsForMerge(
+  emailGroups: EmailGroupItem[]
+): Promise<Record<string, EmailTemplateRemoteData>> {
+  try {
+    const syncTokenPath = path.join(EMAIL_TEMPLATES_DIR, '.sync-token');
+    let syncToken: string | undefined;
+    try {
+      syncToken = (await fs.readFile(syncTokenPath, 'utf8')).trim() || undefined;
+    } catch {
+      return {};
+    }
+
+    if (!syncToken) return {};
+
+    const { baseItems } = await fetchEmailTemplateSync(syncToken);
+
+    // Enrich base items with email group data
+    const groupById = new Map(emailGroups.map(g => [Number(g.id), g]));
+    for (const base of Object.values(baseItems)) {
+      if (base.emailGroupId != null && !base.emailGroup) {
+        const group = groupById.get(Number(base.emailGroupId));
+        if (group) {
+          base.emailGroup = { id: group.id, name: group.name, language: group.language };
+        }
+      }
+    }
+
+    return baseItems;
+  } catch (error: any) {
+    logger.verbose(`[PUSH] Could not fetch base items for merge: ${error.message}`);
+    return {};
+  }
+}
+
+/**
+ * Attempt a three-way merge between base (from last pull), local (current file),
+ * and remote (current server state).
+ *
+ * Returns { canMerge: false } if no base version is available.
+ * Returns { canMerge: true, localUnmodified: true } if local hasn't changed since last pull.
+ * Returns { canMerge: true, merged, hasConflicts, conflictCount } with merge result.
+ */
+async function attemptAutoMerge(
+  local: LocalEmailTemplateItem,
+  remote: RemoteEmailTemplateItem,
+  baseItems: Record<string, EmailTemplateRemoteData>
+): Promise<AutoMergeResult> {
+  const remoteId = remote.id != null ? String(remote.id) : undefined;
+  if (!remoteId) return { canMerge: false };
+
+  const baseItem = baseItems[remoteId];
+  if (!baseItem) return { canMerge: false };
+
+  const baseTransformed = transformEmailTemplateRemoteToLocalFormat(baseItem);
+
+  let localContent: string;
+  try {
+    localContent = await fs.readFile(local.filePath, 'utf8');
+  } catch {
+    return { canMerge: false };
+  }
+
+  const remoteTransformed = transformEmailTemplateRemoteToLocalFormat(remote as unknown as EmailTemplateRemoteData);
+
+  if (!isLocallyModified(baseTransformed, localContent)) {
+    // Local file is identical to what was pulled — no local edits to merge
+    return { canMerge: true, localUnmodified: true, merged: remoteTransformed };
+  }
+
+  const mergeResult = threeWayMerge(baseTransformed, localContent, remoteTransformed);
+  return {
+    canMerge: true,
+    merged: mergeResult.merged,
+    hasConflicts: mergeResult.hasConflicts,
+    conflictCount: mergeResult.conflictCount,
+  };
+}
+
 export interface EmailTemplateStatusResult {
   operations: EmailTemplateOperation[];
   totalLocal: number;
@@ -317,6 +459,12 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
   const remoteTemplates = await leadCMSDataService.getAllEmailTemplates();
   const emailGroups = await leadCMSDataService.getAllEmailGroups();
   const groupIndex = buildGroupIndex(emailGroups);
+
+  // Enrich remote templates with group names for accurate comparison
+  enrichRemoteTemplatesWithGroups(remoteTemplates, emailGroups);
+
+  // Fetch base items for three-way auto-merge detection
+  const baseItems = await fetchBaseItemsForMerge(emailGroups);
 
   for (const local of localTemplates) {
     const resolvedGroupId = resolveEmailGroupId(local, groupIndex);
@@ -361,12 +509,30 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
     const remoteUpdated = match?.updatedAt ? new Date(match.updatedAt) : new Date(0);
 
     if (remoteUpdated > localUpdated) {
-      operations.push({
-        type: 'conflict',
-        local,
-        remote: match,
-        reason: 'Remote email template updated after local changes',
-      });
+      // Attempt three-way auto-merge instead of immediately flagging as conflict
+      const mergeAttempt = await attemptAutoMerge(local, match, baseItems);
+
+      if (mergeAttempt.canMerge && mergeAttempt.localUnmodified) {
+        // Local hasn't changed since last pull — nothing to push
+        continue;
+      } else if (mergeAttempt.canMerge && !mergeAttempt.hasConflicts) {
+        // Auto-merge would succeed — show as update
+        operations.push({ type: 'update', local, remote: match, reason: 'auto-merged' });
+      } else if (mergeAttempt.canMerge && mergeAttempt.hasConflicts) {
+        operations.push({
+          type: 'conflict',
+          local,
+          remote: match,
+          reason: `Auto-merge has ${mergeAttempt.conflictCount} conflict(s) — resolve manually`,
+        });
+      } else {
+        operations.push({
+          type: 'conflict',
+          local,
+          remote: match,
+          reason: 'Remote email template updated after local changes',
+        });
+      }
       continue;
     }
 
@@ -410,18 +576,37 @@ function getRemoteGroupLabel(remote: RemoteEmailTemplateItem): string {
 }
 
 export async function statusEmailTemplates(options: StatusOptions = {}): Promise<void> {
-  const { operations } = await buildEmailTemplateStatus(options);
+  const { targetId, showDetailedPreview } = options;
+  const result = await buildEmailTemplateStatus(options);
+  let { operations } = result;
 
-  colorConsole.important('\n📊 LeadCMS Status');
+  // Filter by target ID if specified
+  if (targetId) {
+    operations = operations.filter(op => {
+      const localId = op.local?.metadata?.id?.toString();
+      const remoteId = op.remote?.id?.toString();
+      return localId === targetId || remoteId === targetId;
+    });
+
+    if (operations.length === 0) {
+      colorConsole.important('\n📊 LeadCMS Email Template Status');
+      colorConsole.log('');
+      colorConsole.log(`❌ No email template found with ID ${targetId}`);
+      return;
+    }
+  }
+
+  colorConsole.important('\n📊 LeadCMS Email Template Status');
   colorConsole.log('');
 
   const syncableChanges = operations.length;
   if (syncableChanges === 0) {
-    colorConsole.success('✅ No changes detected. Everything is in sync!');
+    colorConsole.success('✅ No changes detected. Email templates are in sync!');
     return;
   }
 
-  console.log(`Changes to be synced (${syncableChanges} files):`);
+  const label = targetId ? `Status for template ID ${targetId}:` : `Changes to be synced (${syncableChanges} files):`;
+  console.log(label);
   console.log('');
 
   const sortOps = (ops: EmailTemplateOperation[]) => {
@@ -442,11 +627,74 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
   const conflictOps = sortOps(operations.filter(op => op.type === 'conflict'));
   const deleteOps = sortOps(operations.filter(op => op.type === 'delete'));
 
+  async function printDiffPreview(op: EmailTemplateOperation): Promise<void> {
+    if (!showDetailedPreview && !targetId) return;
+    if (!op.local?.filePath) return;
+
+    try {
+      const localContent = await fs.readFile(op.local.filePath, 'utf8');
+      const remoteTransformed = op.remote
+        ? transformEmailTemplateRemoteToLocalFormat(op.remote)
+        : '';
+
+      if (!hasContentDifferences(localContent, remoteTransformed)) {
+        colorConsole.log('          No content changes detected');
+        colorConsole.log('');
+        return;
+      }
+
+      // Normalize both sides so timestamp precision differences don't appear in the diff
+      const normalizedLocal = normalizeContentForComparison(localContent);
+      const normalizedRemote = normalizeContentForComparison(remoteTransformed);
+      const diff = Diff.diffLines(normalizedRemote, normalizedLocal);
+      let addedLines = 0;
+      let removedLines = 0;
+
+      colorConsole.info('          Content diff preview:');
+      let previewLines = 0;
+      const maxPreviewLines = 10;
+
+      for (const part of diff) {
+        const lines = part.value.split('\n').filter((line: string) => line.trim() !== '');
+
+        if (part.added) {
+          addedLines += lines.length;
+          if (previewLines < maxPreviewLines) {
+            for (const line of lines.slice(0, Math.min(lines.length, maxPreviewLines - previewLines))) {
+              colorConsole.log(`          ${diffColors.added(`+ ${line}`)}`);
+              previewLines++;
+            }
+          }
+        } else if (part.removed) {
+          removedLines += lines.length;
+          if (previewLines < maxPreviewLines) {
+            for (const line of lines.slice(0, Math.min(lines.length, maxPreviewLines - previewLines))) {
+              colorConsole.log(`          ${diffColors.removed(`- ${line}`)}`);
+              previewLines++;
+            }
+          }
+        }
+
+        if (previewLines >= maxPreviewLines) break;
+      }
+
+      if (previewLines >= maxPreviewLines && (addedLines + removedLines > previewLines)) {
+        colorConsole.gray(`          ... (${addedLines + removedLines - previewLines} more changes)`);
+      }
+
+      colorConsole.log(`          ${colorConsole.green(`+${addedLines}`)} / ${colorConsole.red(`-${removedLines}`)} lines`);
+      colorConsole.log('');
+    } catch (error: any) {
+      logger.verbose(`[DIFF] Failed to generate diff for ${op.local?.metadata?.name}: ${error.message}`);
+    }
+  }
+
   for (const op of createOps) {
     const groupLabel = (op.local?.groupFolder || 'ungrouped').padEnd(12);
     const localeLabel = `[${op.local?.locale || defaultLanguage}]`.padEnd(6);
     const nameLabel = op.local?.metadata?.name || 'unknown';
     colorConsole.log(`        ${statusColors.created('new file:')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)}`);
+    await printDiffPreview(op);
   }
 
   for (const op of updateOps) {
@@ -454,7 +702,9 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
     const localeLabel = `[${op.local?.locale || defaultLanguage}]`.padEnd(6);
     const nameLabel = op.local?.metadata?.name || op.remote?.name || 'unknown';
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
-    colorConsole.log(`        ${statusColors.modified('modified:')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`);
+    const mergeHint = op.reason === 'auto-merged' ? colorConsole.gray('(auto-merged) ') : '';
+    colorConsole.log(`        ${statusColors.modified('modified:')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${mergeHint}${colorConsole.gray(idLabel)}`);
+    await printDiffPreview(op);
   }
 
   for (const op of conflictOps) {
@@ -463,6 +713,7 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
     const nameLabel = op.local?.metadata?.name || op.remote?.name || 'unknown';
     const reason = op.reason ? `(${op.reason})` : '';
     colorConsole.log(`        ${statusColors.conflict('conflict:')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(reason)}`);
+    await printDiffPreview(op);
   }
 
   for (const op of deleteOps) {
@@ -471,6 +722,7 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
     const nameLabel = op.remote?.name || 'unknown';
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
     colorConsole.log(`        ${statusColors.conflict('deleted:')}    ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`);
+    await printDiffPreview(op);
   }
 
   const summary = operations.reduce(
@@ -481,7 +733,7 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
     { create: 0, update: 0, delete: 0, conflict: 0, skip: 0 }
   );
 
-  console.log(`\n📊 Email Templates Status:`);
+  console.log(`\n📊 Email Templates Summary:`);
   if (summary.create === 0 && summary.update === 0 && summary.conflict === 0 && summary.delete === 0) {
     console.log(`\n✅ No changes detected. Email templates are in sync!`);
     return;
@@ -514,8 +766,14 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
 
   const groupIndex = buildGroupIndex(emailGroups);
 
+  // Enrich remote templates with group names for accurate comparison
+  enrichRemoteTemplatesWithGroups(remoteTemplates, emailGroups);
+
   // Auto-create missing email groups (like content type auto-creation)
   await createMissingEmailGroups(localTemplates, groupIndex, dryRun);
+
+  // Fetch base items for three-way auto-merge
+  const baseItems = await fetchBaseItemsForMerge(emailGroups);
 
   for (const local of localTemplates) {
     const resolvedGroupId = resolveEmailGroupId(local, groupIndex);
@@ -528,9 +786,29 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
     const localUpdated = local.metadata.updatedAt ? new Date(local.metadata.updatedAt) : new Date(0);
     const remoteUpdated = match?.updatedAt ? new Date(match.updatedAt) : new Date(0);
 
+    let autoMerged = false;
+
     if (match && !force && remoteUpdated > localUpdated) {
-      console.warn(`⚠️  Remote email template updated after local changes: ${local.metadata.name || match.id}`);
-      continue;
+      // Attempt three-way auto-merge instead of immediately skipping as conflict
+      const mergeAttempt = await attemptAutoMerge(local, match, baseItems);
+
+      if (mergeAttempt.canMerge && mergeAttempt.localUnmodified) {
+        // Local hasn't changed since last pull — nothing to push
+        logger.verbose(`[PUSH] Skipping ${local.metadata.name} — no local changes to push`);
+        continue;
+      } else if (mergeAttempt.canMerge && !mergeAttempt.hasConflicts) {
+        // Auto-merge succeeded — update local data from merged content
+        const parsed = parseEmailTemplateFileContent(mergeAttempt.merged!);
+        local.metadata = { ...parsed.metadata, emailGroupId: local.metadata.emailGroupId };
+        local.body = parsed.body;
+        autoMerged = true;
+      } else if (mergeAttempt.canMerge && mergeAttempt.hasConflicts) {
+        console.warn(`⚠️  Auto-merge has ${mergeAttempt.conflictCount} conflict(s): ${local.metadata.name || match.id} — skipping (use --force to override)`);
+        continue;
+      } else {
+        console.warn(`⚠️  Remote email template updated after local changes: ${local.metadata.name || match.id}`);
+        continue;
+      }
     }
 
     const payload = filterUndefinedValues(formatEmailTemplateForApi({
@@ -551,23 +829,30 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
         continue;
       }
 
-      await leadCMSDataService.createEmailTemplate(payload);
+      const created = await leadCMSDataService.createEmailTemplate(payload);
       console.log(`✅ Created email template: ${payload.name}`);
+      await updateLocalFileFromResponse(local, created, emailGroups);
       continue;
     }
 
-    const hasChanges = await hasTemplateChanges(local, match);
-    if (!hasChanges) {
-      continue;
+    // Only check hasChanges for non-merged items (merged content is known to differ)
+    if (!autoMerged) {
+      const hasChanges = await hasTemplateChanges(local, match);
+      if (!hasChanges) {
+        continue;
+      }
     }
 
     if (dryRun) {
-      console.log(`🟡 [DRY RUN] Update email template: ${payload.name} (ID ${match.id})`);
+      const label = autoMerged ? '[DRY RUN] Auto-merge + update' : '[DRY RUN] Update';
+      console.log(`🟡 ${label} email template: ${payload.name} (ID ${match.id})`);
       continue;
     }
 
-    await leadCMSDataService.updateEmailTemplate(Number(match.id), payload);
-    console.log(`✅ Updated email template: ${payload.name}`);
+    const updated = await leadCMSDataService.updateEmailTemplate(Number(match.id), payload);
+    const label = autoMerged ? '🔀 Auto-merged and updated' : '✅ Updated';
+    console.log(`${label} email template: ${payload.name}`);
+    await updateLocalFileFromResponse(local, updated, emailGroups);
   }
 
   if (!allowDelete) {

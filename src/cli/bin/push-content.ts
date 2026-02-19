@@ -6,6 +6,7 @@
 import 'dotenv/config';
 import { pushLeadCMSContent } from '../../scripts/push-leadcms-content.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
+import { startSpinner } from '../../lib/spinner.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
@@ -28,7 +29,11 @@ if (slugIndex !== -1 && args[slugIndex + 1]) {
   targetSlug = args[slugIndex + 1];
 }
 
-pushLeadCMSContent({ statusOnly, force, targetId, targetSlug, dryRun, allowDelete }).catch((error: any) => {
-  console.error('Error running LeadCMS push content:', error.message);
-  process.exit(1);
-});
+const spinner = startSpinner('Pushing content to LeadCMS…');
+pushLeadCMSContent({ statusOnly, force, targetId, targetSlug, dryRun, allowDelete })
+  .then(() => spinner.stop())
+  .catch((error: any) => {
+    spinner.fail('Content push failed');
+    console.error(error.message);
+    process.exit(1);
+  });

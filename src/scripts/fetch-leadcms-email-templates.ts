@@ -14,6 +14,7 @@ import {
   type EmailTemplateRemoteData,
 } from "../lib/email-template-transformation.js";
 import { threeWayMerge, isLocallyModified } from "../lib/content-merge.js";
+import { leadCMSDataService } from "../lib/data-service.js";
 
 interface EmailTemplateSyncResponse {
   items?: EmailTemplateRemoteData[];
@@ -223,6 +224,31 @@ export async function fetchLeadCMSEmailTemplates(): Promise<void> {
 
   const { items, deleted, baseItems, nextSyncToken } = await fetchEmailTemplateSync(lastSyncToken);
 
+  // The sync API returns emailGroup: null — resolve from the groups endpoint
+  if (items.length > 0) {
+    const emailGroups = await leadCMSDataService.getAllEmailGroups();
+    const groupById = new Map(emailGroups.map(g => [Number(g.id), g]));
+
+    for (const template of items) {
+      if (template.emailGroupId != null && !template.emailGroup) {
+        const group = groupById.get(Number(template.emailGroupId));
+        if (group) {
+          template.emailGroup = { id: group.id, name: group.name, language: group.language };
+        }
+      }
+    }
+
+    // Also enrich base items for three-way merge
+    for (const base of Object.values(baseItems)) {
+      if (base.emailGroupId != null && !base.emailGroup) {
+        const group = groupById.get(Number(base.emailGroupId));
+        if (group) {
+          base.emailGroup = { id: group.id, name: group.name, language: group.language };
+        }
+      }
+    }
+  }
+
   const idIndex = (items.length > 0 || deleted.length > 0)
     ? await buildEmailTemplateIdIndex(EMAIL_TEMPLATES_DIR)
     : new Map<string, string[]>();
@@ -298,4 +324,4 @@ export async function fetchLeadCMSEmailTemplates(): Promise<void> {
   }
 }
 
-export { buildEmailTemplateIdIndex, deleteEmailTemplateFilesById, saveEmailTemplateFile };
+export { buildEmailTemplateIdIndex, deleteEmailTemplateFilesById, saveEmailTemplateFile, fetchEmailTemplateSync };

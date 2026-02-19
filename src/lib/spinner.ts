@@ -53,6 +53,22 @@ export function startSpinner(message: string): Spinner {
     process.on('exit', cleanup);
     process.on('SIGINT', cleanup);
 
+    // Auto-clear spinner on first stdout write so output is never interleaved
+    // (spinner writes to stderr; normal output goes to stdout — they share the
+    //  same terminal line, so the spinner must clear before stdout prints)
+    const origStdoutWrite = process.stdout.write;
+    process.stdout.write = function (this: any, ...args: any[]) {
+        restoreStdout();
+        clear();
+        return origStdoutWrite.apply(process.stdout, args as any);
+    } as any;
+
+    function restoreStdout(): void {
+        if (process.stdout.write !== origStdoutWrite) {
+            process.stdout.write = origStdoutWrite;
+        }
+    }
+
     function clear(): void {
         if (stopped) return;
         stopped = true;
@@ -61,6 +77,7 @@ export function startSpinner(message: string): Spinner {
         process.stderr.write('\r\x1b[K\x1b[?25h');
         process.removeListener('exit', cleanup);
         process.removeListener('SIGINT', cleanup);
+        restoreStdout();
     }
 
     return {

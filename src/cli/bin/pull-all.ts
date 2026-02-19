@@ -5,6 +5,7 @@
 
 import { pullAll } from '../../scripts/pull-all.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
+import { startSpinner } from '../../lib/spinner.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
@@ -28,7 +29,11 @@ if (args.includes('--reset')) {
   reset = true;
 }
 
-pullAll({ targetId, targetSlug, reset }).catch((error: any) => {
-  console.error('Error running LeadCMS pull:', error.message);
-  process.exit(1);
-});
+const spinner = startSpinner('Pulling from LeadCMS…');
+pullAll({ targetId, targetSlug, reset })
+  .then(() => spinner.stop())
+  .catch((error: any) => {
+    spinner.fail('Pull failed');
+    console.error(error.message);
+    process.exit(1);
+  });
