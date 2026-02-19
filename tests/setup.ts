@@ -20,6 +20,7 @@ const getTestConfig = () => ({
   contentDir: FIXTURES_CONTENT_DIR,
   mediaDir: FIXTURES_MEDIA_DIR,
   commentsDir: path.join(FIXTURES_DIR, '.leadcms/comments'),
+  emailTemplatesDir: path.join(FIXTURES_DIR, '.leadcms/email-templates'),
   enableDrafts: true,
   preview: mockGlobalConfig.preview,
 });

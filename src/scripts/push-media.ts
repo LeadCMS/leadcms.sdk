@@ -5,6 +5,7 @@ import FormData from 'form-data';
 import { leadCMSDataService, MediaItem } from '../lib/data-service.js';
 import { loadConfig, LeadCMSConfig } from '../lib/config.js';
 import { success, error, warn, info } from '../lib/console-colors.js';
+import { logger } from '../lib/logger.js';
 
 /**
  * Represents a local media file with metadata
@@ -542,6 +543,8 @@ export interface StatusMediaOptions {
   showDelete?: boolean;
   /** Custom media directory path (absolute). If not provided, uses config.mediaDir */
   mediaDir?: string;
+  /** When true, skip console output (return data only). Used by unified status renderer. */
+  silent?: boolean;
 }
 
 /**
@@ -563,7 +566,7 @@ export async function statusMedia(
     // Use provided mediaDir or resolve from config
     const mediaDir = options.mediaDir || path.resolve(process.cwd(), config.mediaDir || 'media');
 
-    logInfoFn(`Scanning local media: ${mediaDir}`);
+    logger.verbose(`Scanning local media: ${mediaDir}`);
     const localFiles = scanLocalMedia(mediaDir, config);
 
     if (localFiles.length === 0) {
@@ -576,7 +579,7 @@ export async function statusMedia(
       };
     }
 
-    logInfoFn(`Fetching remote media from LeadCMS...`);
+    logger.verbose(`Fetching remote media from LeadCMS...`);
     const remoteFiles = await fetchRemoteMedia();
 
     let filteredLocal = localFiles;
@@ -589,7 +592,9 @@ export async function statusMedia(
 
     // Show deletes only if showDelete flag is provided
     const operations = matchMediaFiles(filteredLocal, filteredRemote, options.showDelete || false);
-    displayMediaStatus(operations, false, options.showDelete || false, deps);
+    if (!options.silent) {
+      displayMediaStatus(operations, false, options.showDelete || false, deps);
+    }
 
     const creates = operations.filter(op => op.type === 'create').length;
     const updates = operations.filter(op => op.type === 'update').length;
@@ -647,7 +652,7 @@ export async function pushMedia(
     // Use provided mediaDir or resolve from config
     const mediaDir = options.mediaDir || path.resolve(process.cwd(), config.mediaDir || 'media');
 
-    logInfoFn(`Scanning local media: ${mediaDir}`);
+    logger.verbose(`Scanning local media: ${mediaDir}`);
     const localFiles = scanLocalMedia(mediaDir, config);
 
     if (localFiles.length === 0) {
@@ -659,7 +664,7 @@ export async function pushMedia(
       };
     }
 
-    logInfoFn(`Fetching remote media from LeadCMS...`);
+    logger.verbose(`Fetching remote media from LeadCMS...`);
     const remoteFiles = await fetchRemoteMedia();
 
     // Filter by scopeUid if specified

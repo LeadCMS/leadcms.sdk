@@ -69,6 +69,7 @@ export function getLeadCMSConfig(): LeadCMSConfig {
       contentDir: process.env.LEADCMS_CONTENT_DIR || ".leadcms/content",
       commentsDir: process.env.LEADCMS_COMMENTS_DIR || ".leadcms/comments",
       mediaDir: process.env.LEADCMS_MEDIA_DIR || "public/media",
+      emailTemplatesDir: process.env.LEADCMS_EMAIL_TEMPLATES_DIR || ".leadcms/email-templates",
       enableDrafts: process.env.LEADCMS_ENABLE_DRAFTS === "true",
     };
   }

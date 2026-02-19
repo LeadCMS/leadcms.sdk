@@ -5,8 +5,10 @@
 
 import 'dotenv/config';
 import { pushLeadCMSContent } from '../../scripts/push-leadcms-content.js';
+import { initVerboseFromArgs } from '../../lib/logger.js';
 
 const args = process.argv.slice(2);
+initVerboseFromArgs(args);
 
 // Parse target ID or slug
 let targetId: string | undefined;

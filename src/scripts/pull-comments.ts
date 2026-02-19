@@ -9,6 +9,7 @@ import { leadCMSUrl } from "./leadcms-helpers.js";
 import { setCMSConfig, isCommentsSupported } from "../lib/cms-config-types.js";
 import { fetchLeadCMSComments } from "./fetch-leadcms-comments.js";
 import { resetCommentsState } from "./pull-all.js";
+import { logger } from "../lib/logger.js";
 
 interface PullCommentsOptions {
   /** When true, delete all local comment files and sync tokens before pulling, effectively doing a fresh pull. */
@@ -31,7 +32,7 @@ async function main(options: PullCommentsOptions = {}): Promise<void> {
 
   // Check if comments are supported
   try {
-    console.log(`🔍 Checking CMS configuration...`);
+    logger.verbose(`🔍 Checking CMS configuration...`);
     const configUrl = new URL('/api/config', leadCMSUrl).toString();
     const response = await axios.get(configUrl, { timeout: 10000 });
 
@@ -43,7 +44,7 @@ async function main(options: PullCommentsOptions = {}): Promise<void> {
         return;
       }
 
-      console.log(`✅ Comments entity supported\n`);
+      logger.verbose(`✅ Comments entity supported\n`);
     }
   } catch (error: any) {
     console.warn(`⚠️  Could not fetch CMS config: ${error.message}`);

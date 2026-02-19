@@ -5,8 +5,10 @@
 
 import 'dotenv/config';
 import { statusMedia } from '../../scripts/push-media.js';
+import { initVerboseFromArgs } from '../../lib/logger.js';
 
 const args = process.argv.slice(2);
+initVerboseFromArgs(args);
 
 // Parse scope UID
 let scopeUid: string | undefined;

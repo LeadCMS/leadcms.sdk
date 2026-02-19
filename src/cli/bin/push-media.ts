@@ -5,8 +5,10 @@
 
 import 'dotenv/config';
 import { pushMedia } from '../../scripts/push-media.js';
+import { initVerboseFromArgs } from '../../lib/logger.js';
 
 const args = process.argv.slice(2);
+initVerboseFromArgs(args);
 const dryRun = args.includes('--dry-run') || args.includes('-d');
 const force = args.includes('--force') || args.includes('-f');
 const allowDelete = args.includes('--delete');

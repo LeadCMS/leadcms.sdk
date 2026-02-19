@@ -8,6 +8,7 @@ import axios from "axios";
 import { leadCMSUrl } from "./leadcms-helpers.js";
 import { setCMSConfig, isMediaSupported } from "../lib/cms-config-types.js";
 import { resetMediaState } from "./pull-all.js";
+import { logger } from "../lib/logger.js";
 
 interface PullMediaOptions {
   /** When true, delete all local media files and sync tokens before pulling, effectively doing a fresh pull. */
@@ -31,7 +32,7 @@ async function main(options: PullMediaOptions = {}): Promise<void> {
 
   // Check if media is supported
   try {
-    console.log(`🔍 Checking CMS configuration...`);
+    logger.verbose(`🔍 Checking CMS configuration...`);
     const configUrl = new URL('/api/config', leadCMSUrl).toString();
     const response = await axios.get(configUrl, { timeout: 10000 });
 
@@ -43,7 +44,7 @@ async function main(options: PullMediaOptions = {}): Promise<void> {
         return;
       }
 
-      console.log(`✅ Media entity supported\n`);
+      logger.verbose(`✅ Media entity supported\n`);
     }
   } catch (error: any) {
     console.warn(`⚠️  Could not fetch CMS config: ${error.message}`);

@@ -9,6 +9,7 @@ import {
 } from "./leadcms-helpers.js";
 import { saveContentFile } from "../lib/content-transformation.js";
 import { fetchLeadCMSContent } from "./fetch-leadcms-content.js";
+import { logger } from "../lib/logger.js";
 
 // Type definitions
 interface SSEEventData {
@@ -33,46 +34,46 @@ interface DraftEventData extends SSEEventData {
 }
 
 // Log environment configuration for debugging
-console.log(`[SSE ENV] LeadCMS URL: ${leadCMSUrl}`);
-console.log(
+logger.verbose(`[SSE ENV] LeadCMS URL: ${leadCMSUrl}`);
+logger.verbose(
   `[SSE ENV] LeadCMS API Key: ${leadCMSApiKey ? `${leadCMSApiKey.substring(0, 8)}...` : "NOT_SET"}`
 );
-console.log(`[SSE ENV] Default Language: ${defaultLanguage}`);
-console.log(`[SSE ENV] Content Dir: ${CONTENT_DIR}`);
+logger.verbose(`[SSE ENV] Default Language: ${defaultLanguage}`);
+logger.verbose(`[SSE ENV] Content Dir: ${CONTENT_DIR}`);
 
 // Helper function to trigger content fetch
 async function triggerContentFetch(): Promise<void> {
   try {
-    console.log("[SSE] Starting content fetch...");
+    logger.verbose("[SSE] Starting content fetch...");
     await fetchLeadCMSContent();
-    console.log("[SSE] Content fetch completed successfully");
+    logger.verbose("[SSE] Content fetch completed successfully");
   } catch (error: any) {
-    console.error("[SSE] Content fetch failed:", error.message);
+    logger.verbose("[SSE] Content fetch failed:", error.message);
   }
 }
 
 function buildSSEUrl(): string {
-  console.log(`[SSE URL] Building SSE URL with base: ${leadCMSUrl}`);
+  logger.verbose(`[SSE URL] Building SSE URL with base: ${leadCMSUrl}`);
   const url = new URL("/api/sse/stream", leadCMSUrl || "");
   url.searchParams.set("entities", "Content");
   url.searchParams.set("includeContent", "true");
   url.searchParams.set("includeLiveDrafts", "true");
   const finalUrl = url.toString();
-  console.log(`[SSE URL] Final SSE URL: ${finalUrl}`);
+  logger.verbose(`[SSE URL] Final SSE URL: ${finalUrl}`);
   return finalUrl;
 }
 
 async function startSSEWatcher(): Promise<void> {
-  console.log(`[SSE] Starting SSE watcher...`);
+  logger.verbose(`[SSE] Starting SSE watcher...`);
   const typeMap = await fetchContentTypes();
   const sseUrl = buildSSEUrl();
   const eventSourceOptions: any = {};
 
   if (leadCMSApiKey) {
-    console.log(`[SSE] Using API key for authentication`);
+    logger.verbose(`[SSE] Using API key for authentication`);
     eventSourceOptions.fetch = (input: string | URL, init?: RequestInit): Promise<Response> => {
-      console.log(`[SSE FETCH] Making authenticated request to: ${input}`);
-      console.log(
+      logger.verbose(`[SSE FETCH] Making authenticated request to: ${input}`);
+      logger.verbose(
         `[SSE FETCH] Headers:`,
         JSON.stringify(
           {
@@ -92,91 +93,91 @@ async function startSSEWatcher(): Promise<void> {
         },
       })
         .then((response) => {
-          console.log(`[SSE FETCH] Response status: ${response.status} ${response.statusText}`);
-          console.log(
+          logger.verbose(`[SSE FETCH] Response status: ${response.status} ${response.statusText}`);
+          logger.verbose(
             `[SSE FETCH] Response headers:`,
             JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)
           );
           if (!response.ok) {
-            console.error(`[SSE FETCH] Failed response: ${response.status} ${response.statusText}`);
+            logger.verbose(`[SSE FETCH] Failed response: ${response.status} ${response.statusText}`);
           }
           return response;
         })
         .catch((error) => {
-          console.error(`[SSE FETCH] Fetch error:`, error.message);
+          logger.verbose(`[SSE FETCH] Fetch error:`, error.message);
           throw error;
         });
     };
   } else {
-    console.warn(`[SSE] No API key provided - attempting unauthenticated connection`);
+    logger.verbose(`[SSE] No API key provided - attempting unauthenticated connection`);
   }
 
-  console.log(`[SSE] Connecting to: ${sseUrl}`);
-  console.log(`[SSE] Event source options:`, JSON.stringify(eventSourceOptions, null, 2));
+  logger.verbose(`[SSE] Connecting to: ${sseUrl}`);
+  logger.verbose(`[SSE] Event source options:`, JSON.stringify(eventSourceOptions, null, 2));
   const es = new EventSource(sseUrl, eventSourceOptions);
 
   es.onopen = () => {
-    console.log("[SSE] Connection opened successfully");
+    logger.verbose("[SSE] Connection opened successfully");
   };
 
   es.onmessage = (event) => {
-    console.log(`[SSE] Received message:`, event.data);
+    logger.verbose(`[SSE] Received message:`, event.data);
     try {
       const data: SSEEventData = JSON.parse(event.data);
-      console.log(`[SSE] Parsed message data:`, JSON.stringify(data, null, 2));
+      logger.verbose(`[SSE] Parsed message data:`, JSON.stringify(data, null, 2));
 
       if (data.entityType === "Content") {
-        console.log(`[SSE] Content message - Operation: ${data.operation}`);
-        console.log(`[SSE] Content change detected - triggering full fetch`);
+        logger.verbose(`[SSE] Content message - Operation: ${data.operation}`);
+        logger.verbose(`[SSE] Content change detected - triggering full fetch`);
         triggerContentFetch();
       } else {
-        console.log(`[SSE] Non-content message - Entity type: ${data.entityType}`);
+        logger.verbose(`[SSE] Non-content message - Entity type: ${data.entityType}`);
       }
     } catch (e: any) {
-      console.warn("[SSE] Failed to parse SSE message:", e.message);
-      console.warn("[SSE] Raw event data:", event.data);
+      logger.verbose("[SSE] Failed to parse SSE message:", e.message);
+      logger.verbose("[SSE] Raw event data:", event.data);
     }
   };
 
   es.addEventListener("connected", (event) => {
-    console.log(`[SSE] Received 'connected' event:`, event.data);
+    logger.verbose(`[SSE] Received 'connected' event:`, event.data);
     try {
       const data: ConnectedEventData = JSON.parse(event.data);
-      console.log(
+      logger.verbose(
         `[SSE] Connected successfully - Client ID: ${data.clientId}, Starting change log ID: ${data.startingChangeLogId}`
       );
     } catch (e: any) {
-      console.warn("[SSE] Failed to parse connected event:", e.message);
-      console.warn("[SSE] Raw connected event data:", event.data);
+      logger.verbose("[SSE] Failed to parse connected event:", e.message);
+      logger.verbose("[SSE] Raw connected event data:", event.data);
     }
   });
 
   es.addEventListener("heartbeat", (event) => {
-    console.log(`[SSE] Received heartbeat:`, event.data);
+    logger.verbose(`[SSE] Received heartbeat:`, event.data);
     try {
       const data: HeartbeatEventData = JSON.parse(event.data);
-      console.log(`[SSE] Heartbeat at ${data.timestamp}`);
+      logger.verbose(`[SSE] Heartbeat at ${data.timestamp}`);
     } catch (e: any) {
-      console.warn("[SSE] Failed to parse heartbeat event:", e.message);
-      console.warn("[SSE] Raw heartbeat event data:", event.data);
+      logger.verbose("[SSE] Failed to parse heartbeat event:", e.message);
+      logger.verbose("[SSE] Raw heartbeat event data:", event.data);
     }
   });
 
   es.addEventListener("draft-updated", (event) => {
-    console.log(`[SSE] Received 'draft-updated' event:`, event.data);
+    logger.verbose(`[SSE] Received 'draft-updated' event:`, event.data);
     try {
       const data: DraftEventData = JSON.parse(event.data);
-      console.log(`[SSE] Draft updated data:`, JSON.stringify(data, null, 2));
+      logger.verbose(`[SSE] Draft updated data:`, JSON.stringify(data, null, 2));
 
       if (data.createdById && data.data) {
-        console.log(`[SSE] Processing draft update for user: ${data.createdById}`);
+        logger.verbose(`[SSE] Processing draft update for user: ${data.createdById}`);
         let contentData: any;
         try {
           contentData = typeof data.data === "string" ? JSON.parse(data.data) : data.data;
-          console.log(`[SSE] Draft content data:`, JSON.stringify(contentData, null, 2));
+          logger.verbose(`[SSE] Draft content data:`, JSON.stringify(contentData, null, 2));
         } catch (e: any) {
-          console.warn("[SSE] Failed to parse draft content data:", e.message);
-          console.warn("[SSE] Raw data:", data.data);
+          logger.verbose("[SSE] Failed to parse draft content data:", e.message);
+          logger.verbose("[SSE] Raw data:", data.data);
           return;
         }
 
@@ -186,13 +187,13 @@ async function startSSEWatcher(): Promise<void> {
           contentType = typeMap[contentData.type];
         }
 
-        console.log(`[SSE] Draft updated - triggering full fetch`);
+        logger.verbose(`[SSE] Draft updated - triggering full fetch`);
         triggerContentFetch();
 
         if (contentType === "MDX" || contentType === "JSON") {
           if (contentData && typeof contentData === "object") {
             const previewSlug = `${contentData.slug}-${data.createdById}`;
-            console.log(`[SSE] Saving draft content file for preview: ${previewSlug}`);
+            logger.verbose(`[SSE] Saving draft content file for preview: ${previewSlug}`);
             (async () => {
               try {
                 await saveContentFile({
@@ -201,19 +202,19 @@ async function startSSEWatcher(): Promise<void> {
                   contentDir: CONTENT_DIR,
                   previewSlug: previewSlug,
                 });
-                console.log(`[SSE] Saved draft preview for ${previewSlug}`);
+                logger.verbose(`[SSE] Saved draft preview for ${previewSlug}`);
               } catch (error: any) {
-                console.error(`[SSE] Error processing draft update:`, error.message);
+                logger.verbose(`[SSE] Error processing draft update:`, error.message);
               }
             })();
           }
         } else {
-          console.log(`[SSE] Draft is not MDX or JSON (type: ${contentType}), skipping file save.`);
+          logger.verbose(`[SSE] Draft is not MDX or JSON (type: ${contentType}), skipping file save.`);
         }
       }
     } catch (e: any) {
-      console.warn("[SSE] Failed to parse draft-updated event:", e.message);
-      console.warn("[SSE] Raw draft-updated event data:", event.data);
+      logger.verbose("[SSE] Failed to parse draft-updated event:", e.message);
+      logger.verbose("[SSE] Raw draft-updated event data:", event.data);
     }
   });
 
@@ -224,14 +225,14 @@ async function startSSEWatcher(): Promise<void> {
 
       // Only handle DraftModified operations here for backward compatibility
       if (data.entityType === "Content" && data.operation === "DraftModified" && data.createdById && data.data) {
-        console.log(`[SSE] Received legacy 'DraftModified' message for user: ${data.createdById}`);
+        logger.verbose(`[SSE] Received legacy 'DraftModified' message for user: ${data.createdById}`);
         let contentData: any;
         try {
           contentData = typeof data.data === "string" ? JSON.parse(data.data) : data.data;
-          console.log(`[SSE] Legacy draft content data:`, JSON.stringify(contentData, null, 2));
+          logger.verbose(`[SSE] Legacy draft content data:`, JSON.stringify(contentData, null, 2));
         } catch (e: any) {
-          console.warn("[SSE] Failed to parse legacy draft content data:", e.message);
-          console.warn("[SSE] Raw data:", data.data);
+          logger.verbose("[SSE] Failed to parse legacy draft content data:", e.message);
+          logger.verbose("[SSE] Raw data:", data.data);
           return;
         }
 
@@ -241,13 +242,13 @@ async function startSSEWatcher(): Promise<void> {
           contentType = typeMap[contentData.type];
         }
 
-        console.log(`[SSE] Legacy draft modified - triggering full fetch`);
+        logger.verbose(`[SSE] Legacy draft modified - triggering full fetch`);
         triggerContentFetch();
 
         if (contentType === "MDX" || contentType === "JSON") {
           if (contentData && typeof contentData === "object") {
             const previewSlug = `${contentData.slug}-${data.createdById}`;
-            console.log(`[SSE] Saving legacy draft content file for preview: ${previewSlug}`);
+            logger.verbose(`[SSE] Saving legacy draft content file for preview: ${previewSlug}`);
             (async () => {
               try {
                 await saveContentFile({
@@ -256,14 +257,14 @@ async function startSSEWatcher(): Promise<void> {
                   contentDir: CONTENT_DIR,
                   previewSlug: previewSlug,
                 });
-                console.log(`[SSE] Saved legacy draft preview for ${previewSlug}`);
+                logger.verbose(`[SSE] Saved legacy draft preview for ${previewSlug}`);
               } catch (error: any) {
-                console.error(`[SSE] Error processing legacy draft modification:`, error.message);
+                logger.verbose(`[SSE] Error processing legacy draft modification:`, error.message);
               }
             })();
           }
         } else {
-          console.log(`[SSE] Legacy draft is not MDX or JSON (type: ${contentType}), skipping file save.`);
+          logger.verbose(`[SSE] Legacy draft is not MDX or JSON (type: ${contentType}), skipping file save.`);
         }
       }
     } catch {
@@ -272,21 +273,21 @@ async function startSSEWatcher(): Promise<void> {
   });
 
   es.addEventListener("content-updated", (event) => {
-    console.log(`[SSE] Received 'content-updated' event:`, event.data);
+    logger.verbose(`[SSE] Received 'content-updated' event:`, event.data);
     try {
       const data: SSEEventData = JSON.parse(event.data);
-      console.log(`[SSE] Content updated data:`, JSON.stringify(data, null, 2));
+      logger.verbose(`[SSE] Content updated data:`, JSON.stringify(data, null, 2));
 
-      console.log(`[SSE] Content updated - triggering full fetch`);
+      logger.verbose(`[SSE] Content updated - triggering full fetch`);
       triggerContentFetch();
     } catch (e: any) {
-      console.warn("[SSE] Failed to parse content-updated event:", e.message);
-      console.warn("[SSE] Raw content-updated event data:", event.data);
+      logger.verbose("[SSE] Failed to parse content-updated event:", e.message);
+      logger.verbose("[SSE] Raw content-updated event data:", event.data);
     }
   });
 
   es.onerror = (err: any) => {
-    console.error("[SSE] Connection error occurred:", {
+    logger.verbose("[SSE] Connection error occurred:", {
       type: err.type,
       message: err.message,
       code: err.code,
@@ -297,23 +298,23 @@ async function startSSEWatcher(): Promise<void> {
 
     // Log specific error types
     if (err.code === 401) {
-      console.error("[SSE] Authentication failed (401) - check your LEADCMS_API_KEY");
-      console.error(
+      logger.verbose("[SSE] Authentication failed (401) - check your LEADCMS_API_KEY");
+      logger.verbose(
         "[SSE] Current API Key (first 8 chars):",
         leadCMSApiKey ? leadCMSApiKey.substring(0, 8) : "NOT_SET"
       );
     } else if (err.code === 403) {
-      console.error("[SSE] Forbidden (403) - insufficient permissions");
+      logger.verbose("[SSE] Forbidden (403) - insufficient permissions");
     } else if (err.code === 404) {
-      console.error("[SSE] Not Found (404) - check your LEADCMS_URL and endpoint path");
+      logger.verbose("[SSE] Not Found (404) - check your LEADCMS_URL and endpoint path");
     } else if (err.code >= 500) {
-      console.error("[SSE] Server error (5xx) - LeadCMS server issue");
+      logger.verbose("[SSE] Server error (5xx) - LeadCMS server issue");
     }
 
-    console.log("[SSE] Closing connection and will reconnect in 5s");
+    logger.verbose("[SSE] Closing connection and will reconnect in 5s");
     es.close();
     setTimeout(() => {
-      console.log("[SSE] Attempting to reconnect...");
+      logger.verbose("[SSE] Attempting to reconnect...");
       startSSEWatcher();
     }, 5000);
   };

@@ -14,6 +14,7 @@ import type {
 } from "../lib/comment-types.js";
 import { getConfig } from "../lib/config.js";
 import { isValidLocaleCode } from "../lib/locale-utils.js";
+import { logger } from "../lib/logger.js";
 
 // Load config to get commentsDir
 const config = getConfig();
@@ -38,7 +39,7 @@ async function readCommentSyncToken(): Promise<{ token: string | undefined; migr
   try {
     const legacy = (await fs.readFile(LEGACY_COMMENT_SYNC_TOKEN_PATH, "utf8")).trim();
     if (legacy) {
-      console.log(`[SYNC] Migrating comment sync token from legacy location`);
+      logger.verbose(`[SYNC] Migrating comment sync token from legacy location`);
       return { token: legacy, migrated: true };
     }
   } catch { /* not found */ }
@@ -68,8 +69,8 @@ async function cleanupLegacyCommentSyncToken(): Promise<void> {
  * Handles pagination automatically
  */
 async function fetchCommentSync(syncToken?: string): Promise<CommentSyncResult> {
-  console.log(`[FETCH_COMMENT_SYNC] Starting with syncToken: ${syncToken || "NONE"}`);
-  console.log(`[FETCH_COMMENT_SYNC] Fetching public comments (no authentication)`);
+  logger.verbose(`[FETCH_COMMENT_SYNC] Starting with syncToken: ${syncToken || "NONE"}`);
+  logger.verbose(`[FETCH_COMMENT_SYNC] Fetching public comments (no authentication)`);
   let allItems: Comment[] = [];
   let allDeleted: number[] = [];
   let token = syncToken || "";
@@ -81,7 +82,7 @@ async function fetchCommentSync(syncToken?: string): Promise<CommentSyncResult> 
     url.searchParams.set("filter[limit]", "100");
     url.searchParams.set("syncToken", token);
 
-    console.log(`[FETCH_COMMENT_SYNC] Page ${page}, URL: ${url.toString()}`);
+    logger.verbose(`[FETCH_COMMENT_SYNC] Page ${page}, URL: ${url.toString()}`);
 
     try {
       // SECURITY: Never send API key for read operations
@@ -89,12 +90,12 @@ async function fetchCommentSync(syncToken?: string): Promise<CommentSyncResult> 
       const res: AxiosResponse<CommentSyncResponse> = await axios.get(url.toString());
 
       if (res.status === 204) {
-        console.log(`[FETCH_COMMENT_SYNC] Got 204 No Content - ending sync`);
+        logger.verbose(`[FETCH_COMMENT_SYNC] Got 204 No Content - ending sync`);
         break;
       }
 
       const data = res.data;
-      console.log(
+      logger.verbose(
         `[FETCH_COMMENT_SYNC] Page ${page} - Got ${data.items?.length || 0} items, ${data.deleted?.length || 0} deleted`
       );
 
@@ -105,11 +106,11 @@ async function fetchCommentSync(syncToken?: string): Promise<CommentSyncResult> 
       }
 
       const newSyncToken = res.headers["x-next-sync-token"] || token;
-      console.log(`[FETCH_COMMENT_SYNC] Next sync token: ${newSyncToken}`);
+      logger.verbose(`[FETCH_COMMENT_SYNC] Next sync token: ${newSyncToken}`);
 
       if (!newSyncToken || newSyncToken === token) {
         nextSyncToken = newSyncToken || token;
-        console.log(`[FETCH_COMMENT_SYNC] No new sync token - ending sync`);
+        logger.verbose(`[FETCH_COMMENT_SYNC] No new sync token - ending sync`);
         break;
       }
 
@@ -141,7 +142,7 @@ async function fetchCommentSync(syncToken?: string): Promise<CommentSyncResult> 
     }
   }
 
-  console.log(
+  logger.verbose(
     `[FETCH_COMMENT_SYNC] Completed - Total items: ${allItems.length}, deleted: ${allDeleted.length}`
   );
   return {
@@ -213,7 +214,7 @@ async function saveCommentsForEntity(
     // If no comments, remove the file
     try {
       await fs.unlink(filePath);
-      console.log(`Removed empty comment file: ${filePath}`);
+      logger.verbose(`Removed empty comment file: ${filePath}`);
     } catch {
       // File might not exist, that's okay
     }
@@ -226,7 +227,7 @@ async function saveCommentsForEntity(
     });
 
     await fs.writeFile(filePath, JSON.stringify(sortedComments, null, 2), "utf8");
-    console.log(`Saved ${sortedComments.length} comments to ${filePath}`);
+    logger.verbose(`Saved ${sortedComments.length} comments to ${filePath}`);
   }
 }
 
@@ -301,7 +302,7 @@ async function searchAndDeleteInTypeDirectory(
     if (filtered.length < originalLength) {
       // Found and removed the comment
       await saveCommentsForEntity(commentableType, commentableId, language, filtered);
-      console.log(`Deleted comment ${commentId} from ${commentableType}/${commentableId} (${language})`);
+      logger.verbose(`Deleted comment ${commentId} from ${commentableType}/${commentableId} (${language})`);
       return; // Comment found and deleted, we're done
     }
   }
@@ -352,14 +353,14 @@ async function fetchCMSConfigForEntity(): Promise<boolean> {
  * Main function to sync comments from LeadCMS
  */
 export async function main(): Promise<void> {
-  console.log(`[ENV] LeadCMS URL: ${leadCMSUrl}`);
-  console.log(
+  logger.verbose(`[ENV] LeadCMS URL: ${leadCMSUrl}`);
+  logger.verbose(
     `[ENV] LeadCMS API Key: ${leadCMSApiKey ? `${leadCMSApiKey.substring(0, 8)}...` : "NOT_SET"}`
   );
-  console.log(`[ENV] Comments Dir: ${COMMENTS_DIR}`);
+  logger.verbose(`[ENV] Comments Dir: ${COMMENTS_DIR}`);
 
   // Check if comments are supported
-  console.log(`\n🔍 Checking CMS configuration...`);
+  logger.verbose(`\n🔍 Checking CMS configuration...`);
   const commentsSupported = await fetchCMSConfigForEntity();
 
   if (!commentsSupported) {
@@ -367,7 +368,7 @@ export async function main(): Promise<void> {
     return;
   }
 
-  console.log(`✅ Comments supported - proceeding with sync\n`);
+  logger.verbose(`✅ Comments supported - proceeding with sync\n`);
 
   await fs.mkdir(COMMENTS_DIR, { recursive: true });
 
@@ -379,10 +380,10 @@ export async function main(): Promise<void> {
 
   try {
     if (lastSyncToken) {
-      console.log(`Syncing comments from LeadCMS using sync token: ${lastSyncToken}`);
+      logger.verbose(`Syncing comments from LeadCMS using sync token: ${lastSyncToken}`);
       ({ items, deleted, nextSyncToken } = await fetchCommentSync(lastSyncToken));
     } else {
-      console.log("No comment sync token found. Doing full fetch from LeadCMS...");
+      logger.verbose("No comment sync token found. Doing full fetch from LeadCMS...");
       ({ items, deleted, nextSyncToken } = await fetchCommentSync(undefined));
     }
   } catch (error: any) {
@@ -438,13 +439,13 @@ export async function main(): Promise<void> {
   // Save new sync token
   if (nextSyncToken) {
     await writeCommentSyncToken(nextSyncToken);
-    console.log(`Comment sync token updated: ${nextSyncToken}`);
+    logger.verbose(`Comment sync token updated: ${nextSyncToken}`);
   }
 
   // Clean up legacy sync token after successful migration
   if (commentTokenMigrated) {
     await cleanupLegacyCommentSyncToken();
-    console.log(`[SYNC] Removed legacy comment sync token`);
+    logger.verbose(`[SYNC] Removed legacy comment sync token`);
   }
 
   console.log(`\nComment sync completed successfully.`);

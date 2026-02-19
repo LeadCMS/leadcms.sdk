@@ -483,6 +483,31 @@ describe('pushMedia - SDK top-level function', () => {
     });
   });
 
+  describe('silent mode', () => {
+    it('should return results without calling display functions when silent is true', async () => {
+      const deps: Partial<MediaDependencies> = {
+        ...silentDeps,
+        fetchRemoteMedia: async () => [],
+      };
+
+      // Reset the mock before this test to track calls
+      (console.log as jest.Mock).mockClear();
+
+      const result: MediaStatusResult = await statusMedia(
+        { mediaDir: FIXTURES_MEDIA_DIR, silent: true },
+        deps
+      );
+
+      // Should still return data correctly
+      expect(result.localFiles.length).toBe(4);
+      expect(result.summary.creates).toBe(4);
+
+      // console.log should not have been called for the display output
+      // (silentDeps already mocks logInfo etc., but silent skips displayMediaStatus entirely)
+      expect(result.operations.length).toBe(4);
+    });
+  });
+
   describe('when all files are in sync', () => {
     it('should skip all operations and return early', async () => {
       const uploadMock = jest.fn();

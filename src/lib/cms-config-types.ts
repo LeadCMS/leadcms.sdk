@@ -106,3 +106,10 @@ export function isContentSupported(): boolean {
 export function isMediaSupported(): boolean {
   return isEntitySupported('Media');
 }
+
+/**
+ * Check if email templates are supported
+ */
+export function isEmailTemplatesSupported(): boolean {
+  return isEntitySupported('EmailTemplate') || isEntitySupported('EmailTemplates');
+}

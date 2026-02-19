@@ -83,6 +83,9 @@ switch (command) {
   case 'pull-comments':
     runScript('pull-comments.js', commandArgs);
     break;
+  case 'pull-email-templates':
+    runScript('pull-email-templates.js', commandArgs);
+    break;
   case 'push':
     runScript('push-all.js', commandArgs);
     break;
@@ -91,6 +94,9 @@ switch (command) {
     break;
   case 'push-media':
     runScript('push-media.js', commandArgs);
+    break;
+  case 'push-email-templates':
+    runScript('push-email-templates.js', commandArgs);
     break;
   case 'status':
     runScript('status-all.js', commandArgs);
@@ -141,6 +147,9 @@ Usage:
     --reset              - Delete local media files and sync token, then pull fresh
   leadcms pull-comments [options] - Pull only comments from LeadCMS
     --reset              - Delete local comment files and sync token, then pull fresh
+  leadcms pull-email-templates [options] - Pull email templates from LeadCMS
+    --id <template-id>   - Pull specific email template by ID
+    --reset              - Delete local email templates and sync token, then pull fresh
   leadcms fetch          - Alias for 'pull' (backward compatibility)
 
   Push commands:
@@ -156,9 +165,13 @@ Usage:
     --dry-run            - Show what would be changed without making changes
     --delete             - Delete remote media files not present locally
     --scope <scopeUid>   - Filter by specific scope UID (e.g., "blog", "pages/about")
+  leadcms push-email-templates [options] - Push email templates to LeadCMS
+    --force              - Override remote changes (skip conflict check)
+    --dry-run            - Show API calls without executing them (preview mode)
+    --delete             - Delete remote email templates not present locally
 
   Status & monitoring:
-  leadcms status [options] - Show sync status for all entities (content + media)
+  leadcms status [options] - Show sync status for all entities (content + media + email templates)
     --delete             - Show deletion operations (files to be deleted)
   leadcms status-content [options] - Show content sync status only
     --preview            - Show detailed change previews for all files
@@ -172,6 +185,10 @@ Usage:
 
   Utilities:
   leadcms generate-env   - Generate environment variables file
+
+  Global options:
+  --verbose, -V          - Show detailed debug output (API calls, sync tokens, etc.)
+                           Can also be enabled with LEADCMS_VERBOSE=true env var
 
 Getting Started:
   1. Initialize configuration:
@@ -197,7 +214,8 @@ Configuration Files:
       "defaultLanguage": "en",
       "contentDir": "content",
       "mediaDir": "public/media",
-      "commentsDir": "comments"
+      "commentsDir": "comments",
+      "emailTemplatesDir": ".leadcms/email-templates"
     }
 
   Note: Environment variables take precedence over config file.

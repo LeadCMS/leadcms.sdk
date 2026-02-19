@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { leadCMSDataService, LeadCMSDataService } from '../src/lib/data-service';
+import { setVerbose } from '../src/lib/logger';
 
 // Mock axios
 jest.mock('axios');
@@ -13,6 +14,7 @@ describe('LeadCMS Data Service', () => {
 
   beforeEach(() => {
     originalEnv = process.env;
+    setVerbose(true);
     consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
     consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
@@ -21,6 +23,7 @@ describe('LeadCMS Data Service', () => {
 
   afterEach(() => {
     process.env = originalEnv;
+    setVerbose(false);
     jest.restoreAllMocks();
   });
 
@@ -58,7 +61,7 @@ describe('LeadCMS Data Service', () => {
 
       expect(Array.isArray(content)).toBe(true);
       expect(content.length).toBeGreaterThanOrEqual(0);
-      expect(consoleLogSpy).toHaveBeenCalledWith('[MOCK] Returning mock content data');
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('[MOCK] Returning mock content data'));
     });
 
     it('should return mock content types for getContentTypes', async () => {
@@ -71,7 +74,7 @@ describe('LeadCMS Data Service', () => {
       expect(contentTypes[0]).toHaveProperty('uid');
       expect(contentTypes[0]).toHaveProperty('format');
       expect(contentTypes[0]).toHaveProperty('name');
-      expect(consoleLogSpy).toHaveBeenCalledWith('[MOCK] Returning mock content types');
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('[MOCK] Returning mock content types'));
     });
 
     it('should create content in mock mode', async () => {
@@ -89,7 +92,7 @@ describe('LeadCMS Data Service', () => {
       expect(created.id).toBeDefined();
       expect(created.createdAt).toBeDefined();
       expect(created.updatedAt).toBeDefined();
-      expect(consoleLogSpy).toHaveBeenCalledWith('[MOCK] Creating content: Test Post');
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('[MOCK] Creating content: Test Post'));
     });
 
     it('should update content in mock mode', async () => {
@@ -109,7 +112,7 @@ describe('LeadCMS Data Service', () => {
       expect(updated.title).toBe('Updated Post');
       expect(updated.id).toBe(newContent.id);
       expect(updated.updatedAt).not.toBe(newContent.updatedAt);
-      expect(consoleLogSpy).toHaveBeenCalledWith(`[MOCK] Updating content ID ${newContent.id}: Updated Post`);
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`[MOCK] Updating content ID ${newContent.id}: Updated Post`));
     });
 
     it('should throw error when updating non-existent content in mock mode', async () => {
@@ -131,7 +134,7 @@ describe('LeadCMS Data Service', () => {
       const created = await service.createContentType(contentType);
 
       expect(created).toEqual(contentType);
-      expect(consoleLogSpy).toHaveBeenCalledWith('[MOCK] Creating content type: news');
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('[MOCK] Creating content type: news'));
     });
 
     it('should switch mock scenarios', () => {
@@ -140,7 +143,7 @@ describe('LeadCMS Data Service', () => {
       const mockData = service.switchMockScenario('hasConflicts');
 
       expect(mockData.scenario).toBe('Has Conflicts');
-      expect(consoleLogSpy).toHaveBeenCalledWith('[MOCK] Switched to scenario: Has Conflicts');
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('[MOCK] Switched to scenario: Has Conflicts'));
     });
 
     it('should throw error for unknown mock scenario', () => {
@@ -202,7 +205,7 @@ describe('LeadCMS Data Service', () => {
 
       expect(service.isMockMode()).toBe(false);
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        '[DATA SERVICE] Using real API mode: https://api.example.com'
+        expect.stringContaining('[DATA SERVICE] Using real API mode: https://api.example.com')
       );
     });
 
@@ -245,7 +248,7 @@ describe('LeadCMS Data Service', () => {
       const content = await service.getAllContent();
 
       expect(content).toEqual(mockContent);
-      expect(consoleLogSpy).toHaveBeenCalledWith('[API] Response data is direct array with 1 items');
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('[API] Response data is direct array with 1 items'));
     });
 
     it('should handle 204 No Content response', async () => {
@@ -255,7 +258,7 @@ describe('LeadCMS Data Service', () => {
       const content = await service.getAllContent();
 
       expect(content).toEqual([]);
-      expect(consoleLogSpy).toHaveBeenCalledWith('[API DEBUG] Status 204 - No Content');
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('[API DEBUG] Status 204 - No Content'));
     });
 
     it('should handle empty response data', async () => {
@@ -268,7 +271,7 @@ describe('LeadCMS Data Service', () => {
       const content = await service.getAllContent();
 
       expect(content).toEqual([]);
-      expect(consoleLogSpy).toHaveBeenCalledWith('[API DEBUG] No content data returned from API (data is falsy)');
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('[API DEBUG] No content data returned from API (data is falsy)'));
     });
 
     it('should handle unexpected response format', async () => {

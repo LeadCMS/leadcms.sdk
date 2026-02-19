@@ -7,8 +7,11 @@
 import 'dotenv/config';
 import { pushLeadCMSContent } from '../../scripts/push-leadcms-content.js';
 import { pushMedia } from '../../scripts/push-media.js';
+import { pushEmailTemplates } from '../../scripts/push-email-templates.js';
+import { initVerboseFromArgs } from '../../lib/logger.js';
 
 const args = process.argv.slice(2);
+initVerboseFromArgs(args);
 
 // Parse common flags
 const force = args.includes('--force') || args.includes('-f');
@@ -48,6 +51,13 @@ async function pushAll() {
       targetId,
       targetSlug,
       dryRun,
+      allowDelete
+    });
+
+    console.log('\n📧 Pushing email templates...');
+    await pushEmailTemplates({
+      dryRun,
+      force,
       allowDelete
     });
 

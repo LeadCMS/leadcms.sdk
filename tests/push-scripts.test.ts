@@ -8,6 +8,7 @@ import path from 'path';
 import os from 'os';
 import matter from 'gray-matter';
 import { jest } from '@jest/globals';
+import { setVerbose } from '../src/lib/logger';
 import { createTestConfig, createDataServiceMock } from './test-helpers';
 
 jest.mock('../src/lib/config.js', () => ({
@@ -283,7 +284,8 @@ describe('push-leadcms-content - Pure Functions', () => {
     });
 
     it('should warn when type is missing from metadata', async () => {
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { });
+      setVerbose(true);
+      const logSpy = jest.spyOn(console, 'log').mockImplementation(() => { });
       const filePath = path.join(tmpDir, 'no-type.mdx');
       await fs.writeFile(filePath, matter.stringify('Hello', {
         title: 'No Type',
@@ -292,10 +294,11 @@ describe('push-leadcms-content - Pure Functions', () => {
       const result = await (parseContentFile as any)(filePath, 'en', tmpDir);
       expect(result).not.toBeNull();
       expect(result.type).toBeUndefined();
-      expect(warnSpy).toHaveBeenCalledWith(
+      expect(logSpy).toHaveBeenCalledWith(
         expect.stringContaining('missing a "type" property')
       );
-      warnSpy.mockRestore();
+      logSpy.mockRestore();
+      setVerbose(false);
     });
 
     it('should extract body from JSON content', async () => {

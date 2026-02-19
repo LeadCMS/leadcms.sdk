@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import axios, { AxiosResponse } from "axios";
 import { getConfig, type LeadCMSConfig } from "../lib/config.js";
+import { logger } from "../lib/logger.js";
 
 // Type definitions
 interface ContentType {
@@ -29,12 +30,13 @@ export const leadCMSApiKey = config.apiKey;
 export const defaultLanguage = config.defaultLanguage;
 export const CONTENT_DIR = path.resolve(config.contentDir);
 export const MEDIA_DIR = path.resolve(config.mediaDir);
+export const EMAIL_TEMPLATES_DIR = path.resolve(config.emailTemplatesDir);
 
 // Fetch content types dynamically from LeadCMS API to build typeMap
 // Content types are automatically detected and don't need to be configured
 export async function fetchContentTypes(): Promise<Record<string, string>> {
-  console.log(`[LeadCMS] Fetching content types from API...`);
-  console.log(`[LeadCMS] Fetching public content types (no authentication)`);
+  logger.verbose(`[LeadCMS] Fetching content types from API...`);
+  logger.verbose(`[LeadCMS] Fetching public content types (no authentication)`);
   const url = new URL("/api/content-types", leadCMSUrl);
   url.searchParams.set("filter[limit]", "100");
 
@@ -49,7 +51,7 @@ export async function fetchContentTypes(): Promise<Record<string, string>> {
       typeMap[t.uid] = t.format;
     }
 
-    console.log(`[LeadCMS] Detected ${Object.keys(typeMap).length} content types:`, Object.keys(typeMap).join(', '));
+    logger.verbose(`[LeadCMS] Detected ${Object.keys(typeMap).length} content types:`, Object.keys(typeMap).join(', '));
     return typeMap;
   } catch (error: any) {
     console.error(`[LeadCMS] Failed to fetch content types:`, error.message);
@@ -73,7 +75,7 @@ export function extractMediaUrlsFromContent(content: ContentItem): string[] {
 
   const foundUrls = Array.from(urls);
   if (foundUrls.length > 0) {
-    console.log(`[LeadCMS] Extracted ${foundUrls.length} media URL(s) from content: ${content.slug || content.id}`);
+    logger.verbose(`[LeadCMS] Extracted ${foundUrls.length} media URL(s) from content: ${content.slug || content.id}`);
   }
 
   return foundUrls;
@@ -105,7 +107,7 @@ export async function downloadMediaFileDirect(
       // Remove file if not found on server
       try {
         await fs.unlink(destPath);
-        console.log(`Deleted missing file: ${destPath}`);
+        logger.verbose(`Deleted missing file: ${destPath}`);
       } catch { }
       return false;
     }

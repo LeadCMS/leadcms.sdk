@@ -4,6 +4,7 @@
  */
 
 import axios, { AxiosResponse } from 'axios';
+import { logger } from './logger.js';
 
 /**
  * Formats API validation errors in a user-friendly way
@@ -63,6 +64,32 @@ interface ContentType {
   name: string;
 }
 
+interface EmailTemplateItem {
+  id?: number;
+  name?: string;
+  subject?: string;
+  bodyTemplate?: string;
+  fromEmail?: string;
+  fromName?: string;
+  language?: string;
+  translationKey?: string | null;
+  emailGroupId?: number | null;
+  createdAt?: string;
+  updatedAt?: string | null;
+  emailGroup?: Record<string, any> | null;
+  [key: string]: any;
+}
+
+interface EmailGroupItem {
+  id?: number;
+  name?: string;
+  language?: string;
+  translationKey?: string | null;
+  createdAt?: string;
+  updatedAt?: string | null;
+  [key: string]: any;
+}
+
 export interface MediaItem {
   id: number;
   location: string;
@@ -82,12 +109,16 @@ interface MockScenario {
   remoteContent: ContentItem[];
   contentTypes: Record<string, string>;
   remoteMedia: MediaItem[];
+  emailTemplates?: EmailTemplateItem[];
+  emailGroups?: EmailGroupItem[];
 }
 
 interface MockData {
   remoteContent: ContentItem[];
   contentTypes: Record<string, string>;
   remoteMedia: MediaItem[];
+  emailTemplates: EmailTemplateItem[];
+  emailGroups: EmailGroupItem[];
   scenario: string;
 }
 
@@ -255,9 +286,9 @@ class LeadCMSDataService {
     // Initialize mock data if needed
     if (this.useMock) {
       this.initializeMockData();
-      console.log(`[DATA SERVICE] Using mock mode with scenario: ${this.currentScenario?.name}`);
+      logger.verbose(`[DATA SERVICE] Using mock mode with scenario: ${this.currentScenario?.name}`);
     } else {
-      console.log(`[DATA SERVICE] Using real API mode: ${this.baseURL}`);
+      logger.verbose(`[DATA SERVICE] Using real API mode: ${this.baseURL}`);
     }
 
     this.initialized = true;
@@ -275,6 +306,8 @@ class LeadCMSDataService {
       remoteContent: JSON.parse(JSON.stringify(scenario.remoteContent)),
       contentTypes: { ...scenario.contentTypes },
       remoteMedia: JSON.parse(JSON.stringify(scenario.remoteMedia)),
+      emailTemplates: JSON.parse(JSON.stringify(scenario.emailTemplates || [])),
+      emailGroups: JSON.parse(JSON.stringify(scenario.emailGroups || [])),
       scenario: scenario.name
     };
   }
@@ -298,14 +331,14 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      console.log('[MOCK] Returning mock content data');
+      logger.verbose('[MOCK] Returning mock content data');
       // Simulate network delay
       await new Promise(resolve => setTimeout(resolve, 50));
       return [...this.mockData.remoteContent];
     }
 
     try {
-      console.log('[API] Fetching content from LeadCMS...');
+      logger.verbose('[API] Fetching content from LeadCMS...');
 
       if (!this.baseURL) {
         throw new Error('LeadCMS URL is not configured. Please set LEADCMS_URL or NEXT_PUBLIC_LEADCMS_URL in your .env file.');
@@ -319,30 +352,30 @@ class LeadCMSDataService {
 
       // Ensure we always return an array
       if (response.status === 204) {
-        console.log('[API DEBUG] Status 204 - No Content');
+        logger.verbose('[API DEBUG] Status 204 - No Content');
         return [];
       }
 
       const data = response.data;
       if (!data) {
-        console.log('[API DEBUG] No content data returned from API (data is falsy)');
+        logger.verbose('[API DEBUG] No content data returned from API (data is falsy)');
         return [];
       }
 
       // Check if response has 'items' property (API wrapper format)
       let items: ContentItem[];
       if (data.items && Array.isArray(data.items)) {
-        console.log(`[API] Found items array in response wrapper with ${data.items.length} items`);
+        logger.verbose(`[API] Found items array in response wrapper with ${data.items.length} items`);
         items = data.items;
       } else if (Array.isArray(data)) {
-        console.log(`[API] Response data is direct array with ${data.length} items`);
+        logger.verbose(`[API] Response data is direct array with ${data.length} items`);
         items = data;
       } else {
         console.warn('[API] API returned unexpected data format:', typeof data, data);
         return [];
       }
 
-      console.log(`[API DEBUG] Successfully parsed ${items.length} content items`);
+      logger.verbose(`[API DEBUG] Successfully parsed ${items.length} content items`);
       return items;
     } catch (error: any) {
       console.error('[API] Failed to fetch content:', error.message);
@@ -357,7 +390,7 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      console.log('[MOCK] Returning mock content types');
+      logger.verbose('[MOCK] Returning mock content types');
       await new Promise(resolve => setTimeout(resolve, 30));
       return Object.entries(this.mockData.contentTypes).map(([uid, format]) => ({
         uid,
@@ -367,7 +400,7 @@ class LeadCMSDataService {
     }
 
     try {
-      console.log('[API] Fetching content types from LeadCMS...');
+      logger.verbose('[API] Fetching content types from LeadCMS...');
 
       if (!this.baseURL) {
         throw new Error('LeadCMS URL is not configured. Please set LEADCMS_URL or NEXT_PUBLIC_LEADCMS_URL in your .env file.');
@@ -391,14 +424,14 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      console.log(`[MOCK] Getting content with ID: ${id}`);
+      logger.verbose(`[MOCK] Getting content with ID: ${id}`);
       await new Promise(resolve => setTimeout(resolve, 50));
       const content = this.mockData.remoteContent.find(c => c.id === id);
       return content || null;
     }
 
     try {
-      console.log(`[API] Fetching content with ID: ${id}`);
+      logger.verbose(`[API] Fetching content with ID: ${id}`);
 
       if (!this.baseURL) {
         throw new Error('LeadCMS URL is not configured.');
@@ -414,7 +447,7 @@ class LeadCMSDataService {
       return response.data;
     } catch (error: any) {
       if (error.response?.status === 404) {
-        console.log(`[API] Content with ID ${id} not found`);
+        logger.verbose(`[API] Content with ID ${id} not found`);
         return null;
       }
 
@@ -448,7 +481,7 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      console.log(`[MOCK] Creating content: ${content.title}`);
+      logger.verbose(`[MOCK] Creating content: ${content.title}`);
       await new Promise(resolve => setTimeout(resolve, 100));
 
       const newContent: ContentItem = {
@@ -463,7 +496,7 @@ class LeadCMSDataService {
     }
 
     try {
-      console.log(`[API] Creating content: ${content.title}`);
+      logger.verbose(`[API] Creating content: ${content.title}`);
       const response: AxiosResponse<ContentItem> = await axios.post(`${this.baseURL}/api/content`, content, {
         headers: this.getApiHeaders()
       });
@@ -505,7 +538,7 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      console.log(`[MOCK] Updating content ID ${id}: ${content.title}`);
+      logger.verbose(`[MOCK] Updating content ID ${id}: ${content.title}`);
       await new Promise(resolve => setTimeout(resolve, 80));
 
       const existingIndex = this.mockData.remoteContent.findIndex(c => c.id === id);
@@ -524,7 +557,7 @@ class LeadCMSDataService {
     }
 
     try {
-      console.log(`[API] Updating content ID ${id}: ${content.title}`);
+      logger.verbose(`[API] Updating content ID ${id}: ${content.title}`);
       const response: AxiosResponse<ContentItem> = await axios.put(`${this.baseURL}/api/content/${id}`, content, {
         headers: this.getApiHeaders()
       });
@@ -566,7 +599,7 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      console.log(`[MOCK] Deleting content with ID: ${id}`);
+      logger.verbose(`[MOCK] Deleting content with ID: ${id}`);
       await new Promise(resolve => setTimeout(resolve, 80));
 
       // Remove from mock data
@@ -578,7 +611,7 @@ class LeadCMSDataService {
     }
 
     try {
-      console.log(`[API] Deleting content with ID: ${id}`);
+      logger.verbose(`[API] Deleting content with ID: ${id}`);
 
       if (!this.baseURL) {
         throw new Error('LeadCMS URL is not configured.');
@@ -591,7 +624,7 @@ class LeadCMSDataService {
         }
       );
 
-      console.log('[API] Content deleted successfully');
+      logger.verbose('[API] Content deleted successfully');
     } catch (error: any) {
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
@@ -612,13 +645,275 @@ class LeadCMSDataService {
   }
 
   /**
+   * Get all email templates from LeadCMS or mock data
+   */
+  async getAllEmailTemplates(): Promise<EmailTemplateItem[]> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose('[MOCK] Returning mock email templates');
+      await new Promise(resolve => setTimeout(resolve, 30));
+      return [...this.mockData.emailTemplates];
+    }
+
+    try {
+      logger.verbose('[API] Fetching email templates from LeadCMS...');
+
+      if (!this.baseURL) {
+        throw new Error('LeadCMS URL is not configured.');
+      }
+
+      const response: AxiosResponse<EmailTemplateItem[]> = await axios.get(
+        `${this.baseURL}/api/email-templates`,
+        { headers: this.getApiHeaders() }
+      );
+
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      console.error('[API] Failed to fetch email templates:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all email groups from LeadCMS or mock data
+   */
+  async getAllEmailGroups(): Promise<EmailGroupItem[]> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose('[MOCK] Returning mock email groups');
+      await new Promise(resolve => setTimeout(resolve, 30));
+      return [...this.mockData.emailGroups];
+    }
+
+    try {
+      logger.verbose('[API] Fetching email groups from LeadCMS...');
+
+      if (!this.baseURL) {
+        throw new Error('LeadCMS URL is not configured.');
+      }
+
+      const response: AxiosResponse<EmailGroupItem[]> = await axios.get(
+        `${this.baseURL}/api/email-groups`,
+        { headers: this.getApiHeaders() }
+      );
+
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      console.error('[API] Failed to fetch email groups:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new email group in LeadCMS or mock
+   */
+  async createEmailGroup(group: { name: string; language: string; translationKey?: string | null }): Promise<EmailGroupItem> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose(`[MOCK] Creating email group: ${group.name}`);
+      await new Promise(resolve => setTimeout(resolve, 60));
+
+      const newGroup: EmailGroupItem = {
+        ...group,
+        id: Math.floor(Math.random() * 1000) + 100,
+        createdAt: new Date().toISOString(),
+        updatedAt: null,
+      };
+      this.mockData.emailGroups.push(newGroup);
+      return newGroup;
+    }
+
+    try {
+      logger.verbose(`[API] Creating email group: ${group.name}`);
+
+      if (!this.baseURL) {
+        throw new Error('LeadCMS URL is not configured.');
+      }
+
+      const response: AxiosResponse<EmailGroupItem> = await axios.post(
+        `${this.baseURL}/api/email-groups`,
+        group,
+        { headers: this.getApiHeaders() }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      console.error(`[API] Failed to create email group '${group.name}':`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Create new email template in LeadCMS or mock
+   */
+  async createEmailTemplate(template: Partial<EmailTemplateItem>): Promise<EmailTemplateItem> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose(`[MOCK] Creating email template: ${template.name}`);
+      await new Promise(resolve => setTimeout(resolve, 60));
+
+      const newTemplate: EmailTemplateItem = {
+        ...template,
+        id: Math.floor(Math.random() * 1000) + 100,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } as EmailTemplateItem;
+
+      this.mockData.emailTemplates.push(newTemplate);
+      return newTemplate;
+    }
+
+    try {
+      logger.verbose(`[API] Creating email template: ${template.name}`);
+      const response: AxiosResponse<EmailTemplateItem> = await axios.post(
+        `${this.baseURL}/api/email-templates`,
+        template,
+        { headers: this.getApiHeaders() }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      if (error.response?.status === 422 && error.response?.data?.errors) {
+        const validationMessage = formatApiValidationErrors(error.response);
+        const enhancedError = new Error(`Validation failed${validationMessage}`);
+        (enhancedError as any).status = 422;
+        (enhancedError as any).validationErrors = error.response.data.errors;
+        throw enhancedError;
+      }
+
+      console.error('[API] Failed to create email template:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Update existing email template in LeadCMS or mock
+   */
+  async updateEmailTemplate(id: number, template: Partial<EmailTemplateItem>): Promise<EmailTemplateItem> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose(`[MOCK] Updating email template ID ${id}: ${template.name}`);
+      await new Promise(resolve => setTimeout(resolve, 60));
+
+      const existingIndex = this.mockData.emailTemplates.findIndex(t => t.id === id);
+      if (existingIndex === -1) {
+        throw new Error(`Email template with id ${id} not found`);
+      }
+
+      const updatedTemplate: EmailTemplateItem = {
+        ...this.mockData.emailTemplates[existingIndex],
+        ...template,
+        updatedAt: new Date().toISOString(),
+      };
+
+      this.mockData.emailTemplates[existingIndex] = updatedTemplate;
+      return updatedTemplate;
+    }
+
+    try {
+      logger.verbose(`[API] Updating email template ID ${id}: ${template.name}`);
+      const response: AxiosResponse<EmailTemplateItem> = await axios.patch(
+        `${this.baseURL}/api/email-templates/${id}`,
+        template,
+        { headers: this.getApiHeaders() }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      if (error.response?.status === 422 && error.response?.data?.errors) {
+        const validationMessage = formatApiValidationErrors(error.response);
+        const enhancedError = new Error(`Validation failed${validationMessage}`);
+        (enhancedError as any).status = 422;
+        (enhancedError as any).validationErrors = error.response.data.errors;
+        throw enhancedError;
+      }
+
+      console.error('[API] Failed to update email template:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete email template from LeadCMS
+   */
+  async deleteEmailTemplate(id: number): Promise<void> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose(`[MOCK] Deleting email template with ID: ${id}`);
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      const index = this.mockData.emailTemplates.findIndex(t => t.id === id);
+      if (index !== -1) {
+        this.mockData.emailTemplates.splice(index, 1);
+      }
+      return;
+    }
+
+    try {
+      logger.verbose(`[API] Deleting email template with ID: ${id}`);
+
+      if (!this.baseURL) {
+        throw new Error('LeadCMS URL is not configured.');
+      }
+
+      await axios.delete(`${this.baseURL}/api/email-templates/${id}`, {
+        headers: this.getApiHeaders(),
+      });
+
+      logger.verbose('[API] Email template deleted successfully');
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      if (error.response?.status === 422) {
+        const enhancedError = new Error(
+          `Email template validation failed: ${formatApiValidationErrors(error.response)}`
+        );
+        (enhancedError as any).status = 422;
+        (enhancedError as any).validationErrors = error.response.data.errors;
+        throw enhancedError;
+      }
+
+      console.error('[API] Failed to delete email template:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Create content type in LeadCMS or mock
    */
   async createContentType(contentType: Partial<ContentType>): Promise<ContentType> {
     this._initialize();
 
     if (this.useMock && this.mockData && contentType.uid && contentType.format) {
-      console.log(`[MOCK] Creating content type: ${contentType.uid}`);
+      logger.verbose(`[MOCK] Creating content type: ${contentType.uid}`);
       await new Promise(resolve => setTimeout(resolve, 60));
 
       this.mockData.contentTypes[contentType.uid] = contentType.format;
@@ -630,7 +925,7 @@ class LeadCMSDataService {
     }
 
     try {
-      console.log(`[API] Creating content type: ${contentType.uid}`);
+      logger.verbose(`[API] Creating content type: ${contentType.uid}`);
       const response: AxiosResponse<ContentType> = await axios.post(`${this.baseURL}/api/content-types`, contentType, {
         headers: this.getApiHeaders()
       });
@@ -649,7 +944,7 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      console.log('[MOCK] Returning mock media data');
+      logger.verbose('[MOCK] Returning mock media data');
       await new Promise(resolve => setTimeout(resolve, 50));
 
       let media = [...this.mockData.remoteMedia];
@@ -660,7 +955,7 @@ class LeadCMSDataService {
     }
 
     try {
-      console.log('[API] Fetching media from LeadCMS using sync API...');
+      logger.verbose('[API] Fetching media from LeadCMS using sync API...');
 
       if (!this.baseURL) {
         throw new Error('LeadCMS URL is not configured.');
@@ -699,7 +994,7 @@ class LeadCMSDataService {
         page++;
       }
 
-      console.log(`[API] Fetched ${allMedia.length} media items`);
+      logger.verbose(`[API] Fetched ${allMedia.length} media items`);
       return allMedia;
     } catch (error: any) {
       console.error('[API] Failed to fetch media:', error.message);
@@ -714,7 +1009,7 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      console.log('[MOCK] Uploading media file');
+      logger.verbose('[MOCK] Uploading media file');
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // Extract data from FormData for mock
@@ -740,7 +1035,7 @@ class LeadCMSDataService {
     }
 
     try {
-      console.log('[API] Uploading media file...');
+      logger.verbose('[API] Uploading media file...');
 
       if (!this.baseURL) {
         throw new Error('LeadCMS URL is not configured.');
@@ -757,7 +1052,7 @@ class LeadCMSDataService {
         }
       );
 
-      console.log('[API] Media uploaded successfully');
+      logger.verbose('[API] Media uploaded successfully');
       return response.data;
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -783,7 +1078,7 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      console.log('[MOCK] Updating media file');
+      logger.verbose('[MOCK] Updating media file');
       await new Promise(resolve => setTimeout(resolve, 100));
 
       const scopeUid = formData.get('ScopeUid') as string;
@@ -807,7 +1102,7 @@ class LeadCMSDataService {
     }
 
     try {
-      console.log('[API] Updating media file...');
+      logger.verbose('[API] Updating media file...');
 
       if (!this.baseURL) {
         throw new Error('LeadCMS URL is not configured.');
@@ -823,7 +1118,7 @@ class LeadCMSDataService {
         }
       );
 
-      console.log('[API] Media updated successfully');
+      logger.verbose('[API] Media updated successfully');
       return response.data;
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -849,7 +1144,7 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      console.log(`[MOCK] Deleting media file: ${pathToFile}`);
+      logger.verbose(`[MOCK] Deleting media file: ${pathToFile}`);
       await new Promise(resolve => setTimeout(resolve, 80));
 
       // Parse path to extract scopeUid and name
@@ -870,7 +1165,7 @@ class LeadCMSDataService {
     }
 
     try {
-      console.log(`[API] Deleting media file: ${pathToFile}`);
+      logger.verbose(`[API] Deleting media file: ${pathToFile}`);
 
       if (!this.baseURL) {
         throw new Error('LeadCMS URL is not configured.');
@@ -883,7 +1178,7 @@ class LeadCMSDataService {
         }
       );
 
-      console.log('[API] Media deleted successfully');
+      logger.verbose('[API] Media deleted successfully');
     } catch (error: any) {
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
@@ -930,10 +1225,15 @@ class LeadCMSDataService {
       remoteContent: JSON.parse(JSON.stringify(scenario.remoteContent)),
       contentTypes: { ...scenario.contentTypes },
       remoteMedia: JSON.parse(JSON.stringify(scenario.remoteMedia)),
+      emailTemplates: JSON.parse(JSON.stringify(scenario.emailTemplates || [])),
+      emailGroups: JSON.parse(JSON.stringify(scenario.emailGroups || [])),
       scenario: scenario.name
     };
 
-    console.log(`[MOCK] Switched to scenario: ${scenario.name}`);
+    logger.verbose(`[MOCK] Switched to scenario: ${scenario.name}`);
+    if (!this.mockData) {
+      throw new Error('Mock data not initialized');
+    }
     return this.mockData;
   }
 
@@ -951,6 +1251,8 @@ class LeadCMSDataService {
       remoteContent: [...this.mockData.remoteContent],
       contentTypes: { ...this.mockData.contentTypes },
       remoteMedia: [...this.mockData.remoteMedia],
+      emailTemplates: [...this.mockData.emailTemplates],
+      emailGroups: [...this.mockData.emailGroups],
       scenario: this.currentScenario?.name || ''
     };
   }

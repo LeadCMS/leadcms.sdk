@@ -15,6 +15,7 @@ import {
 import { saveContentFile, transformRemoteToLocalFormat, type ContentTypeMap } from "../lib/content-transformation.js";
 import { threeWayMerge, threeWayMergeJson, isLocallyModified } from "../lib/content-merge.js";
 import { getConfig } from "../lib/config.js";
+import { logger } from "../lib/logger.js";
 
 // Type definitions
 interface SyncResponse {
@@ -56,7 +57,7 @@ interface MediaSyncResult {
 // Add axios request/response interceptors for debugging
 axios.interceptors.request.use(
   (config) => {
-    console.log(`[AXIOS REQUEST] ${config.method?.toUpperCase()} ${config.url}`);
+    logger.verbose(`[AXIOS REQUEST] ${config.method?.toUpperCase()} ${config.url}`);
 
     // Mask the Authorization header for security
     const maskedHeaders = { ...config.headers };
@@ -134,7 +135,7 @@ async function readSyncToken(): Promise<{ token: string | undefined; migrated: b
 
   const legacy = await readFileOrUndefined(LEGACY_SYNC_TOKEN_PATH);
   if (legacy) {
-    console.log(`[SYNC] Migrating content sync token from legacy location`);
+    logger.verbose(`[SYNC] Migrating content sync token from legacy location`);
     return { token: legacy, migrated: true };
   }
   return { token: undefined, migrated: false };
@@ -161,7 +162,7 @@ async function readMediaSyncToken(): Promise<{ token: string | undefined; migrat
 
   const legacy = await readFileOrUndefined(LEGACY_MEDIA_SYNC_TOKEN_PATH);
   if (legacy) {
-    console.log(`[SYNC] Migrating media sync token from legacy location`);
+    logger.verbose(`[SYNC] Migrating media sync token from legacy location`);
     return { token: legacy, migrated: true };
   }
   return { token: undefined, migrated: false };
@@ -180,8 +181,8 @@ async function cleanupLegacyMediaSyncToken(): Promise<void> {
 }
 
 async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> {
-  console.log(`[FETCH_CONTENT_SYNC] Starting with syncToken: ${syncToken || "NONE"}`);
-  console.log(`[FETCH_CONTENT_SYNC] Fetching public content (no authentication)`);
+  logger.verbose(`[FETCH_CONTENT_SYNC] Starting with syncToken: ${syncToken || "NONE"}`);
+  logger.verbose(`[FETCH_CONTENT_SYNC] Fetching public content (no authentication)`);
   let allItems: ContentItem[] = [];
   let allDeleted: number[] = [];
   let allBaseItems: Record<string, ContentItem> = {};
@@ -199,7 +200,7 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
       url.searchParams.set("includeBase", "true");
     }
 
-    console.log(`[FETCH_CONTENT_SYNC] Page ${page}, URL: ${url.toString()}`);
+    logger.verbose(`[FETCH_CONTENT_SYNC] Page ${page}, URL: ${url.toString()}`);
 
     try {
       // SECURITY: Never send API key for read operations
@@ -207,12 +208,12 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
       const res: AxiosResponse<SyncResponse> = await axios.get(url.toString());
 
       if (res.status === 204) {
-        console.log(`[FETCH_CONTENT_SYNC] Got 204 No Content - ending sync`);
+        logger.verbose(`[FETCH_CONTENT_SYNC] Got 204 No Content - ending sync`);
         break;
       }
 
       const data = res.data;
-      console.log(
+      logger.verbose(
         `[FETCH_CONTENT_SYNC] Page ${page} - Got ${data.items?.length || 0} items, ${data.deleted?.length || 0} deleted`
       );
 
@@ -225,15 +226,15 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
       // Collect base items for three-way merge support
       if (data.baseItems && typeof data.baseItems === 'object') {
         Object.assign(allBaseItems, data.baseItems);
-        console.log(`[FETCH_CONTENT_SYNC] Page ${page} - Got ${Object.keys(data.baseItems).length} base items for merge`);
+        logger.verbose(`[FETCH_CONTENT_SYNC] Page ${page} - Got ${Object.keys(data.baseItems).length} base items for merge`);
       }
 
       const newSyncToken = res.headers["x-next-sync-token"] || token;
-      console.log(`[FETCH_CONTENT_SYNC] Next sync token: ${newSyncToken}`);
+      logger.verbose(`[FETCH_CONTENT_SYNC] Next sync token: ${newSyncToken}`);
 
       if (!newSyncToken || newSyncToken === token) {
         nextSyncToken = newSyncToken || token;
-        console.log(`[FETCH_CONTENT_SYNC] No new sync token - ending sync`);
+        logger.verbose(`[FETCH_CONTENT_SYNC] No new sync token - ending sync`);
         break;
       }
 
@@ -246,7 +247,7 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
     }
   }
 
-  console.log(
+  logger.verbose(
     `[FETCH_CONTENT_SYNC] Completed - Total items: ${allItems.length}, deleted: ${allDeleted.length}, base items: ${Object.keys(allBaseItems).length}`
   );
   return {
@@ -258,8 +259,8 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
 }
 
 async function fetchMediaSync(syncToken?: string): Promise<MediaSyncResult> {
-  console.log(`[FETCH_MEDIA_SYNC] Starting with syncToken: ${syncToken || "NONE"}`);
-  console.log(`[FETCH_MEDIA_SYNC] Fetching public media (no authentication)`);
+  logger.verbose(`[FETCH_MEDIA_SYNC] Starting with syncToken: ${syncToken || "NONE"}`);
+  logger.verbose(`[FETCH_MEDIA_SYNC] Fetching public media (no authentication)`);
   let allItems: MediaItem[] = [];
   let allDeleted: MediaDeletedItem[] = [];
   let token = syncToken || "";
@@ -271,7 +272,7 @@ async function fetchMediaSync(syncToken?: string): Promise<MediaSyncResult> {
     url.searchParams.set("filter[limit]", "100");
     url.searchParams.set("syncToken", token);
 
-    console.log(`[FETCH_MEDIA_SYNC] Page ${page}, URL: ${url.toString()}`);
+    logger.verbose(`[FETCH_MEDIA_SYNC] Page ${page}, URL: ${url.toString()}`);
 
     try {
       // SECURITY: Never send API key for read operations
@@ -279,12 +280,12 @@ async function fetchMediaSync(syncToken?: string): Promise<MediaSyncResult> {
       const res: AxiosResponse<MediaSyncResponse> = await axios.get(url.toString());
 
       if (res.status === 204) {
-        console.log(`[FETCH_MEDIA_SYNC] Got 204 No Content - ending sync`);
+        logger.verbose(`[FETCH_MEDIA_SYNC] Got 204 No Content - ending sync`);
         break;
       }
 
       const data = res.data;
-      console.log(
+      logger.verbose(
         `[FETCH_MEDIA_SYNC] Page ${page} - Got ${data.items?.length || 0} items, ${data.deleted?.length || 0} deleted`
       );
 
@@ -295,11 +296,11 @@ async function fetchMediaSync(syncToken?: string): Promise<MediaSyncResult> {
       }
 
       const newSyncToken = res.headers["x-next-sync-token"] || token;
-      console.log(`[FETCH_MEDIA_SYNC] Next sync token: ${newSyncToken}`);
+      logger.verbose(`[FETCH_MEDIA_SYNC] Next sync token: ${newSyncToken}`);
 
       if (!newSyncToken || newSyncToken === token) {
         nextSyncToken = newSyncToken || token;
-        console.log(`[FETCH_MEDIA_SYNC] No new sync token - ending sync`);
+        logger.verbose(`[FETCH_MEDIA_SYNC] No new sync token - ending sync`);
         break;
       }
 
@@ -312,7 +313,7 @@ async function fetchMediaSync(syncToken?: string): Promise<MediaSyncResult> {
     }
   }
 
-  console.log(
+  logger.verbose(
     `[FETCH_MEDIA_SYNC] Completed - Total items: ${allItems.length}, deleted: ${allDeleted.length}`
   );
   return {
@@ -423,7 +424,7 @@ async function deleteContentFilesById(index: ContentIdIndex, idStr: string): Pro
   for (const filePath of paths) {
     try {
       await fs.unlink(filePath);
-      console.log(`Deleted: ${filePath}`);
+      logger.verbose(`Deleted: ${filePath}`);
     } catch (err: any) {
       if (err.code !== 'ENOENT') {
         console.warn(`Warning: Could not delete ${filePath}:`, err.message);
@@ -456,7 +457,7 @@ async function findAndDeleteContentFile(dir: string, idStr: string): Promise<voi
           const jsonRegex = new RegExp(`\\"id\\"\\s*:\\s*['\"]?${idStr}['\"]?\\s*(,|\\}|\\n|$)`);
           if (yamlRegex.test(content) || jsonRegex.test(content)) {
             await fs.unlink(fullPath);
-            console.log(`Deleted: ${fullPath}`);
+            logger.verbose(`Deleted: ${fullPath}`);
           }
         } catch { }
       }
@@ -470,32 +471,32 @@ async function findAndDeleteContentFile(dir: string, idStr: string): Promise<voi
 
 async function main(): Promise<void> {
   // Log environment configuration for debugging
-  console.log(`[ENV] LeadCMS URL: ${leadCMSUrl}`);
-  console.log(
+  logger.verbose(`[ENV] LeadCMS URL: ${leadCMSUrl}`);
+  logger.verbose(
     `[ENV] LeadCMS API Key: ${leadCMSApiKey ? `${leadCMSApiKey.substring(0, 8)}...` : "NOT_SET"}`
   );
-  console.log(`[ENV] Default Language: ${defaultLanguage}`);
-  console.log(`[ENV] Content Dir: ${CONTENT_DIR}`);
-  console.log(`[ENV] Media Dir: ${MEDIA_DIR}`);
+  logger.verbose(`[ENV] Default Language: ${defaultLanguage}`);
+  logger.verbose(`[ENV] Content Dir: ${CONTENT_DIR}`);
+  logger.verbose(`[ENV] Media Dir: ${MEDIA_DIR}`);
 
   // Check supported entities
-  console.log(`\n🔍 Checking CMS configuration...`);
+  logger.verbose(`\n🔍 Checking CMS configuration...`);
   const { content: contentSupported, media: mediaSupported } = await fetchCMSConfigForEntities();
 
   if (!contentSupported && !mediaSupported) {
-    console.log(`⏭️  Neither Content nor Media entities are supported by this LeadCMS instance - skipping sync`);
+    logger.verbose(`⏭️  Neither Content nor Media entities are supported by this LeadCMS instance - skipping sync`);
     return;
   }
 
   if (!contentSupported) {
-    console.log(`⏭️  Content entity not supported - skipping content sync`);
+    logger.verbose(`⏭️  Content entity not supported - skipping content sync`);
   }
 
   if (!mediaSupported) {
-    console.log(`⏭️  Media entity not supported - skipping media sync`);
+    logger.verbose(`⏭️  Media entity not supported - skipping media sync`);
   }
 
-  console.log(`✅ Proceeding with sync\n`);
+  logger.verbose(`✅ Proceeding with sync\n`);
 
   // Only create directories for supported entity types
   if (contentSupported) {
@@ -524,10 +525,10 @@ async function main(): Promise<void> {
   if (contentSupported) {
     try {
       if (lastSyncToken) {
-        console.log(`Syncing content from LeadCMS using sync token: ${lastSyncToken}`);
+        logger.verbose(`Syncing content from LeadCMS using sync token: ${lastSyncToken}`);
         ({ items, deleted, baseItems, nextSyncToken } = await fetchContentSync(lastSyncToken));
       } else {
-        console.log("No content sync token found. Doing full fetch from LeadCMS...");
+        logger.verbose("No content sync token found. Doing full fetch from LeadCMS...");
         ({ items, deleted, baseItems, nextSyncToken } = await fetchContentSync(undefined));
       }
     } catch (error: any) {
@@ -543,10 +544,10 @@ async function main(): Promise<void> {
   if (mediaSupported) {
     try {
       if (lastMediaSyncToken) {
-        console.log(`Syncing media from LeadCMS using sync token: ${lastMediaSyncToken}`);
+        logger.verbose(`Syncing media from LeadCMS using sync token: ${lastMediaSyncToken}`);
         ({ items: mediaItems, deleted: mediaDeleted, nextSyncToken: nextMediaSyncToken } = await fetchMediaSync(lastMediaSyncToken));
       } else {
-        console.log("No media sync token found. Doing full fetch from LeadCMS...");
+        logger.verbose("No media sync token found. Doing full fetch from LeadCMS...");
         ({ items: mediaItems, deleted: mediaDeleted, nextSyncToken: nextMediaSyncToken } = await fetchMediaSync(undefined));
       }
     } catch (error: any) {
@@ -559,8 +560,8 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log(`\x1b[32mFetched ${items.length} content items, ${deleted.length} deleted.\x1b[0m`);
-  console.log(`\x1b[32mFetched ${mediaItems.length} media items, ${mediaDeleted.length} deleted.\x1b[0m`);
+  logger.verbose(`Fetched ${items.length} content items, ${deleted.length} deleted.\x1b[0m`);
+  logger.verbose(`Fetched ${mediaItems.length} media items, ${mediaDeleted.length} deleted.\x1b[0m`);
 
   // Build an ID→filepath index once instead of walking the tree per item.
   // This turns O(items × files) disk reads into O(files + items).
@@ -674,7 +675,7 @@ async function main(): Promise<void> {
 
   // Handle media sync results
   if (mediaItems.length > 0) {
-    console.log(`\nProcessing media changes...`);
+    logger.verbose(`\nProcessing media changes...`);
 
     // Download new/updated media files
     let downloaded = 0;
@@ -684,7 +685,7 @@ async function main(): Promise<void> {
         const destPath = path.join(MEDIA_DIR, relPath);
         const didDownload = await downloadMediaFileDirect(mediaItem.location, destPath, leadCMSUrl || "", leadCMSApiKey || "");
         if (didDownload) {
-          console.log(`Downloaded: ${mediaItem.location} -> ${destPath}`);
+          logger.verbose(`Downloaded: ${mediaItem.location} -> ${destPath}`);
           downloaded++;
         }
       }
@@ -705,7 +706,7 @@ async function main(): Promise<void> {
       const fullPath = path.join(MEDIA_DIR, relPath);
       try {
         await fs.unlink(fullPath);
-        console.log(`Deleted media: ${fullPath}`);
+        logger.verbose(`Deleted media: ${fullPath}`);
         removedCount++;
       } catch (err: any) {
         if (err.code !== 'ENOENT') {
@@ -719,22 +720,22 @@ async function main(): Promise<void> {
   // Save new sync tokens
   if (nextSyncToken) {
     await writeSyncToken(nextSyncToken);
-    console.log(`Content sync token updated: ${nextSyncToken}`);
+    logger.verbose(`Content sync token updated: ${nextSyncToken}`);
   }
 
   if (nextMediaSyncToken) {
     await writeMediaSyncToken(nextMediaSyncToken);
-    console.log(`Media sync token updated: ${nextMediaSyncToken}`);
+    logger.verbose(`Media sync token updated: ${nextMediaSyncToken}`);
   }
 
   // Clean up legacy sync tokens after a successful pull
   if (contentTokenMigrated) {
     await cleanupLegacySyncToken();
-    console.log(`[SYNC] Removed legacy content sync token`);
+    logger.verbose(`[SYNC] Removed legacy content sync token`);
   }
   if (mediaTokenMigrated) {
     await cleanupLegacyMediaSyncToken();
-    console.log(`[SYNC] Removed legacy media sync token`);
+    logger.verbose(`[SYNC] Removed legacy media sync token`);
   }
 }
 

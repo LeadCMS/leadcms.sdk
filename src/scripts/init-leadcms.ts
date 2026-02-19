@@ -16,6 +16,7 @@ const DEFAULTS = {
   contentDir: '.leadcms/content',
   commentsDir: '.leadcms/comments',
   mediaDir: 'public/media',
+  emailTemplatesDir: '.leadcms/email-templates',
 };
 
 interface UserConfig {
@@ -25,6 +26,7 @@ interface UserConfig {
   contentDir: string;
   mediaDir: string;
   commentsDir: string;
+  emailTemplatesDir: string;
 }
 
 /**
@@ -135,7 +137,8 @@ function createConfigFile(config: UserConfig): void {
   const needsConfig =
     config.contentDir !== DEFAULTS.contentDir ||
     config.mediaDir !== DEFAULTS.mediaDir ||
-    config.commentsDir !== DEFAULTS.commentsDir;
+    config.commentsDir !== DEFAULTS.commentsDir ||
+    config.emailTemplatesDir !== DEFAULTS.emailTemplatesDir;
 
   if (!needsConfig) {
     console.log('ℹ️  Using default directories, no leadcms.config.json needed.');
@@ -154,6 +157,10 @@ function createConfigFile(config: UserConfig): void {
 
   if (config.commentsDir !== DEFAULTS.commentsDir) {
     configData.commentsDir = config.commentsDir;
+  }
+
+  if (config.emailTemplatesDir !== DEFAULTS.emailTemplatesDir) {
+    configData.emailTemplatesDir = config.emailTemplatesDir;
   }
 
   fs.writeFileSync(
@@ -211,6 +218,10 @@ function readExistingConfig(): Partial<UserConfig> {
       if (jsonConfig.commentsDir) {
         existingConfig.commentsDir = jsonConfig.commentsDir;
       }
+
+      if (jsonConfig.emailTemplatesDir) {
+        existingConfig.emailTemplatesDir = jsonConfig.emailTemplatesDir;
+      }
     } catch (error) {
       // Ignore parse errors, will use defaults
     }
@@ -264,6 +275,7 @@ export async function initLeadCMS(): Promise<void> {
     contentDir: existingConfig.contentDir || DEFAULTS.contentDir,
     mediaDir: existingConfig.mediaDir || DEFAULTS.mediaDir,
     commentsDir: existingConfig.commentsDir || DEFAULTS.commentsDir,
+    emailTemplatesDir: existingConfig.emailTemplatesDir || DEFAULTS.emailTemplatesDir,
   };
 
   // Step 1: Get LeadCMS URL
@@ -351,6 +363,7 @@ export async function initLeadCMS(): Promise<void> {
   let supportsContent = false;
   let supportsMedia = false;
   let supportsComments = false;
+  let supportsEmailTemplates = false;
 
   if (!cmsConfig) {
     console.log('\n⚠️  Could not fetch CMS configuration. Continuing with manual setup...\n');
@@ -362,7 +375,7 @@ export async function initLeadCMS(): Promise<void> {
     }
 
     // Default to all types when config is not available
-    supportsContent = supportsMedia = supportsComments = false;
+    supportsContent = supportsMedia = supportsComments = supportsEmailTemplates = false;
   } else {
     // Successfully fetched CMS config
     console.log('✅ Connected successfully!\n');
@@ -391,13 +404,15 @@ export async function initLeadCMS(): Promise<void> {
       supportsContent = entityNames.includes('content');
       supportsMedia = entityNames.includes('media');
       supportsComments = entityNames.includes('comment') || entityNames.includes('comments');
+      supportsEmailTemplates = entityNames.includes('emailtemplate') || entityNames.includes('emailtemplates');
 
       console.log('📦 Supported entity types:');
       if (supportsContent) console.log('   ✓ Content');
       if (supportsMedia) console.log('   ✓ Media');
       if (supportsComments) console.log('   ✓ Comments');
+      if (supportsEmailTemplates) console.log('   ✓ Email Templates');
 
-      if (!supportsContent && !supportsMedia && !supportsComments) {
+      if (!supportsContent && !supportsMedia && !supportsComments && !supportsEmailTemplates) {
         console.log('   ⚠️  No matching entity types found');
         console.log('\n💡 This LeadCMS instance does not support standard entity types.');
         console.log('   Configuration will be created without directory prompts.\n');
@@ -432,6 +447,13 @@ export async function initLeadCMS(): Promise<void> {
     const commentsDirInput = await question(`Comments directory [${config.commentsDir}]: `);
     if (commentsDirInput.trim()) {
       config.commentsDir = commentsDirInput.trim();
+    }
+  }
+
+  if (supportsEmailTemplates) {
+    const emailTemplatesDirInput = await question(`Email templates directory [${config.emailTemplatesDir}]: `);
+    if (emailTemplatesDirInput.trim()) {
+      config.emailTemplatesDir = emailTemplatesDirInput.trim();
     }
   }
 

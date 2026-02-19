@@ -18,6 +18,7 @@ import {
 } from "../lib/content-transformation.js";
 import { formatContentForAPI } from '../lib/content-api-formatting.js';
 import { colorConsole, statusColors, diffColors } from '../lib/console-colors.js';
+import { logger } from '../lib/logger.js';
 
 // Extended interfaces for local operations
 interface LocalContentItem extends BaseContentItem {
@@ -102,7 +103,7 @@ async function isLocaleDirectory(dirPath: string, parentDir: string): Promise<bo
  * Read and parse all local content files
  */
 async function readLocalContent(): Promise<LocalContentItem[]> {
-  console.log(`[LOCAL] Reading content from: ${CONTENT_DIR}`);
+  logger.verbose(`[LOCAL] Reading content from: ${CONTENT_DIR}`);
   const localContent: LocalContentItem[] = [];
 
   async function walkDirectory(dir: string, locale: string = defaultLanguage, baseContentDir: string = CONTENT_DIR): Promise<void> {
@@ -128,17 +129,17 @@ async function readLocalContent(): Promise<LocalContentItem[]> {
               localContent.push(content);
             }
           } catch (error: any) {
-            console.warn(`[LOCAL] Failed to parse ${fullPath}:`, error.message);
+            logger.verbose(`[LOCAL] Failed to parse ${fullPath}: ${error.message}`);
           }
         }
       }
     } catch (error: any) {
-      console.warn(`[LOCAL] Failed to read directory ${dir}:`, error.message);
+      logger.verbose(`[LOCAL] Failed to read directory ${dir}: ${error.message}`);
     }
   }
 
   await walkDirectory(CONTENT_DIR);
-  console.log(`[LOCAL] Found ${localContent.length} local content files`);
+  logger.verbose(`[LOCAL] Found ${localContent.length} local content files`);
   return localContent;
 }
 
@@ -182,7 +183,7 @@ async function parseContentFile(filePath: string, locale: string, baseContentDir
 
   // Warn if type is missing
   if (!metadata.type) {
-    console.warn(`[LOCAL] Warning: Content file "${relativePath}" is missing a "type" property. It will be displayed as "unknown".`);
+    logger.verbose(`[LOCAL] Warning: Content file "${relativePath}" is missing a "type" property. It will be displayed as "unknown".`);
   }
 
   return {
@@ -217,11 +218,11 @@ async function fetchRemoteContent(): Promise<RemoteContentItem[]> {
 
   // Ensure we have an array
   if (!Array.isArray(allItems)) {
-    console.warn(`[${leadCMSDataService.isMockMode() ? 'MOCK' : 'REMOTE'}] Retrieved invalid data (not an array):`, typeof allItems);
+    logger.verbose(`[${leadCMSDataService.isMockMode() ? 'MOCK' : 'REMOTE'}] Retrieved invalid data (not an array): ${typeof allItems}`);
     return [];
   }
 
-  console.log(`[${leadCMSDataService.isMockMode() ? 'MOCK' : 'REMOTE'}] Retrieved ${allItems.length} content items`);
+  logger.verbose(`[${leadCMSDataService.isMockMode() ? 'MOCK' : 'REMOTE'}] Retrieved ${allItems.length} content items`);
 
   return allItems.map(item => ({ ...item, isLocal: false })) as RemoteContentItem[];
 }
@@ -247,7 +248,7 @@ async function hasActualContentChanges(local: LocalContentItem, remote: RemoteCo
 
     return hasFileContentChanges;
   } catch (error: any) {
-    console.warn(`[COMPARE] Failed to compare content for ${local.slug}:`, error.message);
+    logger.verbose(`[COMPARE] Failed to compare content for ${local.slug}: ${error.message}`);
     // Fallback to true to err on the side of showing changes
     return true;
   }
@@ -683,7 +684,7 @@ async function displayDetailedDiff(operation: MatchOperation, operationType: str
       colorConsole.log(summaryText);
     }
   } catch (error: any) {
-    console.warn(`[DIFF] Failed to generate detailed diff for ${local.slug}:`, error.message);
+    logger.verbose(`[DIFF] Failed to generate detailed diff for ${local.slug}: ${error.message}`);
     console.log('   Unable to show content comparison');
   }
 
@@ -961,7 +962,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     const actionDescription = statusOnly ? 'status check' : 'push';
     const targetDescription = targetId ? `ID ${targetId}` : targetSlug ? `slug "${targetSlug}"` : 'all content';
 
-    console.log(`[PUSH] Starting ${actionDescription} for ${targetDescription}...`);
+    logger.verbose(`[PUSH] Starting ${actionDescription} for ${targetDescription}...`);
 
     // Check for API key if not in status-only mode
     if (!statusOnly && !dryRun) {
@@ -1005,11 +1006,11 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
         return;
       }
 
-      console.log(`[LOCAL] Found ${filteredLocalContent.length} matching local file(s)`);
+      logger.verbose(`[LOCAL] Found ${filteredLocalContent.length} matching local file(s)`);
     } else {
       // Get local content types and validate them
       const localTypes = getLocalContentTypes(localContent);
-      console.log(`[LOCAL] Found content types: ${Array.from(localTypes).join(', ')}`);
+      logger.verbose(`[LOCAL] Found content types: ${Array.from(localTypes).join(', ')}`);
       await validateContentTypes(localTypes, remoteTypeMap, localContent, dryRun);
     }
 
@@ -1253,7 +1254,7 @@ async function executeIndividualOperations(operations: ContentOperations, option
 
   // If any updates were successful, automatically pull latest changes to sync local store
   if (successful > 0) {
-    console.log(`\n🔄 Syncing latest changes from LeadCMS to local store...`);
+    logger.info(`\n🔄 Syncing latest changes from LeadCMS to local store...`);
     try {
       const { fetchLeadCMSContent } = await import('./fetch-leadcms-content.js');
       await fetchLeadCMSContent();
@@ -1328,6 +1329,7 @@ export { filterContentOperations };
 export { analyzeContentTypeFromFiles };
 export { isYes };
 export { normalizeFormat };
+export { fetchRemoteContent };
 // Re-export formatContentForAPI from utility module for testing
 export { formatContentForAPI } from '../lib/content-api-formatting.js';
 // Re-export the new comparison function for consistency
@@ -1336,5 +1338,40 @@ export { transformRemoteForComparison } from "../lib/content-transformation.js";
 // Note: CLI execution moved to src/cli/bin/push.ts
 // This file now only exports the function for programmatic use
 
+export interface ContentStatusResult {
+  operations: ContentOperations;
+  totalLocal: number;
+  totalRemote: number;
+}
+
+/**
+ * Get content status data without printing anything.
+ * Used by the unified status-all renderer.
+ */
+export async function getContentStatusData(options: { showDelete?: boolean } = {}): Promise<ContentStatusResult> {
+  const localContent = await readLocalContent();
+
+  if (localContent.length === 0) {
+    return {
+      operations: { create: [], update: [], rename: [], typeChange: [], conflict: [], delete: [] },
+      totalLocal: 0,
+      totalRemote: 0,
+    };
+  }
+
+  const remoteTypes = await leadCMSDataService.getContentTypes();
+  const remoteTypeMap: Record<string, string> = {};
+  remoteTypes.forEach(type => { remoteTypeMap[type.uid] = type.format; });
+
+  const remoteContent = await fetchRemoteContent();
+  const operations = await matchContent(localContent, remoteContent, remoteTypeMap, options.showDelete || false);
+
+  return {
+    operations,
+    totalLocal: localContent.length,
+    totalRemote: remoteContent.length,
+  };
+}
+
 // Export types
-export type { LocalContentItem, RemoteContentItem, ContentOperations, PushOptions };
+export type { LocalContentItem, RemoteContentItem, ContentOperations, MatchOperation, PushOptions };

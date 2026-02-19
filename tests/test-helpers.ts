@@ -36,6 +36,7 @@ export function createTestConfig(overrides: Record<string, any> = {}) {
     contentDir: '/tmp/test-content',
     mediaDir: '/tmp/test-media',
     commentsDir: '/tmp/test-comments',
+    emailTemplatesDir: '/tmp/test-email-templates',
     ...overrides,
   };
 }
@@ -178,6 +179,7 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
     contentDir,
     mediaDir,
     commentsDir,
+    emailTemplatesDir: path.join(tmpRoot, 'email-templates'),
     ...configOverrides,
   });
 

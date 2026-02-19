@@ -216,6 +216,7 @@ LEADCMS_API_KEY=your-api-key
 LEADCMS_DEFAULT_LANGUAGE=en
 LEADCMS_CONTENT_DIR=.leadcms/content
 LEADCMS_MEDIA_DIR=public/media
+LEADCMS_EMAIL_TEMPLATES_DIR=.leadcms/email-templates
 LEADCMS_ENABLE_DRAFTS=true
 
 # Next.js users can also use:
@@ -238,7 +239,9 @@ npx leadcms init
 {
   "defaultLanguage": "en",
   "contentDir": ".leadcms/content",
+  "commentsDir": ".leadcms/comments",
   "mediaDir": "public/media",
+  "emailTemplatesDir": ".leadcms/email-templates",
   "enableDrafts": false
 }
 ```

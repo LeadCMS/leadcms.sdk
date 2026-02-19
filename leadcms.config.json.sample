@@ -1,6 +1,8 @@
 {
   "defaultLanguage": "en",
   "contentDir": ".leadcms/content",
+  "commentsDir": ".leadcms/comments",
   "mediaDir": "public/media",
+  "emailTemplatesDir": ".leadcms/email-templates",
   "enableDrafts": false
 }

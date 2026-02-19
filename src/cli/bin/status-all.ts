@@ -1,63 +1,314 @@
 #!/usr/bin/env node
 /**
  * LeadCMS Status All CLI Entry Point
- * Shows status for both content and media
+ * Unified status view for content, media, and email templates
  */
 
 import 'dotenv/config';
-import { pushLeadCMSContent } from '../../scripts/push-leadcms-content.js';
+import { getContentStatusData } from '../../scripts/push-leadcms-content.js';
 import { statusMedia } from '../../scripts/push-media.js';
+import { buildEmailTemplateStatus, getRemoteGroupLabel } from '../../scripts/push-email-templates.js';
+import { initVerboseFromArgs } from '../../lib/logger.js';
+import { colorConsole, statusColors } from '../../lib/console-colors.js';
+import { defaultLanguage } from '../../scripts/leadcms-helpers.js';
+import { startSpinner } from '../../lib/spinner.js';
+
+import type { ContentOperations, ContentStatusResult, MatchOperation } from '../../scripts/push-leadcms-content.js';
+import type { MediaStatusResult } from '../../scripts/push-media.js';
+import type { EmailTemplateOperation, EmailTemplateStatusResult } from '../../scripts/push-email-templates.js';
 
 const args = process.argv.slice(2);
+initVerboseFromArgs(args);
 
-// Parse content-specific flags
-let targetId: string | undefined;
-let targetSlug: string | undefined;
-let showDetailedPreview = false;
-
-const idIndex = args.findIndex(arg => arg === '--id');
-if (idIndex !== -1 && args[idIndex + 1]) {
-  targetId = args[idIndex + 1];
-}
-
-const slugIndex = args.findIndex(arg => arg === '--slug');
-if (slugIndex !== -1 && args[slugIndex + 1]) {
-  targetSlug = args[slugIndex + 1];
-}
-
-if (args.includes('--preview')) {
-  showDetailedPreview = true;
-}
-
-// Check for --delete flag
+// Parse flags
 const showDelete = args.includes('--delete');
-
-// Parse media-specific flags
 let scopeUid: string | undefined;
 const scopeIndex = args.findIndex(arg => arg === '--scope' || arg === '-s');
 if (scopeIndex !== -1 && args[scopeIndex + 1]) {
   scopeUid = args[scopeIndex + 1];
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function sortByLocaleAndSlug<T>(ops: T[], getLocale: (op: T) => string, getSlug: (op: T) => string): T[] {
+  return [...ops].sort((a, b) => {
+    const la = getLocale(a), lb = getLocale(b);
+    if (la !== lb) return la.localeCompare(lb);
+    return getSlug(a).localeCompare(getSlug(b));
+  });
+}
+
+// ── Content rendering ────────────────────────────────────────────────────────
+
+function renderContentLine(op: MatchOperation, label: string, colorFn: (s: string) => string): void {
+  const typeLabel = (op.local?.type || op.remote?.type || 'unknown').padEnd(12);
+  const localeLabel = `[${op.local?.locale || op.remote?.language || 'unknown'}]`.padEnd(6);
+  const nameLabel = op.local?.slug || op.remote?.slug || 'unknown';
+  const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
+  colorConsole.log(`        ${colorFn(label)}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`);
+}
+
+function renderContentSection(ops: ContentOperations): number {
+  const creates = sortByLocaleAndSlug(ops.create, o => o.local.locale, o => o.local.slug);
+  const updates = sortByLocaleAndSlug(ops.update, o => o.local.locale, o => o.local.slug);
+  const renames = sortByLocaleAndSlug(ops.rename, o => o.local.locale, o => o.local.slug);
+  const typeChanges = sortByLocaleAndSlug(ops.typeChange, o => o.local.locale, o => o.local.slug);
+  const conflicts = sortByLocaleAndSlug(ops.conflict, o => o.local.locale, o => o.local.slug);
+  const deletes = showDelete ? sortByLocaleAndSlug(ops.delete, o => o.remote?.language || '', o => o.remote?.slug || '') : [];
+
+  const changeCount = creates.length + updates.length + renames.length + typeChanges.length + conflicts.length + deletes.length;
+
+  for (const op of creates) renderContentLine(op, 'new file: ', statusColors.created);
+  for (const op of updates) renderContentLine(op, 'modified: ', statusColors.modified);
+  for (const op of renames) {
+    const typeLabel = (op.local.type || 'unknown').padEnd(12);
+    const localeLabel = `[${op.local.locale || 'unknown'}]`.padEnd(6);
+    const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
+    colorConsole.log(`        ${statusColors.renamed('renamed:  ')}   ${typeLabel} ${localeLabel} ${colorConsole.gray(op.oldSlug || 'unknown')} -> ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`);
+  }
+  for (const op of typeChanges) {
+    const typeLabel = (op.local.type || 'unknown').padEnd(12);
+    const localeLabel = `[${op.local.locale || 'unknown'}]`.padEnd(6);
+    const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
+    const typeChangeLabel = `(${colorConsole.gray(op.oldType || 'unknown')} -> ${colorConsole.highlight(op.newType || 'unknown')})`;
+    colorConsole.log(`        ${statusColors.typeChange('type chg: ')}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${typeChangeLabel} ${colorConsole.gray(idLabel)}`);
+  }
+  for (const op of conflicts) {
+    renderContentLine(op, 'conflict: ', statusColors.conflict);
+    colorConsole.log(`                    ${colorConsole.gray(op.reason || 'Unknown conflict')}`);
+  }
+  for (const op of deletes) renderContentLine(op, 'deleted:  ', statusColors.conflict);
+
+  return changeCount;
+}
+
+// ── Media rendering ──────────────────────────────────────────────────────────
+
+function renderMediaSection(result: MediaStatusResult): number {
+  const creates = result.operations.filter(op => op.type === 'create');
+  const updates = result.operations.filter(op => op.type === 'update');
+  const deletes = showDelete ? result.operations.filter(op => op.type === 'delete') : [];
+
+  const changeCount = creates.length + updates.length + deletes.length;
+
+  for (const op of creates) {
+    const sizeKB = (op.local!.size / 1024).toFixed(2);
+    colorConsole.log(`        ${statusColors.created('new file: ')}   ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)} ${colorConsole.gray(`(${sizeKB}KB)`)}`);
+  }
+  for (const op of updates) {
+    const sizeKB = (op.local!.size / 1024).toFixed(2);
+    colorConsole.log(`        ${statusColors.modified('modified: ')}   ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)} ${colorConsole.gray(`(${sizeKB}KB)`)}`);
+    if (op.reason) {
+      colorConsole.log(`                    ${colorConsole.gray(op.reason)}`);
+    }
+  }
+  for (const op of deletes) {
+    colorConsole.log(`        ${statusColors.conflict('deleted:  ')}   ${op.remote!.scopeUid}/${colorConsole.highlight(op.remote!.name)}`);
+  }
+
+  return changeCount;
+}
+
+// ── Email template rendering ─────────────────────────────────────────────────
+
+function renderEmailTemplateSection(operations: EmailTemplateOperation[]): number {
+  const creates = operations.filter(op => op.type === 'create');
+  const updates = operations.filter(op => op.type === 'update');
+  const conflicts = operations.filter(op => op.type === 'conflict');
+  const deletes = showDelete ? operations.filter(op => op.type === 'delete') : [];
+
+  const changeCount = creates.length + updates.length + conflicts.length + deletes.length;
+
+  for (const op of creates) {
+    const groupLabel = (op.local?.groupFolder || 'ungrouped').padEnd(12);
+    const localeLabel = `[${op.local?.locale || defaultLanguage}]`.padEnd(6);
+    const nameLabel = op.local?.metadata?.name || 'unknown';
+    colorConsole.log(`        ${statusColors.created('new file: ')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)}`);
+  }
+  for (const op of updates) {
+    const groupLabel = (op.local?.groupFolder || 'ungrouped').padEnd(12);
+    const localeLabel = `[${op.local?.locale || defaultLanguage}]`.padEnd(6);
+    const nameLabel = op.local?.metadata?.name || op.remote?.name || 'unknown';
+    const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
+    colorConsole.log(`        ${statusColors.modified('modified: ')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`);
+  }
+  for (const op of conflicts) {
+    const groupLabel = (op.local?.groupFolder || 'ungrouped').padEnd(12);
+    const localeLabel = `[${op.local?.locale || op.remote?.language || defaultLanguage}]`.padEnd(6);
+    const nameLabel = op.local?.metadata?.name || op.remote?.name || 'unknown';
+    const reason = op.reason ? `(${op.reason})` : '';
+    colorConsole.log(`        ${statusColors.conflict('conflict: ')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(reason)}`);
+  }
+  for (const op of deletes) {
+    const groupLabel = getRemoteGroupLabel(op.remote || {}).padEnd(12);
+    const localeLabel = `[${op.remote?.language || defaultLanguage}]`.padEnd(6);
+    const nameLabel = op.remote?.name || 'unknown';
+    const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
+    colorConsole.log(`        ${statusColors.conflict('deleted:  ')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`);
+  }
+
+  return changeCount;
+}
+
+// ── Summary helper ───────────────────────────────────────────────────────────
+
+function renderSummaryLine(label: string, counts: { creates: number; updates: number; renames?: number; typeChanges?: number; conflicts: number; deletes: number; skips?: number }): string {
+  const parts: string[] = [];
+  if (counts.creates > 0) parts.push(`${counts.creates} new`);
+  if (counts.updates > 0) parts.push(`${counts.updates} modified`);
+  if (counts.renames && counts.renames > 0) parts.push(`${counts.renames} renamed`);
+  if (counts.typeChanges && counts.typeChanges > 0) parts.push(`${counts.typeChanges} type changed`);
+  if (counts.conflicts > 0) parts.push(`${counts.conflicts} conflict${counts.conflicts > 1 ? 's' : ''}`);
+  if (counts.deletes > 0) parts.push(`${counts.deletes} to delete`);
+  if (counts.skips && counts.skips > 0) parts.push(`${counts.skips} up to date`);
+
+  if (parts.length === 0) return `   ${label} up to date`;
+  return `   ${label} ${parts.join(', ')}`;
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────────
+
 async function statusAll() {
   try {
-    console.log('📊 Checking status...\n');
+    // Show spinner while fetching data from all sources
+    const spinner = startSpinner('Fetching status from LeadCMS…');
 
-    // Check content status
-    console.log('📝 Content Status:');
+    let contentResult: ContentStatusResult | null = null;
+    let mediaResult: MediaStatusResult | null = null;
+    let emailResult: EmailTemplateStatusResult | null = null;
+
+    try {
+      [contentResult, mediaResult, emailResult] = await Promise.all([
+        getContentStatusData({ showDelete }).catch((err: any) => {
+          spinner.update('Fetching status… (content failed)');
+          return null;
+        }),
+        statusMedia({ scopeUid, showDelete, silent: true }).catch((err: any) => {
+          spinner.update('Fetching status… (media failed)');
+          return null;
+        }),
+        buildEmailTemplateStatus({ showDelete }).catch((err: any) => {
+          spinner.update('Fetching status… (email templates failed)');
+          return null;
+        }),
+      ]);
+      spinner.stop();
+    } catch (err) {
+      spinner.fail('Failed to fetch status');
+      throw err;
+    }
+
+    colorConsole.important('\n📊 LeadCMS Status');
     console.log('─'.repeat(80));
-    await pushLeadCMSContent({
-      statusOnly: true,
-      targetId,
-      targetSlug,
-      showDetailedPreview,
-      showDelete
-    });
 
-    console.log('\n📷 Media Status:');
+    const contentOps = contentResult?.operations ?? null;
+    const emailOps = emailResult?.operations ?? null;
+
+    // Count changes per section
+    const contentChanges = contentOps
+      ? contentOps.create.length + contentOps.update.length + contentOps.rename.length +
+      contentOps.typeChange.length + contentOps.conflict.length +
+      (showDelete ? contentOps.delete.length : 0)
+      : 0;
+
+    const mediaChanges = mediaResult
+      ? mediaResult.summary.creates + mediaResult.summary.updates +
+      (showDelete ? mediaResult.summary.deletes : 0)
+      : 0;
+
+    const emailChanges = emailOps
+      ? emailOps.filter(op => showDelete ? true : op.type !== 'delete').length
+      : 0;
+
+    // Count up-to-date items per section
+    const contentSkips = contentResult
+      ? contentResult.totalLocal - contentChanges
+      : 0;
+
+    const mediaSkips = mediaResult
+      ? mediaResult.summary.skips
+      : 0;
+
+    const emailSkips = emailResult
+      ? emailResult.totalLocal - emailChanges
+      : 0;
+
+    const totalChanges = contentChanges + mediaChanges + emailChanges;
+
+    if (totalChanges === 0) {
+      colorConsole.success('\n✅ Everything is in sync!\n');
+
+      if (contentResult) console.log(`   📝 Content:          ${contentSkips > 0 ? `${contentSkips} item(s) ` : ''}up to date`);
+      if (mediaResult) console.log(`   📷 Media:            ${mediaSkips > 0 ? `${mediaSkips} file(s) ` : ''}up to date`);
+      if (emailResult) console.log(`   📧 Email Templates:  ${emailSkips > 0 ? `${emailSkips} item(s) ` : ''}up to date`);
+      console.log('');
+      process.exit(0);
+    }
+
+    console.log('');
+
+    // ── Content section ──
+    if (contentOps && contentChanges > 0) {
+      colorConsole.important(`  📝 Content (${contentChanges} change${contentChanges !== 1 ? 's' : ''}):`);
+      renderContentSection(contentOps);
+      console.log('');
+    }
+
+    // ── Media section ──
+    if (mediaResult && mediaChanges > 0) {
+      colorConsole.important(`  📷 Media (${mediaChanges} change${mediaChanges !== 1 ? 's' : ''}):`);
+      renderMediaSection(mediaResult);
+      console.log('');
+    }
+
+    // ── Email Templates section ──
+    if (emailOps && emailChanges > 0) {
+      colorConsole.important(`  📧 Email Templates (${emailChanges} change${emailChanges !== 1 ? 's' : ''}):`);
+      renderEmailTemplateSection(emailOps);
+      console.log('');
+    }
+
+    // ── Summary ──
     console.log('─'.repeat(80));
-    await statusMedia({ scopeUid, showDelete });
 
+    if (contentOps) {
+      console.log(renderSummaryLine('📝 Content:         ', {
+        creates: contentOps.create.length,
+        updates: contentOps.update.length,
+        renames: contentOps.rename.length,
+        typeChanges: contentOps.typeChange.length,
+        conflicts: contentOps.conflict.length,
+        deletes: showDelete ? contentOps.delete.length : 0,
+        skips: contentSkips,
+      }));
+    }
+
+    if (mediaResult) {
+      console.log(renderSummaryLine('📷 Media:           ', {
+        creates: mediaResult.summary.creates,
+        updates: mediaResult.summary.updates,
+        conflicts: 0,
+        deletes: showDelete ? mediaResult.summary.deletes : 0,
+        skips: mediaSkips,
+      }));
+    }
+
+    if (emailOps) {
+      const counts = emailOps.reduce(
+        (acc, op) => { acc[op.type] = (acc[op.type] || 0) + 1; return acc; },
+        {} as Record<string, number>,
+      );
+      console.log(renderSummaryLine('📧 Email Templates: ', {
+        creates: counts.create || 0,
+        updates: counts.update || 0,
+        conflicts: counts.conflict || 0,
+        deletes: showDelete ? (counts.delete || 0) : 0,
+        skips: emailSkips,
+      }));
+    }
+
+    console.log('');
+    process.exit(0);
   } catch (error: any) {
     console.error('\n❌ Status check failed:', error.message);
     process.exit(1);

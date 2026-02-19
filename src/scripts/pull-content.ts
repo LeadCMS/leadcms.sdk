@@ -12,6 +12,7 @@ import { leadCMSDataService } from "../lib/data-service.js";
 import { saveContentFile } from "../lib/content-transformation.js";
 import { CONTENT_DIR, fetchContentTypes } from "./leadcms-helpers.js";
 import { resetContentState } from "./pull-all.js";
+import { logger } from "../lib/logger.js";
 
 interface PullContentOptions {
   targetId?: string;
@@ -85,7 +86,7 @@ async function main(options: PullContentOptions = {}): Promise<void> {
 
   // Check if content is supported
   try {
-    console.log(`🔍 Checking CMS configuration...`);
+    logger.verbose(`🔍 Checking CMS configuration...`);
     const configUrl = new URL('/api/config', leadCMSUrl).toString();
     const response = await axios.get(configUrl, { timeout: 10000 });
 
@@ -97,7 +98,7 @@ async function main(options: PullContentOptions = {}): Promise<void> {
         return;
       }
 
-      console.log(`✅ Content entity supported\n`);
+      logger.verbose(`✅ Content entity supported\n`);
     }
   } catch (error: any) {
     console.warn(`⚠️  Could not fetch CMS config: ${error.message}`);

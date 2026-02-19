@@ -9,8 +9,9 @@ import fs from "fs/promises";
 import path from "path";
 import axios from "axios";
 import { leadCMSUrl } from "./leadcms-helpers.js";
-import { setCMSConfig, isContentSupported, isMediaSupported, isCommentsSupported } from "../lib/cms-config-types.js";
+import { setCMSConfig, isContentSupported, isMediaSupported, isCommentsSupported, isEmailTemplatesSupported } from "../lib/cms-config-types.js";
 import { getConfig } from "../lib/config.js";
+import { logger } from "../lib/logger.js";
 
 interface PullAllOptions {
   targetId?: string;
@@ -26,9 +27,10 @@ async function fetchAndCacheCMSConfig(): Promise<{
   content: boolean;
   media: boolean;
   comments: boolean;
+  emailTemplates: boolean;
 }> {
   try {
-    console.log(`🔍 Checking CMS configuration...`);
+    logger.verbose(`🔍 Checking CMS configuration...`);
     const configUrl = new URL('/api/config', leadCMSUrl).toString();
     const response = await axios.get(configUrl, { timeout: 10000 });
 
@@ -38,13 +40,15 @@ async function fetchAndCacheCMSConfig(): Promise<{
         content: isContentSupported(),
         media: isMediaSupported(),
         comments: isCommentsSupported(),
+        emailTemplates: isEmailTemplatesSupported(),
       };
 
-      console.log(`✅ CMS Configuration received`);
-      console.log(`   - Content: ${support.content ? '✓' : '✗'}`);
-      console.log(`   - Media: ${support.media ? '✓' : '✗'}`);
-      console.log(`   - Comments: ${support.comments ? '✓' : '✗'}`);
-      console.log('');
+      logger.verbose(`✅ CMS Configuration received`);
+      logger.verbose(`   - Content: ${support.content ? '✓' : '✗'}`);
+      logger.verbose(`   - Media: ${support.media ? '✓' : '✗'}`);
+      logger.verbose(`   - Comments: ${support.comments ? '✓' : '✗'}`);
+      logger.verbose(`   - Email Templates: ${support.emailTemplates ? '✓' : '✗'}`);
+      logger.verbose('');
 
       return support;
     }
@@ -53,7 +57,7 @@ async function fetchAndCacheCMSConfig(): Promise<{
     console.warn(`⚠️  Assuming all entities are supported (backward compatibility)\n`);
   }
 
-  return { content: false, media: false, comments: false };
+  return { content: false, media: false, comments: false, emailTemplates: false };
 }
 
 /**
@@ -66,13 +70,13 @@ async function resetContentState(): Promise<void> {
 
   try {
     await fs.rm(contentDir, { recursive: true, force: true });
-    console.log(`   ✓ Cleared content directory: ${contentDir}`);
+    logger.verbose(`   ✓ Cleared content directory: ${contentDir}`);
   } catch { /* directory may not exist */ }
 
   // Clean up legacy content sync token (SDK ≤ 3.2)
   try {
     await fs.unlink(path.join(path.dirname(contentDir), 'sync-token.txt'));
-    console.log(`   ✓ Removed legacy content sync token`);
+    logger.verbose(`   ✓ Removed legacy content sync token`);
   } catch { /* not found — ok */ }
 }
 
@@ -87,13 +91,13 @@ async function resetMediaState(): Promise<void> {
 
   try {
     await fs.rm(mediaDir, { recursive: true, force: true });
-    console.log(`   ✓ Cleared media directory: ${mediaDir}`);
+    logger.verbose(`   ✓ Cleared media directory: ${mediaDir}`);
   } catch { /* directory may not exist */ }
 
   // Clean up legacy media sync token (SDK ≤ 3.2, stored next to content dir)
   try {
     await fs.unlink(path.join(path.dirname(contentDir), 'media-sync-token.txt'));
-    console.log(`   ✓ Removed legacy media sync token`);
+    logger.verbose(`   ✓ Removed legacy media sync token`);
   } catch { /* not found — ok */ }
 }
 
@@ -107,14 +111,27 @@ async function resetCommentsState(): Promise<void> {
 
   try {
     await fs.rm(commentsDir, { recursive: true, force: true });
-    console.log(`   ✓ Cleared comments directory: ${commentsDir}`);
+    logger.verbose(`   ✓ Cleared comments directory: ${commentsDir}`);
   } catch { /* directory may not exist */ }
 
   // Clean up legacy comment sync token (SDK ≤ 3.2)
   try {
     await fs.unlink(path.join(path.dirname(commentsDir), 'comment-sync-token.txt'));
-    console.log(`   ✓ Removed legacy comment sync token`);
+    logger.verbose(`   ✓ Removed legacy comment sync token`);
   } catch { /* not found — ok */ }
+}
+
+/**
+ * Reset email templates directory and its sync tokens.
+ */
+async function resetEmailTemplatesState(): Promise<void> {
+  const config = getConfig();
+  const emailTemplatesDir = path.resolve(config.emailTemplatesDir);
+
+  try {
+    await fs.rm(emailTemplatesDir, { recursive: true, force: true });
+    logger.verbose(`   ✓ Cleared email templates directory: ${emailTemplatesDir}`);
+  } catch { /* directory may not exist */ }
 }
 
 /**
@@ -127,6 +144,7 @@ async function resetLocalState(): Promise<void> {
   await resetContentState();
   await resetMediaState();
   await resetCommentsState();
+  await resetEmailTemplatesState();
 
   console.log(`   ✅ Local state reset complete\n`);
 }
@@ -154,9 +172,9 @@ async function main(options: PullAllOptions = {}): Promise<void> {
   }
 
   // Check which entities are supported
-  const { content, media, comments } = await fetchAndCacheCMSConfig();
+  const { content, media, comments, emailTemplates } = await fetchAndCacheCMSConfig();
 
-  if (!content && !media && !comments) {
+  if (!content && !media && !comments && !emailTemplates) {
     console.log(`⏭️  No supported entities found - nothing to sync`);
     return;
   }
@@ -176,6 +194,12 @@ async function main(options: PullAllOptions = {}): Promise<void> {
     fetchPromises.push(fetchLeadCMSComments());
   }
 
+  if (emailTemplates) {
+    console.log(`📧 Fetching email templates...`);
+    const { fetchLeadCMSEmailTemplates } = await import('./fetch-leadcms-email-templates.js');
+    fetchPromises.push(fetchLeadCMSEmailTemplates());
+  }
+
   // Wait for all fetches to complete
   try {
     await Promise.all(fetchPromises);
@@ -190,7 +214,7 @@ async function main(options: PullAllOptions = {}): Promise<void> {
 export { main as pullAll };
 
 // Export reset functions for individual pull commands and testing
-export { resetLocalState, resetContentState, resetMediaState, resetCommentsState };
+export { resetLocalState, resetContentState, resetMediaState, resetCommentsState, resetEmailTemplatesState };
 
 // Note: CLI execution moved to src/cli/bin/pull-all.ts
 // This file now only exports the function for programmatic use

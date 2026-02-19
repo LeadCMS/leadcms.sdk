@@ -4,5 +4,7 @@
  */
 
 import { startSSEWatcher } from '../../scripts/sse-watcher.js';
+import { initVerboseFromArgs } from '../../lib/logger.js';
 
+initVerboseFromArgs();
 startSSEWatcher();
