@@ -37,6 +37,7 @@ export interface MergeResult {
 const SERVER_CONTROLLED_FIELDS = new Set([
   'updatedAt',
   'createdAt',
+  'publishedAt',
 ]);
 
 /**
@@ -46,7 +47,7 @@ const SERVER_CONTROLLED_FIELDS = new Set([
  *   createdAt: "2026-01-01T00:00:00Z"
  *   updatedAt: 2026-02-01T00:00:00Z
  */
-const SERVER_CONTROLLED_YAML_LINE = /^\s*(updatedAt|createdAt)\s*:/;
+const SERVER_CONTROLLED_YAML_LINE = /^\s*(updatedAt|createdAt|publishedAt)\s*:/;
 
 /**
  * Perform a three-way merge between base, local, and remote content.
@@ -54,7 +55,7 @@ const SERVER_CONTROLLED_YAML_LINE = /^\s*(updatedAt|createdAt)\s*:/;
  * This works like git merge:
  * - Changes that don't overlap are merged automatically
  * - Changes that modify the same lines produce conflict markers
- * - Server-controlled fields (updatedAt, createdAt) in YAML frontmatter
+ * - Server-controlled fields (updatedAt, createdAt, publishedAt) in YAML frontmatter
  *   are auto-resolved to the remote value, never producing conflicts
  *
  * For JSON content, prefer threeWayMergeJson() which does structural merging
@@ -115,13 +116,18 @@ export function threeWayMerge(base: string, local: string, remote: string): Merg
  * Attempt to auto-resolve server-controlled fields within a conflict region.
  *
  * For each line in the conflict, if it's a server-controlled YAML field
- * (updatedAt, createdAt), take the remote version. Non-server-controlled
- * lines remain as conflicts.
+ * (updatedAt, createdAt, publishedAt), replace the local version with the
+ * remote version **in-place**, preserving the original field ordering.
+ *
+ * This avoids extracting server-controlled lines and placing them before
+ * the conflict markers, which would shift field positions and cause
+ * duplication on subsequent merges when diff3 can't reconcile the reordering.
  *
  * Returns:
- * - resolvedLines: lines that were auto-resolved (server-controlled)
+ * - resolvedLines: the final merged lines if fully resolved (no remaining conflict)
  * - remainingConflict: null if fully resolved, or { local, remote } with
- *   the non-server-controlled lines that still conflict
+ *   both sides — server-controlled fields already harmonized to remote values
+ *   in the local side so the user can pick either side safely
  */
 function resolveServerControlledConflict(
   localLines: string[],
@@ -130,44 +136,44 @@ function resolveServerControlledConflict(
   resolvedLines: string[];
   remainingConflict: { local: string[]; remote: string[] } | null;
 } {
-  const resolvedLines: string[] = [];
-  const remainingLocal: string[] = [];
-  const remainingRemote: string[] = [];
-
-  // Separate server-controlled from non-server-controlled lines on each side
-  const localServerControlled: string[] = [];
-  const localOther: string[] = [];
-  for (const line of localLines) {
-    if (SERVER_CONTROLLED_YAML_LINE.test(line)) {
-      localServerControlled.push(line);
-    } else {
-      localOther.push(line);
-    }
-  }
-
-  const remoteServerControlled: string[] = [];
-  const remoteOther: string[] = [];
+  // Build a map of remote server-controlled field values by field name
+  const remoteServerFieldValues = new Map<string, string>();
   for (const line of remoteLines) {
     if (SERVER_CONTROLLED_YAML_LINE.test(line)) {
-      remoteServerControlled.push(line);
-    } else {
-      remoteOther.push(line);
+      const match = line.match(/^\s*(\w+)\s*:/);
+      if (match) {
+        remoteServerFieldValues.set(match[1], line);
+      }
     }
   }
 
-  // Auto-resolve server-controlled fields: always take remote version
-  resolvedLines.push(...remoteServerControlled);
+  // Replace server-controlled fields in local lines with remote values in-place,
+  // preserving the original line order
+  const resolvedLocal = localLines.map(line => {
+    if (SERVER_CONTROLLED_YAML_LINE.test(line)) {
+      const match = line.match(/^\s*(\w+)\s*:/);
+      if (match && remoteServerFieldValues.has(match[1])) {
+        return remoteServerFieldValues.get(match[1])!;
+      }
+    }
+    return line;
+  });
 
-  // Check if there are remaining non-server-controlled lines
-  if (localOther.length === 0 && remoteOther.length === 0) {
-    // Entire conflict was server-controlled → fully resolved
-    return { resolvedLines, remainingConflict: null };
+  // Check if after resolving server-controlled fields, local and remote are identical
+  const isFullyResolved =
+    resolvedLocal.length === remoteLines.length &&
+    resolvedLocal.every((line, i) => line === remoteLines[i]);
+
+  if (isFullyResolved) {
+    // All differences were server-controlled → fully resolved, emit remote lines
+    return { resolvedLines: remoteLines, remainingConflict: null };
   }
 
-  // There are real conflicting lines remaining
+  // Still have real conflict — emit as conflict with server-controlled fields
+  // already harmonized to remote values in-place (no extracted lines before markers)
   return {
-    resolvedLines,
-    remainingConflict: { local: localOther, remote: remoteOther },
+    resolvedLines: [],
+    remainingConflict: { local: resolvedLocal, remote: remoteLines },
   };
 }
 
@@ -189,7 +195,7 @@ interface FieldMergeResult {
  * - Fields changed only remotely → take remote value
  * - Fields changed identically on both sides → take either (same value)
  * - Fields changed differently on both sides → conflict
- * - Server-controlled fields (updatedAt, createdAt) → always take remote
+ * - Server-controlled fields (updatedAt, createdAt, publishedAt) → always take remote
  *
  * For nested objects, the merge recurses into each level.
  *

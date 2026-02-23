@@ -353,6 +353,41 @@ describe('content-merge', () => {
       expect(result.merged).toContain('createdAt: "2026-01-01T00:00:00.1234567Z"');
     });
 
+    it('should auto-accept remote publishedAt in MDX frontmatter without conflict', () => {
+      const base = [
+        '---',
+        'title: My Post',
+        'publishedAt: "2026-01-01T00:00:00Z"',
+        '---',
+        '',
+        'Body.',
+      ].join('\n');
+
+      const local = [
+        '---',
+        'title: My Post',
+        'publishedAt: "2026-01-01T00:00:00Z"',
+        '---',
+        '',
+        'Body.',
+      ].join('\n');
+
+      const remote = [
+        '---',
+        'title: My Post',
+        'publishedAt: "2026-03-01T00:00:00Z"',
+        '---',
+        '',
+        'Body.',
+      ].join('\n');
+
+      const result = threeWayMerge(base, local, remote);
+
+      expect(result.success).toBe(true);
+      expect(result.hasConflicts).toBe(false);
+      expect(result.merged).toContain('publishedAt: "2026-03-01T00:00:00Z"');
+    });
+
     it('should auto-accept remote updatedAt while preserving real conflicts in MDX', () => {
       const base = [
         '---',
@@ -434,16 +469,167 @@ describe('content-merge', () => {
       // Note: description + author are adjacent non-overlapping changes that diff3
       // coalesces into a single conflict region. This is a known diff3 limitation
       // for line-based merge. For JSON content, use threeWayMergeJson instead.
-      // The important thing is that updatedAt does NOT appear inside the conflict markers.
+      // Server-controlled fields remain inside the conflict markers (in-place) with
+      // the remote value on both sides. This preserves field ordering so subsequent
+      // merges don't produce duplication.
       if (result.hasConflicts) {
-        // If there's a conflict, updatedAt should NOT be part of it
+        // If there's a conflict, updatedAt should have the SAME (remote) value on both sides
         const conflictRegex = /<<<<<<< local\n([\s\S]*?)\n=======\n([\s\S]*?)\n>>>>>>> remote/g;
         let match;
         while ((match = conflictRegex.exec(result.merged)) !== null) {
-          expect(match[1]).not.toContain('updatedAt');
-          expect(match[2]).not.toContain('updatedAt');
+          // If updatedAt appears in the conflict, it must be the remote value on both sides
+          if (match[1].includes('updatedAt') || match[2].includes('updatedAt')) {
+            expect(match[1]).toContain('updatedAt: "2026-02-01T00:00:00Z"');
+            expect(match[2]).toContain('updatedAt: "2026-02-01T00:00:00Z"');
+          }
         }
       }
+    });
+
+    it('should not duplicate server-controlled fields when mixed with real conflicts', () => {
+      // Scenario: publishedAt and updatedAt are adjacent to a conflicting field.
+      // diff3 groups them into one conflict region. The auto-resolution must NOT
+      // extract server-controlled lines and place them before the conflict markers,
+      // because that shifts their position and causes duplication on the next merge.
+      const base = [
+        '---',
+        'title: My Post',
+        'description: Original desc',
+        'publishedAt: "2026-01-01T00:00:00Z"',
+        'updatedAt: "2026-01-01T00:00:00Z"',
+        '---',
+        '',
+        'Body.',
+      ].join('\n');
+
+      const local = [
+        '---',
+        'title: My Post',
+        'description: Local desc',
+        'publishedAt: "2026-01-01T00:00:00.1234567Z"',
+        'updatedAt: "2026-01-01T00:00:00Z"',
+        '---',
+        '',
+        'Body.',
+      ].join('\n');
+
+      const remote = [
+        '---',
+        'title: My Post',
+        'description: Remote desc',
+        'publishedAt: "2026-01-01T00:00:00.9876543Z"',
+        'updatedAt: "2026-02-01T00:00:00Z"',
+        '---',
+        '',
+        'Body.',
+      ].join('\n');
+
+      const result = threeWayMerge(base, local, remote);
+
+      // There should be a conflict on description (with server-controlled fields in-place)
+      expect(result.hasConflicts).toBe(true);
+      // Server-controlled fields should take remote values
+      expect(result.merged).toContain('publishedAt: "2026-01-01T00:00:00.9876543Z"');
+      expect(result.merged).toContain('updatedAt: "2026-02-01T00:00:00Z"');
+
+      // Server-controlled fields appear on both sides of the conflict (with remote
+      // values) to preserve field ordering. After resolving the conflict by picking
+      // either side, they must appear exactly once.
+      const resolvedLocal = result.merged
+        .replace(/<<<<<<< local\n/, '')
+        .replace(/=======\n[\s\S]*?>>>>>>> remote\n?/, '');
+      const resolvedRemote = result.merged
+        .replace(/<<<<<<< local\n[\s\S]*?=======\n/, '')
+        .replace(/>>>>>>> remote\n?/, '');
+
+      // CRITICAL: after resolving either way, no duplication
+      expect((resolvedLocal.match(/updatedAt:/g) || []).length).toBe(1);
+      expect((resolvedLocal.match(/publishedAt:/g) || []).length).toBe(1);
+      expect((resolvedRemote.match(/updatedAt:/g) || []).length).toBe(1);
+      expect((resolvedRemote.match(/publishedAt:/g) || []).length).toBe(1);
+    });
+
+    it('should not produce duplicates on consecutive merges after conflict resolution', () => {
+      // Simulate: first merge has a mixed conflict, user resolves it, then
+      // a second merge happens with updated server timestamps.
+      // This is the exact scenario that was causing duplicate updatedAt lines.
+
+      // --- First merge ---
+      const base1 = [
+        '---',
+        'title: My Post',
+        'description: Original',
+        'publishedAt: "2026-01-01T00:00:00Z"',
+        'updatedAt: "2026-01-01T00:00:00Z"',
+        '---',
+        '',
+        'Body.',
+      ].join('\n');
+
+      const local1 = [
+        '---',
+        'title: My Post',
+        'description: Local edit',
+        'publishedAt: "2026-01-01T00:00:00.123Z"',
+        'updatedAt: "2026-01-01T00:00:00Z"',
+        '---',
+        '',
+        'Body.',
+      ].join('\n');
+
+      const remote1 = [
+        '---',
+        'title: My Post',
+        'description: Remote edit',
+        'publishedAt: "2026-01-01T00:00:00.456Z"',
+        'updatedAt: "2026-02-01T00:00:00Z"',
+        '---',
+        '',
+        'Body.',
+      ].join('\n');
+
+      const merge1 = threeWayMerge(base1, local1, remote1);
+      expect(merge1.hasConflicts).toBe(true);
+
+      // Simulate user resolving the conflict: pick local side
+      // With in-place resolution, both sides of the conflict have server-controlled
+      // fields with remote values. Pick the local side (first half of conflict).
+      const resolved = merge1.merged
+        .replace(/<<<<<<< local\n/, '')
+        .replace(/=======\n[\s\S]*?>>>>>>> remote\n?/, '');
+
+      // Verify no duplication after first merge resolution
+      const updatedAtCount1 = (resolved.match(/updatedAt:/g) || []).length;
+      expect(updatedAtCount1).toBe(1);
+      // Verify field order is preserved (description before publishedAt before updatedAt)
+      const descIdx = resolved.indexOf('description:');
+      const pubIdx = resolved.indexOf('publishedAt:');
+      const updIdx = resolved.indexOf('updatedAt:');
+      expect(descIdx).toBeLessThan(pubIdx);
+      expect(pubIdx).toBeLessThan(updIdx);
+
+      // --- Second merge (after push + pull) ---
+      // The resolved file is now "local", server sends new base and remote
+      const base2 = remote1; // base is what server had at last sync
+      const local2 = resolved; // user's resolved file
+      const remote2 = [
+        '---',
+        'title: My Post',
+        'description: Local edit',
+        'publishedAt: "2026-01-01T00:00:00.456Z"',
+        'updatedAt: "2026-02-15T00:00:00Z"',
+        '---',
+        '',
+        'Body.',
+      ].join('\n');
+
+      const merge2 = threeWayMerge(base2, local2, remote2);
+
+      // CRITICAL: no duplicate server-controlled fields after second merge
+      const updatedAtCount2 = (merge2.merged.match(/updatedAt:/g) || []).length;
+      const publishedAtCount2 = (merge2.merged.match(/publishedAt:/g) || []).length;
+      expect(updatedAtCount2).toBe(1);
+      expect(publishedAtCount2).toBe(1);
     });
 
     // --- JSON-specific merge scenarios ---
