@@ -41,15 +41,68 @@ logger.verbose(
 logger.verbose(`[SSE ENV] Default Language: ${defaultLanguage}`);
 logger.verbose(`[SSE ENV] Content Dir: ${CONTENT_DIR}`);
 
-// Helper function to trigger content fetch
-async function triggerContentFetch(): Promise<void> {
+// ── Debounced & serialized content fetch ─────────────────────────────
+// Prevents concurrent syncs and coalesces rapid SSE events into a single
+// fetch. This is critical for watch mode to avoid merge conflicts caused
+// by overlapping pulls that read stale sync tokens.
+let fetchInProgress = false;
+let fetchQueued = false;
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+const DEBOUNCE_MS = 300;
+
+/**
+ * Schedule a debounced, serialized content fetch.
+ *
+ * - **Debounced**: waits DEBOUNCE_MS after the last call before firing,
+ *   so rapid events (e.g. content-updated + onmessage for the same change)
+ *   are coalesced into one fetch.
+ * - **Serialized**: only one fetch runs at a time. If a fetch is already
+ *   in progress, at most one more is queued so that changes received
+ *   during the fetch are not lost.
+ * - **forceOverwrite**: always passes { forceOverwrite: true } to skip
+ *   three-way merge logic, ensuring watch mode never produces conflicts.
+ */
+function scheduleFetch(): void {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+  }
+  debounceTimer = setTimeout(() => {
+    debounceTimer = null;
+    executeFetch();
+  }, DEBOUNCE_MS);
+}
+
+async function executeFetch(): Promise<void> {
+  if (fetchInProgress) {
+    // Another fetch is running — queue one more (coalesced)
+    fetchQueued = true;
+    logger.verbose("[SSE] Fetch already in progress — queued another");
+    return;
+  }
+
+  fetchInProgress = true;
   try {
-    logger.verbose("[SSE] Starting content fetch...");
-    await fetchLeadCMSContent();
+    logger.verbose("[SSE] Starting content fetch (forceOverwrite)...");
+    await fetchLeadCMSContent({ forceOverwrite: true });
     logger.verbose("[SSE] Content fetch completed successfully");
   } catch (error: any) {
     logger.verbose("[SSE] Content fetch failed:", error.message);
+  } finally {
+    fetchInProgress = false;
+
+    // If another event arrived while we were fetching, run one more time
+    if (fetchQueued) {
+      fetchQueued = false;
+      logger.verbose("[SSE] Processing queued fetch...");
+      executeFetch();
+    }
   }
+}
+
+// Legacy helper kept for backward-compatibility (exported tests, etc.)
+// Delegates to the debounced scheduler now.
+async function triggerContentFetch(): Promise<void> {
+  scheduleFetch();
 }
 
 function buildSSEUrl(): string {
@@ -323,3 +376,14 @@ async function startSSEWatcher(): Promise<void> {
 // Export the watcher function and types
 export { startSSEWatcher };
 export type { SSEEventData, ConnectedEventData, HeartbeatEventData, DraftEventData };
+
+// Export internals for testing
+export { scheduleFetch, DEBOUNCE_MS };
+export function _resetFetchState(): void {
+  fetchInProgress = false;
+  fetchQueued = false;
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+}

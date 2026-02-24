@@ -142,10 +142,12 @@ Usage:
     --id <content-id>    - Pull specific content by ID (force update)
     --slug <slug>        - Pull specific content by slug (force update)
     --reset              - Delete all local files and sync tokens, then pull everything fresh
+    --force, -f          - Skip three-way merge, always overwrite local with remote
   leadcms pull-content [options] - Pull only content from LeadCMS
     --id <content-id>    - Pull specific content by ID
     --slug <slug>        - Pull specific content by slug
     --reset              - Delete local content files and sync token, then pull fresh
+    --force, -f          - Skip three-way merge, always overwrite local with remote
   leadcms pull-media [options] - Pull only media files from LeadCMS
     --reset              - Delete local media files and sync token, then pull fresh
   leadcms pull-comments [options] - Pull only comments from LeadCMS

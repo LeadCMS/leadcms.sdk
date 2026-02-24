@@ -29,8 +29,10 @@ if (args.includes('--reset')) {
   reset = true;
 }
 
+const force = args.includes('--force') || args.includes('-f');
+
 const spinner = startSpinner('Pulling from LeadCMS…');
-pullAll({ targetId, targetSlug, reset })
+pullAll({ targetId, targetSlug, reset, force })
   .then(() => spinner.stop())
   .catch((error: any) => {
     spinner.fail('Pull failed');

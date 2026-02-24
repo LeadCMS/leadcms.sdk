@@ -169,7 +169,7 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
 
   // ── Internal state (mutated by helper methods, read by axios mock) ──
   const state = {
-    contentSyncQueue: [] as Array<{ items: any[]; deleted: number[]; token: string }>,
+    contentSyncQueue: [] as Array<{ items: any[]; deleted: number[]; token: string; baseItems?: Record<string, any> }>,
     mediaSyncQueue: [] as Array<{ items: any[]; deleted: any[]; token: string }>,
     contentTypes: [...contentTypes],
   };
@@ -207,9 +207,13 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
       const pending = state.contentSyncQueue[0];
 
       if (pending && sentToken !== pending.token) {
+        const responseData: any = { items: pending.items, deleted: pending.deleted };
+        if (pending.baseItems) {
+          responseData.baseItems = pending.baseItems;
+        }
         return Promise.resolve({
           status: 200,
-          data: { items: pending.items, deleted: pending.deleted },
+          data: responseData,
           headers: { 'x-next-sync-token': pending.token },
         });
       }
@@ -288,8 +292,8 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
     axiosMock,
 
     /** Queue a content sync response for the next pull call. */
-    addContentSync(items: any[], deleted: number[], token: string) {
-      state.contentSyncQueue.push({ items, deleted, token });
+    addContentSync(items: any[], deleted: number[], token: string, baseItems?: Record<string, any>) {
+      state.contentSyncQueue.push({ items, deleted, token, baseItems });
     },
 
     /** Queue a media sync response for the next pull call. */

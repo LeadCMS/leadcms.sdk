@@ -18,6 +18,8 @@ interface PullAllOptions {
   targetSlug?: string;
   /** When true, delete all local files and sync tokens before pulling, effectively doing a fresh pull from scratch. */
   reset?: boolean;
+  /** When true, skip three-way merge and always overwrite local files with remote content. */
+  force?: boolean;
 }
 
 /**
@@ -153,7 +155,7 @@ async function resetLocalState(): Promise<void> {
  * Main orchestrator function
  */
 async function main(options: PullAllOptions = {}): Promise<void> {
-  const { targetId, targetSlug, reset } = options;
+  const { targetId, targetSlug, reset, force } = options;
 
   // If pulling specific content by ID or slug, use pull-content logic directly
   if (targetId || targetSlug) {
@@ -185,7 +187,7 @@ async function main(options: PullAllOptions = {}): Promise<void> {
   if (content || media) {
     console.log(`📄 Fetching content and media...`);
     const { fetchLeadCMSContent } = await import('./fetch-leadcms-content.js');
-    fetchPromises.push(fetchLeadCMSContent());
+    fetchPromises.push(fetchLeadCMSContent({ forceOverwrite: force }));
   }
 
   if (comments) {

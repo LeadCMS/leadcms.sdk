@@ -25,9 +25,10 @@ if (slugIndex !== -1 && args[slugIndex + 1]) {
 }
 
 const reset = args.includes('--reset');
+const force = args.includes('--force') || args.includes('-f');
 
 const spinner = startSpinner('Pulling content from LeadCMS…');
-pullContent({ targetId, targetSlug, reset })
+pullContent({ targetId, targetSlug, reset, force })
   .then(() => spinner.stop())
   .catch((error: any) => {
     spinner.fail('Content pull failed');

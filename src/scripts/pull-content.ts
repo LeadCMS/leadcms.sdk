@@ -19,13 +19,15 @@ interface PullContentOptions {
   targetSlug?: string;
   /** When true, delete all local content files and sync tokens before pulling, effectively doing a fresh pull. */
   reset?: boolean;
+  /** When true, skip three-way merge and always overwrite local files with remote content. */
+  force?: boolean;
 }
 
 /**
  * Main function
  */
 async function main(options: PullContentOptions = {}): Promise<void> {
-  const { targetId, targetSlug, reset } = options;
+  const { targetId, targetSlug, reset, force } = options;
 
   console.log(`\n📄 LeadCMS Pull Content\n`);
 
@@ -106,7 +108,7 @@ async function main(options: PullContentOptions = {}): Promise<void> {
   }
 
   // Fetch content and media
-  await fetchLeadCMSContent();
+  await fetchLeadCMSContent({ forceOverwrite: force });
 
   console.log(`\n✨ Content pull completed!\n`);
 }

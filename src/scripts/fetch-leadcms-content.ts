@@ -17,6 +17,18 @@ import { threeWayMerge, threeWayMergeJson, isLocallyModified } from "../lib/cont
 import { getConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
 
+/**
+ * Options for fetchLeadCMSContent.
+ */
+export interface FetchContentOptions {
+  /**
+   * When true, skip three-way merge logic and always overwrite local files
+   * with remote content. This is used in watch mode (SSE watcher) to prevent
+   * merge conflicts caused by rapid sequential/concurrent syncs.
+   */
+  forceOverwrite?: boolean;
+}
+
 // Type definitions
 interface SyncResponse {
   items?: ContentItem[];
@@ -469,7 +481,9 @@ async function findAndDeleteContentFile(dir: string, idStr: string): Promise<voi
   }
 }
 
-async function main(): Promise<void> {
+async function main(options: FetchContentOptions = {}): Promise<void> {
+  const { forceOverwrite = false } = options;
+
   // Log environment configuration for debugging
   logger.verbose(`[ENV] LeadCMS URL: ${leadCMSUrl}`);
   logger.verbose(
@@ -614,9 +628,10 @@ async function main(): Promise<void> {
       }
 
       // Try three-way merge if we have a base version and local file exists
+      // In forceOverwrite mode (watch/SSE), skip merge entirely to avoid conflicts
       const baseContent = idStr ? baseItems[idStr] : undefined;
 
-      if (localContent && baseContent && hasBaseItems) {
+      if (!forceOverwrite && localContent && baseContent && hasBaseItems) {
         // Transform both base and remote to local file format for comparison
         const baseTransformed = await transformRemoteToLocalFormat(baseContent, contentTypeMap);
         const remoteTransformed = await transformRemoteToLocalFormat(content, contentTypeMap);
@@ -648,7 +663,7 @@ async function main(): Promise<void> {
           }
         }
       } else {
-        // No base available or file is new — overwrite (current behavior)
+        // No base available, file is new, or forceOverwrite — overwrite with remote
         await saveContentFile({ content, typeMap, contentDir: CONTENT_DIR });
         if (localContent) {
           overwrittenCount++;
