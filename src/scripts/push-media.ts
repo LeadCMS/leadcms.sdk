@@ -1,7 +1,9 @@
 import * as fs from 'fs';
+import * as fsPromises from 'fs/promises';
 import * as path from 'path';
 import readline from 'readline';
 import FormData from 'form-data';
+import axios from 'axios';
 import { leadCMSDataService, MediaItem } from '../lib/data-service.js';
 import { loadConfig, LeadCMSConfig } from '../lib/config.js';
 import { success, error, warn, info } from '../lib/console-colors.js';
@@ -81,6 +83,8 @@ export interface MediaDependencies {
   logSuccess?: (message: string) => void;
   /** Function to prompt user for confirmation - defaults to readline prompt */
   promptConfirmation?: (message: string) => Promise<boolean>;
+  /** Function to download a media file from the server - returns file content as Buffer */
+  downloadMediaFile?: (location: string) => Promise<Buffer>;
 }
 
 /**
@@ -119,6 +123,13 @@ function getDefaultDependencies(): Required<MediaDependencies> {
           resolve(confirmed);
         });
       });
+    },
+    downloadMediaFile: async (location: string) => {
+      const config = loadConfig();
+      const baseUrl = (config.url || '').replace(/\/$/, '');
+      const fullUrl = location.startsWith('http') ? location : `${baseUrl}${location}`;
+      const res = await axios.get(fullUrl, { responseType: 'arraybuffer' });
+      return Buffer.from(res.data);
     }
   };
 }
@@ -286,6 +297,76 @@ export function scanLocalMedia(mediaDir: string, config: LeadCMSConfig): LocalMe
 }
 
 /**
+ * Reconcile a local media file with the server response after upload/update.
+ *
+ * The CMS server may:
+ *  - Rename the file (e.g. uppercase → lowercase)
+ *  - Change extension (e.g. .png → .avif due to optimization)
+ *  - Change file size (compression/optimization)
+ *
+ * This function detects those differences and updates the local file accordingly:
+ *  - If only name changed (same extension/size): rename local file
+ *  - If extension or size changed: delete old file, download new version from server
+ */
+export async function reconcileLocalFile(
+  local: LocalMediaFile,
+  serverResponse: MediaItem,
+  mediaDir: string,
+  downloadFn: (location: string) => Promise<Buffer>
+): Promise<{ changed: boolean; reason?: string }> {
+  const nameChanged = local.name !== serverResponse.name;
+  const extensionChanged = local.extension.toLowerCase() !== serverResponse.extension.toLowerCase();
+  const sizeChanged = local.size !== serverResponse.size;
+
+  if (!nameChanged && !extensionChanged && !sizeChanged) {
+    return { changed: false };
+  }
+
+  const reasons: string[] = [];
+  if (nameChanged) reasons.push('name');
+  if (extensionChanged) reasons.push('extension');
+  if (sizeChanged) reasons.push('size');
+  const reason = `Server changed: ${reasons.join(', ')}`;
+
+  const oldFilePath = path.join(mediaDir, local.scopeUid, local.name);
+  const newFilePath = path.join(mediaDir, serverResponse.scopeUid, serverResponse.name);
+
+  if (nameChanged || extensionChanged) {
+    // Name or extension changed — need to replace the local file.
+    // On case-insensitive filesystems (macOS HFS+/APFS), paths differing only
+    // in case resolve to the same inode, so we must delete first, then write.
+
+    // 1. Read original content into memory if we don't need to download
+    const needsDownload = sizeChanged || extensionChanged;
+    let newContent: Buffer;
+
+    if (needsDownload) {
+      newContent = await downloadFn(serverResponse.location);
+    } else {
+      // Name-only change (e.g. case) — keep original content
+      newContent = await fsPromises.readFile(oldFilePath);
+    }
+
+    // 2. Delete old file first (important for case-insensitive FS)
+    try {
+      await fsPromises.unlink(oldFilePath);
+    } catch {
+      // Old file may already be gone
+    }
+
+    // 3. Write new file with server's name
+    await fsPromises.mkdir(path.dirname(newFilePath), { recursive: true });
+    await fsPromises.writeFile(newFilePath, newContent);
+  } else if (sizeChanged) {
+    // Same name, same extension, but size changed — re-download in place
+    const content = await downloadFn(serverResponse.location);
+    await fsPromises.writeFile(oldFilePath, content);
+  }
+
+  return { changed: true, reason };
+}
+
+/**
  * Match local and remote media files to determine operations
  */
 export function matchMediaFiles(
@@ -295,23 +376,23 @@ export function matchMediaFiles(
 ): MediaOperation[] {
   const operations: MediaOperation[] = [];
 
-  // Create map of remote files by scopeUid + name
+  // Create map of remote files by scopeUid + name (case-insensitive)
   const remoteMap = new Map<string, MediaItem>();
   for (const remote of remoteFiles) {
-    const key = `${remote.scopeUid}/${remote.name}`;
+    const key = `${remote.scopeUid}/${remote.name}`.toLowerCase();
     remoteMap.set(key, remote);
   }
 
-  // Create map of local files by scopeUid + name
+  // Create map of local files by scopeUid + name (case-insensitive)
   const localMap = new Map<string, LocalMediaFile>();
   for (const local of localFiles) {
-    const key = `${local.scopeUid}/${local.name}`;
+    const key = `${local.scopeUid}/${local.name}`.toLowerCase();
     localMap.set(key, local);
   }
 
   // Check local files against remote
   for (const local of localFiles) {
-    const key = `${local.scopeUid}/${local.name}`;
+    const key = `${local.scopeUid}/${local.name}`.toLowerCase();
     const remote = remoteMap.get(key);
 
     if (!remote) {
@@ -343,7 +424,7 @@ export function matchMediaFiles(
   // Check for deleted files (remote but not local) if deletion is allowed
   if (allowDelete) {
     for (const remote of remoteFiles) {
-      const key = `${remote.scopeUid}/${remote.name}`;
+      const key = `${remote.scopeUid}/${remote.name}`.toLowerCase();
       if (!localMap.has(key)) {
         operations.push({
           type: 'delete',
@@ -429,12 +510,14 @@ export function displayMediaStatus(
 export async function executeMediaPush(
   operations: MediaOperation[],
   dryRun: boolean = false,
-  deps?: Partial<MediaDependencies>
+  deps?: Partial<MediaDependencies>,
+  mediaDir?: string
 ): Promise<MediaPushResult> {
   const defaults = getDefaultDependencies();
   const uploadMedia = deps?.uploadMedia || defaults.uploadMedia;
   const updateMedia = deps?.updateMedia || defaults.updateMedia;
   const deleteMedia = deps?.deleteMedia || defaults.deleteMedia;
+  const downloadMediaFile = deps?.downloadMediaFile || defaults.downloadMediaFile;
   const logErr = deps?.logError || defaults.logError;
   const logOk = deps?.logSuccess || defaults.logSuccess;
   const logWarning = deps?.logWarn || defaults.logWarn;
@@ -473,9 +556,21 @@ export async function executeMediaPush(
       formData.append('File', fs.createReadStream(op.local!.absolutePath));
       formData.append('ScopeUid', op.local!.scopeUid);
 
-      await uploadMedia(formData);
+      const serverResponse = await uploadMedia(formData);
       logOk(`✓ Uploaded ${op.local!.scopeUid}/${op.local!.name}`);
       result.executed.successful++;
+
+      // Post-upload reconciliation: sync local file with server response
+      if (mediaDir && serverResponse) {
+        try {
+          const reconcileResult = await reconcileLocalFile(op.local!, serverResponse, mediaDir, downloadMediaFile);
+          if (reconcileResult.changed) {
+            logOk(`  ↳ Reconciled: ${reconcileResult.reason}`);
+          }
+        } catch (reconcileErr: any) {
+          logWarning(`  ↳ reconciliation warning for ${op.local!.name}: ${reconcileErr.message}`);
+        }
+      }
     } catch (err: any) {
       logErr(`✗ Failed to upload ${op.local!.scopeUid}/${op.local!.name}: ${err.message}`);
       result.executed.failed++;
@@ -499,9 +594,21 @@ export async function executeMediaPush(
       formData.append('ScopeUid', op.local!.scopeUid);
       formData.append('FileName', op.local!.name);
 
-      await updateMedia(formData);
+      const serverResponse = await updateMedia(formData);
       logOk(`✓ Updated ${op.local!.scopeUid}/${op.local!.name}`);
       result.executed.successful++;
+
+      // Post-update reconciliation: sync local file with server response
+      if (mediaDir && serverResponse) {
+        try {
+          const reconcileResult = await reconcileLocalFile(op.local!, serverResponse, mediaDir, downloadMediaFile);
+          if (reconcileResult.changed) {
+            logOk(`  ↳ Reconciled: ${reconcileResult.reason}`);
+          }
+        } catch (reconcileErr: any) {
+          logWarning(`  ↳ reconciliation warning for ${op.local!.name}: ${reconcileErr.message}`);
+        }
+      }
     } catch (err: any) {
       logErr(`✗ Failed to update ${op.local!.scopeUid}/${op.local!.name}: ${err.message}`);
       result.executed.failed++;
@@ -716,7 +823,7 @@ export async function pushMedia(
       }
     }
 
-    return await executeMediaPush(operations, false, deps);
+    return await executeMediaPush(operations, false, deps, mediaDir);
 
   } catch (err: any) {
     logErrFn(`Media push failed: ${err.message}`);
