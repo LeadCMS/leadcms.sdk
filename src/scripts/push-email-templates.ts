@@ -576,6 +576,13 @@ function getRemoteGroupLabel(remote: RemoteEmailTemplateItem): string {
 }
 
 export async function statusEmailTemplates(options: StatusOptions = {}): Promise<void> {
+  if (!leadCMSDataService.isApiKeyConfigured()) {
+    console.log('\n📊 LeadCMS Email Template Status');
+    console.log('');
+    console.log('⏭️  Email templates require authentication — no API key configured, skipping');
+    return;
+  }
+
   const { targetId, showDetailedPreview } = options;
   const result = await buildEmailTemplateStatus(options);
   let { operations } = result;
@@ -758,6 +765,11 @@ export { buildEmailTemplateStatus, getRemoteGroupLabel };
 export type { EmailTemplateOperation, LocalEmailTemplateItem, RemoteEmailTemplateItem };
 
 export async function pushEmailTemplates(options: PushOptions = {}): Promise<void> {
+  if (!leadCMSDataService.isApiKeyConfigured()) {
+    console.log('⏭️  Email templates require authentication — no API key configured, skipping');
+    return;
+  }
+
   const { force, dryRun, allowDelete } = options;
 
   const localTemplates = await readLocalEmailTemplates();

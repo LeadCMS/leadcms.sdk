@@ -64,6 +64,14 @@ interface ContentType {
   name: string;
 }
 
+export interface UserIdentity {
+  displayName: string;
+  email: string;
+  userName: string;
+  id?: string;
+  avatarUrl?: string;
+}
+
 interface EmailTemplateItem {
   id?: number;
   name?: string;
@@ -333,7 +341,6 @@ class LeadCMSDataService {
     if (this.useMock && this.mockData) {
       logger.verbose('[MOCK] Returning mock content data');
       // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 50));
       return [...this.mockData.remoteContent];
     }
 
@@ -391,7 +398,6 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose('[MOCK] Returning mock content types');
-      await new Promise(resolve => setTimeout(resolve, 30));
       return Object.entries(this.mockData.contentTypes).map(([uid, format]) => ({
         uid,
         format,
@@ -406,11 +412,19 @@ class LeadCMSDataService {
         throw new Error('LeadCMS URL is not configured. Please set LEADCMS_URL or NEXT_PUBLIC_LEADCMS_URL in your .env file.');
       }
 
-      const response: AxiosResponse<ContentType[]> = await axios.get(`${this.baseURL}/api/content-types`, {
+      const response: AxiosResponse = await axios.get(`${this.baseURL}/api/content-types`, {
         headers: this.getApiHeaders()
       });
 
-      return response.data;
+      const data = response.data;
+
+      // /api/content-types returns a direct array (not a sync API)
+      if (Array.isArray(data)) {
+        return data;
+      }
+
+      logger.verbose('[API] Content types response is not an array, returning empty array');
+      return [];
     } catch (error: any) {
       console.error('[API] Failed to fetch content types:', error.message);
       throw error;
@@ -425,7 +439,6 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Getting content with ID: ${id}`);
-      await new Promise(resolve => setTimeout(resolve, 50));
       const content = this.mockData.remoteContent.find(c => c.id === id);
       return content || null;
     }
@@ -482,7 +495,6 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Creating content: ${content.title}`);
-      await new Promise(resolve => setTimeout(resolve, 100));
 
       const newContent: ContentItem = {
         ...content,
@@ -539,7 +551,6 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Updating content ID ${id}: ${content.title}`);
-      await new Promise(resolve => setTimeout(resolve, 80));
 
       const existingIndex = this.mockData.remoteContent.findIndex(c => c.id === id);
       if (existingIndex === -1) {
@@ -600,7 +611,6 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Deleting content with ID: ${id}`);
-      await new Promise(resolve => setTimeout(resolve, 80));
 
       // Remove from mock data
       const index = this.mockData.remoteContent.findIndex(c => c.id === id);
@@ -652,8 +662,12 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose('[MOCK] Returning mock email templates');
-      await new Promise(resolve => setTimeout(resolve, 30));
       return [...this.mockData.emailTemplates];
+    }
+
+    if (!this.apiKey) {
+      logger.verbose('[API] Email templates require authentication — no API key configured, skipping');
+      return [];
     }
 
     try {
@@ -687,8 +701,12 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose('[MOCK] Returning mock email groups');
-      await new Promise(resolve => setTimeout(resolve, 30));
       return [...this.mockData.emailGroups];
+    }
+
+    if (!this.apiKey) {
+      logger.verbose('[API] Email groups require authentication — no API key configured, skipping');
+      return [];
     }
 
     try {
@@ -722,7 +740,6 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Creating email group: ${group.name}`);
-      await new Promise(resolve => setTimeout(resolve, 60));
 
       const newGroup: EmailGroupItem = {
         ...group,
@@ -732,6 +749,10 @@ class LeadCMSDataService {
       };
       this.mockData.emailGroups.push(newGroup);
       return newGroup;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Email group operations require authentication. Please configure LEADCMS_API_KEY.');
     }
 
     try {
@@ -766,7 +787,6 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Creating email template: ${template.name}`);
-      await new Promise(resolve => setTimeout(resolve, 60));
 
       const newTemplate: EmailTemplateItem = {
         ...template,
@@ -777,6 +797,10 @@ class LeadCMSDataService {
 
       this.mockData.emailTemplates.push(newTemplate);
       return newTemplate;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Email template operations require authentication. Please configure LEADCMS_API_KEY.');
     }
 
     try {
@@ -814,7 +838,6 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Updating email template ID ${id}: ${template.name}`);
-      await new Promise(resolve => setTimeout(resolve, 60));
 
       const existingIndex = this.mockData.emailTemplates.findIndex(t => t.id === id);
       if (existingIndex === -1) {
@@ -829,6 +852,10 @@ class LeadCMSDataService {
 
       this.mockData.emailTemplates[existingIndex] = updatedTemplate;
       return updatedTemplate;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Email template operations require authentication. Please configure LEADCMS_API_KEY.');
     }
 
     try {
@@ -866,13 +893,16 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Deleting email template with ID: ${id}`);
-      await new Promise(resolve => setTimeout(resolve, 50));
 
       const index = this.mockData.emailTemplates.findIndex(t => t.id === id);
       if (index !== -1) {
         this.mockData.emailTemplates.splice(index, 1);
       }
       return;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Email template operations require authentication. Please configure LEADCMS_API_KEY.');
     }
 
     try {
@@ -914,7 +944,6 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData && contentType.uid && contentType.format) {
       logger.verbose(`[MOCK] Creating content type: ${contentType.uid}`);
-      await new Promise(resolve => setTimeout(resolve, 60));
 
       this.mockData.contentTypes[contentType.uid] = contentType.format;
       return {
@@ -945,7 +974,6 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose('[MOCK] Returning mock media data');
-      await new Promise(resolve => setTimeout(resolve, 50));
 
       let media = [...this.mockData.remoteMedia];
       if (scopeUid) {
@@ -1010,7 +1038,6 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose('[MOCK] Uploading media file');
-      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Extract data from FormData for mock
       const scopeUid = formData.get('ScopeUid') as string;
@@ -1079,7 +1106,6 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose('[MOCK] Updating media file');
-      await new Promise(resolve => setTimeout(resolve, 100));
 
       const scopeUid = formData.get('ScopeUid') as string;
       const fileName = formData.get('FileName') as string;
@@ -1145,7 +1171,6 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Deleting media file: ${pathToFile}`);
-      await new Promise(resolve => setTimeout(resolve, 80));
 
       // Parse path to extract scopeUid and name
       // Path format: /api/media/scopeUid/filename or scopeUid/filename
@@ -1187,6 +1212,55 @@ class LeadCMSDataService {
       console.error('[API] Failed to delete media:', error.message);
       throw error;
     }
+  }
+
+  /**
+   * Fetch the authenticated user's identity from /api/users/me.
+   * Returns user details if the API key is valid.
+   * Throws on 401 (invalid/expired key) or if no API key is configured.
+   */
+  async getUserMe(): Promise<UserIdentity> {
+    this._initialize();
+
+    if (this.useMock) {
+      logger.verbose('[MOCK] Returning mock user identity');
+      return {
+        displayName: 'Test User',
+        email: 'test@example.com',
+        userName: 'testuser',
+      };
+    }
+
+    if (!this.apiKey) {
+      throw new Error('No API key configured');
+    }
+
+    if (!this.baseURL) {
+      throw new Error('LeadCMS URL is not configured.');
+    }
+
+    try {
+      logger.verbose('[API] Fetching user identity from /api/users/me...');
+      const response: AxiosResponse<UserIdentity> = await axios.get(
+        `${this.baseURL}/api/users/me`,
+        { headers: this.getApiHeaders() }
+      );
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Check if an API key is configured.
+   * Email templates and other authenticated-only features require an API key.
+   */
+  isApiKeyConfigured(): boolean {
+    this._initialize();
+    return !!this.apiKey;
   }
 
   /**

@@ -4,6 +4,7 @@
  */
 
 import { pullAll } from '../../scripts/pull-all.js';
+import { resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
 
@@ -31,9 +32,14 @@ if (args.includes('--reset')) {
 
 const force = args.includes('--force') || args.includes('-f');
 
+await resolveIdentity();
+
 const spinner = startSpinner('Pulling from LeadCMS…');
 pullAll({ targetId, targetSlug, reset, force })
-  .then(() => spinner.stop())
+  .then(() => {
+    spinner.stop();
+    process.exit(0);
+  })
   .catch((error: any) => {
     spinner.fail('Pull failed');
     console.error(error.message);

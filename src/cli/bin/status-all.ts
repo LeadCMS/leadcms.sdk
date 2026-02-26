@@ -10,7 +10,7 @@ import { statusMedia } from '../../scripts/push-media.js';
 import { buildEmailTemplateStatus, getRemoteGroupLabel } from '../../scripts/push-email-templates.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { colorConsole, statusColors } from '../../lib/console-colors.js';
-import { defaultLanguage } from '../../scripts/leadcms-helpers.js';
+import { defaultLanguage, leadCMSApiKey, resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { startSpinner } from '../../lib/spinner.js';
 
 import type { ContentOperations, ContentStatusResult, MatchOperation } from '../../scripts/push-leadcms-content.js';
@@ -170,6 +170,9 @@ function renderSummaryLine(label: string, counts: { creates: number; updates: nu
 
 async function statusAll() {
   try {
+    await resolveIdentity();
+    const canCheckEmailTemplates = Boolean(leadCMSApiKey);
+
     // Show spinner while fetching data from all sources
     const spinner = startSpinner('Fetching status from LeadCMS…');
 
@@ -187,10 +190,12 @@ async function statusAll() {
           spinner.update('Fetching status… (media failed)');
           return null;
         }),
-        buildEmailTemplateStatus({ showDelete }).catch((err: any) => {
-          spinner.update('Fetching status… (email templates failed)');
-          return null;
-        }),
+        canCheckEmailTemplates
+          ? buildEmailTemplateStatus({ showDelete }).catch((err: any) => {
+            spinner.update('Fetching status… (email templates failed)');
+            return null;
+          })
+          : Promise.resolve(null),
       ]);
       spinner.stop();
     } catch (err) {
@@ -240,7 +245,9 @@ async function statusAll() {
 
       if (contentResult) console.log(`   📝 Content:          ${contentSkips > 0 ? `${contentSkips} item(s) ` : ''}up to date`);
       if (mediaResult) console.log(`   📷 Media:            ${mediaSkips > 0 ? `${mediaSkips} file(s) ` : ''}up to date`);
-      if (emailResult) console.log(`   📧 Email Templates:  ${emailSkips > 0 ? `${emailSkips} item(s) ` : ''}up to date`);
+      if (canCheckEmailTemplates && emailResult) {
+        console.log(`   📧 Email Templates:  ${emailSkips > 0 ? `${emailSkips} item(s) ` : ''}up to date`);
+      }
       console.log('');
       process.exit(0);
     }
@@ -293,7 +300,7 @@ async function statusAll() {
       }));
     }
 
-    if (emailOps) {
+    if (canCheckEmailTemplates && emailOps) {
       const counts = emailOps.reduce(
         (acc, op) => { acc[op.type] = (acc[op.type] || 0) + 1; return acc; },
         {} as Record<string, number>,

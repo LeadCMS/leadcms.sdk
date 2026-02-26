@@ -988,9 +988,13 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     // Fetch remote content types for content transformation
     const remoteTypes = await leadCMSDataService.getContentTypes();
     const remoteTypeMap: Record<string, string> = {};
-    remoteTypes.forEach(type => {
-      remoteTypeMap[type.uid] = type.format;
-    });
+    if (Array.isArray(remoteTypes)) {
+      remoteTypes.forEach(type => {
+        remoteTypeMap[type.uid] = type.format;
+      });
+    } else {
+      logger.verbose('[PUSH] Warning: content types response was not an array, proceeding without type map');
+    }
 
     // Filter local content if targeting specific content
     let filteredLocalContent = localContent;
@@ -1361,7 +1365,11 @@ export async function getContentStatusData(options: { showDelete?: boolean } = {
 
   const remoteTypes = await leadCMSDataService.getContentTypes();
   const remoteTypeMap: Record<string, string> = {};
-  remoteTypes.forEach(type => { remoteTypeMap[type.uid] = type.format; });
+  if (Array.isArray(remoteTypes)) {
+    remoteTypes.forEach(type => { remoteTypeMap[type.uid] = type.format; });
+  } else {
+    logger.verbose('[STATUS] Warning: content types response was not an array, proceeding without type map');
+  }
 
   const remoteContent = await fetchRemoteContent();
   const operations = await matchContent(localContent, remoteContent, remoteTypeMap, options.showDelete || false);

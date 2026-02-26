@@ -746,6 +746,13 @@ export async function pushMedia(
   options: PushMediaOptions = {},
   deps?: Partial<MediaDependencies>
 ): Promise<MediaPushResult> {
+  // Defense-in-depth: CLI entry points already gate on API key,
+  // but guard here too in case the function is called directly.
+  if (!leadCMSDataService.isApiKeyConfigured()) {
+    console.log('⏭️  Media push requires authentication — no API key configured, skipping');
+    return { operations: [], executed: { successful: 0, failed: 0, skipped: 0 }, errors: [] };
+  }
+
   const defaults = getDefaultDependencies();
   const fetchRemoteMedia = deps?.fetchRemoteMedia || defaults.fetchRemoteMedia;
   const logInfoFn = deps?.logInfo || defaults.logInfo;

@@ -4,6 +4,7 @@
  */
 
 import { pushEmailTemplates } from '../../scripts/push-email-templates.js';
+import { requireAuthenticatedUser, resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
 
@@ -13,6 +14,12 @@ initVerboseFromArgs(args);
 const force = args.includes('--force') || args.includes('-f');
 const dryRun = args.includes('--dry-run') || args.includes('-d');
 const allowDelete = args.includes('--delete');
+
+if (!dryRun) {
+  await requireAuthenticatedUser();
+} else {
+  await resolveIdentity();
+}
 
 const spinner = startSpinner('Pushing email templates to LeadCMS…');
 pushEmailTemplates({ force, dryRun, allowDelete })

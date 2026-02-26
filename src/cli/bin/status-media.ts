@@ -5,6 +5,7 @@
 
 import 'dotenv/config';
 import { statusMedia } from '../../scripts/push-media.js';
+import { resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
 
@@ -20,6 +21,8 @@ if (scopeIndex !== -1 && args[scopeIndex + 1]) {
 
 // Check for --delete flag
 const showDelete = args.includes('--delete');
+
+await resolveIdentity();
 
 const spinner = startSpinner('Checking media status…');
 statusMedia({ scopeUid, showDelete })

@@ -4,6 +4,7 @@
  */
 
 import { pushLeadCMSContent } from '../../scripts/push-leadcms-content.js';
+import { requireAuthenticatedUser, resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 
 const args = process.argv.slice(2);
@@ -11,6 +12,12 @@ initVerboseFromArgs(args);
 const statusOnly = args.includes('--status');
 const force = args.includes('--force');
 const dryRun = args.includes('--dry-run');
+
+if (!statusOnly && !dryRun) {
+  await requireAuthenticatedUser();
+} else {
+  await resolveIdentity();
+}
 
 // Parse target ID or slug
 let targetId: string | undefined;

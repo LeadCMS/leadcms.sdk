@@ -3,6 +3,7 @@ import path from "path";
 import axios, { AxiosResponse } from "axios";
 import { getConfig, type LeadCMSConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
+import { leadCMSDataService, type UserIdentity } from "../lib/data-service.js";
 
 // Type definitions
 interface ContentType {
@@ -122,3 +123,73 @@ export async function downloadMediaFileDirect(
 
 // Export types for use in other modules
 export type { ContentItem };
+
+/**
+ * Resolve the current user identity before any API operations.
+ *
+ * - API key set & valid   → prints "Authenticated as …", returns UserIdentity
+ * - API key set & invalid → prints auth error, calls process.exit(1)
+ * - No API key            → prints "Running in anonymous mode", returns null
+ *
+ * Call this at the start of every CLI command so the user always sees *who*
+ * is making the requests.
+ */
+export async function resolveIdentity(): Promise<UserIdentity | null> {
+  if (!leadCMSApiKey) {
+    console.log('👤 Running in anonymous mode');
+    return null;
+  }
+
+  try {
+    const user = await leadCMSDataService.getUserMe();
+    console.log(`🔑 Authenticated as ${user.displayName} (${user.email})`);
+    return user;
+  } catch (error: any) {
+    if (error.status === 401 || error.response?.status === 401) {
+      console.error('\n❌ Authentication failed: API key is invalid or expired');
+      console.error('\n💡 To fix this:');
+      console.error('   • Run: leadcms login');
+      console.error('   • Or update LEADCMS_API_KEY in your .env file');
+      process.exit(1);
+    }
+
+    // Non-auth errors (network, server down) – warn but proceed
+    console.warn(`⚠️  Could not verify identity: ${error.message}`);
+    console.log('🔑 Proceeding with configured API key');
+    return { displayName: 'Unknown', email: '', userName: '' };
+  }
+}
+
+/**
+ * Require an authenticated user. Calls resolveIdentity() and exits if
+ * the user is anonymous (no API key).
+ *
+ * Use this for write operations (push) that cannot run anonymously.
+ */
+export async function requireAuthenticatedUser(): Promise<UserIdentity> {
+  const identity = await resolveIdentity();
+
+  if (!identity) {
+    console.error('\n❌ This operation requires authentication.');
+    console.error('\n💡 To authenticate:');
+    console.error('   • Set LEADCMS_API_KEY in your .env file');
+    console.error('   • Or run: leadcms login');
+    process.exit(1);
+  }
+
+  return identity;
+}
+
+/**
+ * @deprecated Use requireAuthenticatedUser() instead – it also verifies the
+ * token is valid by calling /api/users/me before proceeding.
+ */
+export function requireApiKeyOrExit(): void {
+  if (!leadCMSApiKey) {
+    console.error('\n❌ Push operations require authentication.');
+    console.error('\n💡 To push changes, you need to configure an API key:');
+    console.error('   • Set LEADCMS_API_KEY in your .env file');
+    console.error('   • Or run: leadcms login');
+    process.exit(1);
+  }
+}

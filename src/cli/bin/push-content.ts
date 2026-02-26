@@ -5,6 +5,7 @@
 
 import 'dotenv/config';
 import { pushLeadCMSContent } from '../../scripts/push-leadcms-content.js';
+import { requireAuthenticatedUser, resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
 
@@ -14,6 +15,12 @@ const statusOnly = args.includes('--status');
 const force = args.includes('--force');
 const dryRun = args.includes('--dry-run');
 const allowDelete = args.includes('--delete');
+
+if (!statusOnly && !dryRun) {
+  await requireAuthenticatedUser();
+} else {
+  await resolveIdentity();
+}
 
 // Parse target ID or slug
 let targetId: string | undefined;

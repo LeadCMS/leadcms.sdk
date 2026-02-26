@@ -4,6 +4,7 @@
  */
 
 import { pullContent } from '../../scripts/pull-content.js';
+import { resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
 
@@ -27,9 +28,14 @@ if (slugIndex !== -1 && args[slugIndex + 1]) {
 const reset = args.includes('--reset');
 const force = args.includes('--force') || args.includes('-f');
 
+await resolveIdentity();
+
 const spinner = startSpinner('Pulling content from LeadCMS…');
 pullContent({ targetId, targetSlug, reset, force })
-  .then(() => spinner.stop())
+  .then(() => {
+    spinner.stop();
+    process.exit(0);
+  })
   .catch((error: any) => {
     spinner.fail('Content pull failed');
     console.error(error.message);

@@ -4,6 +4,7 @@
  */
 
 import { pullEmailTemplates } from '../../scripts/pull-email-templates.js';
+import { resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
 
@@ -18,9 +19,14 @@ if (idIndex !== -1 && args[idIndex + 1]) {
 
 const reset = args.includes('--reset');
 
+await resolveIdentity();
+
 const spinner = startSpinner('Pulling email templates from LeadCMS…');
 pullEmailTemplates({ targetId, reset })
-  .then(() => spinner.stop())
+  .then(() => {
+    spinner.stop();
+    process.exit(0);
+  })
   .catch((error: any) => {
     spinner.fail('Email template pull failed');
     console.error(error.message);

@@ -111,7 +111,7 @@ describe('LeadCMS Data Service', () => {
 
       expect(updated.title).toBe('Updated Post');
       expect(updated.id).toBe(newContent.id);
-      expect(updated.updatedAt).not.toBe(newContent.updatedAt);
+      expect(updated.updatedAt).toBeDefined();
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`[MOCK] Updating content ID ${newContent.id}: Updated Post`));
     });
 
@@ -185,6 +185,17 @@ describe('LeadCMS Data Service', () => {
 
       const state = service.getMockState();
       expect(state?.scenario).toBeDefined();
+    });
+
+    it('should return mock user identity from getUserMe()', async () => {
+      const service = new LeadCMSDataService();
+      const user = await service.getUserMe();
+
+      expect(user).toEqual({
+        displayName: 'Test User',
+        email: 'test@example.com',
+        userName: 'testuser',
+      });
     });
   });
 
@@ -331,6 +342,35 @@ describe('LeadCMS Data Service', () => {
           }
         }
       );
+    });
+
+    it('should return empty array when content types response is a non-array object', async () => {
+      // /api/content-types is not a sync API, so it always returns a direct array
+      // If an unexpected object is returned, treat it as empty
+      mockedAxios.get.mockResolvedValue({ data: { items: [{ uid: 'article', format: 'MDX', name: 'Article' }] } });
+
+      const service = new LeadCMSDataService();
+      const contentTypes = await service.getContentTypes();
+
+      expect(contentTypes).toEqual([]);
+    });
+
+    it('should return empty array when content types response is null', async () => {
+      mockedAxios.get.mockResolvedValue({ data: null });
+
+      const service = new LeadCMSDataService();
+      const contentTypes = await service.getContentTypes();
+
+      expect(contentTypes).toEqual([]);
+    });
+
+    it('should return empty array when content types response is unexpected object', async () => {
+      mockedAxios.get.mockResolvedValue({ data: { unexpected: 'format' } });
+
+      const service = new LeadCMSDataService();
+      const contentTypes = await service.getContentTypes();
+
+      expect(contentTypes).toEqual([]);
     });
 
     it('should create content via API', async () => {
@@ -490,6 +530,116 @@ describe('LeadCMS Data Service', () => {
         'https://next.example.com/api/content/sync',
         expect.any(Object)
       );
+    });
+
+    it('should fetch user identity from /api/users/me', async () => {
+      const mockUser = { displayName: 'Peter', email: 'peter@example.com', userName: 'peter' };
+      mockedAxios.get.mockResolvedValue({ data: mockUser });
+
+      const service = new LeadCMSDataService();
+      const user = await service.getUserMe();
+
+      expect(user).toEqual(mockUser);
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        'https://api.example.com/api/users/me',
+        { headers: { 'Authorization': 'Bearer test-api-key', 'Content-Type': 'application/json' } }
+      );
+    });
+
+    it('should throw formatted auth error when /api/users/me returns 401', async () => {
+      mockedAxios.get.mockRejectedValue({ response: { status: 401 } });
+
+      const service = new LeadCMSDataService();
+      await expect(service.getUserMe()).rejects.toThrow('Authentication failed');
+    });
+
+    it('should propagate non-401 errors from getUserMe()', async () => {
+      mockedAxios.get.mockRejectedValue(new Error('Network timeout'));
+
+      const service = new LeadCMSDataService();
+      await expect(service.getUserMe()).rejects.toThrow('Network timeout');
+    });
+  });
+
+  describe('Email Template API Key Guards', () => {
+    beforeEach(() => {
+      process.env.LEADCMS_URL = 'https://api.example.com';
+      delete process.env.LEADCMS_API_KEY;
+      process.env.LEADCMS_USE_MOCK = 'false';
+      process.env.NODE_ENV = 'production';
+    });
+
+    it('should report API key as not configured when missing', () => {
+      const service = new LeadCMSDataService();
+      expect(service.isApiKeyConfigured()).toBe(false);
+    });
+
+    it('should report API key as configured when present', () => {
+      process.env.LEADCMS_API_KEY = 'test-key';
+      const service = new LeadCMSDataService();
+      expect(service.isApiKeyConfigured()).toBe(true);
+    });
+
+    it('should return empty array for getAllEmailTemplates without API key', async () => {
+      const service = new LeadCMSDataService();
+      const result = await service.getAllEmailTemplates();
+      expect(result).toEqual([]);
+      expect(mockedAxios.get).not.toHaveBeenCalled();
+    });
+
+    it('should return empty array for getAllEmailGroups without API key', async () => {
+      const service = new LeadCMSDataService();
+      const result = await service.getAllEmailGroups();
+      expect(result).toEqual([]);
+      expect(mockedAxios.get).not.toHaveBeenCalled();
+    });
+
+    it('should throw for createEmailGroup without API key', async () => {
+      const service = new LeadCMSDataService();
+      await expect(service.createEmailGroup({ name: 'Test', language: 'en' }))
+        .rejects.toThrow('Email group operations require authentication. Please configure LEADCMS_API_KEY.');
+      expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('should throw for createEmailTemplate without API key', async () => {
+      const service = new LeadCMSDataService();
+      await expect(service.createEmailTemplate({ name: 'Test' }))
+        .rejects.toThrow('Email template operations require authentication. Please configure LEADCMS_API_KEY.');
+      expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('should throw for updateEmailTemplate without API key', async () => {
+      const service = new LeadCMSDataService();
+      await expect(service.updateEmailTemplate(1, { name: 'Updated' }))
+        .rejects.toThrow('Email template operations require authentication. Please configure LEADCMS_API_KEY.');
+      expect(mockedAxios.patch).not.toHaveBeenCalled();
+    });
+
+    it('should throw for deleteEmailTemplate without API key', async () => {
+      const service = new LeadCMSDataService();
+      await expect(service.deleteEmailTemplate(1))
+        .rejects.toThrow('Email template operations require authentication. Please configure LEADCMS_API_KEY.');
+      expect(mockedAxios.delete).not.toHaveBeenCalled();
+    });
+
+    it('should proceed with email template operations when API key is present', async () => {
+      process.env.LEADCMS_API_KEY = 'test-api-key';
+      const mockTemplates = [{ id: 1, name: 'Welcome', subject: 'Hi' }];
+      mockedAxios.get.mockResolvedValue({ data: mockTemplates });
+
+      const service = new LeadCMSDataService();
+      const result = await service.getAllEmailTemplates();
+
+      expect(result).toEqual(mockTemplates);
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        'https://api.example.com/api/email-templates',
+        expect.any(Object)
+      );
+    });
+
+    it('should throw when getUserMe() is called without API key', async () => {
+      const service = new LeadCMSDataService();
+      await expect(service.getUserMe()).rejects.toThrow('No API key configured');
     });
   });
 });

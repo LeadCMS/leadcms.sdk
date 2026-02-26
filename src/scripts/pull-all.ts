@@ -8,7 +8,7 @@ import "dotenv/config";
 import fs from "fs/promises";
 import path from "path";
 import axios from "axios";
-import { leadCMSUrl } from "./leadcms-helpers.js";
+import { leadCMSUrl, leadCMSApiKey } from "./leadcms-helpers.js";
 import { setCMSConfig, isContentSupported, isMediaSupported, isCommentsSupported, isEmailTemplatesSupported } from "../lib/cms-config-types.js";
 import { getConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
@@ -32,25 +32,26 @@ async function fetchAndCacheCMSConfig(): Promise<{
   emailTemplates: boolean;
 }> {
   try {
-    logger.verbose(`🔍 Checking CMS configuration...`);
+    logger.info(`🔍 Checking CMS configuration...`);
     const configUrl = new URL('/api/config', leadCMSUrl).toString();
     const response = await axios.get(configUrl, { timeout: 10000 });
 
     if (response.data) {
       setCMSConfig(response.data);
+      const hasApiKey = !!leadCMSApiKey;
       const support = {
         content: isContentSupported(),
         media: isMediaSupported(),
         comments: isCommentsSupported(),
-        emailTemplates: isEmailTemplatesSupported(),
+        emailTemplates: isEmailTemplatesSupported() && hasApiKey,
       };
 
-      logger.verbose(`✅ CMS Configuration received`);
-      logger.verbose(`   - Content: ${support.content ? '✓' : '✗'}`);
-      logger.verbose(`   - Media: ${support.media ? '✓' : '✗'}`);
-      logger.verbose(`   - Comments: ${support.comments ? '✓' : '✗'}`);
-      logger.verbose(`   - Email Templates: ${support.emailTemplates ? '✓' : '✗'}`);
-      logger.verbose('');
+      logger.info(`✅ CMS Configuration received`);
+      logger.info(`   - Content: ${support.content ? '✓' : '✗'}`);
+      logger.info(`   - Media: ${support.media ? '✓' : '✗'}`);
+      logger.info(`   - Comments: ${support.comments ? '✓' : '✗'}`);
+      logger.info(`   - Email Templates: ${support.emailTemplates ? '✓' : '✗'}${isEmailTemplatesSupported() && !hasApiKey ? ' (requires auth)' : ''}`);
+      logger.info('');
 
       return support;
     }

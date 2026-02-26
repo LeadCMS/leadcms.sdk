@@ -5,6 +5,7 @@
 
 import 'dotenv/config';
 import { statusEmailTemplates } from '../../scripts/push-email-templates.js';
+import { resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
 
@@ -23,6 +24,8 @@ const showDetailedPreview = args.includes('--preview');
 
 // Check for --delete flag
 const showDelete = args.includes('--delete');
+
+await resolveIdentity();
 
 const spinner = startSpinner('Checking email template status…');
 statusEmailTemplates({ showDelete, targetId, showDetailedPreview })

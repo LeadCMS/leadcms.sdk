@@ -66,47 +66,8 @@ interface MediaSyncResult {
   nextSyncToken: string;
 }
 
-// Add axios request/response interceptors for debugging
-axios.interceptors.request.use(
-  (config) => {
-    logger.verbose(`[AXIOS REQUEST] ${config.method?.toUpperCase()} ${config.url}`);
-
-    // Mask the Authorization header for security
-    const maskedHeaders = { ...config.headers };
-    if (maskedHeaders.Authorization && typeof maskedHeaders.Authorization === "string") {
-      const authParts = maskedHeaders.Authorization.split(" ");
-      if (authParts.length === 2 && authParts[0] === "Bearer") {
-        maskedHeaders.Authorization = `Bearer ${authParts[1].substring(0, 8)}...`;
-      }
-    }
-
-    return config;
-  },
-  (error) => {
-    console.error(`[AXIOS REQUEST ERROR]`, error);
-    return Promise.reject(error);
-  }
-);
-
-axios.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  (error) => {
-    console.error(
-      `[AXIOS RESPONSE ERROR] ${error.response?.status || "NO_STATUS"} ${error.response?.statusText || "NO_STATUS_TEXT"} for ${error.config?.url || "NO_URL"}`
-    );
-    if (error.response) {
-      console.error(`[AXIOS RESPONSE ERROR] Response data:`, error.response.data);
-      console.error(
-        `[AXIOS RESPONSE ERROR] Response headers:`,
-        JSON.stringify(error.response.headers, null, 2)
-      );
-    }
-    console.error(`[AXIOS RESPONSE ERROR] Full error:`, error.message);
-    return Promise.reject(error);
-  }
-);
+const CONTENT_PROGRESS_LOG_INTERVAL = 25;
+const MEDIA_PROGRESS_LOG_INTERVAL = 5;
 
 // ── Sync token paths ───────────────────────────────────────────────────
 // New location: tokens live *inside* the corresponding data directory.
@@ -596,6 +557,10 @@ async function main(options: FetchContentOptions = {}): Promise<void> {
     contentTypeMap[key] = value === 'JSON' ? 'JSON' : 'MDX';
   }
 
+  console.log(`📄 Processing content sync (${items.length} updates, ${deleted.length} deletions)...`);
+
+  let processedContent = 0;
+
   for (const content of items) {
     if (content && typeof content === "object") {
       const idStr = content.id != null ? String(content.id) : undefined;
@@ -671,6 +636,14 @@ async function main(options: FetchContentOptions = {}): Promise<void> {
           newCount++;
         }
       }
+
+      processedContent++;
+      if (
+        items.length > CONTENT_PROGRESS_LOG_INTERVAL
+        && (processedContent % CONTENT_PROGRESS_LOG_INTERVAL === 0 || processedContent === items.length)
+      ) {
+        console.log(`   📄 Content processed: ${processedContent}/${items.length}`);
+      }
     }
   }
 
@@ -684,18 +657,36 @@ async function main(options: FetchContentOptions = {}): Promise<void> {
   }
 
   // Remove deleted content files from all language directories
+  if (deleted.length > 0) {
+    console.log(`🗑️  Removing deleted content files (${deleted.length})...`);
+  }
   for (const id of deleted) {
     await deleteContentFilesById(contentIdIndex, String(id));
   }
 
+  if (items.length === 0 && deleted.length === 0) {
+    console.log(`No content changes detected.`);
+  }
+
   // Handle media sync results
+  console.log(`🖼️  Processing media sync (${mediaItems.length} downloads, ${mediaDeleted.length} deletions)...`);
   if (mediaItems.length > 0) {
     logger.verbose(`\nProcessing media changes...`);
 
     // Download new/updated media files
     let downloaded = 0;
+    let attemptedDownloads = 0;
     for (const mediaItem of mediaItems) {
       if (mediaItem.location) {
+        attemptedDownloads++;
+        if (
+          attemptedDownloads === 1
+          || attemptedDownloads % MEDIA_PROGRESS_LOG_INTERVAL === 0
+          || attemptedDownloads === mediaItems.length
+        ) {
+          console.log(`   ⬇️  Media download progress: ${attemptedDownloads}/${mediaItems.length}`);
+        }
+
         const relPath = mediaItem.location.replace(/^\/api\/media\//, "");
         const destPath = path.join(MEDIA_DIR, relPath);
         const didDownload = await downloadMediaFileDirect(mediaItem.location, destPath, leadCMSUrl || "", leadCMSApiKey || "");
@@ -705,14 +696,14 @@ async function main(options: FetchContentOptions = {}): Promise<void> {
         }
       }
     }
-    console.log(`\nDone. ${downloaded} media files downloaded.\n`);
-  } else {
-    console.log(`\nNo media changes detected.\n`);
+    console.log(`Done. ${downloaded} media files downloaded.`);
+  } else if (mediaDeleted.length === 0) {
+    console.log(`No media changes detected.`);
   }
 
   // Remove deleted media files from local filesystem
   if (mediaDeleted.length > 0) {
-    console.log(`\nRemoving ${mediaDeleted.length} deleted media files...`);
+    console.log(`Removing ${mediaDeleted.length} deleted media files...`);
     let removedCount = 0;
     for (const deletedMedia of mediaDeleted) {
       const relPath = deletedMedia.scopeUid
@@ -729,7 +720,7 @@ async function main(options: FetchContentOptions = {}): Promise<void> {
         }
       }
     }
-    console.log(`Done. ${removedCount} media files removed.\n`);
+    console.log(`Done. ${removedCount} media files removed.`);
   }
 
   // Save new sync tokens

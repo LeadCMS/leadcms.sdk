@@ -15,6 +15,7 @@
  */
 
 import { colorConsole } from './console-colors.js';
+import { registerApiLogger } from './api-logger.js';
 
 let _verbose = false;
 
@@ -95,5 +96,6 @@ export const logger = {
 export function initVerboseFromArgs(args: string[] = process.argv): void {
   if (args.includes('--verbose') || args.includes('-V') || process.env.LEADCMS_VERBOSE === 'true') {
     setVerbose(true);
+    registerApiLogger();
   }
 }

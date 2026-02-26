@@ -758,6 +758,12 @@ describe('content-merge', () => {
 
       expect(result.hasConflicts).toBe(true);
       expect(result.conflictCount).toBe(1);
+      expect(result.merged).toContain('<<<<<<< local');
+      expect(result.merged).toContain('=======');
+      expect(result.merged).toContain('>>>>>>> remote');
+      expect(result.merged).not.toContain('"<<<<<<< local"');
+      expect(result.merged).not.toContain('"======="');
+      expect(result.merged).not.toContain('">>>>>>> remote"');
     });
 
     it('should not conflict when both sides make identical changes', () => {
@@ -909,6 +915,79 @@ describe('content-merge', () => {
       const result = threeWayMergeJson(base, local, remote);
 
       expect(result.hasConflicts).toBe(true);
+      expect(result.merged).toContain('<<<<<<< local');
+      expect(result.merged).toContain('>>>>>>> remote');
+      expect(result.merged).not.toContain('"<<<<<<< local"');
+    });
+
+    it('should render nested object conflicts as top-level text markers (not JSON keys)', () => {
+      const base = JSON.stringify({
+        navigation: [
+          { label: 'Services', href: '/public/services' },
+          { label: 'Blog', href: '/public/blog' },
+        ],
+      }, null, 2);
+
+      const local = JSON.stringify({
+        navigation: [
+          { label: 'Services', href: '/#services' },
+          { label: 'Blog', href: '/public_de/blog' },
+        ],
+      }, null, 2);
+
+      const remote = JSON.stringify({
+        navigation: [
+          { label: 'Services', href: '/public_en/services' },
+          { label: 'Blog', href: '/public_en/blog' },
+        ],
+      }, null, 2);
+
+      const result = threeWayMergeJson(base, local, remote);
+
+      expect(result.hasConflicts).toBe(true);
+      expect(result.merged).toContain('"navigation":');
+      expect(result.merged).toContain('<<<<<<< local');
+      expect(result.merged).toContain('>>>>>>> remote');
+      expect(result.merged).toContain('/public_de/blog');
+      expect(result.merged).toContain('/public_en/blog');
+      expect(result.merged).not.toContain('"<<<<<<< local"');
+      expect(result.merged).not.toContain('"======="');
+      expect(result.merged).not.toContain('">>>>>>> remote"');
+    });
+
+    it('should keep trailing commas inside conflict sides (not on marker lines)', () => {
+      const base = JSON.stringify({
+        navigation: [
+          { label: 'Services', href: '/public/services' },
+          { label: 'Blog', href: '/public/blog' },
+        ],
+        id: 3,
+      }, null, 2);
+
+      const local = JSON.stringify({
+        navigation: [
+          { label: 'Services', href: '/#services' },
+          { label: 'Blog', href: '/public_de/blog' },
+        ],
+        id: 3,
+      }, null, 2);
+
+      const remote = JSON.stringify({
+        navigation: [
+          { label: 'Services', href: '/public_en/services' },
+          { label: 'Blog', href: '/public_en/blog' },
+        ],
+        id: 3,
+      }, null, 2);
+
+      const result = threeWayMergeJson(base, local, remote);
+
+      expect(result.hasConflicts).toBe(true);
+      expect(result.merged).toContain('<<<<<<< local');
+      expect(result.merged).toContain('>>>>>>> remote');
+      expect(result.merged).toContain('    ],\n=======');
+      expect(result.merged).toContain('    ],\n>>>>>>> remote');
+      expect(result.merged).not.toContain('>>>>>>> remote,');
     });
   });
 });

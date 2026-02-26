@@ -5,6 +5,7 @@
 
 import 'dotenv/config';
 import { pushMedia } from '../../scripts/push-media.js';
+import { requireAuthenticatedUser, resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
 
@@ -13,6 +14,12 @@ initVerboseFromArgs(args);
 const dryRun = args.includes('--dry-run') || args.includes('-d');
 const force = args.includes('--force') || args.includes('-f');
 const allowDelete = args.includes('--delete');
+
+if (!dryRun) {
+  await requireAuthenticatedUser();
+} else {
+  await resolveIdentity();
+}
 
 // Parse scope UID
 let scopeUid: string | undefined;

@@ -5,6 +5,7 @@
 
 import 'dotenv/config';
 import { pushLeadCMSContent } from '../../scripts/push-leadcms-content.js';
+import { resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
 
@@ -33,6 +34,8 @@ if (args.includes('--preview')) {
 
 // Check for --delete flag
 const showDelete = args.includes('--delete');
+
+await resolveIdentity();
 
 const spinner = startSpinner('Checking content status…');
 pushLeadCMSContent({ statusOnly: true, targetId, targetSlug, showDetailedPreview, showDelete })

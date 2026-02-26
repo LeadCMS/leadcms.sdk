@@ -185,6 +185,100 @@ interface FieldMergeResult {
   conflicted: boolean;
 }
 
+interface JsonConflictValue {
+  __leadcmsConflict: true;
+  local: any;
+  remote: any;
+}
+
+function createJsonConflictValue(local: any, remote: any): JsonConflictValue {
+  return { __leadcmsConflict: true, local, remote };
+}
+
+function isJsonConflictValue(value: any): value is JsonConflictValue {
+  return Boolean(value && typeof value === 'object' && value.__leadcmsConflict === true);
+}
+
+function cloneWithConflictPlaceholders(value: any, placeholders: Map<string, JsonConflictValue>, state: { index: number }): any {
+  if (isJsonConflictValue(value)) {
+    const key = `__LEADCMS_CONFLICT_${state.index++}__`;
+    placeholders.set(key, value);
+    return key;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(item => cloneWithConflictPlaceholders(item, placeholders, state));
+  }
+
+  if (value !== null && typeof value === 'object') {
+    const cloned: Record<string, any> = {};
+    for (const [key, val] of Object.entries(value)) {
+      cloned[key] = cloneWithConflictPlaceholders(val, placeholders, state);
+    }
+    return cloned;
+  }
+
+  return value;
+}
+
+function indentMultiline(text: string, indent: string): string {
+  return text
+    .split('\n')
+    .map(line => `${indent}${line}`)
+    .join('\n');
+}
+
+function addCommaToLastLine(block: string): string {
+  const lines = block.split('\n');
+  if (lines.length === 0) return block;
+  lines[lines.length - 1] = `${lines[lines.length - 1]},`;
+  return lines.join('\n');
+}
+
+function renderJsonConflictMarkers(mergedWithPlaceholders: string, placeholders: Map<string, JsonConflictValue>): string {
+  const lines = mergedWithPlaceholders.split('\n');
+  const output: string[] = [];
+
+  for (const line of lines) {
+    const propertyMatch = line.match(/^(\s*"[^"]+": )"(__LEADCMS_CONFLICT_\d+__)"(,?)$/);
+    const arrayMatch = line.match(/^(\s*)"(__LEADCMS_CONFLICT_\d+__)"(,?)$/);
+
+    if (!propertyMatch && !arrayMatch) {
+      output.push(line);
+      continue;
+    }
+
+    const isProperty = Boolean(propertyMatch);
+    const prefix = isProperty ? propertyMatch![1] : arrayMatch![1];
+    const token = isProperty ? propertyMatch![2] : arrayMatch![2];
+    const trailingComma = (isProperty ? propertyMatch![3] : arrayMatch![3]) === ',';
+    const conflict = placeholders.get(token);
+
+    if (!conflict) {
+      output.push(line);
+      continue;
+    }
+
+    const markerIndent = prefix.match(/^\s*/)?.[0] ?? '';
+    const valueIndent = `${markerIndent}  `;
+    let localJson = indentMultiline(JSON.stringify(conflict.local, null, 2), valueIndent);
+    let remoteJson = indentMultiline(JSON.stringify(conflict.remote, null, 2), valueIndent);
+
+    if (trailingComma) {
+      localJson = addCommaToLastLine(localJson);
+      remoteJson = addCommaToLastLine(remoteJson);
+    }
+
+    let block = isProperty
+      ? `${prefix}\n<<<<<<< local\n${localJson}\n=======\n${remoteJson}\n>>>>>>> remote`
+      : `<<<<<<< local\n${localJson}\n=======\n${remoteJson}\n>>>>>>> remote`;
+
+    output.push(block);
+  }
+
+  return output.join('\n');
+}
+
 /**
  * Perform a structural three-way merge on JSON content.
  *
@@ -220,7 +314,13 @@ export function threeWayMergeJson(base: string, local: string, remote: string): 
 
   const { value: mergedObj, conflicted, conflictCount } = mergeValues(baseObj, localObj, remoteObj);
 
-  const merged = JSON.stringify(mergedObj, null, 2);
+  const placeholders = new Map<string, JsonConflictValue>();
+  const mergedWithPlaceholders = JSON.stringify(
+    cloneWithConflictPlaceholders(mergedObj, placeholders, { index: 0 }),
+    null,
+    2
+  );
+  const merged = renderJsonConflictMarkers(mergedWithPlaceholders, placeholders);
 
   return {
     success: !conflicted,
@@ -266,13 +366,10 @@ function mergeValues(base: any, local: any, remote: any): FieldMergeResult & { c
   }
 
   // Both changed differently → conflict
-  // Use a special marker object that will be serialized with conflict info
+  // Use an internal conflict marker that will be rendered as real
+  // git-style conflict text markers in the final serialized output.
   return {
-    value: {
-      '<<<<<<< local': local,
-      '=======': '---',
-      '>>>>>>> remote': remote,
-    },
+    value: createJsonConflictValue(local, remote),
     conflicted: true,
     conflictCount: 1,
   };

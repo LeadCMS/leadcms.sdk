@@ -4,7 +4,9 @@
  */
 
 import { startSSEWatcher } from '../../scripts/sse-watcher.js';
+import { resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 
 initVerboseFromArgs();
+await resolveIdentity();
 startSSEWatcher();
