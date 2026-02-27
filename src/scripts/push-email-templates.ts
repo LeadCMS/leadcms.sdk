@@ -142,7 +142,13 @@ async function readLocalEmailTemplates(): Promise<LocalEmailTemplateItem[]> {
 }
 
 function normalizeGroupKey(name: string): string {
-  return slugifySegment(name);
+  // Use Unicode-aware normalization to support non-Latin scripts (Cyrillic, etc.)
+  const normalized = name
+    .toLowerCase()
+    .trim()
+    .replace(/[\s_]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized;
 }
 
 function resolveEmailGroupId(
@@ -570,7 +576,7 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
 
 function getRemoteGroupLabel(remote: RemoteEmailTemplateItem): string {
   if (remote.emailGroup?.name) {
-    return slugifySegment(remote.emailGroup.name) || remote.emailGroup.name;
+    return normalizeGroupKey(remote.emailGroup.name) || remote.emailGroup.name;
   }
   return 'ungrouped';
 }
@@ -763,6 +769,10 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
 // Export for unified status renderer
 export { buildEmailTemplateStatus, getRemoteGroupLabel };
 export type { EmailTemplateOperation, LocalEmailTemplateItem, RemoteEmailTemplateItem };
+
+// Export internal functions for testing
+export { normalizeGroupKey, resolveEmailGroupId, buildGroupIndex, createMissingEmailGroups, getEffectiveGroupName };
+export type { EmailGroupItem };
 
 export async function pushEmailTemplates(options: PushOptions = {}): Promise<void> {
   if (!leadCMSDataService.isApiKeyConfigured()) {
