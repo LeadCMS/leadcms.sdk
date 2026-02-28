@@ -216,6 +216,36 @@ describe('push-leadcms-content - Pure Functions', () => {
       const result = (filterContentOperations as any)(opsWithDelete, '10', undefined);
       expect(result.delete).toHaveLength(1);
     });
+
+    it('should filter by remote ID when local metadata has no ID (JSON content without local id)', () => {
+      // Simulates JSON content files that don't have an `id` field locally
+      // but are matched to remote content by slug
+      const opsWithRemoteOnlyId = {
+        create: [],
+        update: [makeOp('partners-logos', undefined, 121)],
+        rename: [],
+        typeChange: [],
+        conflict: [],
+        delete: [],
+      };
+      const result = (filterContentOperations as any)(opsWithRemoteOnlyId, '121', undefined);
+      expect(result.update).toHaveLength(1);
+      expect(result.update[0].remote.id).toBe(121);
+    });
+
+    it('should not match when neither local nor remote has the target ID', () => {
+      const ops = {
+        create: [makeOp('some-article', undefined, undefined)],
+        update: [makeOp('other-article', undefined, 50)],
+        rename: [],
+        typeChange: [],
+        conflict: [],
+        delete: [],
+      };
+      const result = (filterContentOperations as any)(ops, '999', undefined);
+      expect(result.create).toHaveLength(0);
+      expect(result.update).toHaveLength(0);
+    });
   });
 
   describe('parseContentFile', () => {
@@ -313,6 +343,38 @@ describe('push-leadcms-content - Pure Functions', () => {
       expect(result.body).toBe('<div>Content</div>');
       // body should not be in metadata
       expect(result.metadata.body).toBeUndefined();
+    });
+
+    it('should preserve id in metadata for JSON content with id field', async () => {
+      const filePath = path.join(tmpDir, 'partners-logos.json');
+      await fs.writeFile(filePath, JSON.stringify({
+        id: 121,
+        slug: 'partners-logos',
+        type: 'component',
+        title: 'Partners Logos',
+        items: [{ logo: 'logo1.png' }],
+      }));
+
+      const result = await (parseContentFile as any)(filePath, 'ru-RU', tmpDir);
+      expect(result).not.toBeNull();
+      expect(result.metadata.id).toBe(121);
+      expect(result.metadata.id?.toString()).toBe('121');
+      expect(result.locale).toBe('ru-RU');
+    });
+
+    it('should handle JSON content without id field (component body only)', async () => {
+      const filePath = path.join(tmpDir, 'header.json');
+      await fs.writeFile(filePath, JSON.stringify({
+        type: 'component',
+        title: 'Header',
+        logo: 'logo.png',
+        navigation: [{ label: 'Home', href: '/' }],
+      }));
+
+      const result = await (parseContentFile as any)(filePath, 'en', tmpDir);
+      expect(result).not.toBeNull();
+      expect(result.metadata.id).toBeUndefined();
+      expect(result.slug).toBe('header');
     });
   });
 });

@@ -1005,12 +1005,20 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
         return false;
       });
 
-      if (filteredLocalContent.length === 0) {
-        console.log(`❌ No local content found with ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`}`);
+      if (filteredLocalContent.length === 0 && targetSlug) {
+        // For slug-based filtering, we can fail early since slugs are always local
+        console.log(`❌ No local content found with slug "${targetSlug}"`);
         return;
       }
 
-      logger.verbose(`[LOCAL] Found ${filteredLocalContent.length} matching local file(s)`);
+      if (filteredLocalContent.length === 0 && targetId) {
+        // ID might only exist in remote metadata (e.g., JSON files without local id field).
+        // Proceed with all local content and let filterContentOperations match by remote ID.
+        logger.verbose(`[LOCAL] No local file with ID ${targetId} in metadata, will match against remote content`);
+        filteredLocalContent = localContent;
+      } else {
+        logger.verbose(`[LOCAL] Found ${filteredLocalContent.length} matching local file(s)`);
+      }
     } else {
       // Get local content types and validate them
       const localTypes = getLocalContentTypes(localContent);
@@ -1036,12 +1044,23 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     if (isSingleFileMode) {
       const totalChanges = countPushChanges(finalOperations, true);
 
-      if (totalChanges === 0 && filteredLocalContent.length > 0) {
-        // We have local content but no operations - it's in sync
-        console.log(`✅ Content with ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`} is in sync`);
-      } else if (totalChanges === 0) {
-        console.log(`❌ No content found with ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`} in remote or local`);
-        return;
+      if (totalChanges === 0) {
+        // Check if the target content exists but is in sync
+        const targetFoundInRemote = targetId
+          ? remoteContent.some(r => r.id?.toString() === targetId)
+          : false;
+        const targetFoundInLocal = targetId
+          ? localContent.some(c => c.metadata.id?.toString() === targetId)
+          : targetSlug
+            ? localContent.some(c => c.slug === targetSlug)
+            : false;
+
+        if (targetFoundInRemote || targetFoundInLocal) {
+          console.log(`✅ Content with ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`} is in sync`);
+        } else {
+          console.log(`❌ No content found with ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`} in remote or local`);
+          return;
+        }
       }
     }
 
