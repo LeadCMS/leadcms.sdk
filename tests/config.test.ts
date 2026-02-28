@@ -100,6 +100,42 @@ describe('Config Module', () => {
       expect(config.contentDir).toBe('.leadcms/content');
       expect(config.mediaDir).toBe('public/media');
     });
+
+    it('should strip trailing slash from LEADCMS_URL', () => {
+      process.env.LEADCMS_URL = 'https://cms.dev.example.com/';
+
+      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const config = getConfigFresh();
+
+      expect(config.url).toBe('https://cms.dev.example.com');
+    });
+
+    it('should strip multiple trailing slashes from URL', () => {
+      process.env.LEADCMS_URL = 'https://cms.dev.example.com///';
+
+      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const config = getConfigFresh();
+
+      expect(config.url).toBe('https://cms.dev.example.com');
+    });
+
+    it('should strip trailing slash from NEXT_PUBLIC_LEADCMS_URL', () => {
+      process.env.NEXT_PUBLIC_LEADCMS_URL = 'https://cms.dev.example.com/';
+
+      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const config = getConfigFresh();
+
+      expect(config.url).toBe('https://cms.dev.example.com');
+    });
+
+    it('should not modify URL without trailing slash', () => {
+      process.env.LEADCMS_URL = 'https://cms.dev.example.com';
+
+      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const config = getConfigFresh();
+
+      expect(config.url).toBe('https://cms.dev.example.com');
+    });
   });
 
   describe('Config File Loading', () => {
@@ -120,6 +156,20 @@ describe('Config Module', () => {
       expect(config.apiKey).toBe('file-api-key');
       expect(config.defaultLanguage).toBe('fr');
       expect(config.contentDir).toBe('custom/content');
+    });
+
+    it('should strip trailing slash from URL in config file', () => {
+      const testConfig = {
+        url: 'https://file.leadcms.ai/',
+        apiKey: 'file-api-key',
+      };
+
+      fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
+
+      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const config = getConfigFresh();
+
+      expect(config.url).toBe('https://file.leadcms.ai');
     });
 
     it('should load config from .leadcmsrc.json', () => {

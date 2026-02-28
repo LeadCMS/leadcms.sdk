@@ -288,7 +288,7 @@ class LeadCMSDataService {
     this.useMock = shouldUseMock();
     this.mockScenario = process.env.LEADCMS_MOCK_SCENARIO || 'allNew';
     // Use same fallback logic as helpers: LEADCMS_URL or NEXT_PUBLIC_LEADCMS_URL
-    this.baseURL = process.env.LEADCMS_URL || process.env.NEXT_PUBLIC_LEADCMS_URL;
+    this.baseURL = (process.env.LEADCMS_URL || process.env.NEXT_PUBLIC_LEADCMS_URL || '').replace(/\/+$/, '') || undefined;
     this.apiKey = process.env.LEADCMS_API_KEY;
 
     // Initialize mock data if needed

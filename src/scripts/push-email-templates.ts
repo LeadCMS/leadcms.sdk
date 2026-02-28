@@ -52,6 +52,8 @@ interface PushOptions {
   force?: boolean;
   dryRun?: boolean;
   allowDelete?: boolean;
+  targetId?: string;
+  targetName?: string;
 }
 
 interface StatusOptions {
@@ -780,9 +782,35 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
     return;
   }
 
-  const { force, dryRun, allowDelete } = options;
+  const { force, dryRun, allowDelete, targetId, targetName } = options;
 
-  const localTemplates = await readLocalEmailTemplates();
+  let localTemplates = await readLocalEmailTemplates();
+
+  // Filter to a single template when --id or --name is specified
+  if (targetId) {
+    localTemplates = localTemplates.filter(t => {
+      const localId = t.metadata.id != null ? String(t.metadata.id) : undefined;
+      return localId === targetId;
+    });
+
+    if (localTemplates.length === 0) {
+      console.log(`❌ No local email template found with ID ${targetId}`);
+      return;
+    }
+
+    console.log(`🔍 Pushing email template with ID ${targetId}`);
+  } else if (targetName) {
+    localTemplates = localTemplates.filter(t => {
+      return t.metadata.name === targetName;
+    });
+
+    if (localTemplates.length === 0) {
+      console.log(`❌ No local email template found with name "${targetName}"`);
+      return;
+    }
+
+    console.log(`🔍 Pushing email template "${targetName}"`);
+  }
   const remoteTemplates = await leadCMSDataService.getAllEmailTemplates();
   const emailGroups = await leadCMSDataService.getAllEmailGroups();
 
@@ -877,7 +905,7 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
     await updateLocalFileFromResponse(local, updated, emailGroups);
   }
 
-  if (!allowDelete) {
+  if (!allowDelete || targetId || targetName) {
     return;
   }
 

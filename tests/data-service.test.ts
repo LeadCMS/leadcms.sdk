@@ -220,6 +220,40 @@ describe('LeadCMS Data Service', () => {
       );
     });
 
+    it('should strip trailing slash from LEADCMS_URL', async () => {
+      process.env.LEADCMS_URL = 'https://api.example.com/';
+
+      mockedAxios.get.mockResolvedValue({
+        status: 200,
+        data: { items: [] }
+      });
+
+      const service = new LeadCMSDataService();
+      await service.getAllContent();
+
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        'https://api.example.com/api/content/sync',
+        expect.any(Object)
+      );
+    });
+
+    it('should strip multiple trailing slashes from URL', async () => {
+      process.env.LEADCMS_URL = 'https://api.example.com///';
+
+      mockedAxios.get.mockResolvedValue({
+        status: 200,
+        data: { items: [] }
+      });
+
+      const service = new LeadCMSDataService();
+      await service.getAllContent();
+
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        'https://api.example.com/api/content/sync',
+        expect.any(Object)
+      );
+    });
+
     it('should fetch content from API', async () => {
       const mockContent = [
         { id: 1, slug: 'test', title: 'Test', type: 'article' }

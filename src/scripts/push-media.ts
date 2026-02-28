@@ -541,12 +541,16 @@ export async function executeMediaPush(
 
   result.executed.skipped = skips.length;
 
+  const totalOps = creates.length + updates.length + deletes.length;
+  let completedOps = 0;
+
   // Upload new files
   for (const op of creates) {
+    completedOps++;
     try {
       const validation = validateFileSize(op.local!);
       if (!validation.valid) {
-        logErr(`✗ ${op.local!.scopeUid}/${op.local!.name}: ${validation.message}`);
+        logErr(`[${completedOps}/${totalOps}] ✗ ${op.local!.scopeUid}/${op.local!.name}: ${validation.message}`);
         result.executed.failed++;
         result.errors.push({ operation: op, error: validation.message! });
         continue;
@@ -557,7 +561,7 @@ export async function executeMediaPush(
       formData.append('ScopeUid', op.local!.scopeUid);
 
       const serverResponse = await uploadMedia(formData);
-      logOk(`✓ Uploaded ${op.local!.scopeUid}/${op.local!.name}`);
+      logOk(`[${completedOps}/${totalOps}] ✓ Uploaded ${op.local!.scopeUid}/${op.local!.name}`);
       result.executed.successful++;
 
       // Post-upload reconciliation: sync local file with server response
@@ -572,7 +576,7 @@ export async function executeMediaPush(
         }
       }
     } catch (err: any) {
-      logErr(`✗ Failed to upload ${op.local!.scopeUid}/${op.local!.name}: ${err.message}`);
+      logErr(`[${completedOps}/${totalOps}] ✗ Failed to upload ${op.local!.scopeUid}/${op.local!.name}: ${err.message}`);
       result.executed.failed++;
       result.errors.push({ operation: op, error: err.message });
     }
@@ -580,10 +584,11 @@ export async function executeMediaPush(
 
   // Update modified files
   for (const op of updates) {
+    completedOps++;
     try {
       const validation = validateFileSize(op.local!);
       if (!validation.valid) {
-        logErr(`✗ ${op.local!.scopeUid}/${op.local!.name}: ${validation.message}`);
+        logErr(`[${completedOps}/${totalOps}] ✗ ${op.local!.scopeUid}/${op.local!.name}: ${validation.message}`);
         result.executed.failed++;
         result.errors.push({ operation: op, error: validation.message! });
         continue;
@@ -595,7 +600,7 @@ export async function executeMediaPush(
       formData.append('FileName', op.local!.name);
 
       const serverResponse = await updateMedia(formData);
-      logOk(`✓ Updated ${op.local!.scopeUid}/${op.local!.name}`);
+      logOk(`[${completedOps}/${totalOps}] ✓ Updated ${op.local!.scopeUid}/${op.local!.name}`);
       result.executed.successful++;
 
       // Post-update reconciliation: sync local file with server response
@@ -610,7 +615,7 @@ export async function executeMediaPush(
         }
       }
     } catch (err: any) {
-      logErr(`✗ Failed to update ${op.local!.scopeUid}/${op.local!.name}: ${err.message}`);
+      logErr(`[${completedOps}/${totalOps}] ✗ Failed to update ${op.local!.scopeUid}/${op.local!.name}: ${err.message}`);
       result.executed.failed++;
       result.errors.push({ operation: op, error: err.message });
     }
@@ -618,13 +623,14 @@ export async function executeMediaPush(
 
   // Delete removed files
   for (const op of deletes) {
+    completedOps++;
     try {
       const pathToFile = `${op.remote!.scopeUid}/${op.remote!.name}`;
       await deleteMedia(pathToFile);
-      logOk(`✓ Deleted ${pathToFile}`);
+      logOk(`[${completedOps}/${totalOps}] ✓ Deleted ${pathToFile}`);
       result.executed.successful++;
     } catch (err: any) {
-      logErr(`✗ Failed to delete ${op.remote!.scopeUid}/${op.remote!.name}: ${err.message}`);
+      logErr(`[${completedOps}/${totalOps}] ✗ Failed to delete ${op.remote!.scopeUid}/${op.remote!.name}: ${err.message}`);
       result.executed.failed++;
       result.errors.push({ operation: op, error: err.message });
     }

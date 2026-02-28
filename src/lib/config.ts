@@ -76,7 +76,7 @@ export function loadConfig(): LeadCMSConfig {
 
   // Remove undefined values and ensure required fields
   const cleanConfig: LeadCMSConfig = {
-    url: mergedConfig.url || "",
+    url: (mergedConfig.url || "").replace(/\/+$/, ""),
     apiKey: mergedConfig.apiKey, // Optional - undefined if not provided
     defaultLanguage: mergedConfig.defaultLanguage || DEFAULT_CONFIG.defaultLanguage!,
     contentDir: mergedConfig.contentDir || DEFAULT_CONFIG.contentDir!,

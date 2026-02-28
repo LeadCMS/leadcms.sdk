@@ -174,6 +174,8 @@ Usage:
     --force              - Override remote changes (skip conflict check)
     --dry-run            - Show API calls without executing them (preview mode)
     --delete             - Delete remote email templates not present locally
+    --id <template-id>   - Push only a specific email template by ID
+    --name <name>        - Push only a specific email template by name
 
   Status & monitoring:
   leadcms status [options] - Show sync status for all entities (content + media + email templates)
