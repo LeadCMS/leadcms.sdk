@@ -285,20 +285,25 @@ function getRemoteMatch(
   local: LocalEmailTemplateItem,
   remoteTemplates: RemoteEmailTemplateItem[]
 ): RemoteEmailTemplateItem | undefined {
+  // Priority 1: Match by name + language (name is the "slug" equivalent for templates)
+  const name = local.metadata.name;
+  const language = local.metadata.language || local.locale;
+
+  if (name) {
+    const nameMatch = remoteTemplates.find(template =>
+      template.name === name &&
+      (template.language || defaultLanguage) === language
+    );
+    if (nameMatch) return nameMatch;
+  }
+
+  // Priority 2: Fall back to ID match (handles renames where local still has old remote ID)
   const localId = local.metadata.id != null ? Number(local.metadata.id) : undefined;
   if (localId != null) {
     return remoteTemplates.find(template => template.id === localId);
   }
 
-  const name = local.metadata.name;
-  const emailGroupId = local.metadata.emailGroupId;
-  const language = local.metadata.language || local.locale;
-
-  return remoteTemplates.find(template =>
-    template.name === name &&
-    (template.language || defaultLanguage) === language &&
-    template.emailGroupId === emailGroupId
-  );
+  return undefined;
 }
 
 function filterUndefinedValues(obj: Record<string, any>): Record<string, any> {
@@ -557,13 +562,25 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
         .filter(id => id != null)
         .map(id => Number(id))
     );
+    // Build a set of local name+language keys for matching (like slug+locale in content)
+    const localNameKeys = new Set(
+      localTemplates.map(template => {
+        const name = template.metadata.name;
+        const lang = template.metadata.language || template.locale;
+        return `${name}::${lang}`;
+      })
+    );
 
     for (const remote of remoteTemplates) {
       if (remote.id == null) {
         continue;
       }
 
-      if (!localIds.has(Number(remote.id))) {
+      const isMatchedById = localIds.has(Number(remote.id));
+      const remoteNameKey = `${remote.name}::${remote.language || defaultLanguage}`;
+      const isMatchedByName = localNameKeys.has(remoteNameKey);
+
+      if (!isMatchedById && !isMatchedByName) {
         operations.push({ type: 'delete', remote });
       }
     }
@@ -773,7 +790,7 @@ export { buildEmailTemplateStatus, getRemoteGroupLabel };
 export type { EmailTemplateOperation, LocalEmailTemplateItem, RemoteEmailTemplateItem };
 
 // Export internal functions for testing
-export { normalizeGroupKey, resolveEmailGroupId, buildGroupIndex, createMissingEmailGroups, getEffectiveGroupName };
+export { normalizeGroupKey, resolveEmailGroupId, buildGroupIndex, createMissingEmailGroups, getEffectiveGroupName, getRemoteMatch };
 export type { EmailGroupItem };
 
 export async function pushEmailTemplates(options: PushOptions = {}): Promise<void> {
@@ -910,12 +927,25 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
   }
 
   const localIds = new Set(localTemplates.map(template => template.metadata.id).filter(id => id != null).map(id => Number(id)));
+  // Build a set of local name+language keys for matching (like slug+locale in content)
+  const localNameKeys = new Set(
+    localTemplates.map(template => {
+      const name = template.metadata.name;
+      const lang = template.metadata.language || template.locale;
+      return `${name}::${lang}`;
+    })
+  );
+
   for (const remote of remoteTemplates) {
     if (remote.id == null) {
       continue;
     }
 
-    if (!localIds.has(Number(remote.id))) {
+    const isMatchedById = localIds.has(Number(remote.id));
+    const remoteNameKey = `${remote.name}::${remote.language || defaultLanguage}`;
+    const isMatchedByName = localNameKeys.has(remoteNameKey);
+
+    if (!isMatchedById && !isMatchedByName) {
       if (dryRun) {
         console.log(`🟡 [DRY RUN] Delete email template: ${remote.name || remote.id}`);
         continue;
