@@ -9,7 +9,7 @@ import fs from "fs/promises";
 import path from "path";
 import axios from "axios";
 import { leadCMSUrl, leadCMSApiKey } from "./leadcms-helpers.js";
-import { setCMSConfig, isContentSupported, isMediaSupported, isCommentsSupported, isEmailTemplatesSupported } from "../lib/cms-config-types.js";
+import { setCMSConfig, isContentSupported, isMediaSupported, isCommentsSupported, isEmailTemplatesSupported, isSettingsSupported } from "../lib/cms-config-types.js";
 import { getConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
 
@@ -30,6 +30,7 @@ async function fetchAndCacheCMSConfig(): Promise<{
   media: boolean;
   comments: boolean;
   emailTemplates: boolean;
+  settings: boolean;
 }> {
   try {
     logger.info(`🔍 Checking CMS configuration...`);
@@ -44,6 +45,7 @@ async function fetchAndCacheCMSConfig(): Promise<{
         media: isMediaSupported(),
         comments: isCommentsSupported(),
         emailTemplates: isEmailTemplatesSupported() && hasApiKey,
+        settings: isSettingsSupported() && hasApiKey,
       };
 
       logger.info(`✅ CMS Configuration received`);
@@ -51,6 +53,7 @@ async function fetchAndCacheCMSConfig(): Promise<{
       logger.info(`   - Media: ${support.media ? '✓' : '✗'}`);
       logger.info(`   - Comments: ${support.comments ? '✓' : '✗'}`);
       logger.info(`   - Email Templates: ${support.emailTemplates ? '✓' : '✗'}${isEmailTemplatesSupported() && !hasApiKey ? ' (requires auth)' : ''}`);
+      logger.info(`   - Settings: ${support.settings ? '✓' : '✗'}${isSettingsSupported() && !hasApiKey ? ' (requires auth)' : ''}`);
       logger.info('');
 
       return support;
@@ -60,7 +63,7 @@ async function fetchAndCacheCMSConfig(): Promise<{
     console.warn(`⚠️  Assuming all entities are supported (backward compatibility)\n`);
   }
 
-  return { content: false, media: false, comments: false, emailTemplates: false };
+  return { content: false, media: false, comments: false, emailTemplates: false, settings: false };
 }
 
 /**
@@ -138,6 +141,19 @@ async function resetEmailTemplatesState(): Promise<void> {
 }
 
 /**
+ * Reset settings directory.
+ */
+async function resetSettingsState(): Promise<void> {
+  const config = getConfig();
+  const settingsDir = path.resolve(config.settingsDir || ".leadcms/settings");
+
+  try {
+    await fs.rm(settingsDir, { recursive: true, force: true });
+    logger.verbose(`   ✓ Cleared settings directory: ${settingsDir}`);
+  } catch { /* directory may not exist */ }
+}
+
+/**
  * Delete all local content, media, comments, and sync tokens.
  * Used by --reset to do a clean pull from scratch.
  */
@@ -148,6 +164,7 @@ async function resetLocalState(): Promise<void> {
   await resetMediaState();
   await resetCommentsState();
   await resetEmailTemplatesState();
+  await resetSettingsState();
 
   console.log(`   ✅ Local state reset complete\n`);
 }
@@ -175,11 +192,23 @@ async function main(options: PullAllOptions = {}): Promise<void> {
   }
 
   // Check which entities are supported
-  const { content, media, comments, emailTemplates } = await fetchAndCacheCMSConfig();
+  const { content, media, comments, emailTemplates, settings } = await fetchAndCacheCMSConfig();
 
-  if (!content && !media && !comments && !emailTemplates) {
+  if (!content && !media && !comments && !emailTemplates && !settings) {
     console.log(`⏭️  No supported entities found - nothing to sync`);
     return;
+  }
+
+  // Pull settings first — other content may depend on settings
+  if (settings) {
+    console.log(`\n⚙️  Fetching settings...`);
+    try {
+      const { pullSettings } = await import('./pull-settings.js');
+      await pullSettings({ reset: false });
+    } catch (error: any) {
+      console.error(`   ❌ Failed to pull settings: ${error.message}`);
+      // Continue with other content - settings failure should not block the pull
+    }
   }
 
   // Import and run fetch functions for supported entities
@@ -217,7 +246,7 @@ async function main(options: PullAllOptions = {}): Promise<void> {
 export { main as pullAll };
 
 // Export reset functions for individual pull commands and testing
-export { resetLocalState, resetContentState, resetMediaState, resetCommentsState, resetEmailTemplatesState };
+export { resetLocalState, resetContentState, resetMediaState, resetCommentsState, resetEmailTemplatesState, resetSettingsState };
 
 // Note: CLI execution moved to src/cli/bin/pull-all.ts
 // This file now only exports the function for programmatic use

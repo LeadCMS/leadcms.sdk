@@ -8,6 +8,7 @@ import 'dotenv/config';
 import { getContentStatusData } from '../../scripts/push-leadcms-content.js';
 import { statusMedia } from '../../scripts/push-media.js';
 import { buildEmailTemplateStatus, getRemoteGroupLabel } from '../../scripts/push-email-templates.js';
+import { getSettingsStatusData, renderSettingsStatus, formatSettingValue, formatSettingDiff, renderSettingDiffPreview } from '../../scripts/push-settings.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { colorConsole, statusColors } from '../../lib/console-colors.js';
 import { defaultLanguage, leadCMSApiKey, resolveIdentity } from '../../scripts/leadcms-helpers.js';
@@ -16,6 +17,7 @@ import { startSpinner } from '../../lib/spinner.js';
 import type { ContentOperations, ContentStatusResult, MatchOperation } from '../../scripts/push-leadcms-content.js';
 import type { MediaStatusResult } from '../../scripts/push-media.js';
 import type { EmailTemplateOperation, EmailTemplateStatusResult } from '../../scripts/push-email-templates.js';
+import type { SettingsStatusResult } from '../../lib/settings-types.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
@@ -179,9 +181,10 @@ async function statusAll() {
     let contentResult: ContentStatusResult | null = null;
     let mediaResult: MediaStatusResult | null = null;
     let emailResult: EmailTemplateStatusResult | null = null;
+    let settingsResult: SettingsStatusResult | null = null;
 
     try {
-      [contentResult, mediaResult, emailResult] = await Promise.all([
+      [contentResult, mediaResult, emailResult, settingsResult] = await Promise.all([
         getContentStatusData({ showDelete }).catch((err: any) => {
           spinner.update('Fetching status… (content failed)');
           return null;
@@ -193,6 +196,12 @@ async function statusAll() {
         canCheckEmailTemplates
           ? buildEmailTemplateStatus({ showDelete }).catch((err: any) => {
             spinner.update('Fetching status… (email templates failed)');
+            return null;
+          })
+          : Promise.resolve(null),
+        canCheckEmailTemplates
+          ? getSettingsStatusData().catch((err: any) => {
+            spinner.update('Fetching status… (settings failed)');
             return null;
           })
           : Promise.resolve(null),
@@ -225,6 +234,10 @@ async function statusAll() {
       ? emailOps.filter(op => showDelete ? true : op.type !== 'delete').length
       : 0;
 
+    const settingsChanges = settingsResult
+      ? settingsResult.comparisons.filter(c => c.status !== 'in-sync').length
+      : 0;
+
     // Count up-to-date items per section
     const contentSkips = contentResult
       ? contentResult.totalLocal - contentChanges
@@ -238,7 +251,11 @@ async function statusAll() {
       ? emailResult.totalLocal - emailChanges
       : 0;
 
-    const totalChanges = contentChanges + mediaChanges + emailChanges;
+    const settingsInSync = settingsResult
+      ? settingsResult.comparisons.filter(c => c.status === 'in-sync').length
+      : 0;
+
+    const totalChanges = contentChanges + mediaChanges + emailChanges + settingsChanges;
 
     if (totalChanges === 0) {
       colorConsole.success('\n✅ Everything is in sync!\n');
@@ -247,6 +264,9 @@ async function statusAll() {
       if (mediaResult) console.log(`   📷 Media:            ${mediaSkips > 0 ? `${mediaSkips} file(s) ` : ''}up to date`);
       if (canCheckEmailTemplates && emailResult) {
         console.log(`   📧 Email Templates:  ${emailSkips > 0 ? `${emailSkips} item(s) ` : ''}up to date`);
+      }
+      if (canCheckEmailTemplates && settingsResult) {
+        console.log(`   ⚙️  Settings:         ${settingsInSync > 0 ? `${settingsInSync} setting(s) ` : ''}up to date`);
       }
       console.log('');
       process.exit(0);
@@ -272,6 +292,29 @@ async function statusAll() {
     if (emailOps && emailChanges > 0) {
       colorConsole.important(`  📧 Email Templates (${emailChanges} change${emailChanges !== 1 ? 's' : ''}):`);
       renderEmailTemplateSection(emailOps);
+      console.log('');
+    }
+
+    // ── Settings section ──
+    if (settingsResult && settingsChanges > 0) {
+      colorConsole.important(`  ⚙️  Settings (${settingsChanges} change${settingsChanges !== 1 ? 's' : ''}):`);
+      for (const entry of settingsResult.comparisons) {
+        if (entry.status === 'in-sync') continue;
+        const lang = entry.language ? ` [${entry.language}]` : '';
+        const label = `${entry.key}${lang}`;
+        switch (entry.status) {
+          case 'modified':
+            colorConsole.log(`        ${statusColors.modified('modified: ')}   ${colorConsole.highlight(label)} ${colorConsole.gray(formatSettingDiff(entry.key, entry.remoteValue, entry.localValue))}`);
+            renderSettingDiffPreview(entry.key, entry.remoteValue, entry.localValue, '                      ');
+            break;
+          case 'local-only':
+            colorConsole.log(`        ${statusColors.created('new:      ')}   ${colorConsole.highlight(label)} ${colorConsole.gray(`= ${formatSettingValue(entry.key, entry.localValue)}`)}`);
+            break;
+          case 'remote-only':
+            colorConsole.log(`        ${statusColors.conflict('remote:   ')}   ${colorConsole.highlight(label)} ${colorConsole.gray(`= ${formatSettingValue(entry.key, entry.remoteValue)}`)}`);
+            break;
+        }
+      }
       console.log('');
     }
 
@@ -311,6 +354,19 @@ async function statusAll() {
         conflicts: counts.conflict || 0,
         deletes: showDelete ? (counts.delete || 0) : 0,
         skips: emailSkips,
+      }));
+    }
+
+    if (canCheckEmailTemplates && settingsResult) {
+      const modified = settingsResult.comparisons.filter(c => c.status === 'modified').length;
+      const localOnly = settingsResult.comparisons.filter(c => c.status === 'local-only').length;
+      const remoteOnly = settingsResult.comparisons.filter(c => c.status === 'remote-only').length;
+      console.log(renderSummaryLine('⚙️  Settings:        ', {
+        creates: localOnly,
+        updates: modified,
+        conflicts: remoteOnly,
+        deletes: 0,
+        skips: settingsInSync,
       }));
     }
 

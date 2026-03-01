@@ -8,6 +8,7 @@ import 'dotenv/config';
 import { pushLeadCMSContent } from '../../scripts/push-leadcms-content.js';
 import { pushMedia } from '../../scripts/push-media.js';
 import { pushEmailTemplates } from '../../scripts/push-email-templates.js';
+import { pushSettings } from '../../scripts/push-settings.js';
 import { requireAuthenticatedUser } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
@@ -46,9 +47,17 @@ async function pushAll() {
 
   const spinner = startSpinner('Pushing to LeadCMS…');
   try {
+    spinner.update('Pushing settings…');
+
+    // Push settings first — other content may depend on settings
+    await pushSettings({
+      dryRun,
+      force,
+    });
+
     spinner.update('Pushing content…');
 
-    // Push content first
+    // Push content
     await pushLeadCMSContent({
       statusOnly: false,
       force,

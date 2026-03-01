@@ -113,3 +113,10 @@ export function isMediaSupported(): boolean {
 export function isEmailTemplatesSupported(): boolean {
   return isEntitySupported('EmailTemplate') || isEntitySupported('EmailTemplates');
 }
+
+/**
+ * Check if settings are supported
+ */
+export function isSettingsSupported(): boolean {
+  return isEntitySupported('Setting') || isEntitySupported('Settings');
+}

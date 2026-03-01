@@ -17,6 +17,7 @@ const DEFAULTS = {
   commentsDir: '.leadcms/comments',
   mediaDir: 'public/media',
   emailTemplatesDir: '.leadcms/email-templates',
+  settingsDir: '.leadcms/settings',
 };
 
 interface UserConfig {
@@ -27,6 +28,7 @@ interface UserConfig {
   mediaDir: string;
   commentsDir: string;
   emailTemplatesDir: string;
+  settingsDir: string;
 }
 
 /**
@@ -138,7 +140,8 @@ function createConfigFile(config: UserConfig): void {
     config.contentDir !== DEFAULTS.contentDir ||
     config.mediaDir !== DEFAULTS.mediaDir ||
     config.commentsDir !== DEFAULTS.commentsDir ||
-    config.emailTemplatesDir !== DEFAULTS.emailTemplatesDir;
+    config.emailTemplatesDir !== DEFAULTS.emailTemplatesDir ||
+    config.settingsDir !== DEFAULTS.settingsDir;
 
   if (!needsConfig) {
     console.log('ℹ️  Using default directories, no leadcms.config.json needed.');
@@ -161,6 +164,10 @@ function createConfigFile(config: UserConfig): void {
 
   if (config.emailTemplatesDir !== DEFAULTS.emailTemplatesDir) {
     configData.emailTemplatesDir = config.emailTemplatesDir;
+  }
+
+  if (config.settingsDir !== DEFAULTS.settingsDir) {
+    configData.settingsDir = config.settingsDir;
   }
 
   fs.writeFileSync(
@@ -222,6 +229,9 @@ function readExistingConfig(): Partial<UserConfig> {
       if (jsonConfig.emailTemplatesDir) {
         existingConfig.emailTemplatesDir = jsonConfig.emailTemplatesDir;
       }
+      if (jsonConfig.settingsDir) {
+        existingConfig.settingsDir = jsonConfig.settingsDir;
+      }
     } catch (error) {
       // Ignore parse errors, will use defaults
     }
@@ -276,6 +286,7 @@ export async function initLeadCMS(): Promise<void> {
     mediaDir: existingConfig.mediaDir || DEFAULTS.mediaDir,
     commentsDir: existingConfig.commentsDir || DEFAULTS.commentsDir,
     emailTemplatesDir: existingConfig.emailTemplatesDir || DEFAULTS.emailTemplatesDir,
+    settingsDir: existingConfig.settingsDir || DEFAULTS.settingsDir,
   };
 
   // Step 1: Get LeadCMS URL
@@ -455,6 +466,12 @@ export async function initLeadCMS(): Promise<void> {
     if (emailTemplatesDirInput.trim()) {
       config.emailTemplatesDir = emailTemplatesDirInput.trim();
     }
+  }
+
+  // Settings directory is always prompted (not tied to a specific entity type)
+  const settingsDirInput = await question(`Settings directory [${config.settingsDir}]: `);
+  if (settingsDirInput.trim()) {
+    config.settingsDir = settingsDirInput.trim();
   }
 
   console.log('\n📝 Creating configuration files...\n');

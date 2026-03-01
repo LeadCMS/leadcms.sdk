@@ -5,6 +5,28 @@ export * from './lib/locale-utils.js';
 export * from './lib/comment-types.js';
 export * from './lib/cms-config-types.js';
 
+// Settings types for programmatic use
+export type {
+  SettingDetailsDto,
+  SettingImportDto,
+  SettingImportResult,
+  LocalSettingValue,
+  SettingComparisonEntry,
+  SettingsStatusResult,
+  SettingPushOperation,
+} from './lib/settings-types.js';
+export {
+  TRACKED_SETTING_KEYS,
+  AI_SITEPROFILE_PREFIX,
+  CONTENT_SETTING_PREFIX,
+  MEDIA_SETTING_PREFIX,
+  aiSiteProfileKeyToFileName,
+  fileNameToAiSiteProfileKey,
+  isAiSiteProfileKey,
+  isContentSettingKey,
+  isMediaSettingKey,
+} from './lib/settings-types.js';
+
 // Content merge utilities for three-way merge support
 export { threeWayMerge, threeWayMergeJson, isLocallyModified } from './lib/content-merge.js';
 export type { MergeResult } from './lib/content-merge.js';

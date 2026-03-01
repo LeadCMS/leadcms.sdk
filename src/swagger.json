@@ -2,7 +2,7 @@
   "openapi": "3.0.1",
   "info": {
     "title": "LeadCMS API",
-    "version": "1.3.18.0"
+    "version": "1.4.4.0"
   },
   "paths": {
     "/api/accounts/{id}/comments": {
@@ -839,6 +839,995 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campaigns": {
+      "post": {
+        "tags": [
+          "Campaigns"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignCreateDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignCreateDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Campaigns"
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CampaignDetailsDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CampaignDetailsDto"
+                  }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CampaignDetailsDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campaigns/{id}": {
+      "patch": {
+        "tags": [
+          "Campaigns"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignUpdateDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignUpdateDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Campaigns"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Campaigns"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campaigns/{id}/launch": {
+      "post": {
+        "tags": [
+          "Campaigns"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignLaunchDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignLaunchDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignLaunchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campaigns/{id}/cancel": {
+      "post": {
+        "tags": [
+          "Campaigns"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campaigns/{id}/pause": {
+      "post": {
+        "tags": [
+          "Campaigns"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campaigns/{id}/resume": {
+      "post": {
+        "tags": [
+          "Campaigns"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campaigns/{id}/statistics": {
+      "get": {
+        "tags": [
+          "Campaigns"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignStatisticsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignStatisticsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campaigns/preview": {
+      "post": {
+        "tags": [
+          "Campaigns"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignPreviewRequestDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignPreviewRequestDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignPreviewRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignPreviewResultDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignPreviewResultDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campaigns/{id}/recipients": {
+      "get": {
+        "tags": [
+          "Campaigns"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CampaignRecipientDetailsDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CampaignRecipientDetailsDto"
+                  }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CampaignRecipientDetailsDto"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campaigns/bulk": {
+      "delete": {
+        "tags": [
+          "Campaigns"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            },
+            "text/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            },
+            "text/csv": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campaigns/export": {
+      "get": {
+        "tags": [
+          "Campaigns"
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campaigns/sync": {
+      "get": {
+        "tags": [
+          "Campaigns"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
           },
           "401": {
             "description": "Unauthorized"
@@ -2824,6 +3813,150 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/contact-us": {
+      "post": {
+        "tags": [
+          "ContactUs"
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "Email",
+                  "FirstName",
+                  "Language",
+                  "Message",
+                  "TimeZoneOffset"
+                ],
+                "type": "object",
+                "properties": {
+                  "Attachment": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "Title": {
+                    "type": "string"
+                  },
+                  "NotificationType": {
+                    "type": "string"
+                  },
+                  "AcknowledgmentType": {
+                    "type": "string"
+                  },
+                  "PageUrl": {
+                    "type": "string"
+                  },
+                  "FirstName": {
+                    "type": "string"
+                  },
+                  "LastName": {
+                    "type": "string"
+                  },
+                  "Company": {
+                    "type": "string"
+                  },
+                  "Subject": {
+                    "type": "string"
+                  },
+                  "ExtraData": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "Message": {
+                    "type": "string"
+                  },
+                  "Email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "Phone": {
+                    "type": "string"
+                  },
+                  "RecaptchaToken": {
+                    "type": "string"
+                  },
+                  "TimeZoneOffset": {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  "Language": {
+                    "type": "string"
+                  }
+                }
+              },
+              "encoding": {
+                "Attachment": {
+                  "style": "form"
+                },
+                "Title": {
+                  "style": "form"
+                },
+                "NotificationType": {
+                  "style": "form"
+                },
+                "AcknowledgmentType": {
+                  "style": "form"
+                },
+                "PageUrl": {
+                  "style": "form"
+                },
+                "FirstName": {
+                  "style": "form"
+                },
+                "LastName": {
+                  "style": "form"
+                },
+                "Company": {
+                  "style": "form"
+                },
+                "Subject": {
+                  "style": "form"
+                },
+                "ExtraData": {
+                  "style": "form"
+                },
+                "Message": {
+                  "style": "form"
+                },
+                "Email": {
+                  "style": "form"
+                },
+                "Phone": {
+                  "style": "form"
+                },
+                "RecaptchaToken": {
+                  "style": "form"
+                },
+                "TimeZoneOffset": {
+                  "style": "form"
+                },
+                "Language": {
+                  "style": "form"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "422": {
+            "description": "Client Error"
+          },
+          "500": {
+            "description": "Server Error"
           }
         }
       }
@@ -12994,6 +14127,486 @@
         }
       }
     },
+    "/api/email-templates": {
+      "post": {
+        "tags": [
+          "EmailTemplates"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailTemplateCreateDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailTemplateCreateDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailTemplateCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailTemplateDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailTemplateDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "EmailTemplates"
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EmailTemplateDetailsDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EmailTemplateDetailsDto"
+                  }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EmailTemplateDetailsDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/email-templates/{id}": {
+      "patch": {
+        "tags": [
+          "EmailTemplates"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailTemplateUpdateDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailTemplateUpdateDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailTemplateUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailTemplateDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailTemplateDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "EmailTemplates"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailTemplateDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailTemplateDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "EmailTemplates"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/email-templates/preview": {
+      "post": {
+        "tags": [
+          "EmailTemplates"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailTemplatePreviewRequestDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailTemplatePreviewRequestDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailTemplatePreviewRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailTemplatePreviewResultDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailTemplatePreviewResultDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/email-templates/send-test": {
+      "post": {
+        "tags": [
+          "EmailTemplates"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailTemplateSendTestDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailTemplateSendTestDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailTemplateSendTestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/email-templates/{id}/translation-draft/{language}": {
       "get": {
         "tags": [
@@ -13177,6 +14790,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "includeBase",
+            "in": "query",
+            "description": "Include base versions of modified items for three-way merge support",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ],
         "responses": {
@@ -13222,7 +14844,7 @@
         }
       }
     },
-    "/api/email-templates/{id}": {
+    "/api/email-templates/{id}/change-log": {
       "get": {
         "tags": [
           "EmailTemplates"
@@ -13236,279 +14858,7 @@
               "type": "integer",
               "format": "int32"
             }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmailTemplateDetailsDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmailTemplateDetailsDto"
-                }
-              }
-            }
           },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "EmailTemplates"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EmailTemplateUpdateDto"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EmailTemplateUpdateDto"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/EmailTemplateUpdateDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmailTemplateDetailsDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmailTemplateDetailsDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "422": {
-            "description": "Client Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "EmailTemplates"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "422": {
-            "description": "Client Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/email-templates": {
-      "post": {
-        "tags": [
-          "EmailTemplates"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EmailTemplateCreateDto"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EmailTemplateCreateDto"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/EmailTemplateCreateDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmailTemplateDetailsDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmailTemplateDetailsDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "422": {
-            "description": "Client Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "tags": [
-          "EmailTemplates"
-        ],
-        "parameters": [
           {
             "name": "query",
             "in": "query",
@@ -13525,7 +14875,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/EmailTemplateDetailsDto"
+                    "$ref": "#/components/schemas/EmailTemplateUpdateDtoChangeLogDetailsDto"
                   }
                 }
               },
@@ -13533,7 +14883,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/EmailTemplateDetailsDto"
+                    "$ref": "#/components/schemas/EmailTemplateUpdateDtoChangeLogDetailsDto"
                   }
                 }
               },
@@ -13541,11 +14891,17 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/EmailTemplateDetailsDto"
+                    "$ref": "#/components/schemas/EmailTemplateUpdateDtoChangeLogDetailsDto"
                   }
                 }
               }
             }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "404": {
+            "description": "Not Found"
           },
           "401": {
             "description": "Unauthorized"
@@ -19526,10 +20882,158 @@
         }
       }
     },
+    "/api/settings": {
+      "post": {
+        "tags": [
+          "Settings"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingCreateDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingCreateDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SettingDetailsDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SettingDetailsDto"
+                  }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SettingDetailsDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/system": {
       "get": {
         "tags": [
           "Settings"
+        ],
+        "parameters": [
+          {
+            "name": "language",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -19595,6 +21099,13 @@
             "name": "key",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
             "schema": {
               "type": "string"
             }
@@ -19673,6 +21184,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -19741,6 +21259,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -19790,6 +21315,15 @@
       "get": {
         "tags": [
           "Settings"
+        ],
+        "parameters": [
+          {
+            "name": "language",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -19852,6 +21386,13 @@
             "name": "key",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
             "schema": {
               "type": "string"
             }
@@ -20454,145 +21995,6 @@
         }
       }
     },
-    "/api/settings": {
-      "post": {
-        "tags": [
-          "Settings"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SettingCreateDto"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SettingCreateDto"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/SettingCreateDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SettingDetailsDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SettingDetailsDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "422": {
-            "description": "Client Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "tags": [
-          "Settings"
-        ],
-        "parameters": [
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SettingDetailsDto"
-                  }
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SettingDetailsDto"
-                  }
-                }
-              },
-              "text/csv": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SettingDetailsDto"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/settings/bulk": {
       "delete": {
         "tags": [
@@ -20840,6 +22242,126 @@
           },
           "401": {
             "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error"
+          }
+        }
+      }
+    },
+    "/api/subscribe": {
+      "post": {
+        "tags": [
+          "Subscribes"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscribeDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscribeDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscribeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "422": {
+            "description": "Client Error"
+          },
+          "500": {
+            "description": "Server Error"
+          }
+        }
+      }
+    },
+    "/api/subscribe/confirm": {
+      "post": {
+        "tags": [
+          "Subscribes"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmSubscribeDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmSubscribeDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmSubscribeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "422": {
+            "description": "Client Error"
+          },
+          "500": {
+            "description": "Server Error"
+          }
+        }
+      }
+    },
+    "/api/unsubscribe": {
+      "post": {
+        "tags": [
+          "Subscribes"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnsibscribeDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnsibscribeDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnsibscribeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "422": {
+            "description": "Client Error"
           },
           "500": {
             "description": "Server Error"
@@ -24004,6 +25526,575 @@
         },
         "additionalProperties": false
       },
+      "CampaignCreateDto": {
+        "required": [
+          "emailTemplateId",
+          "name",
+          "segmentIds"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "minLength": 1,
+            "type": "string",
+            "example": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "emailTemplateId": {
+            "title": "Email Template Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "segmentIds": {
+            "title": "Segment Ids",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "excludeSegmentIds": {
+            "title": "Exclude Segment Ids",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "nullable": true
+          },
+          "scheduledAt": {
+            "title": "Scheduled At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "timeZone": {
+            "title": "Time Zone",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "useContactTimeZone": {
+            "title": "Use Contact Time Zone",
+            "type": "boolean",
+            "example": true
+          },
+          "language": {
+            "title": "Language",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CampaignDetailsDto": {
+        "required": [
+          "emailTemplateId",
+          "name",
+          "segmentIds"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "minLength": 1,
+            "type": "string",
+            "example": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "emailTemplateId": {
+            "title": "Email Template Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "segmentIds": {
+            "title": "Segment Ids",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "excludeSegmentIds": {
+            "title": "Exclude Segment Ids",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "nullable": true
+          },
+          "scheduledAt": {
+            "title": "Scheduled At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "timeZone": {
+            "title": "Time Zone",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "useContactTimeZone": {
+            "title": "Use Contact Time Zone",
+            "type": "boolean",
+            "example": true
+          },
+          "language": {
+            "title": "Language",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "status": {
+            "title": "Status",
+            "enum": [
+              "Draft",
+              "Scheduled",
+              "Sending",
+              "Sent",
+              "Cancelled",
+              "Paused"
+            ],
+            "type": "string",
+            "example": "Draft"
+          },
+          "sendStartedAt": {
+            "title": "Send Started At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "sendCompletedAt": {
+            "title": "Send Completed At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "totalRecipients": {
+            "title": "Total Recipients",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "sentCount": {
+            "title": "Sent Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "failedCount": {
+            "title": "Failed Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "skippedCount": {
+            "title": "Skipped Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "createdAt": {
+            "title": "Created At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "updatedAt": {
+            "title": "Updated At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "emailTemplate": {
+            "$ref": "#/components/schemas/EmailTemplateDetailsDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CampaignLaunchDto": {
+        "type": "object",
+        "properties": {
+          "sendNow": {
+            "title": "Send Now",
+            "type": "boolean",
+            "example": true
+          },
+          "scheduledAt": {
+            "title": "Scheduled At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "timeZone": {
+            "title": "Time Zone",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "useContactTimeZone": {
+            "title": "Use Contact Time Zone",
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CampaignPreviewRequestDto": {
+        "required": [
+          "emailTemplateId",
+          "segmentIds"
+        ],
+        "type": "object",
+        "properties": {
+          "emailTemplateId": {
+            "title": "Email Template Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "segmentIds": {
+            "title": "Segment Ids",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "excludeSegmentIds": {
+            "title": "Exclude Segment Ids",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "nullable": true
+          },
+          "language": {
+            "title": "Language",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "contactId": {
+            "title": "Contact Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "contactType": {
+            "title": "Contact Type",
+            "enum": [
+              "Full",
+              "Standard",
+              "Basic",
+              "Minimal"
+            ],
+            "type": "string",
+            "nullable": true,
+            "example": "Full"
+          },
+          "customTemplateParameters": {
+            "title": "Custom Template Parameters",
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CampaignPreviewResultDto": {
+        "type": "object",
+        "properties": {
+          "totalAudienceCount": {
+            "title": "Total Audience Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "sendableCount": {
+            "title": "Sendable Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "unsubscribedCount": {
+            "title": "Unsubscribed Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "invalidEmailCount": {
+            "title": "Invalid Email Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "templatePreview": {
+            "$ref": "#/components/schemas/EmailTemplatePreviewResultDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CampaignRecipientDetailsDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "campaignId": {
+            "title": "Campaign Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "contactId": {
+            "title": "Contact Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "contact": {
+            "$ref": "#/components/schemas/ContactDetailsDto"
+          },
+          "status": {
+            "title": "Status",
+            "enum": [
+              "Pending",
+              "Sent",
+              "Failed",
+              "Skipped"
+            ],
+            "type": "string",
+            "example": "Pending"
+          },
+          "skipReason": {
+            "title": "Skip Reason",
+            "enum": [
+              "None",
+              "Unsubscribed",
+              "Duplicate",
+              "Suppressed",
+              "InvalidEmail"
+            ],
+            "type": "string",
+            "example": "None"
+          },
+          "sentAt": {
+            "title": "Sent At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "expectedSendAtUtc": {
+            "title": "Expected Send At Utc",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "errorMessage": {
+            "title": "Error Message",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "createdAt": {
+            "title": "Created At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "updatedAt": {
+            "title": "Updated At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CampaignStatisticsDto": {
+        "type": "object",
+        "properties": {
+          "totalRecipients": {
+            "title": "Total Recipients",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "sentCount": {
+            "title": "Sent Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "failedCount": {
+            "title": "Failed Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "skippedCount": {
+            "title": "Skipped Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "pendingCount": {
+            "title": "Pending Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "skippedUnsubscribed": {
+            "title": "Skipped Unsubscribed",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "skippedDuplicate": {
+            "title": "Skipped Duplicate",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "skippedSuppressed": {
+            "title": "Skipped Suppressed",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "skippedInvalidEmail": {
+            "title": "Skipped Invalid Email",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "CampaignUpdateDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "minLength": 1,
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "emailTemplateId": {
+            "title": "Email Template Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "segmentIds": {
+            "title": "Segment Ids",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "nullable": true
+          },
+          "excludeSegmentIds": {
+            "title": "Exclude Segment Ids",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "nullable": true
+          },
+          "scheduledAt": {
+            "title": "Scheduled At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "timeZone": {
+            "title": "Time Zone",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "useContactTimeZone": {
+            "title": "Use Contact Time Zone",
+            "type": "boolean",
+            "nullable": true,
+            "example": true
+          },
+          "language": {
+            "title": "Language",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "ChangePasswordDto": {
         "required": [
           "currentPassword",
@@ -24771,6 +26862,21 @@
           },
           "primaryCurrency": {
             "$ref": "#/components/schemas/CurrencyInfoDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConfirmSubscribeDto": {
+        "required": [
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "title": "Token",
+            "minLength": 1,
+            "type": "string",
+            "example": "string"
           }
         },
         "additionalProperties": false
@@ -28468,10 +30574,10 @@
           },
           "dealCurrency": {
             "title": "Deal Currency",
-            "pattern": "^(NAD|ZAR|XAF|JPY|GHS|ETB|USD||AED|BHD|DJF|DZD|EGP|MAD|ERN|ILS|IQD|JOD|KMF|KWD|LBP|LYD|MAD|MRU|OMR|ILS|QAR|SAR|SDG|SOS|SSP|SYP|XAF|TND|YER|CLP|INR|TZS|EUR|AZN|AZN|RUB|XAF|BYN|ZMW|MAD|MAD|TZS|BGN|INR|INR|XOF|XOF|BDT|INR|CNY|INR|EUR|INR|BAM|BAM|ERN|EUR|EUR|EUR|EUR|BDT|INR|RUB|PHP|UGX|USD|USD|USD|IQD|IRR|EUR|CZK|CAD|RUB|GBP|DKK|DKK|KES|EUR|EUR|CHF|EUR|EUR|CHF|EUR|XOF|INR|EUR|XAF|MVR|XOF|BTN|KES|GHS|XOF|EUR|EUR|||AED|XCD|XCD|ALL|ARS|USD|EUR|AUD|BBD|BDT|EUR|BGN|BIF|BMD|BND|BRL|BSD|BWP|BZD|CAD|AUD|CHF|NZD|CLP|XAF|CNY|COP|CVE|AUD|EUR|CZK|EUR|USD|DKK|XCD|EUR|ERN|EUR|FJD|FKP|USD|EUR|GBP|XCD|GBP|GHS|GIP|GMD|EUR|USD|GYD|HKD|HUF|IDR|EUR|ILS|GBP|INR|USD|GBP|JMD|JPY|KES|AUD|XCD|KRW|KYD|XCD|LRD|ZAR|EUR|EUR|MGA|USD|MMK|MOP|USD|XCD|EUR|MUR|MVR|MWK|MXN|MYR|NAD|AUD|NGN|EUR|NOK|AUD|NZD|NZD|PGK|PHP|PKR|PLN|NZD|USD|EUR|USD|RUB|RWF|SAR|SBD|SCR|SDG|SEK|SGD|SHP|EUR|EUR|SLE|SSP|XCG|SZL|USD|THB|NZD|TOP|TRY|TTD|AUD|TWD|TZS|UAH|UGX|USD|USD|USD|XCD|USD|USD|VUV|WST|ZAR|ZMW|ZWG||||XCD|ARS|BBD|BMD|BOB|USD|BRL|BSD|BZD|CAD|CLP|COP|CRC|CUP|XCG|XCD|DOP|EUR|USD|EUR|XCD|XAF|GTQ|GYD|HNL|HTG|EUR|XCD|KYD|XCD|MXN|NIO|PAB|PEN|PHP|USD|PYG|USD|USD|TTD|USD|UYU|XCD|VED|USD|USD|EUR|EUR|XAF|AFN|IRR|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|EUR|PHP|DKK|DKK|EUR|XOF|BIF|XOF|EUR|CAD|CDF|XAF|XAF|CHF|XOF|XAF|DJF|DZD|EUR|XAF|EUR|GNF|EUR|XAF|HTG|KMF|EUR|MAD|EUR|EUR|MGA|XOF|EUR|MRU|MUR|XPF|XOF|XPF|EUR|EUR|RWF|SCR|XOF|SYP|XAF|XOF|TND|VUV|XPF|EUR|EUR|EUR|GBP|EUR|GHS|GBP|ERN|ETB|EUR|PYG|CHF|EUR|CHF|INR|KES|GBP|GHS|XOF|NGN|USD|ILS|INR|INR|CNY|BAM|EUR|EUR|HUF|AMD||IDR|EUR|NGN|CNY||ISK|CHF|EUR|EUR|EUR|CAD|JPY||XAF|TZS|IDR|GEL|DZD|NGN|KES|NGN|TZS|CVE|BRL|XOF|KES|KZT|KZT|XAF|DKK|KES|KHR|INR|CNY|KPW|KRW|INR|INR|GNF|LRD|INR|INR|INR|TZS|XAF|EUR|TRY|GBP|INR|INR|INR|INR|KGS|TZS|EUR|UGX|EUR|USD|EUR|AOA|CDF|XAF|XAF|LAK|IQD|IRR|EUR|CDF|KES|KES|EUR|INR|KES|TZS|KES|MUR|MGA|MZN|XAF|NZD|CAD|IQD|MKD|INR|MNT|INR|INR|CAD|INR|BND|MYR|BND|IDR|MYR|SGD|EUR|XAF|USD|MMK|RUB|IRR|NAD|NOK|NOK|ZWG|EUR|EUR|INR|NPR|AWG|EUR|USD|XCG|EUR|SRD|XCG|XAF|NOK|XAF|INR|GNF|ZAR|ZAR|SSP|USD|MWK|UGX|EUR|EUR|ETB|KES|INR|GEL|RUB|USD|PKR|PKR|INR|NGN|PLN|CAD|PLN|AFN|PKR|AOA|BRL|CHF|CVE|EUR|XAF|XOF|EUR|MOP|MZN|EUR|STN|USD|BOB|USD|PEN|INR|IDR|IDR|BDT|MMK|CHF|BIF|MDL|RON|TZS|BYN|KGS|KZT|MDL|RUB|UAH|RWF|TZS|INR|RUB|KES|INR|INR|TZS|EUR|EUR|PKR|INR|EUR|NOK|SEK|MZN|XOF|XAF|MAD|MAD|LKR|EUR|EUR|USD|WST|EUR|ZWG|DJF|ETB|KES|SOS|ALL|MKD|EUR|BAM|EUR|RSD|EUR|BAM|EUR|RSD|EUR|SZL|ZAR|ZAR|ZAR|IDR|EUR|EUR|SEK|CDF|KES|TZS|UGX|IQD|SYP|PLN|INR|LKR|MYR|SGD|INR|KES|UGX|TJS|THB|ERN|ETB|ERN|TMT|BWP|ZAR|TOP||EUR|TRY|TWD|ZAR|RUB|XOF|MAD|CNY|UAH|INR|PKR|INR|PKR|AFN|UZS|UZS|LRD|LRD|ZAR|EUR|VND|MZN|TZS|EUR|CHF|ETB|XOF|ZAR|INR|UGX|XAF|UAH|XOF|NGN|BRL|COP|VED|CNY|CNY|HKD|CNY|MAD|CNY|HKD|JPY|MOP|MYR|SGD|CNY|HKD|JPY|MOP|MYR|TWD|ZAR)$",
+            "pattern": "^(NAD|ZAR|XAF|JPY|GHS|ETB|USD||AED|BHD|DJF|DZD|EGP|MAD|ERN|ILS|IQD|JOD|KMF|KWD|LBP|LYD|MAD|MRU|OMR|ILS|QAR|SAR|SDG|SOS|SSP|SYP|XAF|TND|YER|CLP|INR|TZS|EUR|AZN|AZN|RUB|XAF|BYN|ZMW|MAD|MAD|TZS|EUR|INR|INR|XOF|XOF|BDT|INR|CNY|INR|EUR|INR|BAM|BAM|RUB|ERN|EUR|EUR|EUR|EUR|BDT|INR|RUB|PHP|UGX|USD|USD|USD|IQD|IRR|EUR|CZK|CAD|RUB|GBP|DKK|DKK|KES|EUR|EUR|CHF|EUR|EUR|CHF|EUR|XOF|INR|EUR|XAF|MVR|XOF|BTN|KES|GHS|XOF|EUR|EUR|||AED|XCD|XCD|ALL|ARS|USD|EUR|AUD|BBD|BDT|EUR|EUR|BIF|BMD|BND|BRL|BSD|BWP|BZD|CAD|AUD|CHF|NZD|CLP|XAF|CNY|COP|CVE|AUD|EUR|CZK|EUR|USD|DKK|XCD|EUR|ERN|EUR|EUR|FJD|FKP|USD|EUR|GBP|XCD|GEL|GBP|GHS|GIP|GMD|EUR|GBP|USD|GYD|HKD|HUF|IDR|EUR|ILS|GBP|INR|USD|EUR|GBP|JMD|JPY|KES|AUD|XCD|KRW|KYD|XCD|LRD|ZAR|EUR|EUR|MGA|USD|MMK|MOP|USD|XCD|EUR|MUR|MVR|MWK|MXN|MYR|NAD|AUD|NGN|EUR|NOK|AUD|NZD|NZD|PGK|PHP|PKR|PLN|NZD|USD|EUR|USD|RON|RUB|RWF|SAR|SBD|SCR|SDG|SEK|SGD|SHP|EUR|EUR|SLE|SSP|XCG|SZL|USD|THB|NZD|TOP|TRY|TTD|AUD|TWD|TZS|UAH|UGX|USD|USD|USD|XCD|USD|USD|VUV|WST|ZAR|ZMW|ZWG||||XCD|ARS|BBD|BMD|BOB|USD|BRL|BSD|BZD|CAD|CLP|COP|CRC|CUP|XCG|XCD|DOP|EUR|USD|EUR|XCD|XAF|GTQ|GYD|HNL|HTG|EUR|XCD|KYD|XCD|MXN|NIO|PAB|PEN|PHP|USD|PYG|USD|USD|TTD|USD|UYU|XCD|VED|USD|USD|EUR|EUR|XAF|AFN|IRR|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|EUR|PHP|DKK|DKK|EUR|XOF|BIF|XOF|EUR|CAD|CDF|XAF|XAF|CHF|XOF|XAF|DJF|DZD|EUR|XAF|EUR|GNF|EUR|XAF|HTG|KMF|EUR|MAD|EUR|EUR|MGA|XOF|EUR|MRU|MUR|XPF|XOF|XPF|EUR|EUR|RWF|SCR|XOF|SYP|XAF|XOF|TND|VUV|XPF|EUR|EUR|EUR|GBP|EUR|GHS|GBP|ERN|ETB|EUR|PYG|CHF|EUR|CHF|INR|KES|GBP|GHS|XOF|NGN|USD|ILS|INR|INR|CNY|BAM|EUR|EUR|HTG|HUF|AMD||IDR|EUR|NGN|CNY||ISK|CHF|EUR|EUR|EUR|CAD|JPY||XAF|TZS|IDR|GEL|DZD|NGN|KES|NGN|TZS|CVE|BRL|XOF|KES|CNY|KZT|KZT|XAF|DKK|KES|KHR|INR|CNY|KPW|KRW|INR|INR|GNF|LRD|INR|INR|INR|TZS|XAF|EUR|IQD|SYP|TRY|TRY|GBP|INR|INR|INR|INR|KGS|TZS|EUR|UGX|EUR|USD|EUR|AOA|CDF|XAF|XAF|LAK|IQD|IRR|EUR|CDF|KES|KES|EUR|INR|KES|TZS|KES|MUR|MGA|MZN|XAF|NZD|CAD|IQD|MKD|INR|MNT|INR|INR|CAD|INR|BND|MYR|BND|IDR|MYR|SGD|EUR|XAF|USD|MMK|RUB|IRR|NAD|NOK|NOK|ZWG|EUR|EUR|INR|NPR|AWG|EUR|USD|XCG|EUR|SRD|XCG|XAF|NOK|XAF|INR|GNF|ZAR|ZAR|SSP|USD|MWK|UGX|EUR|EUR|ETB|KES|INR|GEL|RUB|USD|PKR|PKR|INR|NGN|PLN|EUR|CAD|PLN|AFN|PKR|AOA|BRL|CHF|CVE|EUR|XAF|XOF|EUR|MOP|MZN|EUR|STN|USD|BOB|USD|PEN|INR|IDR|IDR|BDT|MMK|CHF|BIF|MDL|RON|TZS|BYN|KGS|KZT|MDL|RUB|UAH|RWF|TZS|INR|RUB|KES|INR|INR|TZS|EUR|EUR|PKR|INR|EUR|NOK|SEK|MZN|XOF|XAF|MAD|MAD|MMK|THB|LKR|EUR|EUR|USD|WST|EUR|ZWG|DJF|ETB|KES|SOS|ALL|MKD|EUR|BAM|EUR|RSD|EUR|BAM|EUR|RSD|EUR|SZL|ZAR|ZAR|ZAR|IDR|EUR|EUR|SEK|CDF|KES|TZS|UGX|IQD|SYP|PLN|INR|LKR|MYR|SGD|INR|KES|UGX|TJS|THB|ERN|ETB|ERN|TMT|BWP|ZAR|TOP||EUR|TRY|TWD|ZAR|RUB|XOF|RUB|MAD|CNY|UAH|INR|PKR|INR|PKR|AFN|UZS|UZS|LRD|LRD|ZAR|EUR|VND|MZN|TZS|EUR|CHF|ETB|XOF|ZAR|INR|UGX|XAF|UAH|XOF|NGN|BRL|COP|VED|CNY|CNY|HKD|MOP|CNY|MAD|CNY|HKD|JPY|MOP|MYR|SGD|CNY|HKD|JPY|MOP|MYR|TWD|ZAR)$",
             "type": "string",
             "nullable": true,
-            "example": "RUB"
+            "example": "USD"
           },
           "expectedCloseDate": {
             "title": "Expected Close Date",
@@ -28506,6 +30612,13 @@
               "string1",
               "string2"
             ]
+          },
+          "campaignId": {
+            "title": "Campaign Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
           },
           "contactIds": {
             "title": "Contact Ids",
@@ -28548,10 +30661,10 @@
           },
           "dealCurrency": {
             "title": "Deal Currency",
-            "pattern": "^(NAD|ZAR|XAF|JPY|GHS|ETB|USD||AED|BHD|DJF|DZD|EGP|MAD|ERN|ILS|IQD|JOD|KMF|KWD|LBP|LYD|MAD|MRU|OMR|ILS|QAR|SAR|SDG|SOS|SSP|SYP|XAF|TND|YER|CLP|INR|TZS|EUR|AZN|AZN|RUB|XAF|BYN|ZMW|MAD|MAD|TZS|BGN|INR|INR|XOF|XOF|BDT|INR|CNY|INR|EUR|INR|BAM|BAM|ERN|EUR|EUR|EUR|EUR|BDT|INR|RUB|PHP|UGX|USD|USD|USD|IQD|IRR|EUR|CZK|CAD|RUB|GBP|DKK|DKK|KES|EUR|EUR|CHF|EUR|EUR|CHF|EUR|XOF|INR|EUR|XAF|MVR|XOF|BTN|KES|GHS|XOF|EUR|EUR|||AED|XCD|XCD|ALL|ARS|USD|EUR|AUD|BBD|BDT|EUR|BGN|BIF|BMD|BND|BRL|BSD|BWP|BZD|CAD|AUD|CHF|NZD|CLP|XAF|CNY|COP|CVE|AUD|EUR|CZK|EUR|USD|DKK|XCD|EUR|ERN|EUR|FJD|FKP|USD|EUR|GBP|XCD|GBP|GHS|GIP|GMD|EUR|USD|GYD|HKD|HUF|IDR|EUR|ILS|GBP|INR|USD|GBP|JMD|JPY|KES|AUD|XCD|KRW|KYD|XCD|LRD|ZAR|EUR|EUR|MGA|USD|MMK|MOP|USD|XCD|EUR|MUR|MVR|MWK|MXN|MYR|NAD|AUD|NGN|EUR|NOK|AUD|NZD|NZD|PGK|PHP|PKR|PLN|NZD|USD|EUR|USD|RUB|RWF|SAR|SBD|SCR|SDG|SEK|SGD|SHP|EUR|EUR|SLE|SSP|XCG|SZL|USD|THB|NZD|TOP|TRY|TTD|AUD|TWD|TZS|UAH|UGX|USD|USD|USD|XCD|USD|USD|VUV|WST|ZAR|ZMW|ZWG||||XCD|ARS|BBD|BMD|BOB|USD|BRL|BSD|BZD|CAD|CLP|COP|CRC|CUP|XCG|XCD|DOP|EUR|USD|EUR|XCD|XAF|GTQ|GYD|HNL|HTG|EUR|XCD|KYD|XCD|MXN|NIO|PAB|PEN|PHP|USD|PYG|USD|USD|TTD|USD|UYU|XCD|VED|USD|USD|EUR|EUR|XAF|AFN|IRR|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|EUR|PHP|DKK|DKK|EUR|XOF|BIF|XOF|EUR|CAD|CDF|XAF|XAF|CHF|XOF|XAF|DJF|DZD|EUR|XAF|EUR|GNF|EUR|XAF|HTG|KMF|EUR|MAD|EUR|EUR|MGA|XOF|EUR|MRU|MUR|XPF|XOF|XPF|EUR|EUR|RWF|SCR|XOF|SYP|XAF|XOF|TND|VUV|XPF|EUR|EUR|EUR|GBP|EUR|GHS|GBP|ERN|ETB|EUR|PYG|CHF|EUR|CHF|INR|KES|GBP|GHS|XOF|NGN|USD|ILS|INR|INR|CNY|BAM|EUR|EUR|HUF|AMD||IDR|EUR|NGN|CNY||ISK|CHF|EUR|EUR|EUR|CAD|JPY||XAF|TZS|IDR|GEL|DZD|NGN|KES|NGN|TZS|CVE|BRL|XOF|KES|KZT|KZT|XAF|DKK|KES|KHR|INR|CNY|KPW|KRW|INR|INR|GNF|LRD|INR|INR|INR|TZS|XAF|EUR|TRY|GBP|INR|INR|INR|INR|KGS|TZS|EUR|UGX|EUR|USD|EUR|AOA|CDF|XAF|XAF|LAK|IQD|IRR|EUR|CDF|KES|KES|EUR|INR|KES|TZS|KES|MUR|MGA|MZN|XAF|NZD|CAD|IQD|MKD|INR|MNT|INR|INR|CAD|INR|BND|MYR|BND|IDR|MYR|SGD|EUR|XAF|USD|MMK|RUB|IRR|NAD|NOK|NOK|ZWG|EUR|EUR|INR|NPR|AWG|EUR|USD|XCG|EUR|SRD|XCG|XAF|NOK|XAF|INR|GNF|ZAR|ZAR|SSP|USD|MWK|UGX|EUR|EUR|ETB|KES|INR|GEL|RUB|USD|PKR|PKR|INR|NGN|PLN|CAD|PLN|AFN|PKR|AOA|BRL|CHF|CVE|EUR|XAF|XOF|EUR|MOP|MZN|EUR|STN|USD|BOB|USD|PEN|INR|IDR|IDR|BDT|MMK|CHF|BIF|MDL|RON|TZS|BYN|KGS|KZT|MDL|RUB|UAH|RWF|TZS|INR|RUB|KES|INR|INR|TZS|EUR|EUR|PKR|INR|EUR|NOK|SEK|MZN|XOF|XAF|MAD|MAD|LKR|EUR|EUR|USD|WST|EUR|ZWG|DJF|ETB|KES|SOS|ALL|MKD|EUR|BAM|EUR|RSD|EUR|BAM|EUR|RSD|EUR|SZL|ZAR|ZAR|ZAR|IDR|EUR|EUR|SEK|CDF|KES|TZS|UGX|IQD|SYP|PLN|INR|LKR|MYR|SGD|INR|KES|UGX|TJS|THB|ERN|ETB|ERN|TMT|BWP|ZAR|TOP||EUR|TRY|TWD|ZAR|RUB|XOF|MAD|CNY|UAH|INR|PKR|INR|PKR|AFN|UZS|UZS|LRD|LRD|ZAR|EUR|VND|MZN|TZS|EUR|CHF|ETB|XOF|ZAR|INR|UGX|XAF|UAH|XOF|NGN|BRL|COP|VED|CNY|CNY|HKD|CNY|MAD|CNY|HKD|JPY|MOP|MYR|SGD|CNY|HKD|JPY|MOP|MYR|TWD|ZAR)$",
+            "pattern": "^(NAD|ZAR|XAF|JPY|GHS|ETB|USD||AED|BHD|DJF|DZD|EGP|MAD|ERN|ILS|IQD|JOD|KMF|KWD|LBP|LYD|MAD|MRU|OMR|ILS|QAR|SAR|SDG|SOS|SSP|SYP|XAF|TND|YER|CLP|INR|TZS|EUR|AZN|AZN|RUB|XAF|BYN|ZMW|MAD|MAD|TZS|EUR|INR|INR|XOF|XOF|BDT|INR|CNY|INR|EUR|INR|BAM|BAM|RUB|ERN|EUR|EUR|EUR|EUR|BDT|INR|RUB|PHP|UGX|USD|USD|USD|IQD|IRR|EUR|CZK|CAD|RUB|GBP|DKK|DKK|KES|EUR|EUR|CHF|EUR|EUR|CHF|EUR|XOF|INR|EUR|XAF|MVR|XOF|BTN|KES|GHS|XOF|EUR|EUR|||AED|XCD|XCD|ALL|ARS|USD|EUR|AUD|BBD|BDT|EUR|EUR|BIF|BMD|BND|BRL|BSD|BWP|BZD|CAD|AUD|CHF|NZD|CLP|XAF|CNY|COP|CVE|AUD|EUR|CZK|EUR|USD|DKK|XCD|EUR|ERN|EUR|EUR|FJD|FKP|USD|EUR|GBP|XCD|GEL|GBP|GHS|GIP|GMD|EUR|GBP|USD|GYD|HKD|HUF|IDR|EUR|ILS|GBP|INR|USD|EUR|GBP|JMD|JPY|KES|AUD|XCD|KRW|KYD|XCD|LRD|ZAR|EUR|EUR|MGA|USD|MMK|MOP|USD|XCD|EUR|MUR|MVR|MWK|MXN|MYR|NAD|AUD|NGN|EUR|NOK|AUD|NZD|NZD|PGK|PHP|PKR|PLN|NZD|USD|EUR|USD|RON|RUB|RWF|SAR|SBD|SCR|SDG|SEK|SGD|SHP|EUR|EUR|SLE|SSP|XCG|SZL|USD|THB|NZD|TOP|TRY|TTD|AUD|TWD|TZS|UAH|UGX|USD|USD|USD|XCD|USD|USD|VUV|WST|ZAR|ZMW|ZWG||||XCD|ARS|BBD|BMD|BOB|USD|BRL|BSD|BZD|CAD|CLP|COP|CRC|CUP|XCG|XCD|DOP|EUR|USD|EUR|XCD|XAF|GTQ|GYD|HNL|HTG|EUR|XCD|KYD|XCD|MXN|NIO|PAB|PEN|PHP|USD|PYG|USD|USD|TTD|USD|UYU|XCD|VED|USD|USD|EUR|EUR|XAF|AFN|IRR|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|EUR|PHP|DKK|DKK|EUR|XOF|BIF|XOF|EUR|CAD|CDF|XAF|XAF|CHF|XOF|XAF|DJF|DZD|EUR|XAF|EUR|GNF|EUR|XAF|HTG|KMF|EUR|MAD|EUR|EUR|MGA|XOF|EUR|MRU|MUR|XPF|XOF|XPF|EUR|EUR|RWF|SCR|XOF|SYP|XAF|XOF|TND|VUV|XPF|EUR|EUR|EUR|GBP|EUR|GHS|GBP|ERN|ETB|EUR|PYG|CHF|EUR|CHF|INR|KES|GBP|GHS|XOF|NGN|USD|ILS|INR|INR|CNY|BAM|EUR|EUR|HTG|HUF|AMD||IDR|EUR|NGN|CNY||ISK|CHF|EUR|EUR|EUR|CAD|JPY||XAF|TZS|IDR|GEL|DZD|NGN|KES|NGN|TZS|CVE|BRL|XOF|KES|CNY|KZT|KZT|XAF|DKK|KES|KHR|INR|CNY|KPW|KRW|INR|INR|GNF|LRD|INR|INR|INR|TZS|XAF|EUR|IQD|SYP|TRY|TRY|GBP|INR|INR|INR|INR|KGS|TZS|EUR|UGX|EUR|USD|EUR|AOA|CDF|XAF|XAF|LAK|IQD|IRR|EUR|CDF|KES|KES|EUR|INR|KES|TZS|KES|MUR|MGA|MZN|XAF|NZD|CAD|IQD|MKD|INR|MNT|INR|INR|CAD|INR|BND|MYR|BND|IDR|MYR|SGD|EUR|XAF|USD|MMK|RUB|IRR|NAD|NOK|NOK|ZWG|EUR|EUR|INR|NPR|AWG|EUR|USD|XCG|EUR|SRD|XCG|XAF|NOK|XAF|INR|GNF|ZAR|ZAR|SSP|USD|MWK|UGX|EUR|EUR|ETB|KES|INR|GEL|RUB|USD|PKR|PKR|INR|NGN|PLN|EUR|CAD|PLN|AFN|PKR|AOA|BRL|CHF|CVE|EUR|XAF|XOF|EUR|MOP|MZN|EUR|STN|USD|BOB|USD|PEN|INR|IDR|IDR|BDT|MMK|CHF|BIF|MDL|RON|TZS|BYN|KGS|KZT|MDL|RUB|UAH|RWF|TZS|INR|RUB|KES|INR|INR|TZS|EUR|EUR|PKR|INR|EUR|NOK|SEK|MZN|XOF|XAF|MAD|MAD|MMK|THB|LKR|EUR|EUR|USD|WST|EUR|ZWG|DJF|ETB|KES|SOS|ALL|MKD|EUR|BAM|EUR|RSD|EUR|BAM|EUR|RSD|EUR|SZL|ZAR|ZAR|ZAR|IDR|EUR|EUR|SEK|CDF|KES|TZS|UGX|IQD|SYP|PLN|INR|LKR|MYR|SGD|INR|KES|UGX|TJS|THB|ERN|ETB|ERN|TMT|BWP|ZAR|TOP||EUR|TRY|TWD|ZAR|RUB|XOF|RUB|MAD|CNY|UAH|INR|PKR|INR|PKR|AFN|UZS|UZS|LRD|LRD|ZAR|EUR|VND|MZN|TZS|EUR|CHF|ETB|XOF|ZAR|INR|UGX|XAF|UAH|XOF|NGN|BRL|COP|VED|CNY|CNY|HKD|MOP|CNY|MAD|CNY|HKD|JPY|MOP|MYR|SGD|CNY|HKD|JPY|MOP|MYR|TWD|ZAR)$",
             "type": "string",
             "nullable": true,
-            "example": "RUB"
+            "example": "USD"
           },
           "expectedCloseDate": {
             "title": "Expected Close Date",
@@ -28586,6 +30699,13 @@
               "string1",
               "string2"
             ]
+          },
+          "campaignId": {
+            "title": "Campaign Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
           },
           "id": {
             "title": "Id",
@@ -28928,10 +31048,10 @@
           "dealCurrency": {
             "title": "Deal Currency",
             "minLength": 1,
-            "pattern": "^(NAD|ZAR|XAF|JPY|GHS|ETB|USD||AED|BHD|DJF|DZD|EGP|MAD|ERN|ILS|IQD|JOD|KMF|KWD|LBP|LYD|MAD|MRU|OMR|ILS|QAR|SAR|SDG|SOS|SSP|SYP|XAF|TND|YER|CLP|INR|TZS|EUR|AZN|AZN|RUB|XAF|BYN|ZMW|MAD|MAD|TZS|BGN|INR|INR|XOF|XOF|BDT|INR|CNY|INR|EUR|INR|BAM|BAM|ERN|EUR|EUR|EUR|EUR|BDT|INR|RUB|PHP|UGX|USD|USD|USD|IQD|IRR|EUR|CZK|CAD|RUB|GBP|DKK|DKK|KES|EUR|EUR|CHF|EUR|EUR|CHF|EUR|XOF|INR|EUR|XAF|MVR|XOF|BTN|KES|GHS|XOF|EUR|EUR|||AED|XCD|XCD|ALL|ARS|USD|EUR|AUD|BBD|BDT|EUR|BGN|BIF|BMD|BND|BRL|BSD|BWP|BZD|CAD|AUD|CHF|NZD|CLP|XAF|CNY|COP|CVE|AUD|EUR|CZK|EUR|USD|DKK|XCD|EUR|ERN|EUR|FJD|FKP|USD|EUR|GBP|XCD|GBP|GHS|GIP|GMD|EUR|USD|GYD|HKD|HUF|IDR|EUR|ILS|GBP|INR|USD|GBP|JMD|JPY|KES|AUD|XCD|KRW|KYD|XCD|LRD|ZAR|EUR|EUR|MGA|USD|MMK|MOP|USD|XCD|EUR|MUR|MVR|MWK|MXN|MYR|NAD|AUD|NGN|EUR|NOK|AUD|NZD|NZD|PGK|PHP|PKR|PLN|NZD|USD|EUR|USD|RUB|RWF|SAR|SBD|SCR|SDG|SEK|SGD|SHP|EUR|EUR|SLE|SSP|XCG|SZL|USD|THB|NZD|TOP|TRY|TTD|AUD|TWD|TZS|UAH|UGX|USD|USD|USD|XCD|USD|USD|VUV|WST|ZAR|ZMW|ZWG||||XCD|ARS|BBD|BMD|BOB|USD|BRL|BSD|BZD|CAD|CLP|COP|CRC|CUP|XCG|XCD|DOP|EUR|USD|EUR|XCD|XAF|GTQ|GYD|HNL|HTG|EUR|XCD|KYD|XCD|MXN|NIO|PAB|PEN|PHP|USD|PYG|USD|USD|TTD|USD|UYU|XCD|VED|USD|USD|EUR|EUR|XAF|AFN|IRR|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|EUR|PHP|DKK|DKK|EUR|XOF|BIF|XOF|EUR|CAD|CDF|XAF|XAF|CHF|XOF|XAF|DJF|DZD|EUR|XAF|EUR|GNF|EUR|XAF|HTG|KMF|EUR|MAD|EUR|EUR|MGA|XOF|EUR|MRU|MUR|XPF|XOF|XPF|EUR|EUR|RWF|SCR|XOF|SYP|XAF|XOF|TND|VUV|XPF|EUR|EUR|EUR|GBP|EUR|GHS|GBP|ERN|ETB|EUR|PYG|CHF|EUR|CHF|INR|KES|GBP|GHS|XOF|NGN|USD|ILS|INR|INR|CNY|BAM|EUR|EUR|HUF|AMD||IDR|EUR|NGN|CNY||ISK|CHF|EUR|EUR|EUR|CAD|JPY||XAF|TZS|IDR|GEL|DZD|NGN|KES|NGN|TZS|CVE|BRL|XOF|KES|KZT|KZT|XAF|DKK|KES|KHR|INR|CNY|KPW|KRW|INR|INR|GNF|LRD|INR|INR|INR|TZS|XAF|EUR|TRY|GBP|INR|INR|INR|INR|KGS|TZS|EUR|UGX|EUR|USD|EUR|AOA|CDF|XAF|XAF|LAK|IQD|IRR|EUR|CDF|KES|KES|EUR|INR|KES|TZS|KES|MUR|MGA|MZN|XAF|NZD|CAD|IQD|MKD|INR|MNT|INR|INR|CAD|INR|BND|MYR|BND|IDR|MYR|SGD|EUR|XAF|USD|MMK|RUB|IRR|NAD|NOK|NOK|ZWG|EUR|EUR|INR|NPR|AWG|EUR|USD|XCG|EUR|SRD|XCG|XAF|NOK|XAF|INR|GNF|ZAR|ZAR|SSP|USD|MWK|UGX|EUR|EUR|ETB|KES|INR|GEL|RUB|USD|PKR|PKR|INR|NGN|PLN|CAD|PLN|AFN|PKR|AOA|BRL|CHF|CVE|EUR|XAF|XOF|EUR|MOP|MZN|EUR|STN|USD|BOB|USD|PEN|INR|IDR|IDR|BDT|MMK|CHF|BIF|MDL|RON|TZS|BYN|KGS|KZT|MDL|RUB|UAH|RWF|TZS|INR|RUB|KES|INR|INR|TZS|EUR|EUR|PKR|INR|EUR|NOK|SEK|MZN|XOF|XAF|MAD|MAD|LKR|EUR|EUR|USD|WST|EUR|ZWG|DJF|ETB|KES|SOS|ALL|MKD|EUR|BAM|EUR|RSD|EUR|BAM|EUR|RSD|EUR|SZL|ZAR|ZAR|ZAR|IDR|EUR|EUR|SEK|CDF|KES|TZS|UGX|IQD|SYP|PLN|INR|LKR|MYR|SGD|INR|KES|UGX|TJS|THB|ERN|ETB|ERN|TMT|BWP|ZAR|TOP||EUR|TRY|TWD|ZAR|RUB|XOF|MAD|CNY|UAH|INR|PKR|INR|PKR|AFN|UZS|UZS|LRD|LRD|ZAR|EUR|VND|MZN|TZS|EUR|CHF|ETB|XOF|ZAR|INR|UGX|XAF|UAH|XOF|NGN|BRL|COP|VED|CNY|CNY|HKD|CNY|MAD|CNY|HKD|JPY|MOP|MYR|SGD|CNY|HKD|JPY|MOP|MYR|TWD|ZAR)$",
+            "pattern": "^(NAD|ZAR|XAF|JPY|GHS|ETB|USD||AED|BHD|DJF|DZD|EGP|MAD|ERN|ILS|IQD|JOD|KMF|KWD|LBP|LYD|MAD|MRU|OMR|ILS|QAR|SAR|SDG|SOS|SSP|SYP|XAF|TND|YER|CLP|INR|TZS|EUR|AZN|AZN|RUB|XAF|BYN|ZMW|MAD|MAD|TZS|EUR|INR|INR|XOF|XOF|BDT|INR|CNY|INR|EUR|INR|BAM|BAM|RUB|ERN|EUR|EUR|EUR|EUR|BDT|INR|RUB|PHP|UGX|USD|USD|USD|IQD|IRR|EUR|CZK|CAD|RUB|GBP|DKK|DKK|KES|EUR|EUR|CHF|EUR|EUR|CHF|EUR|XOF|INR|EUR|XAF|MVR|XOF|BTN|KES|GHS|XOF|EUR|EUR|||AED|XCD|XCD|ALL|ARS|USD|EUR|AUD|BBD|BDT|EUR|EUR|BIF|BMD|BND|BRL|BSD|BWP|BZD|CAD|AUD|CHF|NZD|CLP|XAF|CNY|COP|CVE|AUD|EUR|CZK|EUR|USD|DKK|XCD|EUR|ERN|EUR|EUR|FJD|FKP|USD|EUR|GBP|XCD|GEL|GBP|GHS|GIP|GMD|EUR|GBP|USD|GYD|HKD|HUF|IDR|EUR|ILS|GBP|INR|USD|EUR|GBP|JMD|JPY|KES|AUD|XCD|KRW|KYD|XCD|LRD|ZAR|EUR|EUR|MGA|USD|MMK|MOP|USD|XCD|EUR|MUR|MVR|MWK|MXN|MYR|NAD|AUD|NGN|EUR|NOK|AUD|NZD|NZD|PGK|PHP|PKR|PLN|NZD|USD|EUR|USD|RON|RUB|RWF|SAR|SBD|SCR|SDG|SEK|SGD|SHP|EUR|EUR|SLE|SSP|XCG|SZL|USD|THB|NZD|TOP|TRY|TTD|AUD|TWD|TZS|UAH|UGX|USD|USD|USD|XCD|USD|USD|VUV|WST|ZAR|ZMW|ZWG||||XCD|ARS|BBD|BMD|BOB|USD|BRL|BSD|BZD|CAD|CLP|COP|CRC|CUP|XCG|XCD|DOP|EUR|USD|EUR|XCD|XAF|GTQ|GYD|HNL|HTG|EUR|XCD|KYD|XCD|MXN|NIO|PAB|PEN|PHP|USD|PYG|USD|USD|TTD|USD|UYU|XCD|VED|USD|USD|EUR|EUR|XAF|AFN|IRR|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|EUR|PHP|DKK|DKK|EUR|XOF|BIF|XOF|EUR|CAD|CDF|XAF|XAF|CHF|XOF|XAF|DJF|DZD|EUR|XAF|EUR|GNF|EUR|XAF|HTG|KMF|EUR|MAD|EUR|EUR|MGA|XOF|EUR|MRU|MUR|XPF|XOF|XPF|EUR|EUR|RWF|SCR|XOF|SYP|XAF|XOF|TND|VUV|XPF|EUR|EUR|EUR|GBP|EUR|GHS|GBP|ERN|ETB|EUR|PYG|CHF|EUR|CHF|INR|KES|GBP|GHS|XOF|NGN|USD|ILS|INR|INR|CNY|BAM|EUR|EUR|HTG|HUF|AMD||IDR|EUR|NGN|CNY||ISK|CHF|EUR|EUR|EUR|CAD|JPY||XAF|TZS|IDR|GEL|DZD|NGN|KES|NGN|TZS|CVE|BRL|XOF|KES|CNY|KZT|KZT|XAF|DKK|KES|KHR|INR|CNY|KPW|KRW|INR|INR|GNF|LRD|INR|INR|INR|TZS|XAF|EUR|IQD|SYP|TRY|TRY|GBP|INR|INR|INR|INR|KGS|TZS|EUR|UGX|EUR|USD|EUR|AOA|CDF|XAF|XAF|LAK|IQD|IRR|EUR|CDF|KES|KES|EUR|INR|KES|TZS|KES|MUR|MGA|MZN|XAF|NZD|CAD|IQD|MKD|INR|MNT|INR|INR|CAD|INR|BND|MYR|BND|IDR|MYR|SGD|EUR|XAF|USD|MMK|RUB|IRR|NAD|NOK|NOK|ZWG|EUR|EUR|INR|NPR|AWG|EUR|USD|XCG|EUR|SRD|XCG|XAF|NOK|XAF|INR|GNF|ZAR|ZAR|SSP|USD|MWK|UGX|EUR|EUR|ETB|KES|INR|GEL|RUB|USD|PKR|PKR|INR|NGN|PLN|EUR|CAD|PLN|AFN|PKR|AOA|BRL|CHF|CVE|EUR|XAF|XOF|EUR|MOP|MZN|EUR|STN|USD|BOB|USD|PEN|INR|IDR|IDR|BDT|MMK|CHF|BIF|MDL|RON|TZS|BYN|KGS|KZT|MDL|RUB|UAH|RWF|TZS|INR|RUB|KES|INR|INR|TZS|EUR|EUR|PKR|INR|EUR|NOK|SEK|MZN|XOF|XAF|MAD|MAD|MMK|THB|LKR|EUR|EUR|USD|WST|EUR|ZWG|DJF|ETB|KES|SOS|ALL|MKD|EUR|BAM|EUR|RSD|EUR|BAM|EUR|RSD|EUR|SZL|ZAR|ZAR|ZAR|IDR|EUR|EUR|SEK|CDF|KES|TZS|UGX|IQD|SYP|PLN|INR|LKR|MYR|SGD|INR|KES|UGX|TJS|THB|ERN|ETB|ERN|TMT|BWP|ZAR|TOP||EUR|TRY|TWD|ZAR|RUB|XOF|RUB|MAD|CNY|UAH|INR|PKR|INR|PKR|AFN|UZS|UZS|LRD|LRD|ZAR|EUR|VND|MZN|TZS|EUR|CHF|ETB|XOF|ZAR|INR|UGX|XAF|UAH|XOF|NGN|BRL|COP|VED|CNY|CNY|HKD|MOP|CNY|MAD|CNY|HKD|JPY|MOP|MYR|SGD|CNY|HKD|JPY|MOP|MYR|TWD|ZAR)$",
             "type": "string",
             "nullable": true,
-            "example": "RUB"
+            "example": "USD"
           },
           "expectedCloseDate": {
             "title": "Expected Close Date",
@@ -28966,6 +31086,13 @@
               "string1",
               "string2"
             ]
+          },
+          "campaignId": {
+            "title": "Campaign Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
           }
         },
         "additionalProperties": false
@@ -30231,6 +32358,23 @@
             "type": "string",
             "example": "string"
           },
+          "category": {
+            "title": "Category",
+            "enum": [
+              "General",
+              "PlainText",
+              "SimpleProfessional",
+              "Newsletter",
+              "Promotional",
+              "Transactional",
+              "Lifecycle",
+              "Digest",
+              "Event",
+              "Alert"
+            ],
+            "type": "string",
+            "example": "General"
+          },
           "fromEmail": {
             "title": "From Email",
             "minLength": 1,
@@ -30295,6 +32439,23 @@
             "minLength": 1,
             "type": "string",
             "example": "string"
+          },
+          "category": {
+            "title": "Category",
+            "enum": [
+              "General",
+              "PlainText",
+              "SimpleProfessional",
+              "Newsletter",
+              "Promotional",
+              "Transactional",
+              "Lifecycle",
+              "Digest",
+              "Event",
+              "Alert"
+            ],
+            "type": "string",
+            "example": "General"
           },
           "fromEmail": {
             "title": "From Email",
@@ -30411,6 +32572,24 @@
             "nullable": true,
             "example": "string"
           },
+          "category": {
+            "title": "Category",
+            "enum": [
+              "General",
+              "PlainText",
+              "SimpleProfessional",
+              "Newsletter",
+              "Promotional",
+              "Transactional",
+              "Lifecycle",
+              "Digest",
+              "Event",
+              "Alert"
+            ],
+            "type": "string",
+            "nullable": true,
+            "example": "General"
+          },
           "fromEmail": {
             "title": "From Email",
             "pattern": "^([\\w\\.\\-]+)@([\\w\\-]+)((\\.(\\w){1,63})+)$",
@@ -30450,6 +32629,25 @@
             "minLength": 1,
             "type": "string",
             "example": "string"
+          },
+          "referenceEmailTemplateId": {
+            "title": "Reference Email Template Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "templateVariables": {
+            "title": "Template Variables",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true,
+            "example": {
+              "key1": "value1",
+              "key2": "value2"
+            }
           }
         },
         "additionalProperties": false
@@ -30470,7 +32668,8 @@
           },
           "emailGroupId": {
             "title": "Email Group Id",
-            "minLength": 1,
+            "maximum": 2147483647,
+            "minimum": 1,
             "type": "integer",
             "format": "int32",
             "example": 1
@@ -30480,6 +32679,230 @@
             "minLength": 1,
             "type": "string",
             "example": "string"
+          },
+          "category": {
+            "title": "Category",
+            "enum": [
+              "General",
+              "PlainText",
+              "SimpleProfessional",
+              "Newsletter",
+              "Promotional",
+              "Transactional",
+              "Lifecycle",
+              "Digest",
+              "Event",
+              "Alert"
+            ],
+            "type": "string",
+            "nullable": true,
+            "example": "General"
+          },
+          "referenceEmailTemplateId": {
+            "title": "Reference Email Template Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "templateVariables": {
+            "title": "Template Variables",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true,
+            "example": {
+              "key1": "value1",
+              "key2": "value2"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "EmailTemplatePreviewRequestDto": {
+        "required": [
+          "bodyTemplate",
+          "fromEmail",
+          "fromName",
+          "subject"
+        ],
+        "type": "object",
+        "properties": {
+          "subject": {
+            "title": "Subject",
+            "minLength": 1,
+            "type": "string",
+            "example": "string"
+          },
+          "bodyTemplate": {
+            "title": "Body Template",
+            "minLength": 1,
+            "type": "string",
+            "example": "string"
+          },
+          "fromEmail": {
+            "title": "From Email",
+            "minLength": 1,
+            "pattern": "^([\\w\\.\\-]+)@([\\w\\-]+)((\\.(\\w){1,63})+)$",
+            "type": "string",
+            "format": "email",
+            "example": "example@example.com"
+          },
+          "fromName": {
+            "title": "From Name",
+            "minLength": 1,
+            "type": "string",
+            "example": "string"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "contactId": {
+            "title": "Contact Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "contactType": {
+            "title": "Contact Type",
+            "enum": [
+              "Full",
+              "Standard",
+              "Basic",
+              "Minimal"
+            ],
+            "type": "string",
+            "nullable": true,
+            "example": "Full"
+          },
+          "customTemplateParameters": {
+            "title": "Custom Template Parameters",
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "EmailTemplatePreviewResultDto": {
+        "type": "object",
+        "properties": {
+          "renderedSubject": {
+            "title": "Rendered Subject",
+            "type": "string",
+            "example": "string"
+          },
+          "renderedBody": {
+            "title": "Rendered Body",
+            "type": "string",
+            "example": "string"
+          },
+          "fromEmail": {
+            "title": "From Email",
+            "type": "string",
+            "example": "string"
+          },
+          "fromName": {
+            "title": "From Name",
+            "type": "string",
+            "example": "string"
+          },
+          "previewContactId": {
+            "title": "Preview Contact Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "previewContactName": {
+            "title": "Preview Contact Name",
+            "type": "string",
+            "example": "string"
+          },
+          "previewContactEmail": {
+            "title": "Preview Contact Email",
+            "type": "string",
+            "example": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EmailTemplateSendTestDto": {
+        "required": [
+          "bodyTemplate",
+          "fromEmail",
+          "fromName",
+          "recipientEmail",
+          "subject"
+        ],
+        "type": "object",
+        "properties": {
+          "subject": {
+            "title": "Subject",
+            "minLength": 1,
+            "type": "string",
+            "example": "string"
+          },
+          "bodyTemplate": {
+            "title": "Body Template",
+            "minLength": 1,
+            "type": "string",
+            "example": "string"
+          },
+          "fromEmail": {
+            "title": "From Email",
+            "minLength": 1,
+            "pattern": "^([\\w\\.\\-]+)@([\\w\\-]+)((\\.(\\w){1,63})+)$",
+            "type": "string",
+            "format": "email",
+            "example": "example@example.com"
+          },
+          "fromName": {
+            "title": "From Name",
+            "minLength": 1,
+            "type": "string",
+            "example": "string"
+          },
+          "contactId": {
+            "title": "Contact Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "contactType": {
+            "title": "Contact Type",
+            "enum": [
+              "Full",
+              "Standard",
+              "Basic",
+              "Minimal"
+            ],
+            "type": "string",
+            "nullable": true,
+            "example": "Full"
+          },
+          "customTemplateParameters": {
+            "title": "Custom Template Parameters",
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            },
+            "nullable": true
+          },
+          "recipientEmail": {
+            "title": "Recipient Email",
+            "minLength": 1,
+            "pattern": "^([\\w\\.\\-]+)@([\\w\\-]+)((\\.(\\w){1,63})+)$",
+            "type": "string",
+            "format": "email",
+            "example": "example@example.com"
           }
         },
         "additionalProperties": false
@@ -30508,6 +32931,24 @@
             "nullable": true,
             "example": "string"
           },
+          "category": {
+            "title": "Category",
+            "enum": [
+              "General",
+              "PlainText",
+              "SimpleProfessional",
+              "Newsletter",
+              "Promotional",
+              "Transactional",
+              "Lifecycle",
+              "Digest",
+              "Event",
+              "Alert"
+            ],
+            "type": "string",
+            "nullable": true,
+            "example": "General"
+          },
           "fromEmail": {
             "title": "From Email",
             "pattern": "^([\\w\\.\\-]+)@([\\w\\-]+)((\\.(\\w){1,63})+)$",
@@ -30541,6 +32982,81 @@
             "format": "int32",
             "nullable": true,
             "example": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "EmailTemplateUpdateDtoChangeLogDetailsDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "objectType": {
+            "title": "Object Type",
+            "type": "string",
+            "example": "string"
+          },
+          "objectId": {
+            "title": "Object Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "entityState": {
+            "title": "Entity State",
+            "enum": [
+              "Detached",
+              "Unchanged",
+              "Deleted",
+              "Modified",
+              "Added"
+            ],
+            "type": "string",
+            "example": "Detached"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EmailTemplateUpdateDto"
+          },
+          "createdAt": {
+            "title": "Created At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "createdById": {
+            "title": "Created By Id",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "updatedById": {
+            "title": "Updated By Id",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "createdBy": {
+            "title": "Created By",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "updatedBy": {
+            "title": "Updated By",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
           }
         },
         "additionalProperties": false
@@ -31662,6 +34178,13 @@
               "string1",
               "string2"
             ]
+          },
+          "campaignId": {
+            "title": "Campaign Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
           }
         },
         "additionalProperties": false
@@ -31739,6 +34262,13 @@
               "string1",
               "string2"
             ]
+          },
+          "campaignId": {
+            "title": "Campaign Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
           },
           "id": {
             "title": "Id",
@@ -32042,9 +34572,9 @@
           "currency": {
             "title": "Currency",
             "minLength": 1,
-            "pattern": "^(NAD|ZAR|XAF|JPY|GHS|ETB|USD||AED|BHD|DJF|DZD|EGP|MAD|ERN|ILS|IQD|JOD|KMF|KWD|LBP|LYD|MAD|MRU|OMR|ILS|QAR|SAR|SDG|SOS|SSP|SYP|XAF|TND|YER|CLP|INR|TZS|EUR|AZN|AZN|RUB|XAF|BYN|ZMW|MAD|MAD|TZS|BGN|INR|INR|XOF|XOF|BDT|INR|CNY|INR|EUR|INR|BAM|BAM|ERN|EUR|EUR|EUR|EUR|BDT|INR|RUB|PHP|UGX|USD|USD|USD|IQD|IRR|EUR|CZK|CAD|RUB|GBP|DKK|DKK|KES|EUR|EUR|CHF|EUR|EUR|CHF|EUR|XOF|INR|EUR|XAF|MVR|XOF|BTN|KES|GHS|XOF|EUR|EUR|||AED|XCD|XCD|ALL|ARS|USD|EUR|AUD|BBD|BDT|EUR|BGN|BIF|BMD|BND|BRL|BSD|BWP|BZD|CAD|AUD|CHF|NZD|CLP|XAF|CNY|COP|CVE|AUD|EUR|CZK|EUR|USD|DKK|XCD|EUR|ERN|EUR|FJD|FKP|USD|EUR|GBP|XCD|GBP|GHS|GIP|GMD|EUR|USD|GYD|HKD|HUF|IDR|EUR|ILS|GBP|INR|USD|GBP|JMD|JPY|KES|AUD|XCD|KRW|KYD|XCD|LRD|ZAR|EUR|EUR|MGA|USD|MMK|MOP|USD|XCD|EUR|MUR|MVR|MWK|MXN|MYR|NAD|AUD|NGN|EUR|NOK|AUD|NZD|NZD|PGK|PHP|PKR|PLN|NZD|USD|EUR|USD|RUB|RWF|SAR|SBD|SCR|SDG|SEK|SGD|SHP|EUR|EUR|SLE|SSP|XCG|SZL|USD|THB|NZD|TOP|TRY|TTD|AUD|TWD|TZS|UAH|UGX|USD|USD|USD|XCD|USD|USD|VUV|WST|ZAR|ZMW|ZWG||||XCD|ARS|BBD|BMD|BOB|USD|BRL|BSD|BZD|CAD|CLP|COP|CRC|CUP|XCG|XCD|DOP|EUR|USD|EUR|XCD|XAF|GTQ|GYD|HNL|HTG|EUR|XCD|KYD|XCD|MXN|NIO|PAB|PEN|PHP|USD|PYG|USD|USD|TTD|USD|UYU|XCD|VED|USD|USD|EUR|EUR|XAF|AFN|IRR|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|EUR|PHP|DKK|DKK|EUR|XOF|BIF|XOF|EUR|CAD|CDF|XAF|XAF|CHF|XOF|XAF|DJF|DZD|EUR|XAF|EUR|GNF|EUR|XAF|HTG|KMF|EUR|MAD|EUR|EUR|MGA|XOF|EUR|MRU|MUR|XPF|XOF|XPF|EUR|EUR|RWF|SCR|XOF|SYP|XAF|XOF|TND|VUV|XPF|EUR|EUR|EUR|GBP|EUR|GHS|GBP|ERN|ETB|EUR|PYG|CHF|EUR|CHF|INR|KES|GBP|GHS|XOF|NGN|USD|ILS|INR|INR|CNY|BAM|EUR|EUR|HUF|AMD||IDR|EUR|NGN|CNY||ISK|CHF|EUR|EUR|EUR|CAD|JPY||XAF|TZS|IDR|GEL|DZD|NGN|KES|NGN|TZS|CVE|BRL|XOF|KES|KZT|KZT|XAF|DKK|KES|KHR|INR|CNY|KPW|KRW|INR|INR|GNF|LRD|INR|INR|INR|TZS|XAF|EUR|TRY|GBP|INR|INR|INR|INR|KGS|TZS|EUR|UGX|EUR|USD|EUR|AOA|CDF|XAF|XAF|LAK|IQD|IRR|EUR|CDF|KES|KES|EUR|INR|KES|TZS|KES|MUR|MGA|MZN|XAF|NZD|CAD|IQD|MKD|INR|MNT|INR|INR|CAD|INR|BND|MYR|BND|IDR|MYR|SGD|EUR|XAF|USD|MMK|RUB|IRR|NAD|NOK|NOK|ZWG|EUR|EUR|INR|NPR|AWG|EUR|USD|XCG|EUR|SRD|XCG|XAF|NOK|XAF|INR|GNF|ZAR|ZAR|SSP|USD|MWK|UGX|EUR|EUR|ETB|KES|INR|GEL|RUB|USD|PKR|PKR|INR|NGN|PLN|CAD|PLN|AFN|PKR|AOA|BRL|CHF|CVE|EUR|XAF|XOF|EUR|MOP|MZN|EUR|STN|USD|BOB|USD|PEN|INR|IDR|IDR|BDT|MMK|CHF|BIF|MDL|RON|TZS|BYN|KGS|KZT|MDL|RUB|UAH|RWF|TZS|INR|RUB|KES|INR|INR|TZS|EUR|EUR|PKR|INR|EUR|NOK|SEK|MZN|XOF|XAF|MAD|MAD|LKR|EUR|EUR|USD|WST|EUR|ZWG|DJF|ETB|KES|SOS|ALL|MKD|EUR|BAM|EUR|RSD|EUR|BAM|EUR|RSD|EUR|SZL|ZAR|ZAR|ZAR|IDR|EUR|EUR|SEK|CDF|KES|TZS|UGX|IQD|SYP|PLN|INR|LKR|MYR|SGD|INR|KES|UGX|TJS|THB|ERN|ETB|ERN|TMT|BWP|ZAR|TOP||EUR|TRY|TWD|ZAR|RUB|XOF|MAD|CNY|UAH|INR|PKR|INR|PKR|AFN|UZS|UZS|LRD|LRD|ZAR|EUR|VND|MZN|TZS|EUR|CHF|ETB|XOF|ZAR|INR|UGX|XAF|UAH|XOF|NGN|BRL|COP|VED|CNY|CNY|HKD|CNY|MAD|CNY|HKD|JPY|MOP|MYR|SGD|CNY|HKD|JPY|MOP|MYR|TWD|ZAR)$",
+            "pattern": "^(NAD|ZAR|XAF|JPY|GHS|ETB|USD||AED|BHD|DJF|DZD|EGP|MAD|ERN|ILS|IQD|JOD|KMF|KWD|LBP|LYD|MAD|MRU|OMR|ILS|QAR|SAR|SDG|SOS|SSP|SYP|XAF|TND|YER|CLP|INR|TZS|EUR|AZN|AZN|RUB|XAF|BYN|ZMW|MAD|MAD|TZS|EUR|INR|INR|XOF|XOF|BDT|INR|CNY|INR|EUR|INR|BAM|BAM|RUB|ERN|EUR|EUR|EUR|EUR|BDT|INR|RUB|PHP|UGX|USD|USD|USD|IQD|IRR|EUR|CZK|CAD|RUB|GBP|DKK|DKK|KES|EUR|EUR|CHF|EUR|EUR|CHF|EUR|XOF|INR|EUR|XAF|MVR|XOF|BTN|KES|GHS|XOF|EUR|EUR|||AED|XCD|XCD|ALL|ARS|USD|EUR|AUD|BBD|BDT|EUR|EUR|BIF|BMD|BND|BRL|BSD|BWP|BZD|CAD|AUD|CHF|NZD|CLP|XAF|CNY|COP|CVE|AUD|EUR|CZK|EUR|USD|DKK|XCD|EUR|ERN|EUR|EUR|FJD|FKP|USD|EUR|GBP|XCD|GEL|GBP|GHS|GIP|GMD|EUR|GBP|USD|GYD|HKD|HUF|IDR|EUR|ILS|GBP|INR|USD|EUR|GBP|JMD|JPY|KES|AUD|XCD|KRW|KYD|XCD|LRD|ZAR|EUR|EUR|MGA|USD|MMK|MOP|USD|XCD|EUR|MUR|MVR|MWK|MXN|MYR|NAD|AUD|NGN|EUR|NOK|AUD|NZD|NZD|PGK|PHP|PKR|PLN|NZD|USD|EUR|USD|RON|RUB|RWF|SAR|SBD|SCR|SDG|SEK|SGD|SHP|EUR|EUR|SLE|SSP|XCG|SZL|USD|THB|NZD|TOP|TRY|TTD|AUD|TWD|TZS|UAH|UGX|USD|USD|USD|XCD|USD|USD|VUV|WST|ZAR|ZMW|ZWG||||XCD|ARS|BBD|BMD|BOB|USD|BRL|BSD|BZD|CAD|CLP|COP|CRC|CUP|XCG|XCD|DOP|EUR|USD|EUR|XCD|XAF|GTQ|GYD|HNL|HTG|EUR|XCD|KYD|XCD|MXN|NIO|PAB|PEN|PHP|USD|PYG|USD|USD|TTD|USD|UYU|XCD|VED|USD|USD|EUR|EUR|XAF|AFN|IRR|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|EUR|PHP|DKK|DKK|EUR|XOF|BIF|XOF|EUR|CAD|CDF|XAF|XAF|CHF|XOF|XAF|DJF|DZD|EUR|XAF|EUR|GNF|EUR|XAF|HTG|KMF|EUR|MAD|EUR|EUR|MGA|XOF|EUR|MRU|MUR|XPF|XOF|XPF|EUR|EUR|RWF|SCR|XOF|SYP|XAF|XOF|TND|VUV|XPF|EUR|EUR|EUR|GBP|EUR|GHS|GBP|ERN|ETB|EUR|PYG|CHF|EUR|CHF|INR|KES|GBP|GHS|XOF|NGN|USD|ILS|INR|INR|CNY|BAM|EUR|EUR|HTG|HUF|AMD||IDR|EUR|NGN|CNY||ISK|CHF|EUR|EUR|EUR|CAD|JPY||XAF|TZS|IDR|GEL|DZD|NGN|KES|NGN|TZS|CVE|BRL|XOF|KES|CNY|KZT|KZT|XAF|DKK|KES|KHR|INR|CNY|KPW|KRW|INR|INR|GNF|LRD|INR|INR|INR|TZS|XAF|EUR|IQD|SYP|TRY|TRY|GBP|INR|INR|INR|INR|KGS|TZS|EUR|UGX|EUR|USD|EUR|AOA|CDF|XAF|XAF|LAK|IQD|IRR|EUR|CDF|KES|KES|EUR|INR|KES|TZS|KES|MUR|MGA|MZN|XAF|NZD|CAD|IQD|MKD|INR|MNT|INR|INR|CAD|INR|BND|MYR|BND|IDR|MYR|SGD|EUR|XAF|USD|MMK|RUB|IRR|NAD|NOK|NOK|ZWG|EUR|EUR|INR|NPR|AWG|EUR|USD|XCG|EUR|SRD|XCG|XAF|NOK|XAF|INR|GNF|ZAR|ZAR|SSP|USD|MWK|UGX|EUR|EUR|ETB|KES|INR|GEL|RUB|USD|PKR|PKR|INR|NGN|PLN|EUR|CAD|PLN|AFN|PKR|AOA|BRL|CHF|CVE|EUR|XAF|XOF|EUR|MOP|MZN|EUR|STN|USD|BOB|USD|PEN|INR|IDR|IDR|BDT|MMK|CHF|BIF|MDL|RON|TZS|BYN|KGS|KZT|MDL|RUB|UAH|RWF|TZS|INR|RUB|KES|INR|INR|TZS|EUR|EUR|PKR|INR|EUR|NOK|SEK|MZN|XOF|XAF|MAD|MAD|MMK|THB|LKR|EUR|EUR|USD|WST|EUR|ZWG|DJF|ETB|KES|SOS|ALL|MKD|EUR|BAM|EUR|RSD|EUR|BAM|EUR|RSD|EUR|SZL|ZAR|ZAR|ZAR|IDR|EUR|EUR|SEK|CDF|KES|TZS|UGX|IQD|SYP|PLN|INR|LKR|MYR|SGD|INR|KES|UGX|TJS|THB|ERN|ETB|ERN|TMT|BWP|ZAR|TOP||EUR|TRY|TWD|ZAR|RUB|XOF|RUB|MAD|CNY|UAH|INR|PKR|INR|PKR|AFN|UZS|UZS|LRD|LRD|ZAR|EUR|VND|MZN|TZS|EUR|CHF|ETB|XOF|ZAR|INR|UGX|XAF|UAH|XOF|NGN|BRL|COP|VED|CNY|CNY|HKD|MOP|CNY|MAD|CNY|HKD|JPY|MOP|MYR|SGD|CNY|HKD|JPY|MOP|MYR|TWD|ZAR)$",
             "type": "string",
-            "example": "RUB"
+            "example": "USD"
           },
           "quantity": {
             "title": "Quantity",
@@ -32100,9 +34630,9 @@
           "currency": {
             "title": "Currency",
             "minLength": 1,
-            "pattern": "^(NAD|ZAR|XAF|JPY|GHS|ETB|USD||AED|BHD|DJF|DZD|EGP|MAD|ERN|ILS|IQD|JOD|KMF|KWD|LBP|LYD|MAD|MRU|OMR|ILS|QAR|SAR|SDG|SOS|SSP|SYP|XAF|TND|YER|CLP|INR|TZS|EUR|AZN|AZN|RUB|XAF|BYN|ZMW|MAD|MAD|TZS|BGN|INR|INR|XOF|XOF|BDT|INR|CNY|INR|EUR|INR|BAM|BAM|ERN|EUR|EUR|EUR|EUR|BDT|INR|RUB|PHP|UGX|USD|USD|USD|IQD|IRR|EUR|CZK|CAD|RUB|GBP|DKK|DKK|KES|EUR|EUR|CHF|EUR|EUR|CHF|EUR|XOF|INR|EUR|XAF|MVR|XOF|BTN|KES|GHS|XOF|EUR|EUR|||AED|XCD|XCD|ALL|ARS|USD|EUR|AUD|BBD|BDT|EUR|BGN|BIF|BMD|BND|BRL|BSD|BWP|BZD|CAD|AUD|CHF|NZD|CLP|XAF|CNY|COP|CVE|AUD|EUR|CZK|EUR|USD|DKK|XCD|EUR|ERN|EUR|FJD|FKP|USD|EUR|GBP|XCD|GBP|GHS|GIP|GMD|EUR|USD|GYD|HKD|HUF|IDR|EUR|ILS|GBP|INR|USD|GBP|JMD|JPY|KES|AUD|XCD|KRW|KYD|XCD|LRD|ZAR|EUR|EUR|MGA|USD|MMK|MOP|USD|XCD|EUR|MUR|MVR|MWK|MXN|MYR|NAD|AUD|NGN|EUR|NOK|AUD|NZD|NZD|PGK|PHP|PKR|PLN|NZD|USD|EUR|USD|RUB|RWF|SAR|SBD|SCR|SDG|SEK|SGD|SHP|EUR|EUR|SLE|SSP|XCG|SZL|USD|THB|NZD|TOP|TRY|TTD|AUD|TWD|TZS|UAH|UGX|USD|USD|USD|XCD|USD|USD|VUV|WST|ZAR|ZMW|ZWG||||XCD|ARS|BBD|BMD|BOB|USD|BRL|BSD|BZD|CAD|CLP|COP|CRC|CUP|XCG|XCD|DOP|EUR|USD|EUR|XCD|XAF|GTQ|GYD|HNL|HTG|EUR|XCD|KYD|XCD|MXN|NIO|PAB|PEN|PHP|USD|PYG|USD|USD|TTD|USD|UYU|XCD|VED|USD|USD|EUR|EUR|XAF|AFN|IRR|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|EUR|PHP|DKK|DKK|EUR|XOF|BIF|XOF|EUR|CAD|CDF|XAF|XAF|CHF|XOF|XAF|DJF|DZD|EUR|XAF|EUR|GNF|EUR|XAF|HTG|KMF|EUR|MAD|EUR|EUR|MGA|XOF|EUR|MRU|MUR|XPF|XOF|XPF|EUR|EUR|RWF|SCR|XOF|SYP|XAF|XOF|TND|VUV|XPF|EUR|EUR|EUR|GBP|EUR|GHS|GBP|ERN|ETB|EUR|PYG|CHF|EUR|CHF|INR|KES|GBP|GHS|XOF|NGN|USD|ILS|INR|INR|CNY|BAM|EUR|EUR|HUF|AMD||IDR|EUR|NGN|CNY||ISK|CHF|EUR|EUR|EUR|CAD|JPY||XAF|TZS|IDR|GEL|DZD|NGN|KES|NGN|TZS|CVE|BRL|XOF|KES|KZT|KZT|XAF|DKK|KES|KHR|INR|CNY|KPW|KRW|INR|INR|GNF|LRD|INR|INR|INR|TZS|XAF|EUR|TRY|GBP|INR|INR|INR|INR|KGS|TZS|EUR|UGX|EUR|USD|EUR|AOA|CDF|XAF|XAF|LAK|IQD|IRR|EUR|CDF|KES|KES|EUR|INR|KES|TZS|KES|MUR|MGA|MZN|XAF|NZD|CAD|IQD|MKD|INR|MNT|INR|INR|CAD|INR|BND|MYR|BND|IDR|MYR|SGD|EUR|XAF|USD|MMK|RUB|IRR|NAD|NOK|NOK|ZWG|EUR|EUR|INR|NPR|AWG|EUR|USD|XCG|EUR|SRD|XCG|XAF|NOK|XAF|INR|GNF|ZAR|ZAR|SSP|USD|MWK|UGX|EUR|EUR|ETB|KES|INR|GEL|RUB|USD|PKR|PKR|INR|NGN|PLN|CAD|PLN|AFN|PKR|AOA|BRL|CHF|CVE|EUR|XAF|XOF|EUR|MOP|MZN|EUR|STN|USD|BOB|USD|PEN|INR|IDR|IDR|BDT|MMK|CHF|BIF|MDL|RON|TZS|BYN|KGS|KZT|MDL|RUB|UAH|RWF|TZS|INR|RUB|KES|INR|INR|TZS|EUR|EUR|PKR|INR|EUR|NOK|SEK|MZN|XOF|XAF|MAD|MAD|LKR|EUR|EUR|USD|WST|EUR|ZWG|DJF|ETB|KES|SOS|ALL|MKD|EUR|BAM|EUR|RSD|EUR|BAM|EUR|RSD|EUR|SZL|ZAR|ZAR|ZAR|IDR|EUR|EUR|SEK|CDF|KES|TZS|UGX|IQD|SYP|PLN|INR|LKR|MYR|SGD|INR|KES|UGX|TJS|THB|ERN|ETB|ERN|TMT|BWP|ZAR|TOP||EUR|TRY|TWD|ZAR|RUB|XOF|MAD|CNY|UAH|INR|PKR|INR|PKR|AFN|UZS|UZS|LRD|LRD|ZAR|EUR|VND|MZN|TZS|EUR|CHF|ETB|XOF|ZAR|INR|UGX|XAF|UAH|XOF|NGN|BRL|COP|VED|CNY|CNY|HKD|CNY|MAD|CNY|HKD|JPY|MOP|MYR|SGD|CNY|HKD|JPY|MOP|MYR|TWD|ZAR)$",
+            "pattern": "^(NAD|ZAR|XAF|JPY|GHS|ETB|USD||AED|BHD|DJF|DZD|EGP|MAD|ERN|ILS|IQD|JOD|KMF|KWD|LBP|LYD|MAD|MRU|OMR|ILS|QAR|SAR|SDG|SOS|SSP|SYP|XAF|TND|YER|CLP|INR|TZS|EUR|AZN|AZN|RUB|XAF|BYN|ZMW|MAD|MAD|TZS|EUR|INR|INR|XOF|XOF|BDT|INR|CNY|INR|EUR|INR|BAM|BAM|RUB|ERN|EUR|EUR|EUR|EUR|BDT|INR|RUB|PHP|UGX|USD|USD|USD|IQD|IRR|EUR|CZK|CAD|RUB|GBP|DKK|DKK|KES|EUR|EUR|CHF|EUR|EUR|CHF|EUR|XOF|INR|EUR|XAF|MVR|XOF|BTN|KES|GHS|XOF|EUR|EUR|||AED|XCD|XCD|ALL|ARS|USD|EUR|AUD|BBD|BDT|EUR|EUR|BIF|BMD|BND|BRL|BSD|BWP|BZD|CAD|AUD|CHF|NZD|CLP|XAF|CNY|COP|CVE|AUD|EUR|CZK|EUR|USD|DKK|XCD|EUR|ERN|EUR|EUR|FJD|FKP|USD|EUR|GBP|XCD|GEL|GBP|GHS|GIP|GMD|EUR|GBP|USD|GYD|HKD|HUF|IDR|EUR|ILS|GBP|INR|USD|EUR|GBP|JMD|JPY|KES|AUD|XCD|KRW|KYD|XCD|LRD|ZAR|EUR|EUR|MGA|USD|MMK|MOP|USD|XCD|EUR|MUR|MVR|MWK|MXN|MYR|NAD|AUD|NGN|EUR|NOK|AUD|NZD|NZD|PGK|PHP|PKR|PLN|NZD|USD|EUR|USD|RON|RUB|RWF|SAR|SBD|SCR|SDG|SEK|SGD|SHP|EUR|EUR|SLE|SSP|XCG|SZL|USD|THB|NZD|TOP|TRY|TTD|AUD|TWD|TZS|UAH|UGX|USD|USD|USD|XCD|USD|USD|VUV|WST|ZAR|ZMW|ZWG||||XCD|ARS|BBD|BMD|BOB|USD|BRL|BSD|BZD|CAD|CLP|COP|CRC|CUP|XCG|XCD|DOP|EUR|USD|EUR|XCD|XAF|GTQ|GYD|HNL|HTG|EUR|XCD|KYD|XCD|MXN|NIO|PAB|PEN|PHP|USD|PYG|USD|USD|TTD|USD|UYU|XCD|VED|USD|USD|EUR|EUR|XAF|AFN|IRR|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|EUR|PHP|DKK|DKK|EUR|XOF|BIF|XOF|EUR|CAD|CDF|XAF|XAF|CHF|XOF|XAF|DJF|DZD|EUR|XAF|EUR|GNF|EUR|XAF|HTG|KMF|EUR|MAD|EUR|EUR|MGA|XOF|EUR|MRU|MUR|XPF|XOF|XPF|EUR|EUR|RWF|SCR|XOF|SYP|XAF|XOF|TND|VUV|XPF|EUR|EUR|EUR|GBP|EUR|GHS|GBP|ERN|ETB|EUR|PYG|CHF|EUR|CHF|INR|KES|GBP|GHS|XOF|NGN|USD|ILS|INR|INR|CNY|BAM|EUR|EUR|HTG|HUF|AMD||IDR|EUR|NGN|CNY||ISK|CHF|EUR|EUR|EUR|CAD|JPY||XAF|TZS|IDR|GEL|DZD|NGN|KES|NGN|TZS|CVE|BRL|XOF|KES|CNY|KZT|KZT|XAF|DKK|KES|KHR|INR|CNY|KPW|KRW|INR|INR|GNF|LRD|INR|INR|INR|TZS|XAF|EUR|IQD|SYP|TRY|TRY|GBP|INR|INR|INR|INR|KGS|TZS|EUR|UGX|EUR|USD|EUR|AOA|CDF|XAF|XAF|LAK|IQD|IRR|EUR|CDF|KES|KES|EUR|INR|KES|TZS|KES|MUR|MGA|MZN|XAF|NZD|CAD|IQD|MKD|INR|MNT|INR|INR|CAD|INR|BND|MYR|BND|IDR|MYR|SGD|EUR|XAF|USD|MMK|RUB|IRR|NAD|NOK|NOK|ZWG|EUR|EUR|INR|NPR|AWG|EUR|USD|XCG|EUR|SRD|XCG|XAF|NOK|XAF|INR|GNF|ZAR|ZAR|SSP|USD|MWK|UGX|EUR|EUR|ETB|KES|INR|GEL|RUB|USD|PKR|PKR|INR|NGN|PLN|EUR|CAD|PLN|AFN|PKR|AOA|BRL|CHF|CVE|EUR|XAF|XOF|EUR|MOP|MZN|EUR|STN|USD|BOB|USD|PEN|INR|IDR|IDR|BDT|MMK|CHF|BIF|MDL|RON|TZS|BYN|KGS|KZT|MDL|RUB|UAH|RWF|TZS|INR|RUB|KES|INR|INR|TZS|EUR|EUR|PKR|INR|EUR|NOK|SEK|MZN|XOF|XAF|MAD|MAD|MMK|THB|LKR|EUR|EUR|USD|WST|EUR|ZWG|DJF|ETB|KES|SOS|ALL|MKD|EUR|BAM|EUR|RSD|EUR|BAM|EUR|RSD|EUR|SZL|ZAR|ZAR|ZAR|IDR|EUR|EUR|SEK|CDF|KES|TZS|UGX|IQD|SYP|PLN|INR|LKR|MYR|SGD|INR|KES|UGX|TJS|THB|ERN|ETB|ERN|TMT|BWP|ZAR|TOP||EUR|TRY|TWD|ZAR|RUB|XOF|RUB|MAD|CNY|UAH|INR|PKR|INR|PKR|AFN|UZS|UZS|LRD|LRD|ZAR|EUR|VND|MZN|TZS|EUR|CHF|ETB|XOF|ZAR|INR|UGX|XAF|UAH|XOF|NGN|BRL|COP|VED|CNY|CNY|HKD|MOP|CNY|MAD|CNY|HKD|JPY|MOP|MYR|SGD|CNY|HKD|JPY|MOP|MYR|TWD|ZAR)$",
             "type": "string",
-            "example": "RUB"
+            "example": "USD"
           },
           "quantity": {
             "title": "Quantity",
@@ -32289,10 +34819,10 @@
           },
           "currency": {
             "title": "Currency",
-            "pattern": "^(NAD|ZAR|XAF|JPY|GHS|ETB|USD||AED|BHD|DJF|DZD|EGP|MAD|ERN|ILS|IQD|JOD|KMF|KWD|LBP|LYD|MAD|MRU|OMR|ILS|QAR|SAR|SDG|SOS|SSP|SYP|XAF|TND|YER|CLP|INR|TZS|EUR|AZN|AZN|RUB|XAF|BYN|ZMW|MAD|MAD|TZS|BGN|INR|INR|XOF|XOF|BDT|INR|CNY|INR|EUR|INR|BAM|BAM|ERN|EUR|EUR|EUR|EUR|BDT|INR|RUB|PHP|UGX|USD|USD|USD|IQD|IRR|EUR|CZK|CAD|RUB|GBP|DKK|DKK|KES|EUR|EUR|CHF|EUR|EUR|CHF|EUR|XOF|INR|EUR|XAF|MVR|XOF|BTN|KES|GHS|XOF|EUR|EUR|||AED|XCD|XCD|ALL|ARS|USD|EUR|AUD|BBD|BDT|EUR|BGN|BIF|BMD|BND|BRL|BSD|BWP|BZD|CAD|AUD|CHF|NZD|CLP|XAF|CNY|COP|CVE|AUD|EUR|CZK|EUR|USD|DKK|XCD|EUR|ERN|EUR|FJD|FKP|USD|EUR|GBP|XCD|GBP|GHS|GIP|GMD|EUR|USD|GYD|HKD|HUF|IDR|EUR|ILS|GBP|INR|USD|GBP|JMD|JPY|KES|AUD|XCD|KRW|KYD|XCD|LRD|ZAR|EUR|EUR|MGA|USD|MMK|MOP|USD|XCD|EUR|MUR|MVR|MWK|MXN|MYR|NAD|AUD|NGN|EUR|NOK|AUD|NZD|NZD|PGK|PHP|PKR|PLN|NZD|USD|EUR|USD|RUB|RWF|SAR|SBD|SCR|SDG|SEK|SGD|SHP|EUR|EUR|SLE|SSP|XCG|SZL|USD|THB|NZD|TOP|TRY|TTD|AUD|TWD|TZS|UAH|UGX|USD|USD|USD|XCD|USD|USD|VUV|WST|ZAR|ZMW|ZWG||||XCD|ARS|BBD|BMD|BOB|USD|BRL|BSD|BZD|CAD|CLP|COP|CRC|CUP|XCG|XCD|DOP|EUR|USD|EUR|XCD|XAF|GTQ|GYD|HNL|HTG|EUR|XCD|KYD|XCD|MXN|NIO|PAB|PEN|PHP|USD|PYG|USD|USD|TTD|USD|UYU|XCD|VED|USD|USD|EUR|EUR|XAF|AFN|IRR|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|EUR|PHP|DKK|DKK|EUR|XOF|BIF|XOF|EUR|CAD|CDF|XAF|XAF|CHF|XOF|XAF|DJF|DZD|EUR|XAF|EUR|GNF|EUR|XAF|HTG|KMF|EUR|MAD|EUR|EUR|MGA|XOF|EUR|MRU|MUR|XPF|XOF|XPF|EUR|EUR|RWF|SCR|XOF|SYP|XAF|XOF|TND|VUV|XPF|EUR|EUR|EUR|GBP|EUR|GHS|GBP|ERN|ETB|EUR|PYG|CHF|EUR|CHF|INR|KES|GBP|GHS|XOF|NGN|USD|ILS|INR|INR|CNY|BAM|EUR|EUR|HUF|AMD||IDR|EUR|NGN|CNY||ISK|CHF|EUR|EUR|EUR|CAD|JPY||XAF|TZS|IDR|GEL|DZD|NGN|KES|NGN|TZS|CVE|BRL|XOF|KES|KZT|KZT|XAF|DKK|KES|KHR|INR|CNY|KPW|KRW|INR|INR|GNF|LRD|INR|INR|INR|TZS|XAF|EUR|TRY|GBP|INR|INR|INR|INR|KGS|TZS|EUR|UGX|EUR|USD|EUR|AOA|CDF|XAF|XAF|LAK|IQD|IRR|EUR|CDF|KES|KES|EUR|INR|KES|TZS|KES|MUR|MGA|MZN|XAF|NZD|CAD|IQD|MKD|INR|MNT|INR|INR|CAD|INR|BND|MYR|BND|IDR|MYR|SGD|EUR|XAF|USD|MMK|RUB|IRR|NAD|NOK|NOK|ZWG|EUR|EUR|INR|NPR|AWG|EUR|USD|XCG|EUR|SRD|XCG|XAF|NOK|XAF|INR|GNF|ZAR|ZAR|SSP|USD|MWK|UGX|EUR|EUR|ETB|KES|INR|GEL|RUB|USD|PKR|PKR|INR|NGN|PLN|CAD|PLN|AFN|PKR|AOA|BRL|CHF|CVE|EUR|XAF|XOF|EUR|MOP|MZN|EUR|STN|USD|BOB|USD|PEN|INR|IDR|IDR|BDT|MMK|CHF|BIF|MDL|RON|TZS|BYN|KGS|KZT|MDL|RUB|UAH|RWF|TZS|INR|RUB|KES|INR|INR|TZS|EUR|EUR|PKR|INR|EUR|NOK|SEK|MZN|XOF|XAF|MAD|MAD|LKR|EUR|EUR|USD|WST|EUR|ZWG|DJF|ETB|KES|SOS|ALL|MKD|EUR|BAM|EUR|RSD|EUR|BAM|EUR|RSD|EUR|SZL|ZAR|ZAR|ZAR|IDR|EUR|EUR|SEK|CDF|KES|TZS|UGX|IQD|SYP|PLN|INR|LKR|MYR|SGD|INR|KES|UGX|TJS|THB|ERN|ETB|ERN|TMT|BWP|ZAR|TOP||EUR|TRY|TWD|ZAR|RUB|XOF|MAD|CNY|UAH|INR|PKR|INR|PKR|AFN|UZS|UZS|LRD|LRD|ZAR|EUR|VND|MZN|TZS|EUR|CHF|ETB|XOF|ZAR|INR|UGX|XAF|UAH|XOF|NGN|BRL|COP|VED|CNY|CNY|HKD|CNY|MAD|CNY|HKD|JPY|MOP|MYR|SGD|CNY|HKD|JPY|MOP|MYR|TWD|ZAR)$",
+            "pattern": "^(NAD|ZAR|XAF|JPY|GHS|ETB|USD||AED|BHD|DJF|DZD|EGP|MAD|ERN|ILS|IQD|JOD|KMF|KWD|LBP|LYD|MAD|MRU|OMR|ILS|QAR|SAR|SDG|SOS|SSP|SYP|XAF|TND|YER|CLP|INR|TZS|EUR|AZN|AZN|RUB|XAF|BYN|ZMW|MAD|MAD|TZS|EUR|INR|INR|XOF|XOF|BDT|INR|CNY|INR|EUR|INR|BAM|BAM|RUB|ERN|EUR|EUR|EUR|EUR|BDT|INR|RUB|PHP|UGX|USD|USD|USD|IQD|IRR|EUR|CZK|CAD|RUB|GBP|DKK|DKK|KES|EUR|EUR|CHF|EUR|EUR|CHF|EUR|XOF|INR|EUR|XAF|MVR|XOF|BTN|KES|GHS|XOF|EUR|EUR|||AED|XCD|XCD|ALL|ARS|USD|EUR|AUD|BBD|BDT|EUR|EUR|BIF|BMD|BND|BRL|BSD|BWP|BZD|CAD|AUD|CHF|NZD|CLP|XAF|CNY|COP|CVE|AUD|EUR|CZK|EUR|USD|DKK|XCD|EUR|ERN|EUR|EUR|FJD|FKP|USD|EUR|GBP|XCD|GEL|GBP|GHS|GIP|GMD|EUR|GBP|USD|GYD|HKD|HUF|IDR|EUR|ILS|GBP|INR|USD|EUR|GBP|JMD|JPY|KES|AUD|XCD|KRW|KYD|XCD|LRD|ZAR|EUR|EUR|MGA|USD|MMK|MOP|USD|XCD|EUR|MUR|MVR|MWK|MXN|MYR|NAD|AUD|NGN|EUR|NOK|AUD|NZD|NZD|PGK|PHP|PKR|PLN|NZD|USD|EUR|USD|RON|RUB|RWF|SAR|SBD|SCR|SDG|SEK|SGD|SHP|EUR|EUR|SLE|SSP|XCG|SZL|USD|THB|NZD|TOP|TRY|TTD|AUD|TWD|TZS|UAH|UGX|USD|USD|USD|XCD|USD|USD|VUV|WST|ZAR|ZMW|ZWG||||XCD|ARS|BBD|BMD|BOB|USD|BRL|BSD|BZD|CAD|CLP|COP|CRC|CUP|XCG|XCD|DOP|EUR|USD|EUR|XCD|XAF|GTQ|GYD|HNL|HTG|EUR|XCD|KYD|XCD|MXN|NIO|PAB|PEN|PHP|USD|PYG|USD|USD|TTD|USD|UYU|XCD|VED|USD|USD|EUR|EUR|XAF|AFN|IRR|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|XOF|XAF|GHS|GMD|GNF|XOF|LRD|MRU|XOF|NGN|SLE|XOF|EUR|PHP|DKK|DKK|EUR|XOF|BIF|XOF|EUR|CAD|CDF|XAF|XAF|CHF|XOF|XAF|DJF|DZD|EUR|XAF|EUR|GNF|EUR|XAF|HTG|KMF|EUR|MAD|EUR|EUR|MGA|XOF|EUR|MRU|MUR|XPF|XOF|XPF|EUR|EUR|RWF|SCR|XOF|SYP|XAF|XOF|TND|VUV|XPF|EUR|EUR|EUR|GBP|EUR|GHS|GBP|ERN|ETB|EUR|PYG|CHF|EUR|CHF|INR|KES|GBP|GHS|XOF|NGN|USD|ILS|INR|INR|CNY|BAM|EUR|EUR|HTG|HUF|AMD||IDR|EUR|NGN|CNY||ISK|CHF|EUR|EUR|EUR|CAD|JPY||XAF|TZS|IDR|GEL|DZD|NGN|KES|NGN|TZS|CVE|BRL|XOF|KES|CNY|KZT|KZT|XAF|DKK|KES|KHR|INR|CNY|KPW|KRW|INR|INR|GNF|LRD|INR|INR|INR|TZS|XAF|EUR|IQD|SYP|TRY|TRY|GBP|INR|INR|INR|INR|KGS|TZS|EUR|UGX|EUR|USD|EUR|AOA|CDF|XAF|XAF|LAK|IQD|IRR|EUR|CDF|KES|KES|EUR|INR|KES|TZS|KES|MUR|MGA|MZN|XAF|NZD|CAD|IQD|MKD|INR|MNT|INR|INR|CAD|INR|BND|MYR|BND|IDR|MYR|SGD|EUR|XAF|USD|MMK|RUB|IRR|NAD|NOK|NOK|ZWG|EUR|EUR|INR|NPR|AWG|EUR|USD|XCG|EUR|SRD|XCG|XAF|NOK|XAF|INR|GNF|ZAR|ZAR|SSP|USD|MWK|UGX|EUR|EUR|ETB|KES|INR|GEL|RUB|USD|PKR|PKR|INR|NGN|PLN|EUR|CAD|PLN|AFN|PKR|AOA|BRL|CHF|CVE|EUR|XAF|XOF|EUR|MOP|MZN|EUR|STN|USD|BOB|USD|PEN|INR|IDR|IDR|BDT|MMK|CHF|BIF|MDL|RON|TZS|BYN|KGS|KZT|MDL|RUB|UAH|RWF|TZS|INR|RUB|KES|INR|INR|TZS|EUR|EUR|PKR|INR|EUR|NOK|SEK|MZN|XOF|XAF|MAD|MAD|MMK|THB|LKR|EUR|EUR|USD|WST|EUR|ZWG|DJF|ETB|KES|SOS|ALL|MKD|EUR|BAM|EUR|RSD|EUR|BAM|EUR|RSD|EUR|SZL|ZAR|ZAR|ZAR|IDR|EUR|EUR|SEK|CDF|KES|TZS|UGX|IQD|SYP|PLN|INR|LKR|MYR|SGD|INR|KES|UGX|TJS|THB|ERN|ETB|ERN|TMT|BWP|ZAR|TOP||EUR|TRY|TWD|ZAR|RUB|XOF|RUB|MAD|CNY|UAH|INR|PKR|INR|PKR|AFN|UZS|UZS|LRD|LRD|ZAR|EUR|VND|MZN|TZS|EUR|CHF|ETB|XOF|ZAR|INR|UGX|XAF|UAH|XOF|NGN|BRL|COP|VED|CNY|CNY|HKD|MOP|CNY|MAD|CNY|HKD|JPY|MOP|MYR|SGD|CNY|HKD|JPY|MOP|MYR|TWD|ZAR)$",
             "type": "string",
             "nullable": true,
-            "example": "RUB"
+            "example": "USD"
           },
           "quantity": {
             "title": "Quantity",
@@ -32462,6 +34992,13 @@
               "string1",
               "string2"
             ]
+          },
+          "campaignId": {
+            "title": "Campaign Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
           },
           "commission": {
             "title": "Commission",
@@ -32839,18 +35376,6 @@
               "format": "int32"
             },
             "nullable": true
-          },
-          "tags": {
-            "title": "Tags",
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "nullable": true,
-            "example": [
-              "string1",
-              "string2"
-            ]
           }
         },
         "additionalProperties": false
@@ -32921,18 +35446,6 @@
               "format": "int32"
             },
             "nullable": true
-          },
-          "tags": {
-            "title": "Tags",
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "nullable": true,
-            "example": [
-              "string1",
-              "string2"
-            ]
           },
           "createdAt": {
             "title": "Created At",
@@ -33112,18 +35625,6 @@
               "format": "int32"
             },
             "nullable": true
-          },
-          "tags": {
-            "title": "Tags",
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "nullable": true,
-            "example": [
-              "string1",
-              "string2"
-            ]
           }
         },
         "additionalProperties": false
@@ -33149,6 +35650,13 @@
           },
           "userId": {
             "title": "User Id",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "language": {
+            "title": "Language",
+            "maxLength": 10,
             "type": "string",
             "nullable": true,
             "example": "string"
@@ -33182,6 +35690,29 @@
             "nullable": true,
             "example": "string"
           },
+          "language": {
+            "title": "Language",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean",
+            "example": true
+          },
+          "type": {
+            "title": "Type",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
           "createdAt": {
             "title": "Created At",
             "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
@@ -33208,12 +35739,6 @@
             "type": "string",
             "nullable": true,
             "example": "string"
-          },
-          "isUserLevel": {
-            "title": "Is User Level",
-            "type": "boolean",
-            "readOnly": true,
-            "example": true
           }
         },
         "additionalProperties": false
@@ -33336,6 +35861,13 @@
             "type": "string",
             "nullable": true,
             "example": "string"
+          },
+          "language": {
+            "title": "Language",
+            "maxLength": 10,
+            "type": "string",
+            "nullable": true,
+            "example": "string"
           }
         },
         "additionalProperties": false
@@ -33366,10 +35898,34 @@
             "nullable": true,
             "example": "string"
           },
-          "isUserLevel": {
-            "title": "Is User Level",
+          "userId": {
+            "title": "User Id",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "required": {
+            "title": "Required",
             "type": "boolean",
             "example": true
+          },
+          "type": {
+            "title": "Type",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
           }
         },
         "additionalProperties": false
@@ -33385,6 +35941,42 @@
             "items": {
               "type": "string"
             }
+          }
+        },
+        "additionalProperties": false
+      },
+      "SubscribeDto": {
+        "required": [
+          "email",
+          "language",
+          "timeZoneOffset"
+        ],
+        "type": "object",
+        "properties": {
+          "email": {
+            "title": "Email",
+            "minLength": 1,
+            "pattern": "^([\\w\\.\\-]+)@([\\w\\-]+)((\\.(\\w){1,63})+)$",
+            "type": "string",
+            "format": "email",
+            "example": "example@example.com"
+          },
+          "group": {
+            "title": "Group",
+            "type": "string",
+            "example": "string"
+          },
+          "timeZoneOffset": {
+            "title": "Time Zone Offset",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "language": {
+            "title": "Language",
+            "minLength": 1,
+            "type": "string",
+            "example": "string"
           }
         },
         "additionalProperties": false
@@ -33679,6 +36271,37 @@
         },
         "additionalProperties": false
       },
+      "UnsibscribeDto": {
+        "required": [
+          "email",
+          "language",
+          "timeZoneOffset"
+        ],
+        "type": "object",
+        "properties": {
+          "email": {
+            "title": "Email",
+            "minLength": 1,
+            "pattern": "^([\\w\\.\\-]+)@([\\w\\-]+)((\\.(\\w){1,63})+)$",
+            "type": "string",
+            "format": "email",
+            "example": "example@example.com"
+          },
+          "timeZoneOffset": {
+            "title": "Time Zone Offset",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "language": {
+            "title": "Language",
+            "minLength": 1,
+            "type": "string",
+            "example": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "UnsubscribeDetailsDto": {
         "type": "object",
         "properties": {
@@ -33710,6 +36333,9 @@
             "type": "string",
             "format": "date-time",
             "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "contact": {
+            "$ref": "#/components/schemas/ContactDetailsDto"
           }
         },
         "additionalProperties": false

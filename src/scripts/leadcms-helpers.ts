@@ -32,6 +32,7 @@ export const defaultLanguage = config.defaultLanguage;
 export const CONTENT_DIR = path.resolve(config.contentDir);
 export const MEDIA_DIR = path.resolve(config.mediaDir);
 export const EMAIL_TEMPLATES_DIR = path.resolve(config.emailTemplatesDir);
+export const SETTINGS_DIR = path.resolve(config.settingsDir || ".leadcms/settings");
 
 // Fetch content types dynamically from LeadCMS API to build typeMap
 // Content types are automatically detected and don't need to be configured

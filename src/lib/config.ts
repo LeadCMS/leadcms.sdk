@@ -16,6 +16,8 @@ export interface LeadCMSConfig {
   mediaDir: string;
   /** Email templates directory path (relative to project root) */
   emailTemplatesDir: string;
+  /** Settings directory path (relative to project root) */
+  settingsDir: string;
   /** Enable draft content support */
   enableDrafts: boolean;
   /** Force preview mode on/off (overrides environment detection) */
@@ -46,6 +48,7 @@ const DEFAULT_CONFIG: Partial<LeadCMSConfig> = {
   commentsDir: ".leadcms/comments",
   mediaDir: "public/media",
   emailTemplatesDir: ".leadcms/email-templates",
+  settingsDir: ".leadcms/settings",
   enableDrafts: false,
 };
 
@@ -83,6 +86,7 @@ export function loadConfig(): LeadCMSConfig {
     commentsDir: mergedConfig.commentsDir || DEFAULT_CONFIG.commentsDir!,
     mediaDir: mergedConfig.mediaDir || DEFAULT_CONFIG.mediaDir!,
     emailTemplatesDir: mergedConfig.emailTemplatesDir || DEFAULT_CONFIG.emailTemplatesDir!,
+    settingsDir: mergedConfig.settingsDir || DEFAULT_CONFIG.settingsDir!,
     enableDrafts: mergedConfig.enableDrafts || DEFAULT_CONFIG.enableDrafts!,
     preview: mergedConfig.preview, // Optional - undefined if not provided
   };
@@ -233,6 +237,10 @@ function loadConfigFromEnv(): Partial<LeadCMSConfig> {
 
   if (process.env.LEADCMS_EMAIL_TEMPLATES_DIR) {
     config.emailTemplatesDir = process.env.LEADCMS_EMAIL_TEMPLATES_DIR;
+  }
+
+  if (process.env.LEADCMS_SETTINGS_DIR) {
+    config.settingsDir = process.env.LEADCMS_SETTINGS_DIR;
   }
 
   if (process.env.LEADCMS_ENABLE_DRAFTS) {

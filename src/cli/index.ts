@@ -86,6 +86,9 @@ switch (command) {
   case 'pull-email-templates':
     runScript('pull-email-templates.js', commandArgs);
     break;
+  case 'pull-settings':
+    runScript('pull-settings.js', commandArgs);
+    break;
   case 'push':
     runScript('push-all.js', commandArgs);
     break;
@@ -98,6 +101,9 @@ switch (command) {
   case 'push-email-templates':
     runScript('push-email-templates.js', commandArgs);
     break;
+  case 'push-settings':
+    runScript('push-settings.js', commandArgs);
+    break;
   case 'status':
     runScript('status-all.js', commandArgs);
     break;
@@ -109,6 +115,9 @@ switch (command) {
     break;
   case 'status-email-templates':
     runScript('status-email-templates.js', commandArgs);
+    break;
+  case 'status-settings':
+    runScript('status-settings.js', commandArgs);
     break;
   case 'watch':
     runScript('watch.js');
@@ -155,6 +164,9 @@ Usage:
   leadcms pull-email-templates [options] - Pull email templates from LeadCMS
     --id <template-id>   - Pull specific email template by ID
     --reset              - Delete local email templates and sync token, then pull fresh
+  leadcms pull-settings [options] - Pull CMS settings locally
+    --name <key>         - Pull a specific setting by key name
+    --reset              - Delete local settings directory, then pull fresh
   leadcms fetch          - Alias for 'pull' (backward compatibility)
 
   Push commands:
@@ -176,6 +188,10 @@ Usage:
     --delete             - Delete remote email templates not present locally
     --id <template-id>   - Push only a specific email template by ID
     --name <name>        - Push only a specific email template by name
+  leadcms push-settings [options] - Push local settings to LeadCMS
+    --name <key>         - Push a specific setting by key name
+    --dry-run            - Show what would be pushed without pushing
+    --force              - Push all tracked settings even if unchanged
 
   Status & monitoring:
   leadcms status [options] - Show sync status for all entities (content + media + email templates)
@@ -192,6 +208,8 @@ Usage:
     --preview            - Show detailed metadata for each change
     --delete             - Show email template deletion operations
     --id <template-id>   - Show detailed status for specific template by ID
+  leadcms status-settings [options] - Show settings sync status
+    --name <key>         - Show status for a specific setting by key name
   leadcms watch          - Watch for real-time updates via Server-Sent Events
 
   Utilities:
