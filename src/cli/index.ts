@@ -161,6 +161,7 @@ Usage:
   leadcms pull-content [options] - Pull only content from LeadCMS
     --id <content-id>    - Pull specific content by ID
     --slug <slug>        - Pull specific content by slug
+    --status <statuses> - Pull only files with matching status (e.g. conflict,new,modified)
     --reset              - Delete local content files and sync token, then pull fresh
     --force, -f          - Skip three-way merge, always overwrite local with remote
   leadcms pull-media [options] - Pull only media files from LeadCMS
@@ -183,6 +184,7 @@ Usage:
     --delete             - Delete remote content/media not present locally
     --id <content-id>    - Target specific content by ID
     --slug <slug>        - Target specific content by slug
+    --status <statuses>  - Only include matching statuses (new, modified, renamed, type-change, conflict, deleted)
   leadcms push-media [options] - Push only media files to LeadCMS
     --force              - Skip confirmation prompt
     --dry-run            - Show what would be changed without making changes
@@ -212,6 +214,7 @@ Usage:
     --delete             - Show content deletion operations
     --id <content-id>    - Show detailed status for specific content by ID
     --slug <slug>        - Show detailed status for specific content by slug
+    --status <statuses> - Only show matching statuses (new, modified, renamed, type-change, conflict, deleted)
   leadcms status-media [options] - Show media file status only
     --delete             - Show media deletion operations
     --scope <scopeUid>   - Filter by specific scope UID

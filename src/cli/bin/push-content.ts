@@ -8,10 +8,11 @@ import { pushLeadCMSContent } from '../../scripts/push-leadcms-content.js';
 import { requireAuthenticatedUser, resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
+import { parsePushContentStatusArgs } from './content-status-args.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
-const statusOnly = args.includes('--status');
+const { statusOnly, statusFilter } = parsePushContentStatusArgs(args);
 const force = args.includes('--force');
 const dryRun = args.includes('--dry-run');
 const allowDelete = args.includes('--delete');
@@ -37,7 +38,7 @@ if (slugIndex !== -1 && args[slugIndex + 1]) {
 }
 
 const spinner = startSpinner('Pushing content to LeadCMS…');
-pushLeadCMSContent({ statusOnly, force, targetId, targetSlug, dryRun, allowDelete })
+pushLeadCMSContent({ statusOnly, force, targetId, targetSlug, statusFilter, dryRun, allowDelete })
   .then(() => spinner.stop())
   .catch((error: any) => {
     spinner.fail('Content push failed');

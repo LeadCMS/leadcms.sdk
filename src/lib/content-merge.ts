@@ -102,7 +102,9 @@ export function threeWayMerge(base: string, local: string, remote: string): Merg
     }
   }
 
-  const merged = resultLines.join('\n');
+  const merged = conflictCount === 0
+    ? applyRemoteServerControlledFrontmatter(resultLines.join('\n'), remote)
+    : resultLines.join('\n');
 
   return {
     success: conflictCount === 0,
@@ -110,6 +112,76 @@ export function threeWayMerge(base: string, local: string, remote: string): Merg
     hasConflicts: conflictCount > 0,
     conflictCount,
   };
+}
+
+function applyRemoteServerControlledFrontmatter(merged: string, remote: string): string {
+  const mergedLines = merged.split('\n');
+  const remoteLines = remote.split('\n');
+
+  if (mergedLines[0] !== '---' || remoteLines[0] !== '---') {
+    return merged;
+  }
+
+  const getFrontmatterEndIndex = (lines: string[]): number => lines.indexOf('---', 1);
+  const mergedFrontmatterEnd = getFrontmatterEndIndex(mergedLines);
+  const remoteFrontmatterEnd = getFrontmatterEndIndex(remoteLines);
+
+  if (mergedFrontmatterEnd === -1 || remoteFrontmatterEnd === -1) {
+    return merged;
+  }
+
+  const remoteServerLines = remoteLines
+    .slice(1, remoteFrontmatterEnd)
+    .filter(line => SERVER_CONTROLLED_YAML_LINE.test(line));
+
+  const remoteServerFieldValues = new Map<string, string>();
+  for (const line of remoteServerLines) {
+    const match = line.match(/^\s*(\w+)\s*:/);
+    if (match) {
+      remoteServerFieldValues.set(match[1], line);
+    }
+  }
+
+  if (remoteServerFieldValues.size === 0) {
+    return merged;
+  }
+
+  const emittedServerFields = new Set<string>();
+  const normalizedFrontmatter: string[] = [mergedLines[0]];
+
+  for (const line of mergedLines.slice(1, mergedFrontmatterEnd)) {
+    if (!SERVER_CONTROLLED_YAML_LINE.test(line)) {
+      normalizedFrontmatter.push(line);
+      continue;
+    }
+
+    const match = line.match(/^\s*(\w+)\s*:/);
+    const fieldName = match?.[1];
+    if (!fieldName || emittedServerFields.has(fieldName)) {
+      continue;
+    }
+
+    emittedServerFields.add(fieldName);
+    if (remoteServerFieldValues.has(fieldName)) {
+      normalizedFrontmatter.push(remoteServerFieldValues.get(fieldName)!);
+    }
+  }
+
+  for (const line of remoteServerLines) {
+    const match = line.match(/^\s*(\w+)\s*:/);
+    const fieldName = match?.[1];
+    if (fieldName && !emittedServerFields.has(fieldName)) {
+      normalizedFrontmatter.push(line);
+      emittedServerFields.add(fieldName);
+    }
+  }
+
+  normalizedFrontmatter.push(mergedLines[mergedFrontmatterEnd]);
+
+  return [
+    ...normalizedFrontmatter,
+    ...mergedLines.slice(mergedFrontmatterEnd + 1),
+  ].join('\n');
 }
 
 /**
@@ -136,44 +208,84 @@ function resolveServerControlledConflict(
   resolvedLines: string[];
   remainingConflict: { local: string[]; remote: string[] } | null;
 } {
+  const getServerControlledFieldName = (line: string): string | undefined => {
+    if (!SERVER_CONTROLLED_YAML_LINE.test(line)) {
+      return undefined;
+    }
+
+    const match = line.match(/^\s*(\w+)\s*:/);
+    return match?.[1];
+  };
+
   // Build a map of remote server-controlled field values by field name
   const remoteServerFieldValues = new Map<string, string>();
   for (const line of remoteLines) {
-    if (SERVER_CONTROLLED_YAML_LINE.test(line)) {
-      const match = line.match(/^\s*(\w+)\s*:/);
-      if (match) {
-        remoteServerFieldValues.set(match[1], line);
-      }
+    const fieldName = getServerControlledFieldName(line);
+    if (fieldName) {
+      remoteServerFieldValues.set(fieldName, line);
     }
   }
 
-  // Replace server-controlled fields in local lines with remote values in-place,
-  // preserving the original line order
-  const resolvedLocal = localLines.map(line => {
-    if (SERVER_CONTROLLED_YAML_LINE.test(line)) {
-      const match = line.match(/^\s*(\w+)\s*:/);
-      if (match && remoteServerFieldValues.has(match[1])) {
-        return remoteServerFieldValues.get(match[1])!;
+  const normalizeWithRemotePriority = (lines: string[]): string[] => {
+    const normalized: string[] = [];
+    const seenServerFields = new Set<string>();
+
+    for (const line of lines) {
+      const fieldName = getServerControlledFieldName(line);
+      if (!fieldName) {
+        normalized.push(line);
+        continue;
+      }
+
+      if (seenServerFields.has(fieldName)) {
+        continue;
+      }
+
+      seenServerFields.add(fieldName);
+
+      if (remoteServerFieldValues.has(fieldName)) {
+        normalized.push(remoteServerFieldValues.get(fieldName)!);
       }
     }
-    return line;
-  });
+
+    return normalized;
+  };
+
+  const stripServerControlledLines = (lines: string[]): string[] =>
+    lines.filter(line => !SERVER_CONTROLLED_YAML_LINE.test(line));
+
+  const normalizedRemote = normalizeWithRemotePriority(remoteLines);
+
+  // Replace server-controlled fields in local lines with remote values in-place,
+  // preserving the original line order
+  const resolvedLocal = normalizeWithRemotePriority(localLines);
+
+  const localWithoutServerControlled = stripServerControlledLines(resolvedLocal);
+  const remoteWithoutServerControlled = stripServerControlledLines(normalizedRemote);
+
+  const hasOnlyServerControlledDifferences =
+    localWithoutServerControlled.length === remoteWithoutServerControlled.length &&
+    localWithoutServerControlled.every((line, i) => line === remoteWithoutServerControlled[i]);
+
+  if (hasOnlyServerControlledDifferences) {
+    return { resolvedLines: normalizedRemote, remainingConflict: null };
+  }
 
   // Check if after resolving server-controlled fields, local and remote are identical
   const isFullyResolved =
-    resolvedLocal.length === remoteLines.length &&
-    resolvedLocal.every((line, i) => line === remoteLines[i]);
+    resolvedLocal.length === normalizedRemote.length &&
+    resolvedLocal.every((line, i) => line === normalizedRemote[i]);
 
   if (isFullyResolved) {
     // All differences were server-controlled → fully resolved, emit remote lines
-    return { resolvedLines: remoteLines, remainingConflict: null };
+    return { resolvedLines: normalizedRemote, remainingConflict: null };
   }
 
   // Still have real conflict — emit as conflict with server-controlled fields
   // already harmonized to remote values in-place (no extracted lines before markers)
   return {
     resolvedLines: [],
-    remainingConflict: { local: resolvedLocal, remote: remoteLines },
+    remainingConflict: { local: resolvedLocal, remote: normalizedRemote },
   };
 }
 

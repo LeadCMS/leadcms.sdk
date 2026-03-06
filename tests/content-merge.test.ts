@@ -632,6 +632,60 @@ describe('content-merge', () => {
       expect(publishedAtCount2).toBe(1);
     });
 
+    it('should auto-resolve conflicts caused only by server-controlled fields without duplicates', () => {
+      const base = [
+        '---',
+        'id: 91',
+        "createdAt: '2022-11-07T07:07:19Z'",
+        "updatedAt: '2026-03-06T17:53:28.562501Z'",
+        'title: Contact us with any questions about XLTools Add-in for Excel',
+        'description: >-',
+        '  Contact our team with questions, suggestions or comments about XLTools Add-in',
+        "publishedAt: '2024-03-20T15:17:08.071387Z'",
+        '---',
+        '',
+        "Body.",
+      ].join('\n');
+
+      const local = [
+        '---',
+        'id: 91',
+        "createdAt: '2022-11-07T07:07:19Z'",
+        "updatedAt: '2026-03-06T17:53:28.5625014Z'",
+        'title: Contact us with any questions about XLTools Add-in for Excel',
+        'description: >-',
+        '  Contact our team with questions, suggestions or comments about XLTools Add-in',
+        "publishedAt: '2024-03-20T15:17:08.071387Z'",
+        '---',
+        '',
+        "Body.",
+      ].join('\n');
+
+      const remote = [
+        '---',
+        'id: 91',
+        "createdAt: '2022-11-07T07:07:19Z'",
+        "updatedAt: '2026-03-06T17:53:28.562501Z'",
+        'title: Contact us with any questions about XLTools Add-in for Excel',
+        'description: >-',
+        '  Contact our team with questions, suggestions or comments about XLTools Add-in',
+        "publishedAt: '2024-03-20T15:17:08.071387Z'",
+        '---',
+        '',
+        "Body.",
+      ].join('\n');
+
+      const result = threeWayMerge(base, local, remote);
+
+      expect(result.success).toBe(true);
+      expect(result.hasConflicts).toBe(false);
+      expect(result.merged).not.toContain('<<<<<<< local');
+      expect((result.merged.match(/updatedAt:/g) || []).length).toBe(1);
+      expect((result.merged.match(/createdAt:/g) || []).length).toBe(1);
+      expect((result.merged.match(/publishedAt:/g) || []).length).toBe(1);
+      expect(result.merged).toContain("updatedAt: '2026-03-06T17:53:28.562501Z'");
+    });
+
     // --- JSON-specific merge scenarios ---
 
     it('should auto-merge non-overlapping JSON property changes', () => {

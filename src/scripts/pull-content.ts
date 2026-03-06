@@ -13,21 +13,118 @@ import { saveContentFile } from "../lib/content-transformation.js";
 import { CONTENT_DIR, fetchContentTypes } from "./leadcms-helpers.js";
 import { resetContentState } from "./pull-all.js";
 import { logger } from "../lib/logger.js";
+import { filterContentOperations, getContentStatusData, type ContentOperations, type MatchOperation } from "./push-leadcms-content.js";
 
 interface PullContentOptions {
   targetId?: string;
   targetSlug?: string;
+  statusFilter?: string[];
   /** When true, delete all local content files and sync tokens before pulling, effectively doing a fresh pull. */
   reset?: boolean;
   /** When true, skip three-way merge and always overwrite local files with remote content. */
   force?: boolean;
 }
 
+interface PullTargetItem {
+  id: number;
+  slug?: string;
+}
+
+interface PullTargetResult {
+  items: PullTargetItem[];
+  skipped: MatchOperation[];
+}
+
+export function getPullTargetsFromOperations(operations: ContentOperations): PullTargetResult {
+  const items: PullTargetItem[] = [];
+  const skipped: MatchOperation[] = [];
+  const seenIds = new Set<number>();
+
+  for (const operation of operations.create) {
+    skipped.push(operation);
+  }
+
+  const remoteBackedOperations = [
+    ...operations.update,
+    ...operations.rename,
+    ...operations.typeChange,
+    ...operations.conflict,
+    ...operations.delete,
+  ];
+
+  for (const operation of remoteBackedOperations) {
+    const id = operation.remote?.id;
+    if (typeof id !== 'number') {
+      skipped.push(operation);
+      continue;
+    }
+
+    if (seenIds.has(id)) {
+      continue;
+    }
+
+    seenIds.add(id);
+    items.push({ id, slug: operation.remote?.slug || operation.local.slug });
+  }
+
+  return { items, skipped };
+}
+
+async function pullFilteredContent(targetId?: string, targetSlug?: string, statusFilter?: string[]): Promise<boolean> {
+  const hasFilter = !!(targetId || targetSlug || (statusFilter && statusFilter.length > 0));
+  if (!hasFilter) {
+    return false;
+  }
+
+  const { operations } = await getContentStatusData({ showDelete: true });
+  const filteredOperations = filterContentOperations(operations, targetId, targetSlug, statusFilter);
+  const { items, skipped } = getPullTargetsFromOperations(filteredOperations);
+
+  if (items.length === 0) {
+    if (skipped.length > 0) {
+      console.log(`⚠️  ${skipped.length} matching local-only file(s) have no remote content to pull.`);
+      for (const operation of skipped) {
+        console.log(`   - ${operation.local.slug}`);
+      }
+    } else {
+      console.log(`✅ No remote-backed content matched the requested filter.`);
+    }
+    return true;
+  }
+
+  console.log(`🎯 Pulling ${items.length} content item(s) from LeadCMS...`);
+
+  if (skipped.length > 0) {
+    console.log(`⚠️  Skipping ${skipped.length} local-only file(s) with no remote content to pull.`);
+  }
+
+  const typeMap = await fetchContentTypes();
+
+  for (const item of items) {
+    const content = await leadCMSDataService.getContentById(item.id);
+    if (!content) {
+      console.warn(`⚠️  Content not found for ID ${item.id}`);
+      continue;
+    }
+
+    await saveContentFile({
+      content,
+      typeMap,
+      contentDir: CONTENT_DIR,
+    });
+
+    console.log(`✅ Pulled: ${content.slug} (${content.type})`);
+  }
+
+  console.log(`\n✨ Content pull completed!\n`);
+  return true;
+}
+
 /**
  * Main function
  */
 async function main(options: PullContentOptions = {}): Promise<void> {
-  const { targetId, targetSlug, reset, force } = options;
+  const { targetId, targetSlug, statusFilter, reset, force } = options;
 
   console.log(`\n📄 LeadCMS Pull Content\n`);
 
@@ -37,8 +134,15 @@ async function main(options: PullContentOptions = {}): Promise<void> {
     await resetContentState();
   }
 
-  // If pulling specific content by ID or slug
-  if (targetId || targetSlug) {
+  // If pulling targeted or filtered content
+  if (targetId || targetSlug || (statusFilter && statusFilter.length > 0)) {
+    if (statusFilter && statusFilter.length > 0) {
+      const handled = await pullFilteredContent(targetId, targetSlug, statusFilter);
+      if (handled) {
+        return;
+      }
+    }
+
     console.log(`🎯 Pulling specific content: ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`}`);
 
     try {

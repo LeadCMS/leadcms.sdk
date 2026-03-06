@@ -32,7 +32,7 @@ interface RemoteContentItem extends ContentItem {
   isLocal: false;
 }
 
-interface MatchOperation {
+export interface MatchOperation {
   local: LocalContentItem;
   remote?: RemoteContentItem;
   reason?: string;
@@ -41,7 +41,7 @@ interface MatchOperation {
   newType?: string; // For type changes
 }
 
-interface ContentOperations {
+export interface ContentOperations {
   create: MatchOperation[];
   update: MatchOperation[];
   rename: MatchOperation[]; // Slug changed but same content
@@ -50,11 +50,12 @@ interface ContentOperations {
   delete: MatchOperation[]; // Remote content not present locally
 }
 
-interface PushOptions {
+export interface PushOptions {
   statusOnly?: boolean;
   force?: boolean;
   targetId?: string;      // Target specific content by ID
   targetSlug?: string;    // Target specific content by slug
+  statusFilter?: string[]; // Filter by operation/status buckets
   showDetailedPreview?: boolean;  // Show detailed diff preview for all files
   dryRun?: boolean;       // Show API calls without executing them
   allowDelete?: boolean;  // Allow deletion of remote content not present locally
@@ -63,6 +64,65 @@ interface PushOptions {
 
 interface ExecutionOptions {
   force?: boolean;
+}
+
+type ContentOperationKey = keyof ContentOperations;
+
+const CONTENT_STATUS_ALIASES: Record<string, ContentOperationKey> = {
+  create: 'create',
+  created: 'create',
+  new: 'create',
+  update: 'update',
+  updated: 'update',
+  modify: 'update',
+  modified: 'update',
+  change: 'update',
+  changed: 'update',
+  rename: 'rename',
+  renamed: 'rename',
+  typechange: 'typeChange',
+  'type-change': 'typeChange',
+  typechanged: 'typeChange',
+  'type-changed': 'typeChange',
+  conflict: 'conflict',
+  conflicts: 'conflict',
+  delete: 'delete',
+  deleted: 'delete',
+  remove: 'delete',
+  removed: 'delete'
+};
+
+function normalizeStatusAlias(value: string): string {
+  return value.trim().toLowerCase().replace(/[_\s]+/g, '-');
+}
+
+export function normalizeContentStatusFilters(statusFilters?: string[]): ContentOperationKey[] | undefined {
+  if (!statusFilters || statusFilters.length === 0) {
+    return undefined;
+  }
+
+  const normalized = new Set<ContentOperationKey>();
+  const invalid: string[] = [];
+
+  for (const rawFilter of statusFilters) {
+    const filter = normalizeStatusAlias(rawFilter);
+    if (!filter) {
+      continue;
+    }
+
+    const operationKey = CONTENT_STATUS_ALIASES[filter];
+    if (operationKey) {
+      normalized.add(operationKey);
+    } else {
+      invalid.push(rawFilter);
+    }
+  }
+
+  if (invalid.length > 0) {
+    throw new Error(`Unsupported content status filter: ${invalid.join(', ')}`);
+  }
+
+  return normalized.size > 0 ? Array.from(normalized) : undefined;
 }
 
 // Create readline interface for user prompts
@@ -574,12 +634,18 @@ async function createContentTypeInteractive(typeName: string, localContent: Loca
 /**
  * Filter content operations to only include specific content by ID or slug
  */
-function filterContentOperations(operations: ContentOperations, targetId?: string, targetSlug?: string): ContentOperations {
-  if (!targetId && !targetSlug) {
+function filterContentOperations(operations: ContentOperations, targetId?: string, targetSlug?: string, statusFilters?: string[]): ContentOperations {
+  const normalizedStatusFilters = normalizeContentStatusFilters(statusFilters);
+
+  if (!targetId && !targetSlug && !normalizedStatusFilters) {
     return operations; // No filtering needed
   }
 
   const matchesTarget = (op: MatchOperation): boolean => {
+    if (!targetId && !targetSlug) {
+      return true;
+    }
+
     if (targetId) {
       // Check if local content has the target ID
       if (op.local.metadata.id?.toString() === targetId) return true;
@@ -599,20 +665,33 @@ function filterContentOperations(operations: ContentOperations, targetId?: strin
     return false;
   };
 
+  const includesStatus = (operationType: ContentOperationKey): boolean => {
+    if (!normalizedStatusFilters || normalizedStatusFilters.length === 0) {
+      return true;
+    }
+
+    return normalizedStatusFilters.includes(operationType);
+  };
+
   return {
-    create: operations.create.filter(matchesTarget),
-    update: operations.update.filter(matchesTarget),
-    rename: operations.rename.filter(matchesTarget),
-    typeChange: operations.typeChange.filter(matchesTarget),
-    conflict: operations.conflict.filter(matchesTarget),
-    delete: operations.delete.filter(matchesTarget)
+    create: includesStatus('create') ? operations.create.filter(matchesTarget) : [],
+    update: includesStatus('update') ? operations.update.filter(matchesTarget) : [],
+    rename: includesStatus('rename') ? operations.rename.filter(matchesTarget) : [],
+    typeChange: includesStatus('typeChange') ? operations.typeChange.filter(matchesTarget) : [],
+    conflict: includesStatus('conflict') ? operations.conflict.filter(matchesTarget) : [],
+    delete: includesStatus('delete') ? operations.delete.filter(matchesTarget) : []
   };
 }
 
 /**
  * Display detailed diff for a single content item
  */
-async function displayDetailedDiff(operation: MatchOperation, operationType: string, typeMap?: Record<string, string>): Promise<void> {
+async function displayDetailedDiff(
+  operation: MatchOperation,
+  operationType: string,
+  typeMap?: Record<string, string>,
+  options: { limitPreviewLines?: boolean } = {}
+): Promise<void> {
   const { local, remote } = operation;
 
   console.log(`\n📄 Detailed Changes for: ${local.slug} [${local.locale}]`);
@@ -647,7 +726,8 @@ async function displayDetailedDiff(operation: MatchOperation, operationType: str
       colorConsole.info('   Content diff preview:');
 
       let previewLines = 0;
-      const maxPreviewLines = 10;
+      const shouldLimitPreviewLines = options.limitPreviewLines !== false;
+      const maxPreviewLines = shouldLimitPreviewLines ? 10 : Number.POSITIVE_INFINITY;
 
       for (const part of diff) {
         // Count non-empty lines only for more accurate statistics
@@ -673,10 +753,10 @@ async function displayDetailedDiff(operation: MatchOperation, operationType: str
           unchangedLines += lines.length;
         }
 
-        if (previewLines >= maxPreviewLines) break;
+        if (shouldLimitPreviewLines && previewLines >= maxPreviewLines) break;
       }
 
-      if (previewLines >= maxPreviewLines && (addedLines + removedLines > previewLines)) {
+      if (shouldLimitPreviewLines && previewLines >= maxPreviewLines && (addedLines + removedLines > previewLines)) {
         colorConsole.gray(`   ... (${addedLines + removedLines - previewLines} more changes)`);
       }
 
@@ -717,19 +797,19 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
   if (isSingleFile) {
     // Show detailed diff for each operation
     for (const op of operations.create) {
-      await displayDetailedDiff(op, 'New file', typeMap);
+      await displayDetailedDiff(op, 'New file', typeMap, { limitPreviewLines: false });
     }
     for (const op of operations.update) {
-      await displayDetailedDiff(op, 'Modified', typeMap);
+      await displayDetailedDiff(op, 'Modified', typeMap, { limitPreviewLines: false });
     }
     for (const op of operations.rename) {
-      await displayDetailedDiff(op, `Renamed (${op.oldSlug} → ${op.local.slug})`, typeMap);
+      await displayDetailedDiff(op, `Renamed (${op.oldSlug} → ${op.local.slug})`, typeMap, { limitPreviewLines: false });
     }
     for (const op of operations.typeChange) {
-      await displayDetailedDiff(op, `Type changed (${op.oldType} → ${op.newType})`, typeMap);
+      await displayDetailedDiff(op, `Type changed (${op.oldType} → ${op.newType})`, typeMap, { limitPreviewLines: false });
     }
     for (const op of operations.conflict) {
-      await displayDetailedDiff(op, `Conflict: ${op.reason}`, typeMap);
+      await displayDetailedDiff(op, `Conflict: ${op.reason}`, typeMap, { limitPreviewLines: false });
     }
     return;
   }
@@ -955,7 +1035,7 @@ async function showDryRunOperations(operations: ContentOperations): Promise<void
  * Main function for push command
  */
 async function pushMain(options: PushOptions = {}): Promise<void> {
-  const { statusOnly = false, force = false, targetId, targetSlug, showDetailedPreview = false, dryRun = false, allowDelete = false, showDelete = false } = options;
+  const { statusOnly = false, force = false, targetId, targetSlug, statusFilter, showDetailedPreview = false, dryRun = false, allowDelete = false, showDelete = false } = options;
 
   try {
     const isSingleFileMode = !!(targetId || targetSlug);
@@ -1036,9 +1116,9 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     const operations = await matchContent(filteredLocalContent, remoteContent, remoteTypeMap, shouldDetectDeletions);
 
     // Filter operations if targeting specific content
-    const finalOperations = isSingleFileMode ?
-      filterContentOperations(operations, targetId, targetSlug) :
-      operations;
+    const finalOperations = (isSingleFileMode || (statusFilter && statusFilter.length > 0))
+      ? filterContentOperations(operations, targetId, targetSlug, statusFilter)
+      : operations;
 
     // Check if we found the target content
     if (isSingleFileMode) {
@@ -1353,6 +1433,7 @@ export { analyzeContentTypeFromFiles };
 export { isYes };
 export { normalizeFormat };
 export { fetchRemoteContent };
+export { displayDetailedDiff };
 // Re-export formatContentForAPI from utility module for testing
 export { formatContentForAPI } from '../lib/content-api-formatting.js';
 // Re-export the new comparison function for consistency
@@ -1401,4 +1482,4 @@ export async function getContentStatusData(options: { showDelete?: boolean } = {
 }
 
 // Export types
-export type { LocalContentItem, RemoteContentItem, ContentOperations, MatchOperation, PushOptions };
+export type { LocalContentItem, RemoteContentItem };

@@ -246,6 +246,24 @@ describe('push-leadcms-content - Pure Functions', () => {
       expect(result.create).toHaveLength(0);
       expect(result.update).toHaveLength(0);
     });
+
+    it('should filter by content status aliases', () => {
+      const result = (filterContentOperations as any)(baseOps, undefined, undefined, ['new', 'modified']);
+      expect(result.create).toHaveLength(1);
+      expect(result.update).toHaveLength(1);
+      expect(result.rename).toHaveLength(0);
+      expect(result.typeChange).toHaveLength(0);
+      expect(result.conflict).toHaveLength(0);
+    });
+
+    it('should filter by conflict status only', () => {
+      const result = (filterContentOperations as any)(baseOps, undefined, undefined, ['conflict']);
+      expect(result.create).toHaveLength(0);
+      expect(result.update).toHaveLength(0);
+      expect(result.rename).toHaveLength(0);
+      expect(result.typeChange).toHaveLength(0);
+      expect(result.conflict).toHaveLength(1);
+    });
   });
 
   describe('parseContentFile', () => {

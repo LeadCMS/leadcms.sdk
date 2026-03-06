@@ -7,6 +7,7 @@ import { pullContent } from '../../scripts/pull-content.js';
 import { resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
+import { parseContentStatusFilter } from './content-status-args.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
@@ -27,11 +28,12 @@ if (slugIndex !== -1 && args[slugIndex + 1]) {
 
 const reset = args.includes('--reset');
 const force = args.includes('--force') || args.includes('-f');
+const statusFilter = parseContentStatusFilter(args);
 
 await resolveIdentity();
 
 const spinner = startSpinner('Pulling content from LeadCMS…');
-pullContent({ targetId, targetSlug, reset, force })
+pullContent({ targetId, targetSlug, statusFilter, reset, force })
   .then(() => {
     spinner.stop();
     process.exit(0);
