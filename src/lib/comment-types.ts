@@ -13,6 +13,8 @@ export interface Comment {
   authorName: string;
   authorEmail?: string;
   body: string;
+  status?: 'NotApproved' | 'Approved' | 'Spam' | 'Answer';
+  answerStatus?: 'Unanswered' | 'Answered' | 'Closed';
   createdAt: string;
   updatedAt?: string | null;
   commentableId: number;
@@ -39,6 +41,8 @@ export interface StoredComment {
   authorName: string;
   authorEmail?: string;
   body: string;
+  status?: 'NotApproved' | 'Approved' | 'Spam' | 'Answer';
+  answerStatus?: 'Unanswered' | 'Answered' | 'Closed';
   createdAt: string;
   updatedAt?: string | null;
   commentableId: number;

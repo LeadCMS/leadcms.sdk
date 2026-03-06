@@ -223,7 +223,7 @@ async function saveCommentsForEntity(
     const sortedComments = [...comments].sort((a, b) => {
       const dateCompare = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       if (dateCompare !== 0) return dateCompare;
-      return a.id - b.id;
+      return (a.id || 0) - (b.id || 0);
     });
 
     await fs.writeFile(filePath, JSON.stringify(sortedComments, null, 2), "utf8");
@@ -459,6 +459,7 @@ export { main as fetchLeadCMSComments };
 
 // Export helper functions for testing
 export {
+  fetchCommentSync,
   loadCommentsForEntity,
   saveCommentsForEntity,
   groupCommentsByEntityAndLanguage,

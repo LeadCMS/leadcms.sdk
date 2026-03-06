@@ -6,6 +6,7 @@
 
 import 'dotenv/config';
 import { getContentStatusData } from '../../scripts/push-leadcms-content.js';
+import { buildCommentStatus } from '../../scripts/push-comments.js';
 import { statusMedia } from '../../scripts/push-media.js';
 import { buildEmailTemplateStatus, getRemoteGroupLabel } from '../../scripts/push-email-templates.js';
 import { getSettingsStatusData, renderSettingsStatus, formatSettingValue, formatSettingDiff, renderSettingDiffPreview } from '../../scripts/push-settings.js';
@@ -15,6 +16,7 @@ import { defaultLanguage, leadCMSApiKey, resolveIdentity } from '../../scripts/l
 import { startSpinner } from '../../lib/spinner.js';
 
 import type { ContentOperations, ContentStatusResult, MatchOperation } from '../../scripts/push-leadcms-content.js';
+import type { CommentOperation, CommentStatusResult } from '../../scripts/push-comments.js';
 import type { MediaStatusResult } from '../../scripts/push-media.js';
 import type { EmailTemplateOperation, EmailTemplateStatusResult } from '../../scripts/push-email-templates.js';
 import type { SettingsStatusResult } from '../../lib/settings-types.js';
@@ -111,6 +113,43 @@ function renderMediaSection(result: MediaStatusResult): number {
   return changeCount;
 }
 
+// ── Comment rendering ────────────────────────────────────────────────────────
+
+function renderCommentSection(operations: CommentOperation[]): number {
+  const creates = operations.filter(op => op.type === 'create');
+  const updates = operations.filter(op => op.type === 'update');
+  const conflicts = operations.filter(op => op.type === 'conflict');
+  const deletes = showDelete ? operations.filter(op => op.type === 'delete') : [];
+
+  const changeCount = creates.length + updates.length + conflicts.length + deletes.length;
+
+  for (const op of creates) {
+    const comment = op.local?.comment;
+    const label = `${comment?.commentableType || 'Unknown'}#${comment?.commentableId || '?'} [${comment?.language || defaultLanguage}]`;
+    colorConsole.log(`        ${statusColors.created('new file: ')}   ${label} ${colorConsole.highlight(comment?.body?.slice(0, 48) || 'New comment')}`);
+  }
+  for (const op of updates) {
+    const comment = op.local?.comment || op.remote;
+    const label = `${comment?.commentableType || 'Unknown'}#${comment?.commentableId || '?'} [${comment?.language || defaultLanguage}]`;
+    colorConsole.log(`        ${statusColors.modified('modified: ')}   ${label} ${colorConsole.gray(`(ID: ${op.remote?.id || comment?.id || 'unknown'})`)}`);
+  }
+  for (const op of conflicts) {
+    const comment = op.local?.comment || op.remote;
+    const label = `${comment?.commentableType || 'Unknown'}#${comment?.commentableId || '?'} [${comment?.language || defaultLanguage}]`;
+    colorConsole.log(`        ${statusColors.conflict('conflict: ')}   ${label} ${colorConsole.gray(`(ID: ${op.remote?.id || comment?.id || 'unknown'})`)}`);
+    if (op.reason) {
+      colorConsole.log(`                    ${colorConsole.gray(op.reason)}`);
+    }
+  }
+  for (const op of deletes) {
+    const comment = op.remote;
+    const label = `${comment?.commentableType || 'Unknown'}#${comment?.commentableId || '?'} [${comment?.language || defaultLanguage}]`;
+    colorConsole.log(`        ${statusColors.conflict('deleted:  ')}   ${label} ${colorConsole.gray(`(ID: ${comment?.id || 'unknown'})`)}`);
+  }
+
+  return changeCount;
+}
+
 // ── Email template rendering ─────────────────────────────────────────────────
 
 function renderEmailTemplateSection(operations: EmailTemplateOperation[]): number {
@@ -179,14 +218,19 @@ async function statusAll() {
     const spinner = startSpinner('Fetching status from LeadCMS…');
 
     let contentResult: ContentStatusResult | null = null;
+    let commentResult: CommentStatusResult | null = null;
     let mediaResult: MediaStatusResult | null = null;
     let emailResult: EmailTemplateStatusResult | null = null;
     let settingsResult: SettingsStatusResult | null = null;
 
     try {
-      [contentResult, mediaResult, emailResult, settingsResult] = await Promise.all([
+      [contentResult, commentResult, mediaResult, emailResult, settingsResult] = await Promise.all([
         getContentStatusData({ showDelete }).catch((err: any) => {
           spinner.update('Fetching status… (content failed)');
+          return null;
+        }),
+        buildCommentStatus({ showDelete }).catch((err: any) => {
+          spinner.update('Fetching status… (comments failed)');
           return null;
         }),
         statusMedia({ scopeUid, showDelete, silent: true }).catch((err: any) => {
@@ -216,6 +260,7 @@ async function statusAll() {
     console.log('─'.repeat(80));
 
     const contentOps = contentResult?.operations ?? null;
+    const commentOps = commentResult?.operations ?? null;
     const emailOps = emailResult?.operations ?? null;
 
     // Count changes per section
@@ -228,6 +273,10 @@ async function statusAll() {
     const mediaChanges = mediaResult
       ? mediaResult.summary.creates + mediaResult.summary.updates +
       (showDelete ? mediaResult.summary.deletes : 0)
+      : 0;
+
+    const commentChanges = commentOps
+      ? commentOps.filter(op => showDelete ? true : op.type !== 'delete').length
       : 0;
 
     const emailChanges = emailOps
@@ -247,6 +296,10 @@ async function statusAll() {
       ? mediaResult.summary.skips
       : 0;
 
+    const commentSkips = commentResult
+      ? commentResult.totalLocal - commentChanges
+      : 0;
+
     const emailSkips = emailResult
       ? emailResult.totalLocal - emailChanges
       : 0;
@@ -255,12 +308,13 @@ async function statusAll() {
       ? settingsResult.comparisons.filter(c => c.status === 'in-sync').length
       : 0;
 
-    const totalChanges = contentChanges + mediaChanges + emailChanges + settingsChanges;
+    const totalChanges = contentChanges + commentChanges + mediaChanges + emailChanges + settingsChanges;
 
     if (totalChanges === 0) {
       colorConsole.success('\n✅ Everything is in sync!\n');
 
       if (contentResult) console.log(`   📝 Content:          ${contentSkips > 0 ? `${contentSkips} item(s) ` : ''}up to date`);
+      if (commentResult) console.log(`   💬 Comments:         ${commentSkips > 0 ? `${commentSkips} item(s) ` : ''}up to date`);
       if (mediaResult) console.log(`   📷 Media:            ${mediaSkips > 0 ? `${mediaSkips} file(s) ` : ''}up to date`);
       if (canCheckEmailTemplates && emailResult) {
         console.log(`   📧 Email Templates:  ${emailSkips > 0 ? `${emailSkips} item(s) ` : ''}up to date`);
@@ -278,6 +332,12 @@ async function statusAll() {
     if (contentOps && contentChanges > 0) {
       colorConsole.important(`  📝 Content (${contentChanges} change${contentChanges !== 1 ? 's' : ''}):`);
       renderContentSection(contentOps);
+      console.log('');
+    }
+
+    if (commentOps && commentChanges > 0) {
+      colorConsole.important(`  💬 Comments (${commentChanges} change${commentChanges !== 1 ? 's' : ''}):`);
+      renderCommentSection(commentOps);
       console.log('');
     }
 
@@ -330,6 +390,16 @@ async function statusAll() {
         conflicts: contentOps.conflict.length,
         deletes: showDelete ? contentOps.delete.length : 0,
         skips: contentSkips,
+      }));
+    }
+
+    if (commentOps) {
+      console.log(renderSummaryLine('💬 Comments:        ', {
+        creates: commentOps.filter(op => op.type === 'create').length,
+        updates: commentOps.filter(op => op.type === 'update').length,
+        conflicts: commentOps.filter(op => op.type === 'conflict').length,
+        deletes: showDelete ? commentOps.filter(op => op.type === 'delete').length : 0,
+        skips: commentSkips,
       }));
     }
 

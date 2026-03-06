@@ -98,6 +98,9 @@ switch (command) {
   case 'push-media':
     runScript('push-media.js', commandArgs);
     break;
+  case 'push-comments':
+    runScript('push-comments.js', commandArgs);
+    break;
   case 'push-email-templates':
     runScript('push-email-templates.js', commandArgs);
     break;
@@ -112,6 +115,9 @@ switch (command) {
     break;
   case 'status-media':
     runScript('status-media.js', commandArgs);
+    break;
+  case 'status-comments':
+    runScript('status-comments.js', commandArgs);
     break;
   case 'status-email-templates':
     runScript('status-email-templates.js', commandArgs);
@@ -182,6 +188,11 @@ Usage:
     --dry-run            - Show what would be changed without making changes
     --delete             - Delete remote media files not present locally
     --scope <scopeUid>   - Filter by specific scope UID (e.g., "blog", "pages/about")
+  leadcms push-comments [options] - Push local comment changes to LeadCMS
+    --force              - Override remote comment changes when possible
+    --dry-run            - Show what would be pushed without making changes
+    --delete             - Delete remote comments not present locally
+    --id <comment-id>    - Push only a specific comment by ID
   leadcms push-email-templates [options] - Push email templates to LeadCMS
     --force              - Override remote changes (skip conflict check)
     --dry-run            - Show API calls without executing them (preview mode)
@@ -204,6 +215,10 @@ Usage:
   leadcms status-media [options] - Show media file status only
     --delete             - Show media deletion operations
     --scope <scopeUid>   - Filter by specific scope UID
+  leadcms status-comments [options] - Show comment sync status only
+    --preview            - Show detailed comment field/body previews
+    --delete             - Show remote comments that would be deleted
+    --id <comment-id>    - Show status for a specific comment by ID
   leadcms status-email-templates [options] - Show email template status only
     --preview            - Show detailed metadata for each change
     --delete             - Show email template deletion operations

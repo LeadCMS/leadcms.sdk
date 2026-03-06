@@ -6,6 +6,7 @@
 
 import 'dotenv/config';
 import { pushLeadCMSContent } from '../../scripts/push-leadcms-content.js';
+import { pushComments } from '../../scripts/push-comments.js';
 import { pushMedia } from '../../scripts/push-media.js';
 import { pushEmailTemplates } from '../../scripts/push-email-templates.js';
 import { pushSettings } from '../../scripts/push-settings.js';
@@ -73,6 +74,14 @@ async function pushAll() {
       dryRun,
       force,
       allowDelete
+    });
+
+    console.log('\n💬 Pushing comments...');
+    spinner.update('Pushing comments…');
+    await pushComments({
+      dryRun,
+      force,
+      allowDelete,
     });
 
     console.log('\n📷 Pushing media...');

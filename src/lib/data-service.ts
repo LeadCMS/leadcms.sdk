@@ -5,6 +5,7 @@
 
 import axios, { AxiosResponse } from 'axios';
 import { logger } from './logger.js';
+import type { Comment as CommentItem } from './comment-types.js';
 
 /**
  * Formats API validation errors in a user-friendly way
@@ -98,6 +99,34 @@ interface EmailGroupItem {
   [key: string]: any;
 }
 
+interface CommentCreateItem {
+  authorEmail: string;
+  body: string;
+  commentableType: string;
+  authorName?: string;
+  contactId?: number | null;
+  parentId?: number | null;
+  source?: string | null;
+  language?: string;
+  translationKey?: string | null;
+  tags?: string[] | null;
+  commentableId?: number | null;
+  commentableUid?: string | null;
+  status?: 'NotApproved' | 'Approved' | 'Spam' | 'Answer';
+  answerStatus?: 'Unanswered' | 'Answered' | 'Closed';
+}
+
+interface CommentUpdateItem {
+  body?: string;
+  authorName?: string;
+  authorEmail?: string;
+  language?: string;
+  status?: 'NotApproved' | 'Approved' | 'Spam' | 'Answer';
+  answerStatus?: 'Unanswered' | 'Answered' | 'Closed';
+  translationKey?: string | null;
+  tags?: string[] | null;
+}
+
 export interface MediaItem {
   id: number;
   location: string;
@@ -119,6 +148,7 @@ interface MockScenario {
   remoteMedia: MediaItem[];
   emailTemplates?: EmailTemplateItem[];
   emailGroups?: EmailGroupItem[];
+  comments?: CommentItem[];
 }
 
 interface MockData {
@@ -127,6 +157,7 @@ interface MockData {
   remoteMedia: MediaItem[];
   emailTemplates: EmailTemplateItem[];
   emailGroups: EmailGroupItem[];
+  comments: CommentItem[];
   scenario: string;
 }
 
@@ -316,6 +347,7 @@ class LeadCMSDataService {
       remoteMedia: JSON.parse(JSON.stringify(scenario.remoteMedia)),
       emailTemplates: JSON.parse(JSON.stringify(scenario.emailTemplates || [])),
       emailGroups: JSON.parse(JSON.stringify(scenario.emailGroups || [])),
+      comments: JSON.parse(JSON.stringify(scenario.comments || [])),
       scenario: scenario.name
     };
   }
@@ -775,6 +807,168 @@ class LeadCMSDataService {
       }
 
       console.error(`[API] Failed to create email group '${group.name}':`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Create new comment in LeadCMS or mock.
+   */
+  async createComment(comment: CommentCreateItem): Promise<CommentItem> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose(`[MOCK] Creating comment for ${comment.commentableType}`);
+
+      const newComment: CommentItem = {
+        id: Math.floor(Math.random() * 1000) + 100,
+        authorName: comment.authorName || '',
+        authorEmail: comment.authorEmail,
+        body: comment.body,
+        status: comment.status,
+        answerStatus: comment.answerStatus,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        commentableId: comment.commentableId || 0,
+        commentableType: comment.commentableType,
+        language: comment.language || 'en',
+        parentId: comment.parentId,
+        translationKey: comment.translationKey,
+        contactId: comment.contactId,
+        source: comment.source,
+        tags: comment.tags,
+      };
+
+      this.mockData.comments.push(newComment);
+      return newComment;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Comment operations require authentication. Please configure LEADCMS_API_KEY.');
+    }
+
+    try {
+      logger.verbose(`[API] Creating comment for ${comment.commentableType}`);
+      const response: AxiosResponse<CommentItem> = await axios.post(
+        `${this.baseURL}/api/comments`,
+        comment,
+        { headers: this.getApiHeaders() }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      if (error.response?.status === 422 && error.response?.data?.errors) {
+        const validationMessage = formatApiValidationErrors(error.response);
+        const enhancedError = new Error(`Validation failed${validationMessage}`);
+        (enhancedError as any).status = 422;
+        (enhancedError as any).validationErrors = error.response.data.errors;
+        throw enhancedError;
+      }
+
+      console.error('[API] Failed to create comment:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Update existing comment in LeadCMS or mock.
+   */
+  async updateComment(id: number, comment: CommentUpdateItem): Promise<CommentItem> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose(`[MOCK] Updating comment ID ${id}`);
+
+      const existingIndex = this.mockData.comments.findIndex(c => c.id === id);
+      if (existingIndex === -1) {
+        throw new Error(`Comment with id ${id} not found`);
+      }
+
+      const updatedComment: CommentItem = {
+        ...this.mockData.comments[existingIndex],
+        ...comment,
+        updatedAt: new Date().toISOString(),
+      };
+
+      this.mockData.comments[existingIndex] = updatedComment;
+      return updatedComment;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Comment operations require authentication. Please configure LEADCMS_API_KEY.');
+    }
+
+    try {
+      logger.verbose(`[API] Updating comment ID ${id}`);
+      const response: AxiosResponse<CommentItem> = await axios.patch(
+        `${this.baseURL}/api/comments/${id}`,
+        comment,
+        { headers: this.getApiHeaders() }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      if (error.response?.status === 422 && error.response?.data?.errors) {
+        const validationMessage = formatApiValidationErrors(error.response);
+        const enhancedError = new Error(`Validation failed${validationMessage}`);
+        (enhancedError as any).status = 422;
+        (enhancedError as any).validationErrors = error.response.data.errors;
+        throw enhancedError;
+      }
+
+      console.error('[API] Failed to update comment:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete comment from LeadCMS.
+   */
+  async deleteComment(id: number): Promise<void> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose(`[MOCK] Deleting comment with ID: ${id}`);
+      const index = this.mockData.comments.findIndex(c => c.id === id);
+      if (index !== -1) {
+        this.mockData.comments.splice(index, 1);
+      }
+      return;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Comment operations require authentication. Please configure LEADCMS_API_KEY.');
+    }
+
+    try {
+      logger.verbose(`[API] Deleting comment with ID: ${id}`);
+
+      await axios.delete(`${this.baseURL}/api/comments/${id}`, {
+        headers: this.getApiHeaders(),
+      });
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      if (error.response?.status === 422) {
+        const enhancedError = new Error(
+          `Comment validation failed: ${formatApiValidationErrors(error.response)}`
+        );
+        (enhancedError as any).status = 422;
+        (enhancedError as any).validationErrors = error.response.data.errors;
+        throw enhancedError;
+      }
+
+      console.error('[API] Failed to delete comment:', error.message);
       throw error;
     }
   }
@@ -1301,6 +1495,7 @@ class LeadCMSDataService {
       remoteMedia: JSON.parse(JSON.stringify(scenario.remoteMedia)),
       emailTemplates: JSON.parse(JSON.stringify(scenario.emailTemplates || [])),
       emailGroups: JSON.parse(JSON.stringify(scenario.emailGroups || [])),
+      comments: JSON.parse(JSON.stringify(scenario.comments || [])),
       scenario: scenario.name
     };
 
@@ -1327,6 +1522,7 @@ class LeadCMSDataService {
       remoteMedia: [...this.mockData.remoteMedia],
       emailTemplates: [...this.mockData.emailTemplates],
       emailGroups: [...this.mockData.emailGroups],
+      comments: [...this.mockData.comments],
       scenario: this.currentScenario?.name || ''
     };
   }
@@ -1350,4 +1546,4 @@ export const leadCMSDataService = new LeadCMSDataService();
 export { LeadCMSDataService };
 
 // Export types for use in other modules
-export type { ContentItem, ContentType, MockScenario, MockData };
+export type { ContentItem, ContentType, MockScenario, MockData, CommentCreateItem, CommentUpdateItem };

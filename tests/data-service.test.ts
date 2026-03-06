@@ -676,4 +676,87 @@ describe('LeadCMS Data Service', () => {
       await expect(service.getUserMe()).rejects.toThrow('No API key configured');
     });
   });
+
+  describe('Comment API Key Guards', () => {
+    beforeEach(() => {
+      process.env.LEADCMS_URL = 'https://api.example.com';
+      delete process.env.LEADCMS_API_KEY;
+      process.env.LEADCMS_USE_MOCK = 'false';
+      process.env.NODE_ENV = 'production';
+    });
+
+    it('should throw for createComment without API key', async () => {
+      const service = new LeadCMSDataService();
+      await expect(service.createComment({ body: 'Reply', authorEmail: 'test@example.com', commentableType: 'Content' }))
+        .rejects.toThrow('Comment operations require authentication. Please configure LEADCMS_API_KEY.');
+      expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('should throw for updateComment without API key', async () => {
+      const service = new LeadCMSDataService();
+      await expect(service.updateComment(42, { body: 'Updated reply' }))
+        .rejects.toThrow('Comment operations require authentication. Please configure LEADCMS_API_KEY.');
+      expect(mockedAxios.patch).not.toHaveBeenCalled();
+    });
+
+    it('should throw for deleteComment without API key', async () => {
+      const service = new LeadCMSDataService();
+      await expect(service.deleteComment(42))
+        .rejects.toThrow('Comment operations require authentication. Please configure LEADCMS_API_KEY.');
+      expect(mockedAxios.delete).not.toHaveBeenCalled();
+    });
+
+    it('should create a comment when API key is present', async () => {
+      process.env.LEADCMS_API_KEY = 'test-api-key';
+      const created = { id: 99, body: 'Reply', authorEmail: 'test@example.com', commentableType: 'Content' };
+      mockedAxios.post.mockResolvedValue({ data: created });
+
+      const service = new LeadCMSDataService();
+      const result = await service.createComment({
+        body: 'Reply',
+        authorEmail: 'test@example.com',
+        commentableType: 'Content',
+      });
+
+      expect(result).toEqual(created);
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        'https://api.example.com/api/comments',
+        {
+          body: 'Reply',
+          authorEmail: 'test@example.com',
+          commentableType: 'Content',
+        },
+        expect.any(Object)
+      );
+    });
+
+    it('should update a comment when API key is present', async () => {
+      process.env.LEADCMS_API_KEY = 'test-api-key';
+      const updated = { id: 42, body: 'Updated reply' };
+      mockedAxios.patch.mockResolvedValue({ data: updated });
+
+      const service = new LeadCMSDataService();
+      const result = await service.updateComment(42, { body: 'Updated reply' });
+
+      expect(result).toEqual(updated);
+      expect(mockedAxios.patch).toHaveBeenCalledWith(
+        'https://api.example.com/api/comments/42',
+        { body: 'Updated reply' },
+        expect.any(Object)
+      );
+    });
+
+    it('should delete a comment when API key is present', async () => {
+      process.env.LEADCMS_API_KEY = 'test-api-key';
+      mockedAxios.delete.mockResolvedValue({ data: undefined });
+
+      const service = new LeadCMSDataService();
+      await service.deleteComment(42);
+
+      expect(mockedAxios.delete).toHaveBeenCalledWith(
+        'https://api.example.com/api/comments/42',
+        expect.any(Object)
+      );
+    });
+  });
 });
