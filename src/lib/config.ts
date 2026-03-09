@@ -268,11 +268,6 @@ function validateConfig(config: LeadCMSConfig): void {
     errors.push("Invalid URL format: url");
   }
 
-  // API key is now optional - warn if not provided
-  if (!config.apiKey && DEBUG_LOGGING) {
-    console.warn("[LeadCMS] No API key provided - only public content will be accessible");
-  }
-
   if (errors.length > 0) {
     throw new Error(`LeadCMS configuration errors:\n${errors.join("\n")}`);
   }

@@ -36,13 +36,15 @@ jest.mock('../src/scripts/fetch-leadcms-comments.js', () => {
   return {
     ...actual,
     fetchCommentSync: jest.fn(),
+    fetchLeadCMSComments: jest.fn(),
   };
 });
 
 import { buildCommentStatus, pushComments, statusComments } from '../src/scripts/push-comments';
-import { fetchCommentSync } from '../src/scripts/fetch-leadcms-comments';
+import { fetchCommentSync, fetchLeadCMSComments } from '../src/scripts/fetch-leadcms-comments';
 
 const mockedFetchCommentSync = fetchCommentSync as jest.MockedFunction<typeof fetchCommentSync>;
+const mockedFetchLeadCMSComments = fetchLeadCMSComments as jest.MockedFunction<typeof fetchLeadCMSComments>;
 
 async function writeCommentFile(relativePath: string, comments: any[]): Promise<string> {
   const filePath = path.join(commentsDir, relativePath);
@@ -58,6 +60,7 @@ describe('push-comments', () => {
     jest.clearAllMocks();
     dataServiceMock.isApiKeyConfigured.mockReturnValue(true);
     mockedFetchCommentSync.mockResolvedValue({ items: [], deleted: [], nextSyncToken: 'sync-1' } as any);
+    mockedFetchLeadCMSComments.mockResolvedValue(undefined);
   });
 
   afterAll(async () => {
@@ -166,6 +169,7 @@ describe('push-comments', () => {
         parentId: 864,
         authorName: 'Peter Liapin',
         authorEmail: 'peter@xltools.net',
+        avatarUrl: 'https://example.com/avatars/peter.png',
         body: 'Brand new local reply',
         status: 'Approved',
       },
@@ -176,6 +180,7 @@ describe('push-comments', () => {
       parentId: 864,
       authorName: 'Peter Liapin',
       authorEmail: 'peter@xltools.net',
+      avatarUrl: 'https://example.com/avatars/peter.png',
       body: 'Brand new local reply',
       status: 'Approved',
       createdAt: '2024-03-01T00:00:00Z',
@@ -197,12 +202,14 @@ describe('push-comments', () => {
       commentableType: 'Content',
       language: 'ru-RU',
     });
+    expect(mockedFetchLeadCMSComments).toHaveBeenCalledTimes(1);
 
     const saved = JSON.parse(await fs.readFile(filePath, 'utf8'));
     expect(saved[0].id).toBe(1001);
     expect(saved[0].commentableId).toBe(110);
     expect(saved[0].commentableType).toBe('Content');
     expect(saved[0].language).toBe('ru-RU');
+    expect(saved[0].avatarUrl).toBe('https://example.com/avatars/peter.png');
   });
 
   it('updates matching comments and deletes remote-only comments when delete mode is enabled', async () => {
@@ -212,6 +219,7 @@ describe('push-comments', () => {
         parentId: 864,
         authorName: 'Peter Liapin',
         authorEmail: 'peter@xltools.net',
+        avatarUrl: 'https://example.com/avatars/peter-local.png',
         body: 'Locally updated reply',
         status: 'Approved',
         answerStatus: 'Answered',
@@ -230,6 +238,7 @@ describe('push-comments', () => {
           parentId: 864,
           authorName: 'Peter Liapin',
           authorEmail: 'peter@xltools.net',
+          avatarUrl: 'https://example.com/avatars/peter-remote-old.png',
           body: 'Remote old reply',
           status: 'Approved',
           answerStatus: 'Unanswered',
@@ -262,6 +271,7 @@ describe('push-comments', () => {
       parentId: 864,
       authorName: 'Peter Liapin',
       authorEmail: 'peter@xltools.net',
+      avatarUrl: 'https://example.com/avatars/peter-local.png',
       body: 'Locally updated reply',
       status: 'Approved',
       answerStatus: 'Answered',
@@ -277,12 +287,12 @@ describe('push-comments', () => {
     expect(dataServiceMock.updateComment).toHaveBeenCalledWith(20, {
       body: 'Locally updated reply',
       authorName: 'Peter Liapin',
-      authorEmail: 'peter@xltools.net',
       language: 'en',
       status: 'Approved',
       answerStatus: 'Answered',
     });
     expect(dataServiceMock.deleteComment).toHaveBeenCalledWith(21);
+    expect(mockedFetchLeadCMSComments).toHaveBeenCalledTimes(1);
   });
 
   it('skips conflicting updates unless force is enabled', async () => {
@@ -292,6 +302,7 @@ describe('push-comments', () => {
         parentId: 864,
         authorName: 'Peter Liapin',
         authorEmail: 'peter@xltools.net',
+        avatarUrl: 'https://example.com/avatars/peter-local.png',
         body: 'Local conflicting body',
         status: 'Approved',
         createdAt: '2024-01-01T00:00:00Z',
@@ -309,6 +320,7 @@ describe('push-comments', () => {
           parentId: 864,
           authorName: 'Peter Liapin',
           authorEmail: 'peter@xltools.net',
+          avatarUrl: 'https://example.com/avatars/peter-remote.png',
           body: 'Remote conflicting body',
           status: 'Approved',
           createdAt: '2024-01-01T00:00:00Z',
@@ -330,6 +342,7 @@ describe('push-comments', () => {
       parentId: 864,
       authorName: 'Peter Liapin',
       authorEmail: 'peter@xltools.net',
+      avatarUrl: 'https://example.com/avatars/peter-local.png',
       body: 'Local conflicting body',
       status: 'Approved',
       createdAt: '2024-01-01T00:00:00Z',
@@ -343,10 +356,87 @@ describe('push-comments', () => {
     expect(dataServiceMock.updateComment).toHaveBeenCalledWith(30, {
       body: 'Local conflicting body',
       authorName: 'Peter Liapin',
-      authorEmail: 'peter@xltools.net',
       language: 'en',
       status: 'Approved',
     });
+    expect(mockedFetchLeadCMSComments).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not treat avatarUrl-only local edits as client-side updates', async () => {
+    await writeCommentFile('content/110.json', [
+      {
+        id: 50,
+        parentId: 864,
+        authorName: 'Peter Liapin',
+        authorEmail: 'peter@xltools.net',
+        avatarUrl: 'https://example.com/avatars/peter-local.png',
+        body: 'Unchanged body',
+        status: 'Approved',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-02T00:00:00Z',
+        commentableId: 110,
+        commentableType: 'Content',
+        language: 'en',
+      },
+    ]);
+
+    mockedFetchCommentSync.mockResolvedValue({
+      items: [
+        {
+          id: 50,
+          parentId: 864,
+          authorName: 'Peter Liapin',
+          authorEmail: 'peter@xltools.net',
+          avatarUrl: 'https://example.com/avatars/peter-server.png',
+          body: 'Unchanged body',
+          status: 'Approved',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-02T00:00:00Z',
+          commentableId: 110,
+          commentableType: 'Content',
+          language: 'en',
+        },
+      ],
+      deleted: [],
+      nextSyncToken: 'sync-avatar',
+    } as any);
+
+    const result = await buildCommentStatus();
+
+    expect(result.operations).toHaveLength(0);
+  });
+
+  it('removes authorEmail locally after create before anonymous refresh completes', async () => {
+    const filePath = await writeCommentFile('content/110.json', [
+      {
+        parentId: 864,
+        authorName: 'Peter Liapin',
+        authorEmail: 'peter@xltools.net',
+        body: 'Brand new local reply',
+        status: 'Approved',
+      },
+    ]);
+
+    dataServiceMock.createComment.mockResolvedValue({
+      id: 1002,
+      parentId: 864,
+      authorName: 'Peter Liapin',
+      authorEmail: 'peter@xltools.net',
+      body: 'Brand new local reply',
+      status: 'Approved',
+      createdAt: '2024-03-01T00:00:00Z',
+      updatedAt: '2024-03-01T00:00:00Z',
+      commentableId: 110,
+      commentableType: 'Content',
+      language: 'en',
+    });
+    mockedFetchLeadCMSComments.mockRejectedValue(new Error('refresh failed'));
+
+    await expect(pushComments()).rejects.toThrow('refresh failed');
+
+    const saved = JSON.parse(await fs.readFile(filePath, 'utf8'));
+    expect(saved[0].id).toBe(1002);
+    expect(saved[0].authorEmail).toBeUndefined();
   });
 
   it('shows detailed preview for comment updates when preview is enabled', async () => {

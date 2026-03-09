@@ -10,14 +10,18 @@ Complete documentation for the LeadCMS SDK - a framework-agnostic TypeScript/Jav
 ## Features
 
 ### Content & Media
+
 - **[Content Management](./CONTENT_MANAGEMENT.md)** - Retrieving and organizing content
 - **[Media Management](./MEDIA_MANAGEMENT.md)** - Working with media files
 - **[Draft Handling](./DRAFT_HANDLING.md)** - Working with draft content and user-specific drafts
 
 ### Comments
+
+- **[Working with Comments](./COMMENTS.md)** - Reading synchronized comments in your app
 - **[Comment Tree](./COMMENT_TREE.md)** - Building threaded comment interfaces
 
 ### Security
+
 - **[Public API Mode](./PUBLIC_API_MODE.md)** - Security-first approach and operation modes
 
 ## Development
@@ -28,12 +32,14 @@ Complete documentation for the LeadCMS SDK - a framework-agnostic TypeScript/Jav
 ## Quick Links
 
 ### For Users
+
 1. [Installation](../README.md#installation)
 2. [Quick Start](../README.md#quick-start)
 3. [Configuration](../README.md#configuration)
 4. [API Reference](../README.md#api-reference)
 
 ### For Developers
+
 1. [Development Setup](./DEVELOPMENT.md#-quick-setup)
 2. [Testing](./DEVELOPMENT.md#-testing)
 3. [Publishing](./GITHUB_ACTIONS.md#publishing)
@@ -41,35 +47,41 @@ Complete documentation for the LeadCMS SDK - a framework-agnostic TypeScript/Jav
 ### Common Tasks
 
 **Setup Project:**
+
 ```bash
 npx leadcms init
 npx leadcms pull
 ```
 
 **Get Content:**
+
 ```typescript
-import { getCMSContentBySlugForLocale } from '@leadcms/sdk';
-const content = getCMSContentBySlugForLocale('about', 'en');
+import { getCMSContentBySlugForLocale } from "@leadcms/sdk";
+const content = getCMSContentBySlugForLocale("about", "en");
 ```
 
 **Work with Comments:**
+
 ```typescript
-import { getCommentsTreeForContent } from '@leadcms/sdk';
-const tree = getCommentsTreeForContent(contentId);
+import { getCommentsForContent } from "@leadcms/sdk";
+const comments = getCommentsForContent(contentId);
 ```
 
 **Handle Media:**
+
 ```bash
 npx leadcms pull-media
 ```
 
 **Handle Drafts:**
+
 ```typescript
-import { getCMSContentBySlug } from '@leadcms/sdk';
-const withDrafts = getCMSContentBySlug('article', true);
+import { getCMSContentBySlug } from "@leadcms/sdk";
+const withDrafts = getCMSContentBySlug("article", true);
 ```
 
 **Public Mode:**
+
 ```bash
 # No API key needed for public content
 echo "LEADCMS_URL=https://cms.example.com" > .env
@@ -83,6 +95,7 @@ docs/
 ├── README.md                  # This file - Documentation hub
 ├── CONTENT_MANAGEMENT.md      # Content retrieval and organization
 ├── MEDIA_MANAGEMENT.md        # Media file handling
+├── COMMENTS.md                # Reading synchronized comments
 ├── COMMENT_TREE.md            # Comment tree and threading
 ├── DRAFT_HANDLING.md          # Draft content handling
 ├── PUBLIC_API_MODE.md         # Security and authentication

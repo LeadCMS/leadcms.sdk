@@ -119,7 +119,6 @@ interface CommentCreateItem {
 interface CommentUpdateItem {
   body?: string;
   authorName?: string;
-  authorEmail?: string;
   language?: string;
   status?: 'NotApproved' | 'Approved' | 'Spam' | 'Answer';
   answerStatus?: 'Unanswered' | 'Answered' | 'Closed';

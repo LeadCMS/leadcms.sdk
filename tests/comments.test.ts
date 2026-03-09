@@ -10,6 +10,7 @@ import {
   getCommentsForContent,
   getCommentsStrict,
   getCommentsForContentStrict,
+  getCommentsTreeForContent,
 } from "../src/lib/cms.js";
 import type {
   Comment,
@@ -18,6 +19,18 @@ import type {
 import { createTestConfig } from "./test-helpers";
 
 const TEST_COMMENTS_DIR = path.resolve(".leadcms-test/comments");
+const TEST_CONTENT_DIR = path.resolve(".leadcms-test/content");
+
+function saveTestContent(slug: string, id: number, language = "en") {
+  const localeDir = language === "en" ? TEST_CONTENT_DIR : path.join(TEST_CONTENT_DIR, language);
+  const filePath = path.join(localeDir, `${slug}.mdx`);
+
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(
+    filePath,
+    `---\nid: ${id}\nslug: ${slug}\ntype: page\nlanguage: ${language}\npublishedAt: 2024-01-01T00:00:00Z\n---\n${slug}`
+  );
+}
 
 // Mock configuration for tests - must be before imports that use getConfig at module load
 jest.mock("../src/lib/config.js", () => ({
@@ -28,6 +41,7 @@ jest.mock("../src/lib/config.js", () => ({
     commentsDir: ".leadcms-test/comments",
     enableDrafts: false,
   })),
+  isPreviewMode: jest.fn(() => false),
 }));
 
 // Import real SDK functions after mocks are set up
@@ -44,11 +58,19 @@ describe("Comments Feature", () => {
     if (fs.existsSync(TEST_COMMENTS_DIR)) {
       fs.rmSync(TEST_COMMENTS_DIR, { recursive: true, force: true });
     }
+
+    if (fs.existsSync(TEST_CONTENT_DIR)) {
+      fs.rmSync(TEST_CONTENT_DIR, { recursive: true, force: true });
+    }
   });
 
   afterEach(async () => {
     if (fs.existsSync(TEST_COMMENTS_DIR)) {
       fs.rmSync(TEST_COMMENTS_DIR, { recursive: true, force: true });
+    }
+
+    if (fs.existsSync(TEST_CONTENT_DIR)) {
+      fs.rmSync(TEST_CONTENT_DIR, { recursive: true, force: true });
     }
   });
 
@@ -81,7 +103,6 @@ describe("Comments Feature", () => {
         id: 1,
         parentId: null,
         authorName: "John Doe",
-        authorEmail: "john@example.com",
         body: "Test comment",
         createdAt: "2024-01-01T00:00:00Z",
         updatedAt: "2024-01-02T00:00:00Z",
@@ -98,6 +119,7 @@ describe("Comments Feature", () => {
       expect(stored).not.toHaveProperty("content");
       expect(stored).not.toHaveProperty("parent");
       expect(stored).not.toHaveProperty("contact");
+      expect(stored).not.toHaveProperty("authorEmail");
     });
   });
 
@@ -382,6 +404,7 @@ describe("Comments Feature", () => {
       ];
 
       await saveCommentsForEntity("Content", 15, "en", comments);
+      saveTestContent("hello-world", 15);
     });
 
     it("should retrieve comments for content", () => {
@@ -390,9 +413,34 @@ describe("Comments Feature", () => {
       expect(comments[0].body).toBe("Content comment");
     });
 
+    it("should retrieve comments for content slug", () => {
+      const comments = getCommentsForContent("hello-world", "en");
+      expect(comments).toHaveLength(1);
+      expect(comments[0].body).toBe("Content comment");
+    });
+
+    it("should resolve comments for localized content slug", async () => {
+      const comments: StoredComment[] = [
+        {
+          id: 2, parentId: null, authorName: "French User", body: "Bonjour",
+          createdAt: "2024-01-01T00:00:00Z", commentableId: 21,
+          commentableType: "Content", language: "fr",
+        },
+      ];
+
+      await saveCommentsForEntity("Content", 21, "fr", comments);
+      saveTestContent("bonjour", 21, "fr");
+
+      expect(getCommentsForContent("bonjour", "fr")).toEqual(comments);
+    });
+
     it("should return empty array for content without comments", () => {
       const comments = getCommentsForContent(999);
       expect(comments).toEqual([]);
+    });
+
+    it("should return empty array when content slug cannot be resolved", () => {
+      expect(getCommentsForContent("missing-content", "en")).toEqual([]);
     });
   });
 
@@ -443,6 +491,7 @@ describe("Comments Feature", () => {
       ];
 
       await saveCommentsForEntity("Content", 15, "en", comments);
+      saveTestContent("hello-world", 15);
     });
 
     it("should retrieve comments for content", () => {
@@ -450,10 +499,61 @@ describe("Comments Feature", () => {
       expect(comments).toHaveLength(1);
     });
 
+    it("should retrieve comments for content slug", () => {
+      const comments = getCommentsForContentStrict("hello-world", "en");
+      expect(comments).toHaveLength(1);
+      expect(comments[0].body).toBe("Content comment");
+    });
+
     it("should throw error for content without comments", () => {
       expect(() => getCommentsForContentStrict(999)).toThrow(
         /Comments file not found/
       );
+    });
+
+    it("should throw error when content slug cannot be resolved", () => {
+      expect(() => getCommentsForContentStrict("missing-content", "en")).toThrow(
+        /Content not found for slug/
+      );
+    });
+  });
+
+  describe("Public API - getCommentsTreeForContent", () => {
+    beforeEach(async () => {
+      const comments: StoredComment[] = [
+        {
+          id: 1,
+          parentId: null,
+          authorName: "Parent User",
+          body: "Parent comment",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 25,
+          commentableType: "Content",
+          language: "en",
+        },
+        {
+          id: 2,
+          parentId: 1,
+          authorName: "Child User",
+          body: "Child comment",
+          createdAt: "2024-01-02T00:00:00Z",
+          commentableId: 25,
+          commentableType: "Content",
+          language: "en",
+        },
+      ];
+
+      await saveCommentsForEntity("Content", 25, "en", comments);
+      saveTestContent("threaded-post", 25);
+    });
+
+    it("should build comment tree for content slug", () => {
+      const tree = getCommentsTreeForContent("threaded-post", "en");
+
+      expect(tree).toHaveLength(1);
+      expect(tree[0].body).toBe("Parent comment");
+      expect(tree[0].children).toHaveLength(1);
+      expect(tree[0].children[0].body).toBe("Child comment");
     });
   });
 

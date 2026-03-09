@@ -1257,14 +1257,58 @@ export function getComments(commentableType: string, commentableId: number, lang
   }
 }
 
+function resolveContentCommentableId(
+  contentIdentifier: number | string,
+  language?: string,
+  strict = false
+): number | null {
+  if (typeof contentIdentifier === "number") {
+    return contentIdentifier;
+  }
+
+  const content = language
+    ? getCMSContentBySlugForLocale(contentIdentifier, language)
+    : getCMSContentBySlug(contentIdentifier);
+
+  if (!content) {
+    if (strict) {
+      throw new Error(
+        `[LeadCMS] Content not found for slug "${contentIdentifier}" (language: ${language || getLeadCMSConfig().defaultLanguage})`
+      );
+    }
+
+    return null;
+  }
+
+  const contentId = typeof content.id === "number" ? content.id : Number(content.id);
+
+  if (!Number.isFinite(contentId)) {
+    if (strict) {
+      throw new Error(
+        `[LeadCMS] Content found for slug "${contentIdentifier}" does not have a numeric id`
+      );
+    }
+
+    return null;
+  }
+
+  return contentId;
+}
+
 /**
- * Get comments for a specific content item by content ID
+ * Get comments for a specific content item by content ID or slug
  * This is a convenience function that calls getComments with commentableType="Content"
- * @param contentId - The ID of the content
+ * @param contentIdentifier - The ID or slug of the content
  * @param language - Language code (optional, uses default language if not provided)
  * @returns Array of comments for the content, or empty array if none found
  */
-export function getCommentsForContent(contentId: number, language?: string): any[] {
+export function getCommentsForContent(contentIdentifier: number | string, language?: string): any[] {
+  const contentId = resolveContentCommentableId(contentIdentifier, language);
+
+  if (contentId === null) {
+    return [];
+  }
+
   return getComments("Content", contentId, language);
 }
 
@@ -1300,12 +1344,18 @@ export function getCommentsStrict(commentableType: string, commentableId: number
 /**
  * Get comments for a specific content item with strict error handling
  * This is a convenience function that calls getCommentsStrict with commentableType="Content"
- * @param contentId - The ID of the content
+ * @param contentIdentifier - The ID or slug of the content
  * @param language - Language code (optional, uses default language if not provided)
  * @returns Array of comments for the content
  * @throws {Error} If comments file cannot be read or parsed
  */
-export function getCommentsForContentStrict(contentId: number, language?: string): any[] {
+export function getCommentsForContentStrict(contentIdentifier: number | string, language?: string): any[] {
+  const contentId = resolveContentCommentableId(contentIdentifier, language, true);
+
+  if (contentId === null) {
+    throw new Error("[LeadCMS] Failed to resolve content identifier for comments lookup");
+  }
+
   return getCommentsStrict("Content", contentId, language);
 }
 
@@ -1330,16 +1380,22 @@ export function getCommentsTree(
 
 /**
  * Get comments tree for content with convenience wrapper
- * @param contentId - The ID of the content
+ * @param contentIdentifier - The ID or slug of the content
  * @param language - Language code (optional, uses default language if not provided)
  * @param options - Tree building options (sorting, filtering, etc.)
  * @returns Array of root-level comment nodes with nested children
  */
 export function getCommentsTreeForContent(
-  contentId: number,
+  contentIdentifier: number | string,
   language?: string,
   options?: import('./comment-utils.js').CommentTreeOptions
 ): import('./comment-utils.js').CommentTreeNode[] {
+  const contentId = resolveContentCommentableId(contentIdentifier, language);
+
+  if (contentId === null) {
+    return [];
+  }
+
   return getCommentsTree("Content", contentId, language, options);
 }
 

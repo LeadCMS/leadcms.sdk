@@ -708,7 +708,13 @@ describe('LeadCMS Data Service', () => {
 
     it('should create a comment when API key is present', async () => {
       process.env.LEADCMS_API_KEY = 'test-api-key';
-      const created = { id: 99, body: 'Reply', authorEmail: 'test@example.com', commentableType: 'Content' };
+      const created = {
+        id: 99,
+        body: 'Reply',
+        authorEmail: 'test@example.com',
+        avatarUrl: 'https://example.com/avatars/test.png',
+        commentableType: 'Content'
+      };
       mockedAxios.post.mockResolvedValue({ data: created });
 
       const service = new LeadCMSDataService();
@@ -732,11 +738,13 @@ describe('LeadCMS Data Service', () => {
 
     it('should update a comment when API key is present', async () => {
       process.env.LEADCMS_API_KEY = 'test-api-key';
-      const updated = { id: 42, body: 'Updated reply' };
+      const updated = { id: 42, body: 'Updated reply', avatarUrl: 'https://example.com/avatars/updated.png' };
       mockedAxios.patch.mockResolvedValue({ data: updated });
 
       const service = new LeadCMSDataService();
-      const result = await service.updateComment(42, { body: 'Updated reply' });
+      const result = await service.updateComment(42, {
+        body: 'Updated reply'
+      });
 
       expect(result).toEqual(updated);
       expect(mockedAxios.patch).toHaveBeenCalledWith(

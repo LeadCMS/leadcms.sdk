@@ -87,7 +87,9 @@ async function fetchCommentSync(syncToken?: string): Promise<CommentSyncResult> 
     try {
       // SECURITY: Never send API key for read operations
       // Comments sync should only return public comments
-      const res: AxiosResponse<CommentSyncResponse> = await axios.get(url.toString());
+      const res: AxiosResponse<CommentSyncResponse> = await axios.get(url.toString(), {
+        headers: {},
+      });
 
       if (res.status === 204) {
         logger.verbose(`[FETCH_COMMENT_SYNC] Got 204 No Content - ending sync`);
@@ -156,7 +158,7 @@ async function fetchCommentSync(syncToken?: string): Promise<CommentSyncResult> 
  * Convert Comment to StoredComment by removing nested objects
  */
 function toStoredComment(comment: Comment): StoredComment {
-  const { content, parent, contact, ...stored } = comment;
+  const { content, parent, contact, authorEmail, ...stored } = comment;
   return stored;
 }
 
@@ -355,7 +357,7 @@ async function fetchCMSConfigForEntity(): Promise<boolean> {
 export async function main(): Promise<void> {
   logger.verbose(`[ENV] LeadCMS URL: ${leadCMSUrl}`);
   logger.verbose(
-    `[ENV] LeadCMS API Key: ${leadCMSApiKey ? `${leadCMSApiKey.substring(0, 8)}...` : "NOT_SET"}`
+    `[ENV] LeadCMS API Key: ${leadCMSApiKey ? 'CONFIGURED (ignored for anonymous comment pull)' : 'NOT_SET'}`
   );
   logger.verbose(`[ENV] Comments Dir: ${COMMENTS_DIR}`);
 

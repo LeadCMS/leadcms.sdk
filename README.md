@@ -633,7 +633,7 @@ const tree = getCommentsTreeForContent(contentId, undefined, {
 });
 ```
 
-**📖 See [Comment Tree Guide](./docs/COMMENT_TREE.md)** for complete documentation on threaded comments, sorting, filtering, and advanced features.
+**📖 See [Working with Comments](./docs/COMMENTS.md)** for the complete comments workflow and [Comment Tree Guide](./docs/COMMENT_TREE.md) for threaded comments, sorting, and filtering.
 
 ## Docker Deployment
 
@@ -762,6 +762,7 @@ try {
 
 #### Comments
 
+- **[Working with Comments](./docs/COMMENTS.md)** - Reading synchronized comments and using the public SDK APIs
 - **[Comment Tree Guide](./docs/COMMENT_TREE.md)** - Building threaded comment interfaces with sorting and filtering
 
 #### Setup & Configuration

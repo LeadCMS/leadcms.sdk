@@ -9,7 +9,7 @@ import { leadCMSDataService } from '../lib/data-service.js';
 import { isValidLocaleCode } from '../lib/locale-utils.js';
 import { colorConsole, diffColors, statusColors } from '../lib/console-colors.js';
 import { logger } from '../lib/logger.js';
-import { fetchCommentSync, saveCommentsForEntity } from './fetch-leadcms-comments.js';
+import { fetchCommentSync, fetchLeadCMSComments, saveCommentsForEntity } from './fetch-leadcms-comments.js';
 
 import type { Comment, StoredComment } from '../lib/comment-types.js';
 import type { CommentCreateItem, CommentUpdateItem } from '../lib/data-service.js';
@@ -79,7 +79,6 @@ function normalizeEditableFields(comment: Partial<EditableComment | RemoteCommen
   return {
     body: comment.body ?? remote?.body ?? '',
     authorName: comment.authorName ?? remote?.authorName ?? '',
-    authorEmail: comment.authorEmail ?? remote?.authorEmail ?? '',
     language: comment.language ?? remote?.language ?? DEFAULT_LANGUAGE,
     status: comment.status ?? remote?.status ?? undefined,
     answerStatus: comment.answerStatus ?? remote?.answerStatus ?? undefined,
@@ -219,7 +218,6 @@ function buildUpdatePayload(local: LocalCommentItem, remote: RemoteCommentItem):
   return filterUndefinedValues({
     body: normalized.body,
     authorName: normalized.authorName,
-    authorEmail: normalized.authorEmail,
     language: normalized.language,
     status: normalized.status,
     answerStatus: normalized.answerStatus,
@@ -245,7 +243,7 @@ async function updateLocalFileFromResponse(local: LocalCommentItem, remote: Remo
     id: remote.id,
     parentId: remote.parentId ?? null,
     authorName: remote.authorName,
-    authorEmail: remote.authorEmail,
+    authorEmail: undefined,
     body: remote.body,
     status: remote.status,
     answerStatus: remote.answerStatus,
@@ -377,7 +375,6 @@ export async function statusComments(options: CommentStatusOptions = {}): Promis
 
     const fieldDiffs: Array<[string, string | undefined, string | undefined]> = [
       ['authorName', remote.authorName, local.authorName],
-      ['authorEmail', remote.authorEmail, local.authorEmail],
       ['language', remote.language, local.language],
       ['status', remote.status, local.status],
       ['answerStatus', remote.answerStatus, local.answerStatus],
@@ -465,6 +462,7 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
 
   const { force, dryRun, allowDelete, targetId } = options;
   const status = await buildCommentStatus({ showDelete: allowDelete, targetId });
+  let didMutate = false;
 
   for (const operation of status.operations) {
     if (operation.type === 'conflict' && !force) {
@@ -488,6 +486,7 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
       const created = await leadCMSDataService.createComment(payload);
       console.log(`✅ Created comment ${created.id} in ${created.commentableType}#${created.commentableId}`);
       await updateLocalFileFromResponse(operation.local, created);
+      didMutate = true;
       continue;
     }
 
@@ -501,6 +500,7 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
       const updated = await leadCMSDataService.updateComment(operation.remote.id, payload);
       console.log(`✅ Updated comment ${updated.id}`);
       await updateLocalFileFromResponse(operation.local, updated);
+      didMutate = true;
       continue;
     }
 
@@ -525,6 +525,7 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
       const updated = await leadCMSDataService.updateComment(localId, payload);
       console.log(`✅ Force-updated comment ${updated.id}`);
       await updateLocalFileFromResponse(operation.local, updated);
+      didMutate = true;
       continue;
     }
 
@@ -536,7 +537,13 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
 
       await leadCMSDataService.deleteComment(operation.remote.id);
       console.log(`✅ Deleted remote comment ${operation.remote.id}`);
+      didMutate = true;
     }
+  }
+
+  if (!dryRun && didMutate) {
+    console.log('🔄 Refreshing local comments anonymously...');
+    await fetchLeadCMSComments();
   }
 }
 
