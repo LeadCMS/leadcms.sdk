@@ -117,6 +117,8 @@ When no `remotes` block exists in config, the SDK behaves exactly as today:
 - Sync tokens remain at current paths
 - `id` / `updatedAt` in frontmatter work as before
 - No migration required
+- You do not need to add a `remotes` section just to keep single-remote behavior
+- You do not need to create or commit `.leadcms/remotes/` for single-remote projects
 
 When `remotes` is present, the flat `url` / `apiKey` fields are ignored (with a warning if both exist).
 
