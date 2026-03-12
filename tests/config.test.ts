@@ -368,7 +368,7 @@ describe('Config Module', () => {
       };
       fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
 
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { });
 
       const { getConfig: getConfigFresh } = require('../src/lib/config');
       expect(() => getConfigFresh()).not.toThrow();
