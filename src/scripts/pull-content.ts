@@ -7,13 +7,14 @@ import "dotenv/config";
 import axios from "axios";
 import { leadCMSUrl } from "./leadcms-helpers.js";
 import { setCMSConfig, isContentSupported } from "../lib/cms-config-types.js";
-import { fetchLeadCMSContent } from "./fetch-leadcms-content.js";
+import { pullLeadCMSContent } from "./pull-leadcms-content.js";
 import { leadCMSDataService } from "../lib/data-service.js";
 import { saveContentFile } from "../lib/content-transformation.js";
 import { CONTENT_DIR, fetchContentTypes } from "./leadcms-helpers.js";
 import { resetContentState } from "./pull-all.js";
 import { logger } from "../lib/logger.js";
 import { filterContentOperations, getContentStatusData, type ContentOperations, type MatchOperation } from "./push-leadcms-content.js";
+import type { RemoteContext } from "../lib/remote-context.js";
 
 interface PullContentOptions {
   targetId?: string;
@@ -23,6 +24,8 @@ interface PullContentOptions {
   reset?: boolean;
   /** When true, skip three-way merge and always overwrite local files with remote content. */
   force?: boolean;
+  /** Remote context for multi-remote support. */
+  remoteContext?: RemoteContext;
 }
 
 interface PullTargetItem {
@@ -124,14 +127,15 @@ async function pullFilteredContent(targetId?: string, targetSlug?: string, statu
  * Main function
  */
 async function main(options: PullContentOptions = {}): Promise<void> {
-  const { targetId, targetSlug, statusFilter, reset, force } = options;
+  const { targetId, targetSlug, statusFilter, reset, force, remoteContext: remoteCtx } = options;
+  const effectiveUrl = remoteCtx?.url || leadCMSUrl;
 
   console.log(`\n📄 LeadCMS Pull Content\n`);
 
   // Handle --reset flag: clear content before pulling
   if (reset) {
     console.log(`🔄 Resetting content state...\n`);
-    await resetContentState();
+    await resetContentState(remoteCtx);
   }
 
   // If pulling targeted or filtered content
@@ -193,7 +197,7 @@ async function main(options: PullContentOptions = {}): Promise<void> {
   // Check if content is supported
   try {
     logger.verbose(`🔍 Checking CMS configuration...`);
-    const configUrl = new URL('/api/config', leadCMSUrl).toString();
+    const configUrl = new URL('/api/config', effectiveUrl).toString();
     const response = await axios.get(configUrl, { timeout: 10000 });
 
     if (response.data) {
@@ -211,8 +215,8 @@ async function main(options: PullContentOptions = {}): Promise<void> {
     console.warn(`⚠️  Assuming content is supported (backward compatibility)\n`);
   }
 
-  // Fetch content and media
-  await fetchLeadCMSContent({ forceOverwrite: force });
+  // Fetch content only (no media)
+  await pullLeadCMSContent({ forceOverwrite: force, remoteContext: remoteCtx });
 
   console.log(`\n✨ Content pull completed!\n`);
 }

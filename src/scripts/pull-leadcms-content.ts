@@ -3,12 +3,10 @@ import fs from "fs/promises";
 import path from "path";
 import axios, { AxiosResponse } from "axios";
 import {
-  downloadMediaFileDirect,
   leadCMSUrl,
   leadCMSApiKey,
   defaultLanguage,
   CONTENT_DIR,
-  MEDIA_DIR,
   fetchContentTypes,
   ContentItem,
 } from "./leadcms-helpers.js";
@@ -16,17 +14,25 @@ import { saveContentFile, transformRemoteToLocalFormat, type ContentTypeMap } fr
 import { threeWayMerge, threeWayMergeJson, isLocallyModified } from "../lib/content-merge.js";
 import { getConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
+import type { RemoteContext } from "../lib/remote-context.js";
+import { syncTokenPath } from "../lib/remote-context.js";
 
 /**
- * Options for fetchLeadCMSContent.
+ * Options for pullLeadCMSContent.
  */
-export interface FetchContentOptions {
+export interface PullContentOptions {
   /**
    * When true, skip three-way merge logic and always overwrite local files
    * with remote content. This is used in watch mode (SSE watcher) to prevent
    * merge conflicts caused by rapid sequential/concurrent syncs.
    */
   forceOverwrite?: boolean;
+  /**
+   * Remote context for multi-remote support. When provided, sync tokens and
+   * API calls use this remote's URL and per-remote state directory.
+   * When omitted, falls back to single-remote behavior (backward compat).
+   */
+  remoteContext?: RemoteContext;
 }
 
 // Type definitions
@@ -37,22 +43,6 @@ interface SyncResponse {
   nextSyncToken?: string;
 }
 
-interface MediaItem {
-  location?: string;
-  [key: string]: any;
-}
-
-interface MediaDeletedItem {
-  scopeUid: string;
-  name: string;
-}
-
-interface MediaSyncResponse {
-  items?: MediaItem[];
-  deleted?: MediaDeletedItem[];
-  nextSyncToken?: string;
-}
-
 interface ContentSyncResult {
   items: ContentItem[];
   deleted: number[];
@@ -60,24 +50,15 @@ interface ContentSyncResult {
   nextSyncToken: string;
 }
 
-interface MediaSyncResult {
-  items: MediaItem[];
-  deleted: MediaDeletedItem[];
-  nextSyncToken: string;
-}
-
 const CONTENT_PROGRESS_LOG_INTERVAL = 25;
-const MEDIA_PROGRESS_LOG_INTERVAL = 5;
 
 // ── Sync token paths ───────────────────────────────────────────────────
 // New location: tokens live *inside* the corresponding data directory.
 const SYNC_TOKEN_PATH = path.join(CONTENT_DIR, ".sync-token");
-const MEDIA_SYNC_TOKEN_PATH = path.join(MEDIA_DIR, ".sync-token");
 
 // Legacy location (SDK ≤ 3.2): tokens lived in the parent of contentDir.
 // We check these once for migration and then delete them after a successful pull.
 const LEGACY_SYNC_TOKEN_PATH = path.join(path.dirname(CONTENT_DIR), "sync-token.txt");
-const LEGACY_MEDIA_SYNC_TOKEN_PATH = path.join(path.dirname(CONTENT_DIR), "media-sync-token.txt");
 
 /**
  * Read a file and return its trimmed contents, or undefined if it doesn't exist.
@@ -101,8 +82,23 @@ async function unlinkSafe(filePath: string): Promise<void> {
 
 /**
  * Read content sync token. Checks new location first, then falls back to legacy.
+ * When remoteCtx is provided, reads from the remote-specific state directory.
  */
-async function readSyncToken(): Promise<{ token: string | undefined; migrated: boolean }> {
+async function readSyncToken(remoteCtx?: RemoteContext): Promise<{ token: string | undefined; migrated: boolean }> {
+  if (remoteCtx) {
+    const tokenPath = syncTokenPath(remoteCtx, "content");
+    const token = await readFileOrUndefined(tokenPath);
+    if (token) return { token, migrated: false };
+
+    // Migration: check old single-remote path and move to per-remote path
+    const legacyToken = await readFileOrUndefined(SYNC_TOKEN_PATH);
+    if (legacyToken) {
+      logger.verbose(`[SYNC] Migrating content sync token to remote "${remoteCtx.name}"`);
+      return { token: legacyToken, migrated: true };
+    }
+    return { token: undefined, migrated: false };
+  }
+
   const token = await readFileOrUndefined(SYNC_TOKEN_PATH);
   if (token) return { token, migrated: false };
 
@@ -114,7 +110,13 @@ async function readSyncToken(): Promise<{ token: string | undefined; migrated: b
   return { token: undefined, migrated: false };
 }
 
-async function writeSyncToken(token: string): Promise<void> {
+async function writeSyncToken(token: string, remoteCtx?: RemoteContext): Promise<void> {
+  if (remoteCtx) {
+    const tokenPath = syncTokenPath(remoteCtx, "content");
+    await fs.mkdir(path.dirname(tokenPath), { recursive: true });
+    await fs.writeFile(tokenPath, token, "utf8");
+    return;
+  }
   await fs.mkdir(path.dirname(SYNC_TOKEN_PATH), { recursive: true });
   await fs.writeFile(SYNC_TOKEN_PATH, token, "utf8");
 }
@@ -126,36 +128,10 @@ async function cleanupLegacySyncToken(): Promise<void> {
   await unlinkSafe(LEGACY_SYNC_TOKEN_PATH);
 }
 
-/**
- * Read media sync token. Checks new location first, then falls back to legacy.
- */
-async function readMediaSyncToken(): Promise<{ token: string | undefined; migrated: boolean }> {
-  const token = await readFileOrUndefined(MEDIA_SYNC_TOKEN_PATH);
-  if (token) return { token, migrated: false };
-
-  const legacy = await readFileOrUndefined(LEGACY_MEDIA_SYNC_TOKEN_PATH);
-  if (legacy) {
-    logger.verbose(`[SYNC] Migrating media sync token from legacy location`);
-    return { token: legacy, migrated: true };
-  }
-  return { token: undefined, migrated: false };
-}
-
-async function writeMediaSyncToken(token: string): Promise<void> {
-  await fs.mkdir(path.dirname(MEDIA_SYNC_TOKEN_PATH), { recursive: true });
-  await fs.writeFile(MEDIA_SYNC_TOKEN_PATH, token, "utf8");
-}
-
-/**
- * Clean up legacy media sync token after successful migration.
- */
-async function cleanupLegacyMediaSyncToken(): Promise<void> {
-  await unlinkSafe(LEGACY_MEDIA_SYNC_TOKEN_PATH);
-}
-
-async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> {
-  logger.verbose(`[FETCH_CONTENT_SYNC] Starting with syncToken: ${syncToken || "NONE"}`);
-  logger.verbose(`[FETCH_CONTENT_SYNC] Fetching public content (no authentication)`);
+async function pullContentSync(syncToken?: string, baseUrl?: string): Promise<ContentSyncResult> {
+  const effectiveUrl = baseUrl || leadCMSUrl;
+  logger.verbose(`[PULL_CONTENT_SYNC] Starting with syncToken: ${syncToken || "NONE"}`);
+  logger.verbose(`[PULL_CONTENT_SYNC] Pulling public content (no authentication)`);
   let allItems: ContentItem[] = [];
   let allDeleted: number[] = [];
   let allBaseItems: Record<string, ContentItem> = {};
@@ -164,7 +140,7 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
   let page = 0;
 
   while (true) {
-    const url = new URL("/api/content/sync", leadCMSUrl);
+    const url = new URL("/api/content/sync", effectiveUrl);
     url.searchParams.set("filter[limit]", "100");
     url.searchParams.set("syncToken", token);
 
@@ -173,7 +149,7 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
       url.searchParams.set("includeBase", "true");
     }
 
-    logger.verbose(`[FETCH_CONTENT_SYNC] Page ${page}, URL: ${url.toString()}`);
+    logger.verbose(`[PULL_CONTENT_SYNC] Page ${page}, URL: ${url.toString()}`);
 
     try {
       // SECURITY: Never send API key for read operations
@@ -181,13 +157,13 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
       const res: AxiosResponse<SyncResponse> = await axios.get(url.toString());
 
       if (res.status === 204) {
-        logger.verbose(`[FETCH_CONTENT_SYNC] Got 204 No Content - ending sync`);
+        logger.verbose(`[PULL_CONTENT_SYNC] Got 204 No Content - ending sync`);
         break;
       }
 
       const data = res.data;
       logger.verbose(
-        `[FETCH_CONTENT_SYNC] Page ${page} - Got ${data.items?.length || 0} items, ${data.deleted?.length || 0} deleted`
+        `[PULL_CONTENT_SYNC] Page ${page} - Got ${data.items?.length || 0} items, ${data.deleted?.length || 0} deleted`
       );
 
       if (data.items && Array.isArray(data.items)) allItems.push(...data.items);
@@ -199,15 +175,15 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
       // Collect base items for three-way merge support
       if (data.baseItems && typeof data.baseItems === 'object') {
         Object.assign(allBaseItems, data.baseItems);
-        logger.verbose(`[FETCH_CONTENT_SYNC] Page ${page} - Got ${Object.keys(data.baseItems).length} base items for merge`);
+        logger.verbose(`[PULL_CONTENT_SYNC] Page ${page} - Got ${Object.keys(data.baseItems).length} base items for merge`);
       }
 
       const newSyncToken = res.headers["x-next-sync-token"] || token;
-      logger.verbose(`[FETCH_CONTENT_SYNC] Next sync token: ${newSyncToken}`);
+      logger.verbose(`[PULL_CONTENT_SYNC] Next sync token: ${newSyncToken}`);
 
       if (!newSyncToken || newSyncToken === token) {
         nextSyncToken = newSyncToken || token;
-        logger.verbose(`[FETCH_CONTENT_SYNC] No new sync token - ending sync`);
+        logger.verbose(`[PULL_CONTENT_SYNC] No new sync token - ending sync`);
         break;
       }
 
@@ -215,13 +191,13 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
       token = newSyncToken;
       page++;
     } catch (error: any) {
-      console.error(`[FETCH_CONTENT_SYNC] Failed on page ${page}:`, error.message);
+      console.error(`[PULL_CONTENT_SYNC] Failed on page ${page}:`, error.message);
       throw error;
     }
   }
 
   logger.verbose(
-    `[FETCH_CONTENT_SYNC] Completed - Total items: ${allItems.length}, deleted: ${allDeleted.length}, base items: ${Object.keys(allBaseItems).length}`
+    `[PULL_CONTENT_SYNC] Completed - Total items: ${allItems.length}, deleted: ${allDeleted.length}, base items: ${Object.keys(allBaseItems).length}`
   );
   return {
     items: allItems,
@@ -229,95 +205,6 @@ async function fetchContentSync(syncToken?: string): Promise<ContentSyncResult> 
     baseItems: allBaseItems,
     nextSyncToken: nextSyncToken || token,
   };
-}
-
-async function fetchMediaSync(syncToken?: string): Promise<MediaSyncResult> {
-  logger.verbose(`[FETCH_MEDIA_SYNC] Starting with syncToken: ${syncToken || "NONE"}`);
-  logger.verbose(`[FETCH_MEDIA_SYNC] Fetching public media (no authentication)`);
-  let allItems: MediaItem[] = [];
-  let allDeleted: MediaDeletedItem[] = [];
-  let token = syncToken || "";
-  let nextSyncToken: string | undefined = undefined;
-  let page = 0;
-
-  while (true) {
-    const url = new URL("/api/media/sync", leadCMSUrl);
-    url.searchParams.set("filter[limit]", "100");
-    url.searchParams.set("syncToken", token);
-
-    logger.verbose(`[FETCH_MEDIA_SYNC] Page ${page}, URL: ${url.toString()}`);
-
-    try {
-      // SECURITY: Never send API key for read operations
-      // Media sync should only return public files
-      const res: AxiosResponse<MediaSyncResponse> = await axios.get(url.toString());
-
-      if (res.status === 204) {
-        logger.verbose(`[FETCH_MEDIA_SYNC] Got 204 No Content - ending sync`);
-        break;
-      }
-
-      const data = res.data;
-      logger.verbose(
-        `[FETCH_MEDIA_SYNC] Page ${page} - Got ${data.items?.length || 0} items, ${data.deleted?.length || 0} deleted`
-      );
-
-      if (data.items && Array.isArray(data.items)) allItems.push(...data.items);
-
-      if (data.deleted && Array.isArray(data.deleted)) {
-        allDeleted.push(...data.deleted);
-      }
-
-      const newSyncToken = res.headers["x-next-sync-token"] || token;
-      logger.verbose(`[FETCH_MEDIA_SYNC] Next sync token: ${newSyncToken}`);
-
-      if (!newSyncToken || newSyncToken === token) {
-        nextSyncToken = newSyncToken || token;
-        logger.verbose(`[FETCH_MEDIA_SYNC] No new sync token - ending sync`);
-        break;
-      }
-
-      nextSyncToken = newSyncToken;
-      token = newSyncToken;
-      page++;
-    } catch (error: any) {
-      console.error(`[FETCH_MEDIA_SYNC] Failed on page ${page}:`, error.message);
-      throw error;
-    }
-  }
-
-  logger.verbose(
-    `[FETCH_MEDIA_SYNC] Completed - Total items: ${allItems.length}, deleted: ${allDeleted.length}`
-  );
-  return {
-    items: allItems,
-    deleted: allDeleted,
-    nextSyncToken: nextSyncToken || token,
-  };
-}
-
-/**
- * Fetch CMS config to check supported entities
- */
-async function fetchCMSConfigForEntities(): Promise<{ content: boolean; media: boolean }> {
-  try {
-    const { setCMSConfig, isContentSupported, isMediaSupported } = await import('../lib/cms-config-types.js');
-
-    const configUrl = new URL('/api/config', leadCMSUrl).toString();
-    const response = await axios.get(configUrl, { timeout: 10000 });
-
-    if (response.data) {
-      setCMSConfig(response.data);
-      return {
-        content: isContentSupported(),
-        media: isMediaSupported()
-      };
-    }
-  } catch (error: any) {
-    console.warn(`[FETCH_CONTENT_SYNC] Could not fetch CMS config: ${error.message}`);
-    console.warn(`[FETCH_CONTENT_SYNC] Assuming content and media are supported (backward compatibility)`);
-  }
-  return { content: false, media: false };
 }
 
 /**
@@ -442,101 +329,46 @@ async function findAndDeleteContentFile(dir: string, idStr: string): Promise<voi
   }
 }
 
-async function main(options: FetchContentOptions = {}): Promise<void> {
-  const { forceOverwrite = false } = options;
+async function main(options: PullContentOptions = {}): Promise<void> {
+  const { forceOverwrite = false, remoteContext: remoteCtx } = options;
+  const effectiveUrl = remoteCtx?.url || leadCMSUrl;
 
   // Log environment configuration for debugging
-  logger.verbose(`[ENV] LeadCMS URL: ${leadCMSUrl}`);
-  logger.verbose(
-    `[ENV] LeadCMS API Key: ${leadCMSApiKey ? `${leadCMSApiKey.substring(0, 8)}...` : "NOT_SET"}`
-  );
+  logger.verbose(`[ENV] LeadCMS URL: ${effectiveUrl}`);
+  if (remoteCtx) {
+    logger.verbose(`[ENV] Remote: ${remoteCtx.name}`);
+  }
   logger.verbose(`[ENV] Default Language: ${defaultLanguage}`);
   logger.verbose(`[ENV] Content Dir: ${CONTENT_DIR}`);
-  logger.verbose(`[ENV] Media Dir: ${MEDIA_DIR}`);
 
-  // Check supported entities
-  logger.verbose(`\n🔍 Checking CMS configuration...`);
-  const { content: contentSupported, media: mediaSupported } = await fetchCMSConfigForEntities();
+  await fs.mkdir(CONTENT_DIR, { recursive: true });
 
-  if (!contentSupported && !mediaSupported) {
-    logger.verbose(`⏭️  Neither Content nor Media entities are supported by this LeadCMS instance - skipping sync`);
-    return;
-  }
+  const typeMap = await fetchContentTypes(effectiveUrl);
 
-  if (!contentSupported) {
-    logger.verbose(`⏭️  Content entity not supported - skipping content sync`);
-  }
-
-  if (!mediaSupported) {
-    logger.verbose(`⏭️  Media entity not supported - skipping media sync`);
-  }
-
-  logger.verbose(`✅ Proceeding with sync\n`);
-
-  // Only create directories for supported entity types
-  if (contentSupported) {
-    await fs.mkdir(CONTENT_DIR, { recursive: true });
-  }
-
-  if (mediaSupported) {
-    await fs.mkdir(MEDIA_DIR, { recursive: true });
-  }
-
-  const typeMap = await fetchContentTypes();
-
-  const { token: lastSyncToken, migrated: contentTokenMigrated } = await readSyncToken();
-  const { token: lastMediaSyncToken, migrated: mediaTokenMigrated } = await readMediaSyncToken();
+  const { token: lastSyncToken, migrated: contentTokenMigrated } = await readSyncToken(remoteCtx);
 
   let items: ContentItem[] = [],
     deleted: number[] = [],
     baseItems: Record<string, ContentItem> = {},
     nextSyncToken: string = "";
 
-  let mediaItems: MediaItem[] = [],
-    mediaDeleted: MediaDeletedItem[] = [],
-    nextMediaSyncToken: string = "";
-
-  // Sync content (only if supported)
-  if (contentSupported) {
-    try {
-      if (lastSyncToken) {
-        logger.verbose(`Syncing content from LeadCMS using sync token: ${lastSyncToken}`);
-        ({ items, deleted, baseItems, nextSyncToken } = await fetchContentSync(lastSyncToken));
-      } else {
-        logger.verbose("No content sync token found. Doing full fetch from LeadCMS...");
-        ({ items, deleted, baseItems, nextSyncToken } = await fetchContentSync(undefined));
-      }
-    } catch (error: any) {
-      console.error(`[MAIN] Failed to fetch content:`, error.message);
-      if (error.response?.status === 401) {
-        console.error(`[MAIN] Authentication failed - check your LEADCMS_API_KEY`);
-      }
-      throw error;
+  try {
+    if (lastSyncToken) {
+      logger.verbose(`Syncing content from LeadCMS using sync token: ${lastSyncToken}`);
+      ({ items, deleted, baseItems, nextSyncToken } = await pullContentSync(lastSyncToken, effectiveUrl));
+    } else {
+      logger.verbose("No content sync token found. Doing full pull from LeadCMS...");
+      ({ items, deleted, baseItems, nextSyncToken } = await pullContentSync(undefined, effectiveUrl));
     }
+  } catch (error: any) {
+    console.error(`[MAIN] Failed to pull content:`, error.message);
+    if (error.response?.status === 401) {
+      console.error(`[MAIN] Authentication failed - check your LEADCMS_API_KEY`);
+    }
+    throw error;
   }
 
-  // Sync media (only if supported)
-  if (mediaSupported) {
-    try {
-      if (lastMediaSyncToken) {
-        logger.verbose(`Syncing media from LeadCMS using sync token: ${lastMediaSyncToken}`);
-        ({ items: mediaItems, deleted: mediaDeleted, nextSyncToken: nextMediaSyncToken } = await fetchMediaSync(lastMediaSyncToken));
-      } else {
-        logger.verbose("No media sync token found. Doing full fetch from LeadCMS...");
-        ({ items: mediaItems, deleted: mediaDeleted, nextSyncToken: nextMediaSyncToken } = await fetchMediaSync(undefined));
-      }
-    } catch (error: any) {
-      console.error(`[MAIN] Failed to fetch media:`, error.message);
-      if (error.response?.status === 401) {
-        console.error(`[MAIN] Authentication failed - check your LEADCMS_API_KEY`);
-      }
-      // Don't throw here, continue with content sync even if media sync fails
-      console.warn(`[MAIN] Continuing without media sync...`);
-    }
-  }
-
-  logger.verbose(`Fetched ${items.length} content items, ${deleted.length} deleted.\x1b[0m`);
-  logger.verbose(`Fetched ${mediaItems.length} media items, ${mediaDeleted.length} deleted.\x1b[0m`);
+  logger.verbose(`Pulled ${items.length} content items, ${deleted.length} deleted.\x1b[0m`);
 
   // Build an ID→filepath index once instead of walking the tree per item.
   // This turns O(items × files) disk reads into O(files + items).
@@ -559,11 +391,57 @@ async function main(options: FetchContentOptions = {}): Promise<void> {
 
   console.log(`📄 Processing content sync (${items.length} updates, ${deleted.length} deletions)...`);
 
+  // Load per-remote metadata for multi-remote support
+  let metadataMap: import('../lib/remote-context.js').MetadataMap | undefined;
+  const rcModule = remoteCtx ? await import('../lib/remote-context.js') : undefined;
+  if (remoteCtx && rcModule) {
+    metadataMap = await rcModule.readMetadataMap(remoteCtx);
+  }
+
+  // Load defaultRemote's maps so frontmatter always reflects the default
+  // remote's ids and timestamps, even when pulling from another remote.
+  let defaultMetadataMap: import('../lib/remote-context.js').MetadataMap | undefined;
+  if (remoteCtx && !remoteCtx.isDefault && rcModule) {
+    const cfg = getConfig();
+    if (cfg.defaultRemote) {
+      const defaultCtx = rcModule.resolveRemote(cfg.defaultRemote, cfg);
+      defaultMetadataMap = await rcModule.readMetadataMap(defaultCtx);
+    }
+  }
+
   let processedContent = 0;
 
   for (const content of items) {
     if (content && typeof content === "object") {
       const idStr = content.id != null ? String(content.id) : undefined;
+
+      // Update per-remote metadata with this content item's data
+      if (remoteCtx && rcModule && metadataMap && content.slug && content.language) {
+        if (content.id != null) {
+          rcModule.setRemoteId(metadataMap, content.language || defaultLanguage, content.slug, content.id);
+        }
+        rcModule.setMetadataForContent(metadataMap, content.language || defaultLanguage, content.slug, {
+          createdAt: content.createdAt,
+          updatedAt: content.updatedAt,
+        });
+      }
+
+      // For non-default remotes, replace server-generated fields with the
+      // defaultRemote's values so frontmatter always reflects prod ids/dates.
+      // The current remote's values are already stored in its per-remote maps.
+      let contentToSave = content;
+      if (remoteCtx && !remoteCtx.isDefault) {
+        const { id, createdAt, updatedAt, ...rest } = content;
+        const lang = content.language || defaultLanguage;
+        const defaultId = defaultMetadataMap?.content[lang]?.[content.slug]?.id;
+        const defaultMeta = defaultMetadataMap?.content[lang]?.[content.slug];
+        contentToSave = {
+          ...(defaultId != null ? { id: defaultId } : {}),
+          ...(defaultMeta?.createdAt ? { createdAt: defaultMeta.createdAt } : {}),
+          ...(defaultMeta?.updatedAt ? { updatedAt: defaultMeta.updatedAt } : {}),
+          ...rest,
+        } as ContentItem;
+      }
 
       // Determine the file path where this content would be saved
       const contentConfig = getConfig();
@@ -597,13 +475,15 @@ async function main(options: FetchContentOptions = {}): Promise<void> {
       const baseContent = idStr ? baseItems[idStr] : undefined;
 
       if (!forceOverwrite && localContent && baseContent && hasBaseItems) {
-        // Transform both base and remote to local file format for comparison
+        // Transform both base and remote to local file format for comparison.
+        // Use contentToSave (which may have id/timestamps stripped for non-default remotes)
+        // so the merge result matches what will actually be written.
         const baseTransformed = await transformRemoteToLocalFormat(baseContent, contentTypeMap);
-        const remoteTransformed = await transformRemoteToLocalFormat(content, contentTypeMap);
+        const remoteTransformed = await transformRemoteToLocalFormat(contentToSave, contentTypeMap);
 
         if (!isLocallyModified(baseTransformed, localContent)) {
           // Local file is unchanged from base — safe to overwrite with remote
-          await saveContentFile({ content, typeMap, contentDir: CONTENT_DIR });
+          await saveContentFile({ content: contentToSave, typeMap, contentDir: CONTENT_DIR });
           overwrittenCount++;
         } else {
           // Local file was modified — perform three-way merge
@@ -629,7 +509,7 @@ async function main(options: FetchContentOptions = {}): Promise<void> {
         }
       } else {
         // No base available, file is new, or forceOverwrite — overwrite with remote
-        await saveContentFile({ content, typeMap, contentDir: CONTENT_DIR });
+        await saveContentFile({ content: contentToSave, typeMap, contentDir: CONTENT_DIR });
         if (localContent) {
           overwrittenCount++;
         } else {
@@ -656,6 +536,12 @@ async function main(options: FetchContentOptions = {}): Promise<void> {
     if (conflictCount > 0) console.log(`   ⚠️  Conflicts (need manual resolution): ${conflictCount}`);
   }
 
+  // Persist per-remote metadata after processing all content items
+  if (remoteCtx && rcModule && metadataMap && items.length > 0) {
+    await rcModule.writeMetadataMap(remoteCtx, metadataMap);
+    logger.verbose(`[PULL] Updated metadata-map for remote "${remoteCtx.name}"`);
+  }
+
   // Remove deleted content files from all language directories
   if (deleted.length > 0) {
     console.log(`🗑️  Removing deleted content files (${deleted.length})...`);
@@ -668,85 +554,25 @@ async function main(options: FetchContentOptions = {}): Promise<void> {
     console.log(`No content changes detected.`);
   }
 
-  // Handle media sync results
-  console.log(`🖼️  Processing media sync (${mediaItems.length} downloads, ${mediaDeleted.length} deletions)...`);
-  if (mediaItems.length > 0) {
-    logger.verbose(`\nProcessing media changes...`);
-
-    // Download new/updated media files
-    let downloaded = 0;
-    let attemptedDownloads = 0;
-    for (const mediaItem of mediaItems) {
-      if (mediaItem.location) {
-        attemptedDownloads++;
-        if (
-          attemptedDownloads === 1
-          || attemptedDownloads % MEDIA_PROGRESS_LOG_INTERVAL === 0
-          || attemptedDownloads === mediaItems.length
-        ) {
-          console.log(`   ⬇️  Media download progress: ${attemptedDownloads}/${mediaItems.length}`);
-        }
-
-        const relPath = mediaItem.location.replace(/^\/api\/media\//, "");
-        const destPath = path.join(MEDIA_DIR, relPath);
-        const didDownload = await downloadMediaFileDirect(mediaItem.location, destPath, leadCMSUrl || "", leadCMSApiKey || "");
-        if (didDownload) {
-          logger.verbose(`Downloaded: ${mediaItem.location} -> ${destPath}`);
-          downloaded++;
-        }
-      }
-    }
-    console.log(`Done. ${downloaded} media files downloaded.`);
-  } else if (mediaDeleted.length === 0) {
-    console.log(`No media changes detected.`);
-  }
-
-  // Remove deleted media files from local filesystem
-  if (mediaDeleted.length > 0) {
-    console.log(`Removing ${mediaDeleted.length} deleted media files...`);
-    let removedCount = 0;
-    for (const deletedMedia of mediaDeleted) {
-      const relPath = deletedMedia.scopeUid
-        ? path.join(deletedMedia.scopeUid, deletedMedia.name)
-        : deletedMedia.name;
-      const fullPath = path.join(MEDIA_DIR, relPath);
-      try {
-        await fs.unlink(fullPath);
-        logger.verbose(`Deleted media: ${fullPath}`);
-        removedCount++;
-      } catch (err: any) {
-        if (err.code !== 'ENOENT') {
-          console.warn(`Warning: Could not delete media file ${fullPath}:`, err.message);
-        }
-      }
-    }
-    console.log(`Done. ${removedCount} media files removed.`);
-  }
-
-  // Save new sync tokens
+  // Save new sync token
   if (nextSyncToken) {
-    await writeSyncToken(nextSyncToken);
+    await writeSyncToken(nextSyncToken, remoteCtx);
     logger.verbose(`Content sync token updated: ${nextSyncToken}`);
   }
 
-  if (nextMediaSyncToken) {
-    await writeMediaSyncToken(nextMediaSyncToken);
-    logger.verbose(`Media sync token updated: ${nextMediaSyncToken}`);
-  }
-
-  // Clean up legacy sync tokens after a successful pull
+  // Clean up legacy sync token after a successful pull
   if (contentTokenMigrated) {
     await cleanupLegacySyncToken();
     logger.verbose(`[SYNC] Removed legacy content sync token`);
-  }
-  if (mediaTokenMigrated) {
-    await cleanupLegacyMediaSyncToken();
-    logger.verbose(`[SYNC] Removed legacy media sync token`);
+    // Also clean up old single-remote path when migrating to multi-remote
+    if (remoteCtx) {
+      await unlinkSafe(SYNC_TOKEN_PATH);
+    }
   }
 }
 
 // Export the main function so it can be imported by other modules
-export { main as fetchLeadCMSContent };
+export { main as pullLeadCMSContent };
 
 // Export internal functions for testing
 export { findAndDeleteContentFile };
@@ -756,4 +582,4 @@ export { buildContentIdIndex, deleteContentFilesById, extractContentId };
 // This file now only exports the function for programmatic use
 
 // Export types
-export type { ContentSyncResult, MediaSyncResult, MediaItem, MediaDeletedItem };
+export type { ContentSyncResult };

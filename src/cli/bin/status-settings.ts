@@ -8,9 +8,11 @@ import { statusSettings } from '../../scripts/push-settings.js';
 import { resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
+import { parseRemoteFlag } from './remote-flag.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+parseRemoteFlag(args);
 
 // Parse --name flag
 let targetName: string | undefined;

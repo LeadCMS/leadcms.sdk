@@ -15,6 +15,10 @@ import {
 } from "../lib/email-template-transformation.js";
 import { threeWayMerge, isLocallyModified } from "../lib/content-merge.js";
 import { leadCMSDataService } from "../lib/data-service.js";
+import { syncTokenPath, type RemoteContext } from "../lib/remote-context.js";
+import type { MetadataMap } from "../lib/remote-context.js";
+import { getConfig } from "../lib/config.js";
+import { logger } from "../lib/logger.js";
 
 interface EmailTemplateSyncResponse {
   items?: EmailTemplateRemoteData[];
@@ -39,18 +43,47 @@ async function readFileOrUndefined(filePath: string): Promise<string | undefined
   }
 }
 
-async function writeSyncToken(token: string): Promise<void> {
+/**
+ * Read the email-templates sync token.
+ * When remoteCtx is provided, reads from the remote-specific state directory.
+ */
+async function readSyncToken(remoteCtx?: RemoteContext): Promise<{ token: string | undefined; migrated: boolean }> {
+  if (remoteCtx) {
+    const tokenPath = syncTokenPath(remoteCtx, "email-templates");
+    const token = await readFileOrUndefined(tokenPath);
+    if (token) return { token, migrated: false };
+
+    // Migration: check old single-remote path
+    const legacyToken = await readFileOrUndefined(SYNC_TOKEN_PATH);
+    if (legacyToken) {
+      logger.verbose(`[SYNC] Migrating email-templates sync token to remote "${remoteCtx.name}"`);
+      return { token: legacyToken, migrated: true };
+    }
+    return { token: undefined, migrated: false };
+  }
+
+  const token = await readFileOrUndefined(SYNC_TOKEN_PATH);
+  return { token, migrated: false };
+}
+
+async function writeSyncToken(token: string, remoteCtx?: RemoteContext): Promise<void> {
+  if (remoteCtx) {
+    const tokenPath = syncTokenPath(remoteCtx, "email-templates");
+    await fs.mkdir(path.dirname(tokenPath), { recursive: true });
+    await fs.writeFile(tokenPath, token, "utf8");
+    return;
+  }
   await fs.mkdir(path.dirname(SYNC_TOKEN_PATH), { recursive: true });
   await fs.writeFile(SYNC_TOKEN_PATH, token, "utf8");
 }
 
-async function fetchEmailTemplateSync(syncToken?: string): Promise<EmailTemplateSyncResult> {
+async function pullEmailTemplateSync(syncToken?: string): Promise<EmailTemplateSyncResult> {
   if (!leadCMSUrl) {
     throw new Error("LeadCMS URL is not configured.");
   }
 
   if (!leadCMSApiKey) {
-    throw new Error("LeadCMS API key is required to fetch email templates.");
+    throw new Error("LeadCMS API key is required to pull email templates.");
   }
 
   let allItems: EmailTemplateRemoteData[] = [];
@@ -219,10 +252,28 @@ async function deleteEmailTemplateFilesById(index: Map<string, string[]>, id: st
   index.delete(id);
 }
 
-export async function fetchLeadCMSEmailTemplates(): Promise<void> {
-  const lastSyncToken = await readFileOrUndefined(SYNC_TOKEN_PATH);
+export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Promise<void> {
+  const { token: lastSyncToken } = await readSyncToken(remoteCtx);
 
-  const { items, deleted, baseItems, nextSyncToken } = await fetchEmailTemplateSync(lastSyncToken);
+  const { items, deleted, baseItems, nextSyncToken } = await pullEmailTemplateSync(lastSyncToken);
+
+  // Load per-remote metadata for multi-remote support
+  let metadataMap: MetadataMap | undefined;
+  const rcModule = remoteCtx ? await import('../lib/remote-context.js') : undefined;
+  if (remoteCtx && rcModule) {
+    metadataMap = await rcModule.readMetadataMap(remoteCtx);
+  }
+
+  // Load defaultRemote's maps so frontmatter always reflects the default
+  // remote's ids and timestamps, even when pulling from another remote.
+  let defaultMetadataMap: MetadataMap | undefined;
+  if (remoteCtx && !remoteCtx.isDefault && rcModule) {
+    const cfg = getConfig();
+    if (cfg.defaultRemote) {
+      const defaultCtx = rcModule.resolveRemote(cfg.defaultRemote, cfg);
+      defaultMetadataMap = await rcModule.readMetadataMap(defaultCtx);
+    }
+  }
 
   // The sync API returns emailGroup: null — resolve from the groups endpoint
   if (items.length > 0) {
@@ -263,6 +314,35 @@ export async function fetchLeadCMSEmailTemplates(): Promise<void> {
     const idStr = template.id != null ? String(template.id) : undefined;
     const filePath = getEmailTemplateFilePath(template);
 
+    // Update per-remote metadata with this template's data
+    if (remoteCtx && rcModule && metadataMap && template.name && template.language) {
+      if (template.id != null) {
+        rcModule.setEmailTemplateRemoteId(metadataMap, template.language || defaultLanguage, template.name, template.id);
+      }
+      rcModule.setMetadataForEmailTemplate(metadataMap, template.language || defaultLanguage, template.name, {
+        createdAt: template.createdAt,
+        updatedAt: template.updatedAt ?? undefined,
+      });
+    }
+
+    // For non-default remotes, replace server-generated fields with the
+    // defaultRemote's values so frontmatter always reflects prod ids/dates.
+    // The current remote's values are already stored in its per-remote maps.
+    let templateToSave = template;
+    if (remoteCtx && !remoteCtx.isDefault) {
+      const { id, createdAt, updatedAt, ...rest } = template;
+      const lang = template.language || defaultLanguage;
+      const name = template.name || '';
+      const defaultId = defaultMetadataMap?.emailTemplates?.[lang]?.[name]?.id;
+      const defaultMeta = defaultMetadataMap?.emailTemplates?.[lang]?.[name];
+      templateToSave = {
+        ...(defaultId != null ? { id: defaultId } : {}),
+        ...(defaultMeta?.createdAt ? { createdAt: defaultMeta.createdAt } : {}),
+        ...(defaultMeta?.updatedAt ? { updatedAt: defaultMeta.updatedAt } : {}),
+        ...rest,
+      } as EmailTemplateRemoteData;
+    }
+
     let localContent: string | null = null;
     try {
       localContent = await fs.readFile(filePath, "utf8");
@@ -278,7 +358,7 @@ export async function fetchLeadCMSEmailTemplates(): Promise<void> {
 
     if (localContent && baseTemplate && hasBaseItems) {
       const baseTransformed = transformEmailTemplateRemoteToLocalFormat(baseTemplate);
-      const remoteTransformed = transformEmailTemplateRemoteToLocalFormat(template);
+      const remoteTransformed = transformEmailTemplateRemoteToLocalFormat(templateToSave);
 
       if (!isLocallyModified(baseTransformed, localContent)) {
         await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -298,7 +378,7 @@ export async function fetchLeadCMSEmailTemplates(): Promise<void> {
         }
       }
     } else {
-      await saveEmailTemplateFile(template);
+      await saveEmailTemplateFile(templateToSave);
       if (localContent) {
         overwrittenCount++;
       } else {
@@ -319,9 +399,15 @@ export async function fetchLeadCMSEmailTemplates(): Promise<void> {
     await deleteEmailTemplateFilesById(idIndex, String(id));
   }
 
+  // Persist per-remote metadata after processing all templates
+  if (remoteCtx && rcModule && metadataMap && items.length > 0) {
+    await rcModule.writeMetadataMap(remoteCtx, metadataMap);
+    logger.verbose(`[PULL] Updated metadata-map for remote "${remoteCtx.name}"`);
+  }
+
   if (nextSyncToken) {
-    await writeSyncToken(nextSyncToken);
+    await writeSyncToken(nextSyncToken, remoteCtx);
   }
 }
 
-export { buildEmailTemplateIdIndex, deleteEmailTemplateFilesById, saveEmailTemplateFile, fetchEmailTemplateSync };
+export { buildEmailTemplateIdIndex, deleteEmailTemplateFilesById, saveEmailTemplateFile, pullEmailTemplateSync };

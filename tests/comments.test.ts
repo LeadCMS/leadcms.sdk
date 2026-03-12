@@ -51,7 +51,7 @@ import {
   loadCommentsForEntity,
   saveCommentsForEntity,
   deleteComment,
-} from "../src/scripts/fetch-leadcms-comments.js";
+} from "../src/scripts/pull-leadcms-comments.js";
 
 describe("Comments Feature", () => {
   beforeEach(async () => {

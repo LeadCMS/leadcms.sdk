@@ -1,5 +1,5 @@
 /**
- * Tests for fetch-leadcms-content.ts - findAndDeleteContentFile and indexed deletion
+ * Tests for pull-leadcms-content.ts - findAndDeleteContentFile and indexed deletion
  */
 
 import fs from 'fs/promises';
@@ -20,7 +20,7 @@ jest.mock('../src/lib/data-service.js', () => ({
 
 jest.mock('axios', () => createAxiosMock());
 
-import { findAndDeleteContentFile, buildContentIdIndex, deleteContentFilesById, extractContentId } from '../src/scripts/fetch-leadcms-content';
+import { findAndDeleteContentFile, buildContentIdIndex, deleteContentFilesById, extractContentId } from '../src/scripts/pull-leadcms-content';
 
 describe('findAndDeleteContentFile', () => {
   let tmpDir: string;

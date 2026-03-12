@@ -29,10 +29,9 @@
     "test:coverage": "jest --coverage",
     "test:cli": "npm run build && node dist/cli/index.js --help > /dev/null && echo '✅ CLI tests passed'",
     "prepublishOnly": "npm run build",
-    "leadcms:pull": "node dist/scripts/fetch-leadcms-content.js",
+    "leadcms:pull": "node dist/scripts/pull-leadcms-content.js",
     "leadcms:push": "node dist/scripts/push-leadcms-content.js",
     "leadcms:status": "node dist/scripts/status-leadcms-content.js",
-    "leadcms:fetch": "node dist/scripts/fetch-leadcms-content.js",
     "leadcms:watch": "node dist/scripts/sse-watcher.js",
     "leadcms:generate-env": "node dist/scripts/generate-env-js.js"
   },

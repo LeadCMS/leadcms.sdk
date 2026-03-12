@@ -1,8 +1,9 @@
 import fs from "fs";
 import path from "path";
+import type { RemoteConfig } from "./remote-context.js";
 
 export interface LeadCMSConfig {
-  /** LeadCMS instance URL */
+  /** LeadCMS instance URL (single-remote mode) */
   url: string;
   /** LeadCMS API key (optional - when not provided, only public content is accessible) */
   apiKey?: string;
@@ -22,6 +23,10 @@ export interface LeadCMSConfig {
   enableDrafts: boolean;
   /** Force preview mode on/off (overrides environment detection) */
   preview?: boolean;
+  /** Named remote CMS instances (multi-remote mode) */
+  remotes?: Record<string, RemoteConfig>;
+  /** Default remote name (used when --remote is not specified) */
+  defaultRemote?: string;
 }
 
 let globalConfig: LeadCMSConfig | null = null;
@@ -89,6 +94,8 @@ export function loadConfig(): LeadCMSConfig {
     settingsDir: mergedConfig.settingsDir || DEFAULT_CONFIG.settingsDir!,
     enableDrafts: mergedConfig.enableDrafts || DEFAULT_CONFIG.enableDrafts!,
     preview: mergedConfig.preview, // Optional - undefined if not provided
+    remotes: mergedConfig.remotes,
+    defaultRemote: mergedConfig.defaultRemote,
   };
 
   validateConfig(cleanConfig);
@@ -260,12 +267,42 @@ function loadConfigFromEnv(): Partial<LeadCMSConfig> {
 function validateConfig(config: LeadCMSConfig): void {
   const errors: string[] = [];
 
-  if (!config.url) {
-    errors.push("Missing required configuration: url");
-  }
+  // In multi-remote mode, url is optional (comes from remotes block)
+  if (config.remotes && Object.keys(config.remotes).length > 0) {
+    // Validate remotes
+    for (const [name, remote] of Object.entries(config.remotes)) {
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) {
+        errors.push(`Invalid remote name "${name}": must be lowercase alphanumeric with hyphens, starting with a letter or digit`);
+      }
+      if (!remote.url) {
+        errors.push(`Remote "${name}" is missing required "url" field`);
+      } else if (!isValidUrl(remote.url)) {
+        errors.push(`Remote "${name}" has invalid URL: ${remote.url}`);
+      }
+    }
 
-  if (config.url && !isValidUrl(config.url)) {
-    errors.push("Invalid URL format: url");
+    // Validate defaultRemote
+    if (config.defaultRemote) {
+      if (!config.remotes[config.defaultRemote]) {
+        errors.push(`"defaultRemote" references "${config.defaultRemote}" but no such remote is configured`);
+      }
+    } else {
+      errors.push(`"remotes" is configured but "defaultRemote" is not set. Add "defaultRemote" to your config.`);
+    }
+
+    // Warn if flat url/apiKey also exist (they are ignored in multi-remote mode)
+    if (config.url && DEBUG_LOGGING) {
+      console.warn(`[LeadCMS] Both "remotes" and flat "url" are configured. The flat "url" will be ignored in multi-remote mode.`);
+    }
+  } else {
+    // Single-remote mode — url is required
+    if (!config.url) {
+      errors.push("Missing required configuration: url");
+    }
+
+    if (config.url && !isValidUrl(config.url)) {
+      errors.push("Invalid URL format: url");
+    }
   }
 
   if (errors.length > 0) {

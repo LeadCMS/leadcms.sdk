@@ -743,7 +743,7 @@ Test page content.`
       expect(transformed).toContain('title: Test Blog');
       expect(transformed).toContain('author: Test Author');
       expect(transformed).toContain('allowComments: false'); // false is not null
-      expect(transformed).toContain('tags: []'); // empty array is not null
+      expect(transformed).not.toContain('tags:'); // empty array is filtered out
       expect(transformed).toContain("coverImageUrl: ''"); // empty string is not null
     });
 

@@ -260,6 +260,102 @@ describe('Config Module', () => {
       expect(config.defaultLanguage).toBe('en');
       expect(config.contentDir).toBe('custom/content');
     });
+
+    it('should NOT require flat url when remotes block is configured', () => {
+      delete process.env.LEADCMS_URL;
+      delete process.env.NEXT_PUBLIC_LEADCMS_URL;
+
+      const testConfig = {
+        remotes: {
+          production: { url: 'https://prod.leadcms.ai' },
+        },
+        defaultRemote: 'production',
+      };
+      fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
+
+      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      // Should not throw — url is optional in multi-remote mode
+      expect(() => getConfigFresh()).not.toThrow();
+    });
+
+    it('should throw when remote name has invalid characters', () => {
+      delete process.env.LEADCMS_URL;
+
+      const testConfig = {
+        remotes: {
+          'PROD_SERVER': { url: 'https://prod.leadcms.ai' },
+        },
+        defaultRemote: 'PROD_SERVER',
+      };
+      fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
+
+      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      expect(() => getConfigFresh()).toThrow(/Invalid remote name/);
+    });
+
+    it('should throw when remote is missing url', () => {
+      delete process.env.LEADCMS_URL;
+
+      const testConfig = {
+        remotes: {
+          production: {},
+        },
+        defaultRemote: 'production',
+      };
+      fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
+
+      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      expect(() => getConfigFresh()).toThrow(/missing required "url" field/);
+    });
+
+    it('should throw when defaultRemote references unknown remote', () => {
+      delete process.env.LEADCMS_URL;
+
+      const testConfig = {
+        remotes: {
+          production: { url: 'https://prod.leadcms.ai' },
+        },
+        defaultRemote: 'staging',
+      };
+      fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
+
+      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      expect(() => getConfigFresh()).toThrow(/defaultRemote.*references.*staging/);
+    });
+
+    it('should throw when remotes is configured but defaultRemote is not set', () => {
+      delete process.env.LEADCMS_URL;
+
+      const testConfig = {
+        remotes: {
+          production: { url: 'https://prod.leadcms.ai' },
+        },
+      };
+      fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
+
+      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      expect(() => getConfigFresh()).toThrow(/defaultRemote.*is not set/);
+    });
+
+    it('should load config with valid remotes block', () => {
+      delete process.env.LEADCMS_URL;
+
+      const testConfig = {
+        remotes: {
+          production: { url: 'https://prod.leadcms.ai' },
+          develop: { url: 'https://dev.leadcms.ai' },
+        },
+        defaultRemote: 'production',
+      };
+      fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
+
+      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const config = getConfigFresh();
+
+      expect(config.remotes).toBeDefined();
+      expect(config.remotes!.production.url).toBe('https://prod.leadcms.ai');
+      expect(config.defaultRemote).toBe('production');
+    });
   });
 
   describe('Default Values', () => {

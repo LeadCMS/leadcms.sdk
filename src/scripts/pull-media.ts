@@ -10,13 +10,17 @@ import { setCMSConfig, isMediaSupported } from "../lib/cms-config-types.js";
 import { resetMediaState } from "./pull-all.js";
 import { logger } from "../lib/logger.js";
 
+import type { RemoteContext } from "../lib/remote-context.js";
+
 interface PullMediaOptions {
   /** When true, delete all local media files and sync tokens before pulling, effectively doing a fresh pull. */
   reset?: boolean;
+  /** Remote context for multi-remote support. */
+  remoteContext?: RemoteContext;
 }
 
 /**
- * Main function - currently media is fetched as part of content sync
+ * Main function - currently media is pulled as part of content sync
  * This is a placeholder for future dedicated media sync
  */
 async function main(options: PullMediaOptions = {}): Promise<void> {
@@ -51,9 +55,9 @@ async function main(options: PullMediaOptions = {}): Promise<void> {
     console.warn(`⚠️  Assuming media is supported (backward compatibility)\n`);
   }
 
-  // Import and run content fetch (which includes media)
-  const { fetchLeadCMSContent } = await import('./fetch-leadcms-content.js');
-  await fetchLeadCMSContent();
+  // Pull media
+  const { pullLeadCMSMedia } = await import('./pull-leadcms-media.js');
+  await pullLeadCMSMedia({ remoteContext: options.remoteContext });
 
   console.log(`\n✨ Media pull completed!\n`);
 }

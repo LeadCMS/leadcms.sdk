@@ -5,6 +5,7 @@
 import { config as dotenvConfig } from 'dotenv';
 import { getConfig } from '../lib/config.js';
 import { authenticate, saveTokenToEnv } from '../lib/auth.js';
+import { resolveRemote } from '../lib/remote-context.js';
 import axios from 'axios';
 import * as readline from 'readline';
 
@@ -28,18 +29,49 @@ function prompt(question: string): Promise<string> {
   });
 }
 
+function parseRemoteArg(args: string[]): string | undefined {
+  const idx = args.findIndex(arg => arg === '--remote' || arg === '-r');
+  if (idx === -1) {
+    return undefined;
+  }
+
+  const name = args[idx + 1];
+  if (!name || name.startsWith('-')) {
+    throw new Error('--remote requires a remote name (e.g. --remote production)');
+  }
+
+  return name;
+}
+
+function remoteApiKeyEnvName(remoteName: string): string {
+  return `LEADCMS_REMOTE_${remoteName.toUpperCase().replace(/-/g, '_')}_API_KEY`;
+}
+
 /**
  * Interactive login flow
  */
-async function main(): Promise<void> {
+async function main(args: string[] = []): Promise<void> {
   let leadCMSUrl: string | undefined;
+  let selectedRemoteName: string | undefined;
+  let shouldAlsoSaveGenericKey = false;
+  const requestedRemote = parseRemoteArg(args);
 
-  // Try to get URL from config file first
   try {
     const config = getConfig();
-    leadCMSUrl = config.url;
+
+    if (config.remotes && Object.keys(config.remotes).length > 0) {
+      const remoteCtx = resolveRemote(requestedRemote);
+      leadCMSUrl = remoteCtx.url;
+      selectedRemoteName = remoteCtx.name;
+      shouldAlsoSaveGenericKey = remoteCtx.isDefault;
+    } else {
+      leadCMSUrl = config.url || process.env.LEADCMS_URL;
+    }
   } catch (error) {
-    // Config file not found or invalid, try environment variable
+    // Config file not found/invalid; fallback to env for URL only when no explicit remote is requested.
+    if (requestedRemote) {
+      throw error;
+    }
     leadCMSUrl = process.env.LEADCMS_URL;
   }
 
@@ -56,9 +88,18 @@ async function main(): Promise<void> {
     const { token, user } = await authenticate(leadCMSUrl, prompt);
 
     // Save to .env
-    saveTokenToEnv(token);
+    if (selectedRemoteName) {
+      const remoteEnvKey = remoteApiKeyEnvName(selectedRemoteName);
+      saveTokenToEnv(token, remoteEnvKey);
+      if (shouldAlsoSaveGenericKey) {
+        saveTokenToEnv(token, 'LEADCMS_API_KEY');
+      }
+      console.log(`✅ Token verified and saved to .env file (${remoteEnvKey})!`);
+    } else {
+      saveTokenToEnv(token);
+      console.log('✅ Token verified and saved to .env file!');
+    }
 
-    console.log('✅ Token verified and saved to .env file!');
     console.log(`\n👤 Successfully logged in as: ${user.displayName || user.userName}`);
     console.log(`   Email: ${user.email}`);
 
@@ -89,3 +130,4 @@ async function main(): Promise<void> {
 // This file now only exports the function for programmatic use
 
 export { main as loginLeadCMS };
+export { parseRemoteArg, remoteApiKeyEnvName };

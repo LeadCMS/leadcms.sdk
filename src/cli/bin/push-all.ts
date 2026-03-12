@@ -13,9 +13,11 @@ import { pushSettings } from '../../scripts/push-settings.js';
 import { requireAuthenticatedUser } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
+import { parseRemoteFlag } from './remote-flag.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+const remoteContext = parseRemoteFlag(args);
 
 // Parse common flags
 const force = args.includes('--force') || args.includes('-f');
@@ -65,7 +67,8 @@ async function pushAll() {
       targetId,
       targetSlug,
       dryRun,
-      allowDelete
+      allowDelete,
+      remoteContext
     });
 
     console.log('\n📧 Pushing email templates...');

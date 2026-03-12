@@ -482,8 +482,8 @@ describe('Sync token save location', () => {
 
     harness.addContentSync([article], [], 'content-token-abc');
 
-    const { fetchLeadCMSContent } = await import('../src/scripts/fetch-leadcms-content');
-    await fetchLeadCMSContent();
+    const { pullLeadCMSContent } = await import('../src/scripts/pull-leadcms-content');
+    await pullLeadCMSContent();
 
     // Token should be at contentDir/.sync-token
     const token = await fsPromises.readFile(contentSyncTokenPath, 'utf8');
@@ -500,8 +500,8 @@ describe('Sync token save location', () => {
       'media-token-xyz'
     );
 
-    const { fetchLeadCMSContent } = await import('../src/scripts/fetch-leadcms-content');
-    await fetchLeadCMSContent();
+    const { pullLeadCMSMedia } = await import('../src/scripts/pull-leadcms-media');
+    await pullLeadCMSMedia();
 
     // Token should be at mediaDir/.sync-token
     const token = await fsPromises.readFile(mediaSyncTokenPath, 'utf8');
@@ -525,8 +525,8 @@ describe('Sync token save location', () => {
 
     harness.addContentSync([article], [], 'sibling-token');
 
-    const { fetchLeadCMSContent } = await import('../src/scripts/fetch-leadcms-content');
-    await fetchLeadCMSContent();
+    const { pullLeadCMSContent } = await import('../src/scripts/pull-leadcms-content');
+    await pullLeadCMSContent();
 
     // The parent dir should NOT contain any sync-token.txt files
     const parentDir = path.dirname(contentDir);
@@ -563,8 +563,8 @@ describe('Legacy sync token migration', () => {
 
     harness.addContentSync([article], [], 'new-token-after-migration');
 
-    const { fetchLeadCMSContent } = await import('../src/scripts/fetch-leadcms-content');
-    await fetchLeadCMSContent();
+    const { pullLeadCMSContent } = await import('../src/scripts/pull-leadcms-content');
+    await pullLeadCMSContent();
 
     // After migration + successful pull, new token should be written
     const newToken = await fsPromises.readFile(contentSyncTokenPath, 'utf8');
@@ -584,8 +584,8 @@ describe('Legacy sync token migration', () => {
       'new-media-token-after-migration'
     );
 
-    const { fetchLeadCMSContent } = await import('../src/scripts/fetch-leadcms-content');
-    await fetchLeadCMSContent();
+    const { pullLeadCMSMedia } = await import('../src/scripts/pull-leadcms-media');
+    await pullLeadCMSMedia();
 
     // After migration + successful pull, new token should be written
     const newToken = await fsPromises.readFile(mediaSyncTokenPath, 'utf8');
@@ -615,8 +615,8 @@ describe('Legacy sync token migration', () => {
 
     harness.addContentSync([article], [], 'updated-token');
 
-    const { fetchLeadCMSContent } = await import('../src/scripts/fetch-leadcms-content');
-    await fetchLeadCMSContent();
+    const { pullLeadCMSContent } = await import('../src/scripts/pull-leadcms-content');
+    await pullLeadCMSContent();
 
     // New token should be updated
     const token = await fsPromises.readFile(contentSyncTokenPath, 'utf8');
@@ -638,8 +638,8 @@ describe('Legacy sync token migration', () => {
 
     harness.addContentSync([article], [], 'fresh-token');
 
-    const { fetchLeadCMSContent } = await import('../src/scripts/fetch-leadcms-content');
-    await fetchLeadCMSContent();
+    const { pullLeadCMSContent } = await import('../src/scripts/pull-leadcms-content');
+    await pullLeadCMSContent();
 
     // Token should be written to new location
     const token = await fsPromises.readFile(contentSyncTokenPath, 'utf8');

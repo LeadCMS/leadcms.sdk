@@ -7,23 +7,26 @@ import "dotenv/config";
 import axios from "axios";
 import { leadCMSUrl, leadCMSApiKey, EMAIL_TEMPLATES_DIR } from "./leadcms-helpers.js";
 import { setCMSConfig, isEmailTemplatesSupported } from "../lib/cms-config-types.js";
-import { fetchLeadCMSEmailTemplates, buildEmailTemplateIdIndex, deleteEmailTemplateFilesById, saveEmailTemplateFile } from "./fetch-leadcms-email-templates.js";
+import { pullLeadCMSEmailTemplates, buildEmailTemplateIdIndex, deleteEmailTemplateFilesById, saveEmailTemplateFile } from "./pull-leadcms-email-templates.js";
 import { resetEmailTemplatesState } from "./pull-all.js";
 import { logger } from "../lib/logger.js";
+import type { RemoteContext } from "../lib/remote-context.js";
 
 interface PullEmailTemplatesOptions {
   targetId?: string;
   /** When true, delete all local email template files and sync token before pulling. */
   reset?: boolean;
+  /** Optional remote context for multi-remote sync token isolation. */
+  remoteContext?: RemoteContext;
 }
 
 async function main(options: PullEmailTemplatesOptions = {}): Promise<void> {
-  const { targetId, reset } = options;
+  const { targetId, reset, remoteContext } = options;
   console.log(`\n📧 LeadCMS Pull Email Templates\n`);
 
   if (reset) {
     console.log(`🔄 Resetting email templates state...\n`);
-    await resetEmailTemplatesState();
+    await resetEmailTemplatesState(remoteContext);
   }
 
   if (targetId) {
@@ -90,7 +93,7 @@ async function main(options: PullEmailTemplatesOptions = {}): Promise<void> {
     console.warn(`⚠️  Assuming email templates are supported (backward compatibility)\n`);
   }
 
-  await fetchLeadCMSEmailTemplates();
+  await pullLeadCMSEmailTemplates(remoteContext);
 
   console.log(`\n✨ Email templates pull completed!\n`);
 }

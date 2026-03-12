@@ -15,6 +15,7 @@ import type {
 import { getConfig } from "../lib/config.js";
 import { isValidLocaleCode } from "../lib/locale-utils.js";
 import { logger } from "../lib/logger.js";
+import { syncTokenPath, type RemoteContext } from "../lib/remote-context.js";
 
 // Load config to get commentsDir
 const config = getConfig();
@@ -29,8 +30,27 @@ const LEGACY_COMMENT_SYNC_TOKEN_PATH = path.join(path.dirname(COMMENTS_DIR), "co
 /**
  * Read the last comment sync token from disk.
  * Checks new location first, then falls back to legacy for migration.
+ * When remoteCtx is provided, reads from the remote-specific state directory.
  */
-async function readCommentSyncToken(): Promise<{ token: string | undefined; migrated: boolean }> {
+async function readCommentSyncToken(remoteCtx?: RemoteContext): Promise<{ token: string | undefined; migrated: boolean }> {
+  if (remoteCtx) {
+    const tokenPath = syncTokenPath(remoteCtx, "comments");
+    try {
+      const token = (await fs.readFile(tokenPath, "utf8")).trim();
+      if (token) return { token, migrated: false };
+    } catch { /* not found */ }
+
+    // Migration: check old single-remote path and move to per-remote path
+    try {
+      const legacyToken = (await fs.readFile(COMMENT_SYNC_TOKEN_PATH, "utf8")).trim();
+      if (legacyToken) {
+        logger.verbose(`[SYNC] Migrating comment sync token to remote "${remoteCtx.name}"`);
+        return { token: legacyToken, migrated: true };
+      }
+    } catch { /* not found */ }
+    return { token: undefined, migrated: false };
+  }
+
   try {
     const token = (await fs.readFile(COMMENT_SYNC_TOKEN_PATH, "utf8")).trim();
     if (token) return { token, migrated: false };
@@ -48,9 +68,16 @@ async function readCommentSyncToken(): Promise<{ token: string | undefined; migr
 }
 
 /**
- * Write the comment sync token to disk (new location inside commentsDir)
+ * Write the comment sync token to disk.
+ * When remoteCtx is provided, writes to the remote-specific state directory.
  */
-async function writeCommentSyncToken(token: string): Promise<void> {
+async function writeCommentSyncToken(token: string, remoteCtx?: RemoteContext): Promise<void> {
+  if (remoteCtx) {
+    const tokenPath = syncTokenPath(remoteCtx, "comments");
+    await fs.mkdir(path.dirname(tokenPath), { recursive: true });
+    await fs.writeFile(tokenPath, token, "utf8");
+    return;
+  }
   await fs.mkdir(path.dirname(COMMENT_SYNC_TOKEN_PATH), { recursive: true });
   await fs.writeFile(COMMENT_SYNC_TOKEN_PATH, token, "utf8");
 }
@@ -65,12 +92,12 @@ async function cleanupLegacyCommentSyncToken(): Promise<void> {
 }
 
 /**
- * Fetch comments from LeadCMS sync endpoint
+ * Pull comments from LeadCMS sync endpoint
  * Handles pagination automatically
  */
-async function fetchCommentSync(syncToken?: string): Promise<CommentSyncResult> {
-  logger.verbose(`[FETCH_COMMENT_SYNC] Starting with syncToken: ${syncToken || "NONE"}`);
-  logger.verbose(`[FETCH_COMMENT_SYNC] Fetching public comments (no authentication)`);
+async function pullCommentSync(syncToken?: string): Promise<CommentSyncResult> {
+  logger.verbose(`[PULL_COMMENT_SYNC] Starting with syncToken: ${syncToken || "NONE"}`);
+  logger.verbose(`[PULL_COMMENT_SYNC] Pulling public comments (no authentication)`);
   let allItems: Comment[] = [];
   let allDeleted: number[] = [];
   let token = syncToken || "";
@@ -82,7 +109,7 @@ async function fetchCommentSync(syncToken?: string): Promise<CommentSyncResult> 
     url.searchParams.set("filter[limit]", "100");
     url.searchParams.set("syncToken", token);
 
-    logger.verbose(`[FETCH_COMMENT_SYNC] Page ${page}, URL: ${url.toString()}`);
+    logger.verbose(`[PULL_COMMENT_SYNC] Page ${page}, URL: ${url.toString()}`);
 
     try {
       // SECURITY: Never send API key for read operations
@@ -92,13 +119,13 @@ async function fetchCommentSync(syncToken?: string): Promise<CommentSyncResult> 
       });
 
       if (res.status === 204) {
-        logger.verbose(`[FETCH_COMMENT_SYNC] Got 204 No Content - ending sync`);
+        logger.verbose(`[PULL_COMMENT_SYNC] Got 204 No Content - ending sync`);
         break;
       }
 
       const data = res.data;
       logger.verbose(
-        `[FETCH_COMMENT_SYNC] Page ${page} - Got ${data.items?.length || 0} items, ${data.deleted?.length || 0} deleted`
+        `[PULL_COMMENT_SYNC] Page ${page} - Got ${data.items?.length || 0} items, ${data.deleted?.length || 0} deleted`
       );
 
       if (data.items && Array.isArray(data.items)) allItems.push(...data.items);
@@ -108,11 +135,11 @@ async function fetchCommentSync(syncToken?: string): Promise<CommentSyncResult> 
       }
 
       const newSyncToken = res.headers["x-next-sync-token"] || token;
-      logger.verbose(`[FETCH_COMMENT_SYNC] Next sync token: ${newSyncToken}`);
+      logger.verbose(`[PULL_COMMENT_SYNC] Next sync token: ${newSyncToken}`);
 
       if (!newSyncToken || newSyncToken === token) {
         nextSyncToken = newSyncToken || token;
-        logger.verbose(`[FETCH_COMMENT_SYNC] No new sync token - ending sync`);
+        logger.verbose(`[PULL_COMMENT_SYNC] No new sync token - ending sync`);
         break;
       }
 
@@ -120,7 +147,7 @@ async function fetchCommentSync(syncToken?: string): Promise<CommentSyncResult> 
       token = newSyncToken;
       page++;
     } catch (error: any) {
-      console.error(`[FETCH_COMMENT_SYNC] Failed on page ${page}:`, error.message);
+      console.error(`[PULL_COMMENT_SYNC] Failed on page ${page}:`, error.message);
 
       // Provide helpful error messages based on status code
       if (error.response?.status === 403) {
@@ -145,7 +172,7 @@ async function fetchCommentSync(syncToken?: string): Promise<CommentSyncResult> 
   }
 
   logger.verbose(
-    `[FETCH_COMMENT_SYNC] Completed - Total items: ${allItems.length}, deleted: ${allDeleted.length}`
+    `[PULL_COMMENT_SYNC] Completed - Total items: ${allItems.length}, deleted: ${allDeleted.length}`
   );
   return {
     items: allItems,
@@ -330,7 +357,7 @@ function groupCommentsByEntityAndLanguage(comments: Comment[]): Map<string, Comm
 
 
 /**
- * Fetch CMS config to check if comments are supported
+ * Check CMS config to check if comments are supported
  */
 async function fetchCMSConfigForEntity(): Promise<boolean> {
   try {
@@ -345,8 +372,8 @@ async function fetchCMSConfigForEntity(): Promise<boolean> {
       return isCommentsSupported();
     }
   } catch (error: any) {
-    console.warn(`[FETCH_COMMENT_SYNC] Could not fetch CMS config: ${error.message}`);
-    console.warn(`[FETCH_COMMENT_SYNC] Assuming comments are supported (backward compatibility)`);
+    console.warn(`[PULL_COMMENT_SYNC] Could not fetch CMS config: ${error.message}`);
+    console.warn(`[PULL_COMMENT_SYNC] Assuming comments are supported (backward compatibility)`);
   }
   return false;
 }
@@ -354,7 +381,7 @@ async function fetchCMSConfigForEntity(): Promise<boolean> {
 /**
  * Main function to sync comments from LeadCMS
  */
-export async function main(): Promise<void> {
+export async function main(remoteCtx?: RemoteContext): Promise<void> {
   logger.verbose(`[ENV] LeadCMS URL: ${leadCMSUrl}`);
   logger.verbose(
     `[ENV] LeadCMS API Key: ${leadCMSApiKey ? 'CONFIGURED (ignored for anonymous comment pull)' : 'NOT_SET'}`
@@ -374,7 +401,7 @@ export async function main(): Promise<void> {
 
   await fs.mkdir(COMMENTS_DIR, { recursive: true });
 
-  const { token: lastSyncToken, migrated: commentTokenMigrated } = await readCommentSyncToken();
+  const { token: lastSyncToken, migrated: commentTokenMigrated } = await readCommentSyncToken(remoteCtx);
 
   let items: Comment[] = [],
     deleted: number[] = [],
@@ -383,16 +410,16 @@ export async function main(): Promise<void> {
   try {
     if (lastSyncToken) {
       logger.verbose(`Syncing comments from LeadCMS using sync token: ${lastSyncToken}`);
-      ({ items, deleted, nextSyncToken } = await fetchCommentSync(lastSyncToken));
+      ({ items, deleted, nextSyncToken } = await pullCommentSync(lastSyncToken));
     } else {
-      logger.verbose("No comment sync token found. Doing full fetch from LeadCMS...");
-      ({ items, deleted, nextSyncToken } = await fetchCommentSync(undefined));
+      logger.verbose("No comment sync token found. Doing full pull from LeadCMS...");
+      ({ items, deleted, nextSyncToken } = await pullCommentSync(undefined));
     }
   } catch (error: any) {
     console.error(`\n❌ Failed to sync comments from LeadCMS`);
     console.error(`   Error: ${error.message}`);
 
-    // Error details are already logged by fetchCommentSync
+    // Error details are already logged by pullCommentSync
     // Just provide a summary here
     if (error.response?.status === 403 || error.response?.status === 401) {
       console.error(`\n💡 This may be a LeadCMS configuration issue.`);
@@ -402,7 +429,7 @@ export async function main(): Promise<void> {
     throw error;
   }
 
-  console.log(`\x1b[32mFetched ${items.length} comment items, ${deleted.length} deleted.\x1b[0m`);
+  console.log(`\x1b[32mPulled ${items.length} comment items, ${deleted.length} deleted.\x1b[0m`);
 
   // Process updated/new comments
   if (items.length > 0) {
@@ -440,7 +467,7 @@ export async function main(): Promise<void> {
 
   // Save new sync token
   if (nextSyncToken) {
-    await writeCommentSyncToken(nextSyncToken);
+    await writeCommentSyncToken(nextSyncToken, remoteCtx);
     logger.verbose(`Comment sync token updated: ${nextSyncToken}`);
   }
 
@@ -454,14 +481,14 @@ export async function main(): Promise<void> {
 }
 
 // Export the main function so it can be imported by other modules
-export { main as fetchLeadCMSComments };
+export { main as pullLeadCMSComments };
 
 // Note: CLI execution moved to CLI entry points
 // This file now only exports the function for programmatic use
 
 // Export helper functions for testing
 export {
-  fetchCommentSync,
+  pullCommentSync,
   loadCommentsForEntity,
   saveCommentsForEntity,
   groupCommentsByEntityAndLanguage,

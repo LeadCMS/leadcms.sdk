@@ -4,5 +4,16 @@
   "commentsDir": ".leadcms/comments",
   "mediaDir": "public/media",
   "emailTemplatesDir": ".leadcms/email-templates",
-  "enableDrafts": false
+  "enableDrafts": false,
+
+  "_comment_remotes": "Multi-remote setup (optional). Omit 'remotes' for single-remote mode.",
+  "remotes": {
+    "production": {
+      "url": "https://prod.cms.example.com"
+    },
+    "develop": {
+      "url": "https://dev.cms.example.com"
+    }
+  },
+  "defaultRemote": "production"
 }

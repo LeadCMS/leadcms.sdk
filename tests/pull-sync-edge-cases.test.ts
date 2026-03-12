@@ -1,7 +1,7 @@
 /**
  * Integration tests: pull sync edge cases that lead to inconsistent local state.
  *
- * These tests call the real fetchLeadCMSContent function and only mock the
+ * These tests call the real pullLeadCMSContent function and only mock the
  * HTTP layer (axios). Each test targets a specific scenario where the local
  * filesystem can become out of sync with the remote after a pull.
  *
@@ -30,7 +30,8 @@ jest.mock('../src/lib/config.js', () => ({
 }));
 jest.mock('axios', () => harness.axiosMock);
 
-import { fetchLeadCMSContent } from '../src/scripts/fetch-leadcms-content';
+import { pullLeadCMSContent } from '../src/scripts/pull-leadcms-content';
+import { pullLeadCMSMedia } from '../src/scripts/pull-leadcms-media';
 
 // ── Shared setup / teardown ────────────────────────────────────────────
 beforeEach(() => harness.setup());
@@ -69,13 +70,13 @@ describe('Pull: content type change (MDX → JSON)', () => {
     harness.addContentSync([v1], [], 'token-1');
     harness.addContentSync([v2], [], 'token-2');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(1);
     expect(afterFirst[0]).toContain('hero-section.mdx');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     // Expectation: only hero-section.json should exist
     const afterSecond = await listContentFiles(contentDir);
@@ -114,7 +115,7 @@ describe('Pull: content language change', () => {
     harness.addContentSync([v1], [], 'token-1');
     harness.addContentSync([v2], [], 'token-2');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(1);
@@ -122,7 +123,7 @@ describe('Pull: content language change', () => {
     // Should be in root (default language)
     expect(afterFirst[0]).not.toContain('/fr/');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     // Expectation: only one file, in the fr/ subdirectory
     const afterSecond = await listContentFiles(contentDir);
@@ -164,13 +165,13 @@ describe('Pull: slug + type + language change simultaneously', () => {
     harness.addContentSync([v1], [], 'token-1');
     harness.addContentSync([v2], [], 'token-2');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(1);
     expect(afterFirst[0]).toContain('old-nav.mdx');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     // Expectation: only one file: de/new-navigation.json
     const afterSecond = await listContentFiles(contentDir);
@@ -201,13 +202,13 @@ describe('Pull: remote content deletion', () => {
     // Second pull: no items, but id=40 in deleted list
     harness.addContentSync([], [40], 'token-2');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(1);
     expect(afterFirst[0]).toContain('temp-article.mdx');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     // Expectation: NO content files remain
     const afterSecond = await listContentFiles(contentDir);
@@ -228,13 +229,13 @@ describe('Pull: remote content deletion', () => {
     harness.addContentSync([v1], [], 'token-1');
     harness.addContentSync([], [41], 'token-2');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(1);
     expect(afterFirst[0]).toContain('footer-config.json');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const afterSecond = await listContentFiles(contentDir);
     expect(afterSecond).toHaveLength(0);
@@ -261,13 +262,13 @@ describe('Pull: non-default language content deletion', () => {
     harness.addContentSync([v1], [], 'token-1');
     harness.addContentSync([], [50], 'token-2');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(1);
     expect(afterFirst[0]).toContain('/es/');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const afterSecond = await listContentFiles(contentDir);
     expect(afterSecond).toHaveLength(0);
@@ -301,8 +302,8 @@ describe('Pull: content update (same slug)', () => {
     harness.addContentSync([v1], [], 'token-1');
     harness.addContentSync([v2], [], 'token-2');
 
-    await fetchLeadCMSContent();
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
+    await pullLeadCMSContent();
 
     const files = await listContentFiles(contentDir);
     expect(files).toHaveLength(1);
@@ -347,7 +348,7 @@ describe('Pull: mixed operations in single sync', () => {
     // First pull: two articles
     harness.addContentSync([item1, item2], [], 'token-1');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(2);
@@ -374,7 +375,7 @@ describe('Pull: mixed operations in single sync', () => {
 
     harness.addContentSync([item1Updated, item3], [71], 'token-2');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const afterSecond = await listContentFiles(contentDir);
     // Should have page-one.mdx (updated) and page-three.mdx (new), NOT page-two.mdx
@@ -419,13 +420,13 @@ describe('Pull: nested slug rename', () => {
     harness.addContentSync([v1], [], 'token-1');
     harness.addContentSync([v2], [], 'token-2');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(1);
     expect(afterFirst[0]).toContain('my-first-post.mdx');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const afterSecond = await listContentFiles(contentDir);
     expect(afterSecond).toHaveLength(1);
@@ -443,13 +444,10 @@ describe('Pull: media deletion', () => {
     await fsPromises.mkdir(path.dirname(mediaPath), { recursive: true });
     await fsPromises.writeFile(mediaPath, 'fake-image-data');
 
-    // Content sync returns nothing
-    harness.addContentSync([], [], 'token-1');
-
     // Media sync returns the deleted item (MediaDeletedDto: { scopeUid, name })
     harness.addMediaSync([], [{ scopeUid: 'images', name: 'photo.jpg' }], 'media-token-1');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSMedia();
 
     const mediaFiles = await listAllFiles(mediaDir);
     const hasPhoto = mediaFiles.some(f => f.includes('photo.jpg'));
@@ -469,9 +467,6 @@ describe('Pull: media rename', () => {
     await fsPromises.mkdir(path.dirname(oldMediaPath), { recursive: true });
     await fsPromises.writeFile(oldMediaPath, 'fake-image-data');
 
-    // Content sync returns nothing
-    harness.addContentSync([], [], 'token-1');
-
     // Media sync returns the renamed media:
     //  - deleted array has old location (MediaDeletedDto)
     //  - items array has new location (MediaDetailsDto)
@@ -481,7 +476,7 @@ describe('Pull: media rename', () => {
       'media-token-1',
     );
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSMedia();
 
     const mediaFiles = await listAllFiles(mediaDir);
     const hasOld = mediaFiles.some(f => f.includes('old-name.jpg'));
@@ -498,8 +493,6 @@ describe('Pull: media rename', () => {
     await fsPromises.mkdir(path.dirname(oldMediaPath), { recursive: true });
     await fsPromises.writeFile(oldMediaPath, 'fake-banner-data');
 
-    harness.addContentSync([], [], 'token-1');
-
     // Media renamed and moved to a different scope
     harness.addMediaSync(
       [{ location: '/api/media/blog/post-2/banner.png' }],
@@ -507,7 +500,7 @@ describe('Pull: media rename', () => {
       'media-token-1',
     );
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSMedia();
 
     const mediaFiles = await listAllFiles(mediaDir);
     const hasOldLocation = mediaFiles.some(f => f.includes('post-1') && f.includes('banner.png'));
@@ -549,7 +542,7 @@ describe('Pull: same slug in multiple languages', () => {
 
     harness.addContentSync([enContent, frContent], [], 'token-1');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const files = await listContentFiles(contentDir);
     expect(files).toHaveLength(2);
@@ -565,7 +558,7 @@ describe('Pull: same slug in multiple languages', () => {
     // Now delete only the French version
     harness.addContentSync([], [91], 'token-2');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const afterDelete = await listContentFiles(contentDir);
     // Only English should remain
@@ -607,7 +600,7 @@ describe('Pull: slug collision after rename', () => {
 
     harness.addContentSync([itemA, itemB], [], 'token-1');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(2);
@@ -626,7 +619,7 @@ describe('Pull: slug collision after rename', () => {
 
     harness.addContentSync([itemARenamed, itemBRenamed], [], 'token-2');
 
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const afterSecond = await listContentFiles(contentDir);
     // Should have exactly 2 files with new names, no old ones

@@ -7,7 +7,7 @@
  *   3. Pull again (the sync API returns the updated content with slug="new-slug")
  *   4. After the second pull, only ONE file should exist locally (new-slug.mdx)
  *
- * This test calls the real fetchLeadCMSContent function and only mocks the
+ * This test calls the real pullLeadCMSContent function and only mocks the
  * HTTP layer (axios) so the test stays in sync with the actual implementation.
  */
 
@@ -35,7 +35,7 @@ jest.mock('axios', () => harness.axiosMock);
 
 // Import the real pull function — all internal logic (saveContentFile,
 // findAndDeleteContentFile, sync token handling, etc.) runs for real.
-import { fetchLeadCMSContent } from '../src/scripts/fetch-leadcms-content';
+import { pullLeadCMSContent } from '../src/scripts/pull-leadcms-content';
 
 describe('Pull: remote slug rename scenario', () => {
   beforeEach(() => harness.setup());
@@ -65,14 +65,14 @@ describe('Pull: remote slug rename scenario', () => {
     harness.addContentSync([remoteContentV2], [], 'token-2');
 
     // ── First pull ─────────────────────────────────────────────────────
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     const filesAfterFirstPull = await listContentFiles(contentDir);
     expect(filesAfterFirstPull).toHaveLength(1);
     expect(filesAfterFirstPull[0]).toContain('old-slug.mdx');
 
     // ── Second pull (slug was renamed remotely) ────────────────────────
-    await fetchLeadCMSContent();
+    await pullLeadCMSContent();
 
     // ── Verify: only ONE file should remain (new-slug.mdx) ────────────
     const filesAfterSecondPull = await listContentFiles(contentDir);

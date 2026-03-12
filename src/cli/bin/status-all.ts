@@ -14,6 +14,7 @@ import { initVerboseFromArgs } from '../../lib/logger.js';
 import { colorConsole, statusColors } from '../../lib/console-colors.js';
 import { defaultLanguage, leadCMSApiKey, resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { startSpinner } from '../../lib/spinner.js';
+import { parseRemoteFlag } from './remote-flag.js';
 
 import type { ContentOperations, ContentStatusResult, MatchOperation } from '../../scripts/push-leadcms-content.js';
 import type { CommentOperation, CommentStatusResult } from '../../scripts/push-comments.js';
@@ -23,6 +24,7 @@ import type { SettingsStatusResult } from '../../lib/settings-types.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+const remoteContext = parseRemoteFlag(args);
 
 // Parse flags
 const showDelete = args.includes('--delete');
@@ -225,7 +227,7 @@ async function statusAll() {
 
     try {
       [contentResult, commentResult, mediaResult, emailResult, settingsResult] = await Promise.all([
-        getContentStatusData({ showDelete }).catch((err: any) => {
+        getContentStatusData({ showDelete, remoteContext }).catch((err: any) => {
           spinner.update('Fetching status… (content failed)');
           return null;
         }),
@@ -238,7 +240,7 @@ async function statusAll() {
           return null;
         }),
         canCheckEmailTemplates
-          ? buildEmailTemplateStatus({ showDelete }).catch((err: any) => {
+          ? buildEmailTemplateStatus({ showDelete, remoteContext }).catch((err: any) => {
             spinner.update('Fetching status… (email templates failed)');
             return null;
           })

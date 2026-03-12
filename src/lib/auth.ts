@@ -114,7 +114,7 @@ export async function verifyToken(url: string, token: string): Promise<UserDetai
 /**
  * Save API token to .env file
  */
-export function saveTokenToEnv(token: string): void {
+export function saveTokenToEnv(token: string, envKey = 'LEADCMS_API_KEY'): void {
   const envPath = path.join(process.cwd(), '.env');
   let envContent = '';
 
@@ -123,20 +123,20 @@ export function saveTokenToEnv(token: string): void {
     envContent = fs.readFileSync(envPath, 'utf-8');
   }
 
-  // Check if LEADCMS_API_KEY already exists
+  // Check if target key already exists
   const lines = envContent.split('\n');
-  const apiKeyIndex = lines.findIndex((line) => line.startsWith('LEADCMS_API_KEY='));
+  const apiKeyIndex = lines.findIndex((line) => line.startsWith(`${envKey}=`));
 
   if (apiKeyIndex !== -1) {
     // Update existing key
-    lines[apiKeyIndex] = `LEADCMS_API_KEY=${token}`;
+    lines[apiKeyIndex] = `${envKey}=${token}`;
     envContent = lines.join('\n');
   } else {
     // Add new key
     if (envContent && !envContent.endsWith('\n')) {
       envContent += '\n';
     }
-    envContent += `LEADCMS_API_KEY=${token}\n`;
+    envContent += `${envKey}=${token}\n`;
   }
 
   fs.writeFileSync(envPath, envContent, 'utf-8');

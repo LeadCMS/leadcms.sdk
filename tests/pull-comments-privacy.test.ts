@@ -20,7 +20,7 @@ jest.mock('../src/scripts/leadcms-helpers.js', () => ({
     leadCMSApiKey: 'secret-api-key',
 }));
 
-import { fetchCommentSync, toStoredComment } from '../src/scripts/fetch-leadcms-comments.js';
+import { pullCommentSync, toStoredComment } from '../src/scripts/pull-leadcms-comments.js';
 import type { Comment } from '../src/lib/comment-types.js';
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -30,14 +30,14 @@ describe('comment pull privacy', () => {
         jest.clearAllMocks();
     });
 
-    it('fetches comment sync without authentication headers', async () => {
+    it('pulls comment sync without authentication headers', async () => {
         mockedAxios.get.mockResolvedValue({
             status: 200,
             data: { items: [], deleted: [] },
             headers: { 'x-next-sync-token': '' },
         } as any);
 
-        await fetchCommentSync();
+        await pullCommentSync();
 
         expect(mockedAxios.get).toHaveBeenCalledWith(
             expect.stringContaining('/api/comments/sync'),

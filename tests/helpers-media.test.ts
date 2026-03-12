@@ -9,7 +9,34 @@ jest.mock('../src/lib/config.js', () => ({
   getConfig: jest.fn(() => createTestConfig()),
 }));
 
-import { extractMediaUrlsFromContent } from '../src/scripts/leadcms-helpers';
+import { extractMediaUrlsFromContent, configureDataServiceForRemote, leadCMSUrl, leadCMSApiKey } from '../src/scripts/leadcms-helpers';
+import type { RemoteContext } from '../src/lib/remote-context';
+
+describe('configureDataServiceForRemote updates module-level vars', () => {
+  it('should update leadCMSUrl and leadCMSApiKey when called', async () => {
+    // Dynamic import to read live bindings after configuration
+    const helpers = await import('../src/scripts/leadcms-helpers');
+
+    const originalUrl = helpers.leadCMSUrl;
+    const originalKey = helpers.leadCMSApiKey;
+
+    const ctx: RemoteContext = {
+      name: 'staging',
+      url: 'https://staging.example.com',
+      apiKey: 'staging-api-key-123',
+      isDefault: false,
+      stateDir: '/tmp/.leadcms/remotes/staging',
+    };
+
+    configureDataServiceForRemote(ctx);
+
+    expect(helpers.leadCMSUrl).toBe('https://staging.example.com');
+    expect(helpers.leadCMSApiKey).toBe('staging-api-key-123');
+
+    // Verify they actually changed (not coincidentally the same)
+    expect(helpers.leadCMSUrl).not.toBe(originalUrl);
+  });
+});
 
 describe('extractMediaUrlsFromContent', () => {
   it('should extract media URLs from body content', () => {

@@ -332,6 +332,18 @@ class LeadCMSDataService {
     this.initialized = true;
   }
 
+  /**
+   * Configure the data service to target a specific remote.
+   * Call this before any API operations when working with multi-remote configs.
+   * Overrides the lazy initialization from environment variables.
+   */
+  configureForRemote(url: string, apiKey?: string): void {
+    this._initialize();
+    this.baseURL = url.replace(/\/+$/, '') || undefined;
+    this.apiKey = apiKey;
+    logger.verbose(`[DATA SERVICE] Configured for remote: ${this.baseURL}`);
+  }
+
   private initializeMockData(): void {
     const scenario = MOCK_SCENARIOS[this.mockScenario];
     if (!scenario) {

@@ -8,8 +8,10 @@ import {
   fetchContentTypes,
 } from "./leadcms-helpers.js";
 import { saveContentFile } from "../lib/content-transformation.js";
-import { fetchLeadCMSContent } from "./fetch-leadcms-content.js";
+import { pullLeadCMSContent } from "./pull-leadcms-content.js";
+import { pullLeadCMSMedia } from "./pull-leadcms-media.js";
 import { logger } from "../lib/logger.js";
+import type { RemoteContext } from "../lib/remote-context.js";
 
 // Type definitions
 interface SSEEventData {
@@ -41,73 +43,76 @@ logger.verbose(
 logger.verbose(`[SSE ENV] Default Language: ${defaultLanguage}`);
 logger.verbose(`[SSE ENV] Content Dir: ${CONTENT_DIR}`);
 
-// ── Debounced & serialized content fetch ─────────────────────────────
+// ── Debounced & serialized content pull ─────────────────────────────
 // Prevents concurrent syncs and coalesces rapid SSE events into a single
-// fetch. This is critical for watch mode to avoid merge conflicts caused
+// pull. This is critical for watch mode to avoid merge conflicts caused
 // by overlapping pulls that read stale sync tokens.
-let fetchInProgress = false;
-let fetchQueued = false;
+let pullInProgress = false;
+let pullQueued = false;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+let activeRemoteCtx: RemoteContext | undefined;
 const DEBOUNCE_MS = 300;
 
 /**
- * Schedule a debounced, serialized content fetch.
+ * Schedule a debounced, serialized content pull.
  *
  * - **Debounced**: waits DEBOUNCE_MS after the last call before firing,
  *   so rapid events (e.g. content-updated + onmessage for the same change)
- *   are coalesced into one fetch.
- * - **Serialized**: only one fetch runs at a time. If a fetch is already
+ *   are coalesced into one pull.
+ * - **Serialized**: only one pull runs at a time. If a pull is already
  *   in progress, at most one more is queued so that changes received
- *   during the fetch are not lost.
+ *   during the pull are not lost.
  * - **forceOverwrite**: always passes { forceOverwrite: true } to skip
  *   three-way merge logic, ensuring watch mode never produces conflicts.
  */
-function scheduleFetch(): void {
+function schedulePull(): void {
   if (debounceTimer) {
     clearTimeout(debounceTimer);
   }
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
-    executeFetch();
+    executePull();
   }, DEBOUNCE_MS);
 }
 
-async function executeFetch(): Promise<void> {
-  if (fetchInProgress) {
-    // Another fetch is running — queue one more (coalesced)
-    fetchQueued = true;
-    logger.verbose("[SSE] Fetch already in progress — queued another");
+async function executePull(): Promise<void> {
+  if (pullInProgress) {
+    // Another pull is running — queue one more (coalesced)
+    pullQueued = true;
+    logger.verbose("[SSE] Pull already in progress — queued another");
     return;
   }
 
-  fetchInProgress = true;
+  pullInProgress = true;
   try {
-    logger.verbose("[SSE] Starting content fetch (forceOverwrite)...");
-    await fetchLeadCMSContent({ forceOverwrite: true });
-    logger.verbose("[SSE] Content fetch completed successfully");
+    logger.verbose("[SSE] Starting content+media pull (forceOverwrite)...");
+    await pullLeadCMSContent({ forceOverwrite: true, remoteContext: activeRemoteCtx });
+    await pullLeadCMSMedia({ remoteContext: activeRemoteCtx });
+    logger.verbose("[SSE] Content+media pull completed successfully");
   } catch (error: any) {
-    logger.verbose("[SSE] Content fetch failed:", error.message);
+    logger.verbose("[SSE] Content pull failed:", error.message);
   } finally {
-    fetchInProgress = false;
+    pullInProgress = false;
 
-    // If another event arrived while we were fetching, run one more time
-    if (fetchQueued) {
-      fetchQueued = false;
-      logger.verbose("[SSE] Processing queued fetch...");
-      executeFetch();
+    // If another event arrived while we were pulling, run one more time
+    if (pullQueued) {
+      pullQueued = false;
+      logger.verbose("[SSE] Processing queued pull...");
+      executePull();
     }
   }
 }
 
 // Legacy helper kept for backward-compatibility (exported tests, etc.)
 // Delegates to the debounced scheduler now.
-async function triggerContentFetch(): Promise<void> {
-  scheduleFetch();
+async function triggerContentPull(): Promise<void> {
+  schedulePull();
 }
 
-function buildSSEUrl(): string {
-  logger.verbose(`[SSE URL] Building SSE URL with base: ${leadCMSUrl}`);
-  const url = new URL("/api/sse/stream", leadCMSUrl || "");
+function buildSSEUrl(remoteCtx?: RemoteContext): string {
+  const effectiveUrl = remoteCtx?.url || leadCMSUrl;
+  logger.verbose(`[SSE URL] Building SSE URL with base: ${effectiveUrl}`);
+  const url = new URL("/api/sse/stream", effectiveUrl || "");
   url.searchParams.set("entities", "Content");
   url.searchParams.set("includeContent", "true");
   url.searchParams.set("includeLiveDrafts", "true");
@@ -116,13 +121,17 @@ function buildSSEUrl(): string {
   return finalUrl;
 }
 
-async function startSSEWatcher(): Promise<void> {
+async function startSSEWatcher(remoteCtx?: RemoteContext): Promise<void> {
+  activeRemoteCtx = remoteCtx;
+  const effectiveUrl = remoteCtx?.url || leadCMSUrl;
+  const effectiveApiKey = remoteCtx?.apiKey || leadCMSApiKey;
+
   logger.verbose(`[SSE] Starting SSE watcher...`);
-  const typeMap = await fetchContentTypes();
-  const sseUrl = buildSSEUrl();
+  const typeMap = await fetchContentTypes(effectiveUrl);
+  const sseUrl = buildSSEUrl(remoteCtx);
   const eventSourceOptions: any = {};
 
-  if (leadCMSApiKey) {
+  if (effectiveApiKey) {
     logger.verbose(`[SSE] Using API key for authentication`);
     eventSourceOptions.fetch = (input: string | URL, init?: RequestInit): Promise<Response> => {
       logger.verbose(`[SSE FETCH] Making authenticated request to: ${input}`);
@@ -131,7 +140,7 @@ async function startSSEWatcher(): Promise<void> {
         JSON.stringify(
           {
             ...init?.headers,
-            Authorization: `Bearer ${leadCMSApiKey?.substring(0, 8)}...`,
+            Authorization: `Bearer ${effectiveApiKey?.substring(0, 8)}...`,
           },
           null,
           2
@@ -142,7 +151,7 @@ async function startSSEWatcher(): Promise<void> {
         ...init,
         headers: {
           ...init?.headers,
-          Authorization: `Bearer ${leadCMSApiKey}`,
+          Authorization: `Bearer ${effectiveApiKey}`,
         },
       })
         .then((response) => {
@@ -181,8 +190,8 @@ async function startSSEWatcher(): Promise<void> {
 
       if (data.entityType === "Content") {
         logger.verbose(`[SSE] Content message - Operation: ${data.operation}`);
-        logger.verbose(`[SSE] Content change detected - triggering full fetch`);
-        triggerContentFetch();
+        logger.verbose(`[SSE] Content change detected - triggering full pull`);
+        triggerContentPull();
       } else {
         logger.verbose(`[SSE] Non-content message - Entity type: ${data.entityType}`);
       }
@@ -240,8 +249,8 @@ async function startSSEWatcher(): Promise<void> {
           contentType = typeMap[contentData.type];
         }
 
-        logger.verbose(`[SSE] Draft updated - triggering full fetch`);
-        triggerContentFetch();
+        logger.verbose(`[SSE] Draft updated - triggering full pull`);
+        triggerContentPull();
 
         if (contentType === "MDX" || contentType === "JSON") {
           if (contentData && typeof contentData === "object") {
@@ -295,8 +304,8 @@ async function startSSEWatcher(): Promise<void> {
           contentType = typeMap[contentData.type];
         }
 
-        logger.verbose(`[SSE] Legacy draft modified - triggering full fetch`);
-        triggerContentFetch();
+        logger.verbose(`[SSE] Legacy draft modified - triggering full pull`);
+        triggerContentPull();
 
         if (contentType === "MDX" || contentType === "JSON") {
           if (contentData && typeof contentData === "object") {
@@ -331,8 +340,8 @@ async function startSSEWatcher(): Promise<void> {
       const data: SSEEventData = JSON.parse(event.data);
       logger.verbose(`[SSE] Content updated data:`, JSON.stringify(data, null, 2));
 
-      logger.verbose(`[SSE] Content updated - triggering full fetch`);
-      triggerContentFetch();
+      logger.verbose(`[SSE] Content updated - triggering full pull`);
+      triggerContentPull();
     } catch (e: any) {
       logger.verbose("[SSE] Failed to parse content-updated event:", e.message);
       logger.verbose("[SSE] Raw content-updated event data:", event.data);
@@ -354,7 +363,7 @@ async function startSSEWatcher(): Promise<void> {
       logger.verbose("[SSE] Authentication failed (401) - check your LEADCMS_API_KEY");
       logger.verbose(
         "[SSE] Current API Key (first 8 chars):",
-        leadCMSApiKey ? leadCMSApiKey.substring(0, 8) : "NOT_SET"
+        effectiveApiKey ? effectiveApiKey.substring(0, 8) : "NOT_SET"
       );
     } else if (err.code === 403) {
       logger.verbose("[SSE] Forbidden (403) - insufficient permissions");
@@ -368,7 +377,7 @@ async function startSSEWatcher(): Promise<void> {
     es.close();
     setTimeout(() => {
       logger.verbose("[SSE] Attempting to reconnect...");
-      startSSEWatcher();
+      startSSEWatcher(remoteCtx);
     }, 5000);
   };
 }
@@ -378,10 +387,10 @@ export { startSSEWatcher };
 export type { SSEEventData, ConnectedEventData, HeartbeatEventData, DraftEventData };
 
 // Export internals for testing
-export { scheduleFetch, DEBOUNCE_MS };
-export function _resetFetchState(): void {
-  fetchInProgress = false;
-  fetchQueued = false;
+export { schedulePull, DEBOUNCE_MS };
+export function _resetPullState(): void {
+  pullInProgress = false;
+  pullQueued = false;
   if (debounceTimer) {
     clearTimeout(debounceTimer);
     debounceTimer = null;

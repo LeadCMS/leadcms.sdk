@@ -14,11 +14,13 @@ import {
   transformRemoteToLocalFormat,
   transformRemoteForComparison,
   hasContentDifferences,
+  stripTimestampMetadata,
   type ContentTypeMap
 } from "../lib/content-transformation.js";
 import { formatContentForAPI } from '../lib/content-api-formatting.js';
 import { colorConsole, statusColors, diffColors } from '../lib/console-colors.js';
 import { logger } from '../lib/logger.js';
+import type { RemoteContext, MetadataMap } from '../lib/remote-context.js';
 
 // Extended interfaces for local operations
 interface LocalContentItem extends BaseContentItem {
@@ -60,10 +62,13 @@ export interface PushOptions {
   dryRun?: boolean;       // Show API calls without executing them
   allowDelete?: boolean;  // Allow deletion of remote content not present locally
   showDelete?: boolean;   // Show deletion operations in status output
+  /** Remote context for multi-remote support. When provided, API calls target this remote. */
+  remoteContext?: import("../lib/remote-context.js").RemoteContext;
 }
 
 interface ExecutionOptions {
   force?: boolean;
+  remoteCtx?: RemoteContext;
 }
 
 type ContentOperationKey = keyof ContentOperations;
@@ -297,11 +302,11 @@ async function fetchRemoteContent(): Promise<RemoteContentItem[]> {
 async function hasActualContentChanges(local: LocalContentItem, remote: RemoteContentItem, typeMap?: Record<string, string>): Promise<boolean> {
   try {
     // Read the local file content as-is
-    const localFileContent = await fs.readFile(local.filePath, 'utf-8');
+    const localFileContent = stripTimestampMetadata(await fs.readFile(local.filePath, 'utf-8'));
 
     // Transform remote content for comparison, only including fields that exist in local content
     // This prevents false positives when remote has additional fields like updatedAt
-    const transformedRemoteContent = await transformRemoteForComparison(remote, localFileContent, typeMap as ContentTypeMap);
+    const transformedRemoteContent = stripTimestampMetadata(await transformRemoteForComparison(remote, localFileContent, typeMap as ContentTypeMap));
 
     // Compare the raw file contents using shared normalization logic
     const hasFileContentChanges = hasContentDifferences(localFileContent, transformedRemoteContent);
@@ -317,7 +322,13 @@ async function hasActualContentChanges(local: LocalContentItem, remote: RemoteCo
 /**
  * Match local content with remote content
  */
-async function matchContent(localContent: LocalContentItem[], remoteContent: RemoteContentItem[], typeMap?: Record<string, string>, allowDelete: boolean = false): Promise<ContentOperations> {
+async function matchContent(
+  localContent: LocalContentItem[],
+  remoteContent: RemoteContentItem[],
+  typeMap?: Record<string, string>,
+  allowDelete: boolean = false,
+  metadataMap?: MetadataMap,
+): Promise<ContentOperations> {
 
   const operations: ContentOperations = {
     create: [],
@@ -331,9 +342,14 @@ async function matchContent(localContent: LocalContentItem[], remoteContent: Rem
   for (const local of localContent) {
     let match: RemoteContentItem | undefined = undefined;
 
-    // First try to match by ID if local content has one
-    if (local.metadata.id) {
-      match = remoteContent.find(remote => remote.id === local.metadata.id);
+    // First try to match by ID — use remote-specific id-map when available,
+    // falling back to frontmatter ID for single-remote backward compatibility
+    const remoteId = metadataMap
+      ? (await import('../lib/remote-context.js')).lookupRemoteId(metadataMap, local.locale, local.slug)
+      : undefined;
+    const matchId = remoteId ?? local.metadata.id;
+    if (matchId) {
+      match = remoteContent.find(remote => remote.id === matchId);
     }
 
     // If no ID match, try to match by current filename slug and locale
@@ -361,8 +377,14 @@ async function matchContent(localContent: LocalContentItem[], remoteContent: Rem
     }
 
     if (match) {
-      // Check for conflicts by comparing updatedAt timestamps from content metadata
-      const localUpdated = local.metadata.updatedAt ? new Date(local.metadata.updatedAt) : new Date(0);
+      // Check for conflicts by comparing updatedAt timestamps.
+      // Use remote-specific metadata-map when available, falling back to frontmatter.
+      const localUpdatedStr = metadataMap
+        ? (await import('../lib/remote-context.js')).getMetadataForContent(
+          metadataMap, local.locale, local.slug,
+        )?.updatedAt
+        : local.metadata.updatedAt;
+      const localUpdated = localUpdatedStr ? new Date(localUpdatedStr) : new Date(0);
       const remoteUpdated = match.updatedAt ? new Date(match.updatedAt) : new Date(0);
 
       // Detect different types of changes
@@ -431,8 +453,21 @@ async function matchContent(localContent: LocalContentItem[], remoteContent: Rem
 
   // Check for deleted content (remote but not local) if deletion is allowed
   if (allowDelete) {
-    // Create a set of local content IDs and slugs for quick lookup
-    const localIds = new Set(localContent.map(c => c.metadata.id).filter(id => id));
+    // Build a set of IDs from the remote-specific id-map (or frontmatter for single-remote)
+    const localIds = new Set<number | string>();
+    if (metadataMap) {
+      // Multi-remote: use the target remote's metadata values
+      for (const slugMap of Object.values(metadataMap.content)) {
+        for (const entry of Object.values(slugMap)) {
+          if (entry.id != null) localIds.add(entry.id);
+        }
+      }
+    } else {
+      // Single-remote: use frontmatter IDs
+      for (const c of localContent) {
+        if (c.metadata.id != null) localIds.add(c.metadata.id);
+      }
+    }
     const localSlugs = new Map<string, string>();
     for (const local of localContent) {
       const key = `${local.slug}:${local.locale}`;
@@ -707,10 +742,10 @@ async function displayDetailedDiff(
 
   try {
     // Read local file content as-is
-    const localFileContent = await fs.readFile(local.filePath, 'utf-8');
+    const localFileContent = stripTimestampMetadata(await fs.readFile(local.filePath, 'utf-8'));
 
     // Transform remote content to local format for comparison
-    const transformedRemoteContent = remote ? await transformRemoteToLocalFormat(remote, typeMap as ContentTypeMap) : '';
+    const transformedRemoteContent = remote ? stripTimestampMetadata(await transformRemoteToLocalFormat(remote, typeMap as ContentTypeMap)) : '';
 
     if (localFileContent.trim() === transformedRemoteContent.trim()) {
       console.log('   No content changes detected');
@@ -774,7 +809,7 @@ async function displayDetailedDiff(
 /**
  * Display status/preview of changes
  */
-async function displayStatus(operations: ContentOperations, isStatusOnly: boolean = false, isSingleFile: boolean = false, showDetailedPreview: boolean = false, typeMap?: Record<string, string>, showDelete: boolean = false): Promise<void> {
+async function displayStatus(operations: ContentOperations, isStatusOnly: boolean = false, isSingleFile: boolean = false, showDetailedPreview: boolean = false, typeMap?: Record<string, string>, showDelete: boolean = false, remoteName?: string): Promise<void> {
   if (isSingleFile) {
     colorConsole.important('\n📄 LeadCMS File Status');
   } else {
@@ -903,7 +938,8 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
   }  // Conflicts (like git's merge conflicts)
   if (operations.conflict.length > 0) {
     colorConsole.warn(`⚠️  Unmerged conflicts (${operations.conflict.length} files):`);
-    colorConsole.info('  (use "leadcms pull" to merge remote changes)');
+    const remoteFlag = remoteName ? ` -r ${remoteName}` : '';
+    colorConsole.info(`  (use "leadcms pull-content${remoteFlag}" to merge remote changes)`);
     colorConsole.log('');
 
     // Sort conflicts by locale then slug as well
@@ -936,10 +972,10 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
 
     if (!isStatusOnly) {
       colorConsole.important('💡 To resolve conflicts:');
-      colorConsole.info('   • Run "leadcms pull" to fetch latest changes');
+      colorConsole.info(`   • Run "leadcms pull-content${remoteFlag}" to pull latest changes`);
       colorConsole.info('   • Resolve conflicts in local files');
-      colorConsole.info('   • Run "leadcms push" again');
-      colorConsole.warn('   • Or use "leadcms push --force" to override remote changes (⚠️  data loss risk)');
+      colorConsole.info(`   • Run "leadcms push-content${remoteFlag}" again`);
+      colorConsole.warn(`   • Or use "leadcms push-content${remoteFlag} --force" to override remote changes (⚠️  data loss risk)`);
       colorConsole.log('');
     }
   }
@@ -1035,9 +1071,17 @@ async function showDryRunOperations(operations: ContentOperations): Promise<void
  * Main function for push command
  */
 async function pushMain(options: PushOptions = {}): Promise<void> {
-  const { statusOnly = false, force = false, targetId, targetSlug, statusFilter, showDetailedPreview = false, dryRun = false, allowDelete = false, showDelete = false } = options;
+  const { statusOnly = false, targetId, targetSlug, statusFilter, showDetailedPreview = false, dryRun = false, allowDelete = false, showDelete = false, remoteContext: remoteCtx } = options;
+
+  let force = options.force ?? false;
 
   try {
+    // Configure data service for the target remote (multi-remote support)
+    if (remoteCtx) {
+      leadCMSDataService.configureForRemote(remoteCtx.url, remoteCtx.apiKey);
+      logger.verbose(`[PUSH] Using remote "${remoteCtx.name}" (${remoteCtx.url})`);
+    }
+
     const isSingleFileMode = !!(targetId || targetSlug);
     const actionDescription = statusOnly ? 'status check' : 'push';
     const targetDescription = targetId ? `ID ${targetId}` : targetSlug ? `slug "${targetSlug}"` : 'all content';
@@ -1046,8 +1090,8 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
 
     // Check for API key if not in status-only mode
     if (!statusOnly && !dryRun) {
-      const config = await import('../lib/config.js').then(m => m.getConfig());
-      if (!config.apiKey) {
+      const hasApiKey = remoteCtx ? !!remoteCtx.apiKey : !!(await import('../lib/config.js').then(m => m.getConfig())).apiKey;
+      if (!hasApiKey) {
         console.log('\n❌ Cannot push changes: No API key configured (anonymous mode)');
         console.log('\n💡 To push changes, you need to authenticate:');
         console.log('   • Set LEADCMS_API_KEY in your .env file');
@@ -1109,11 +1153,18 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     // Fetch remote content for comparison
     const remoteContent = await fetchRemoteContent();
 
+    // Load per-remote metadata-map for multi-remote support
+    let metadataMap: MetadataMap | undefined;
+    if (remoteCtx) {
+      const rc = await import('../lib/remote-context.js');
+      metadataMap = await rc.readMetadataMap(remoteCtx);
+    }
+
     // Match local vs remote content with type mapping for proper content transformation
     // In status mode, enable deletion detection if showDelete is true (for display purposes)
     // In push mode, only detect deletions if allowDelete is true (for execution)
     const shouldDetectDeletions = statusOnly ? (showDelete || allowDelete) : allowDelete;
-    const operations = await matchContent(filteredLocalContent, remoteContent, remoteTypeMap, shouldDetectDeletions);
+    const operations = await matchContent(filteredLocalContent, remoteContent, remoteTypeMap, shouldDetectDeletions, metadataMap);
 
     // Filter operations if targeting specific content
     const finalOperations = (isSingleFileMode || (statusFilter && statusFilter.length > 0))
@@ -1145,7 +1196,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     }
 
     // Display status
-    await displayStatus(finalOperations, statusOnly, isSingleFileMode, showDetailedPreview, remoteTypeMap, statusOnly ? showDelete : true);
+    await displayStatus(finalOperations, statusOnly, isSingleFileMode, showDetailedPreview, remoteTypeMap, statusOnly ? showDelete : true, remoteCtx?.name);
 
     // If status only, we're done
     if (statusOnly) {
@@ -1185,7 +1236,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     }
 
     // Execute the sync
-    const results = await executePush(finalOperations, { force });
+    const results = await executePush(finalOperations, { force, remoteCtx });
 
     // Display final message based on results
     if (results.failed === 0) {
@@ -1209,7 +1260,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
  * Execute the actual push operations
  */
 async function executePush(operations: ContentOperations, options: ExecutionOptions = {}): Promise<{ successful: number; failed: number }> {
-  const { force = false } = options;
+  const { force = false, remoteCtx } = options;
 
   // Handle force updates for conflicts
   if (force && operations.conflict.length > 0) {
@@ -1223,14 +1274,14 @@ async function executePush(operations: ContentOperations, options: ExecutionOpti
   }
 
   // Use individual operations
-  return await executeIndividualOperations(operations, { force });
+  return await executeIndividualOperations(operations, { force, remoteCtx });
 }
 
 /**
  * Execute operations individually (one by one)
  */
 async function executeIndividualOperations(operations: ContentOperations, options: ExecutionOptions = {}): Promise<{ successful: number; failed: number }> {
-  const { force = false } = options;
+  const { force = false, remoteCtx } = options;
   let successful = 0;
   let failed = 0;
 
@@ -1241,7 +1292,7 @@ async function executeIndividualOperations(operations: ContentOperations, option
       try {
         const result = await leadCMSDataService.createContent(formatContentForAPI(op.local));
         if (result) {
-          await updateLocalMetadata(op.local, result);
+          await updateLocalMetadata(op.local, result, remoteCtx);
           successful++;
           colorConsole.success(`✅ Created: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`);
         } else {
@@ -1263,7 +1314,7 @@ async function executeIndividualOperations(operations: ContentOperations, option
         if (op.remote?.id) {
           const result = await leadCMSDataService.updateContent(op.remote.id, formatContentForAPI(op.local));
           if (result) {
-            await updateLocalMetadata(op.local, result);
+            await updateLocalMetadata(op.local, result, remoteCtx);
             successful++;
             colorConsole.success(`✅ Updated: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`);
           } else {
@@ -1289,7 +1340,7 @@ async function executeIndividualOperations(operations: ContentOperations, option
         if (op.remote?.id) {
           const result = await leadCMSDataService.updateContent(op.remote.id, formatContentForAPI(op.local));
           if (result) {
-            await updateLocalMetadata(op.local, result);
+            await updateLocalMetadata(op.local, result, remoteCtx);
             successful++;
             colorConsole.success(`✅ Renamed: ${op.oldSlug} -> ${op.local.slug}`);
           } else {
@@ -1315,7 +1366,7 @@ async function executeIndividualOperations(operations: ContentOperations, option
         if (op.remote?.id) {
           const result = await leadCMSDataService.updateContent(op.remote.id, formatContentForAPI(op.local));
           if (result) {
-            await updateLocalMetadata(op.local, result);
+            await updateLocalMetadata(op.local, result, remoteCtx);
             successful++;
             colorConsole.success(`✅ Type changed: ${op.local.slug} (${op.oldType} -> ${op.newType})`);
           } else {
@@ -1359,8 +1410,10 @@ async function executeIndividualOperations(operations: ContentOperations, option
   if (successful > 0) {
     logger.info(`\n🔄 Syncing latest changes from LeadCMS to local store...`);
     try {
-      const { fetchLeadCMSContent } = await import('./fetch-leadcms-content.js');
-      await fetchLeadCMSContent();
+      const { pullLeadCMSContent } = await import('./pull-leadcms-content.js');
+      await pullLeadCMSContent({ remoteContext: remoteCtx });
+      const { pullLeadCMSMedia } = await import('./pull-leadcms-media.js');
+      await pullLeadCMSMedia({ remoteContext: remoteCtx });
       console.log('✅ Local content store synchronized with latest changes');
     } catch (error: any) {
       console.warn('⚠️  Failed to automatically sync local content:', error.message);
@@ -1377,11 +1430,36 @@ async function executeIndividualOperations(operations: ContentOperations, option
 
 
 /**
- * Update local file with metadata from LeadCMS response
+ * Update local file with metadata from LeadCMS response.
+ * In multi-remote mode, saves IDs and timestamps to per-remote map files.
+ * Frontmatter is only updated for the default remote (or in single-remote mode).
  */
-async function updateLocalMetadata(localContent: LocalContentItem, remoteResponse: ContentItem): Promise<void> {
+async function updateLocalMetadata(localContent: LocalContentItem, remoteResponse: ContentItem, remoteCtx?: RemoteContext): Promise<void> {
   const { filePath } = localContent;
   const ext = path.extname(filePath);
+
+  // Per-remote metadata updates
+  if (remoteCtx) {
+    try {
+      const rc = await import('../lib/remote-context.js');
+      const metaMap = await rc.readMetadataMap(remoteCtx);
+      if (remoteResponse.id != null) {
+        rc.setRemoteId(metaMap, localContent.locale, localContent.slug, remoteResponse.id);
+      }
+      rc.setMetadataForContent(metaMap, localContent.locale, localContent.slug, {
+        createdAt: remoteResponse.createdAt,
+        updatedAt: remoteResponse.updatedAt,
+      });
+      await rc.writeMetadataMap(remoteCtx, metaMap);
+    } catch (error: any) {
+      console.warn(`Failed to update remote map files for ${filePath}:`, error.message);
+    }
+  }
+
+  // Only update frontmatter in single-remote mode or for the default remote
+  if (remoteCtx && !remoteCtx.isDefault) {
+    return;
+  }
 
   try {
     if (ext === '.mdx') {
@@ -1452,7 +1530,12 @@ export interface ContentStatusResult {
  * Get content status data without printing anything.
  * Used by the unified status-all renderer.
  */
-export async function getContentStatusData(options: { showDelete?: boolean } = {}): Promise<ContentStatusResult> {
+export async function getContentStatusData(options: { showDelete?: boolean; remoteContext?: import("../lib/remote-context.js").RemoteContext } = {}): Promise<ContentStatusResult> {
+  // Configure data service for the target remote (multi-remote support)
+  if (options.remoteContext) {
+    leadCMSDataService.configureForRemote(options.remoteContext.url, options.remoteContext.apiKey);
+  }
+
   const localContent = await readLocalContent();
 
   if (localContent.length === 0) {
@@ -1472,7 +1555,15 @@ export async function getContentStatusData(options: { showDelete?: boolean } = {
   }
 
   const remoteContent = await fetchRemoteContent();
-  const operations = await matchContent(localContent, remoteContent, remoteTypeMap, options.showDelete || false);
+
+  // Load per-remote maps for multi-remote support
+  let metadataMap: MetadataMap | undefined;
+  if (options.remoteContext) {
+    const rc = await import('../lib/remote-context.js');
+    metadataMap = await rc.readMetadataMap(options.remoteContext);
+  }
+
+  const operations = await matchContent(localContent, remoteContent, remoteTypeMap, options.showDelete || false, metadataMap);
 
   return {
     operations,

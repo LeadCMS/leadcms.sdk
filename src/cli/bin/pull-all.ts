@@ -7,9 +7,11 @@ import { pullAll } from '../../scripts/pull-all.js';
 import { resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
+import { parseRemoteFlag } from './remote-flag.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+const remoteContext = parseRemoteFlag(args);
 
 // Parse target ID or slug
 let targetId: string | undefined;
@@ -32,10 +34,10 @@ if (args.includes('--reset')) {
 
 const force = args.includes('--force') || args.includes('-f');
 
-await resolveIdentity();
+await resolveIdentity(remoteContext?.apiKey);
 
 const spinner = startSpinner('Pulling from LeadCMS…');
-pullAll({ targetId, targetSlug, reset, force })
+pullAll({ targetId, targetSlug, reset, force, remoteContext })
   .then(() => {
     spinner.stop();
     process.exit(0);

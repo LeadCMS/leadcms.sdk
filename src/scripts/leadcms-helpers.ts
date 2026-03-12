@@ -4,6 +4,7 @@ import axios, { AxiosResponse } from "axios";
 import { getConfig, type LeadCMSConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
 import { leadCMSDataService, type UserIdentity } from "../lib/data-service.js";
+import type { RemoteContext } from "../lib/remote-context.js";
 
 // Type definitions
 interface ContentType {
@@ -26,8 +27,10 @@ interface ContentItem {
 const config = getConfig();
 
 // Use configuration with environment variable fallbacks
-export const leadCMSUrl = config.url;
-export const leadCMSApiKey = config.apiKey;
+// These are `let` so that configureDataServiceForRemote() can update them
+// at runtime for multi-remote setups (ESM live bindings propagate to importers).
+export let leadCMSUrl = config.url;
+export let leadCMSApiKey = config.apiKey;
 export const defaultLanguage = config.defaultLanguage;
 export const CONTENT_DIR = path.resolve(config.contentDir);
 export const MEDIA_DIR = path.resolve(config.mediaDir);
@@ -36,10 +39,11 @@ export const SETTINGS_DIR = path.resolve(config.settingsDir || ".leadcms/setting
 
 // Fetch content types dynamically from LeadCMS API to build typeMap
 // Content types are automatically detected and don't need to be configured
-export async function fetchContentTypes(): Promise<Record<string, string>> {
+export async function fetchContentTypes(baseUrl?: string): Promise<Record<string, string>> {
+  const effectiveUrl = baseUrl || leadCMSUrl;
   logger.verbose(`[LeadCMS] Fetching content types from API...`);
   logger.verbose(`[LeadCMS] Fetching public content types (no authentication)`);
-  const url = new URL("/api/content-types", leadCMSUrl);
+  const url = new URL("/api/content-types", effectiveUrl);
   url.searchParams.set("filter[limit]", "100");
 
   try {
@@ -134,9 +138,13 @@ export type { ContentItem };
  *
  * Call this at the start of every CLI command so the user always sees *who*
  * is making the requests.
+ *
+ * @param overrideApiKey  Optional API key override (e.g., from RemoteContext).
+ *                        When provided, this is used instead of the module-level key.
  */
-export async function resolveIdentity(): Promise<UserIdentity | null> {
-  if (!leadCMSApiKey) {
+export async function resolveIdentity(overrideApiKey?: string): Promise<UserIdentity | null> {
+  const effectiveApiKey = overrideApiKey ?? leadCMSApiKey;
+  if (!effectiveApiKey) {
     console.log('👤 Running in anonymous mode');
     return null;
   }
@@ -166,9 +174,11 @@ export async function resolveIdentity(): Promise<UserIdentity | null> {
  * the user is anonymous (no API key).
  *
  * Use this for write operations (push) that cannot run anonymously.
+ *
+ * @param overrideApiKey  Optional API key override (e.g., from RemoteContext).
  */
-export async function requireAuthenticatedUser(): Promise<UserIdentity> {
-  const identity = await resolveIdentity();
+export async function requireAuthenticatedUser(overrideApiKey?: string): Promise<UserIdentity> {
+  const identity = await resolveIdentity(overrideApiKey);
 
   if (!identity) {
     console.error('\n❌ This operation requires authentication.');
@@ -179,6 +189,22 @@ export async function requireAuthenticatedUser(): Promise<UserIdentity> {
   }
 
   return identity;
+}
+
+/**
+ * Set up the data service for a specific RemoteContext and resolve identity.
+ * Use at the start of CLI commands when --remote is specified.
+ */
+export function configureDataServiceForRemote(ctx: RemoteContext): void {
+  leadCMSDataService.configureForRemote(ctx.url, ctx.apiKey);
+
+  // Also update module-level vars so scripts that import leadCMSUrl / leadCMSApiKey
+  // directly (pull-settings, fetch-comments, fetch-email-templates, push-settings)
+  // pick up the correct values via ESM live bindings.
+  leadCMSUrl = ctx.url;
+  if (ctx.apiKey !== undefined) {
+    leadCMSApiKey = ctx.apiKey;
+  }
 }
 
 /**

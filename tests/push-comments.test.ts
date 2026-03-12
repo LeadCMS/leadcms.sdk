@@ -31,20 +31,20 @@ jest.mock('../src/lib/data-service.js', () => {
   };
 });
 
-jest.mock('../src/scripts/fetch-leadcms-comments.js', () => {
-  const actual = jest.requireActual('../src/scripts/fetch-leadcms-comments.js');
+jest.mock('../src/scripts/pull-leadcms-comments.js', () => {
+  const actual = jest.requireActual('../src/scripts/pull-leadcms-comments.js');
   return {
     ...actual,
-    fetchCommentSync: jest.fn(),
-    fetchLeadCMSComments: jest.fn(),
+    pullCommentSync: jest.fn(),
+    pullLeadCMSComments: jest.fn(),
   };
 });
 
 import { buildCommentStatus, pushComments, statusComments } from '../src/scripts/push-comments';
-import { fetchCommentSync, fetchLeadCMSComments } from '../src/scripts/fetch-leadcms-comments';
+import { pullCommentSync, pullLeadCMSComments } from '../src/scripts/pull-leadcms-comments';
 
-const mockedFetchCommentSync = fetchCommentSync as jest.MockedFunction<typeof fetchCommentSync>;
-const mockedFetchLeadCMSComments = fetchLeadCMSComments as jest.MockedFunction<typeof fetchLeadCMSComments>;
+const mockedPullCommentSync = pullCommentSync as jest.MockedFunction<typeof pullCommentSync>;
+const mockedPullLeadCMSComments = pullLeadCMSComments as jest.MockedFunction<typeof pullLeadCMSComments>;
 
 async function writeCommentFile(relativePath: string, comments: any[]): Promise<string> {
   const filePath = path.join(commentsDir, relativePath);
@@ -59,8 +59,8 @@ describe('push-comments', () => {
     await fs.mkdir(commentsDir, { recursive: true });
     jest.clearAllMocks();
     dataServiceMock.isApiKeyConfigured.mockReturnValue(true);
-    mockedFetchCommentSync.mockResolvedValue({ items: [], deleted: [], nextSyncToken: 'sync-1' } as any);
-    mockedFetchLeadCMSComments.mockResolvedValue(undefined);
+    mockedPullCommentSync.mockResolvedValue({ items: [], deleted: [], nextSyncToken: 'sync-1' } as any);
+    mockedPullLeadCMSComments.mockResolvedValue(undefined);
   });
 
   afterAll(async () => {
@@ -108,7 +108,7 @@ describe('push-comments', () => {
       },
     ]);
 
-    mockedFetchCommentSync.mockResolvedValue({
+    mockedPullCommentSync.mockResolvedValue({
       items: [
         {
           id: 10,
@@ -202,7 +202,7 @@ describe('push-comments', () => {
       commentableType: 'Content',
       language: 'ru-RU',
     });
-    expect(mockedFetchLeadCMSComments).toHaveBeenCalledTimes(1);
+    expect(mockedPullLeadCMSComments).toHaveBeenCalledTimes(1);
 
     const saved = JSON.parse(await fs.readFile(filePath, 'utf8'));
     expect(saved[0].id).toBe(1001);
@@ -231,7 +231,7 @@ describe('push-comments', () => {
       },
     ]);
 
-    mockedFetchCommentSync.mockResolvedValue({
+    mockedPullCommentSync.mockResolvedValue({
       items: [
         {
           id: 20,
@@ -292,7 +292,7 @@ describe('push-comments', () => {
       answerStatus: 'Answered',
     });
     expect(dataServiceMock.deleteComment).toHaveBeenCalledWith(21);
-    expect(mockedFetchLeadCMSComments).toHaveBeenCalledTimes(1);
+    expect(mockedPullLeadCMSComments).toHaveBeenCalledTimes(1);
   });
 
   it('skips conflicting updates unless force is enabled', async () => {
@@ -313,7 +313,7 @@ describe('push-comments', () => {
       },
     ]);
 
-    mockedFetchCommentSync.mockResolvedValue({
+    mockedPullCommentSync.mockResolvedValue({
       items: [
         {
           id: 30,
@@ -359,7 +359,7 @@ describe('push-comments', () => {
       language: 'en',
       status: 'Approved',
     });
-    expect(mockedFetchLeadCMSComments).toHaveBeenCalledTimes(1);
+    expect(mockedPullLeadCMSComments).toHaveBeenCalledTimes(1);
   });
 
   it('does not treat avatarUrl-only local edits as client-side updates', async () => {
@@ -380,7 +380,7 @@ describe('push-comments', () => {
       },
     ]);
 
-    mockedFetchCommentSync.mockResolvedValue({
+    mockedPullCommentSync.mockResolvedValue({
       items: [
         {
           id: 50,
@@ -430,7 +430,7 @@ describe('push-comments', () => {
       commentableType: 'Content',
       language: 'en',
     });
-    mockedFetchLeadCMSComments.mockRejectedValue(new Error('refresh failed'));
+    mockedPullLeadCMSComments.mockRejectedValue(new Error('refresh failed'));
 
     await expect(pushComments()).rejects.toThrow('refresh failed');
 
@@ -457,7 +457,7 @@ describe('push-comments', () => {
       },
     ]);
 
-    mockedFetchCommentSync.mockResolvedValue({
+    mockedPullCommentSync.mockResolvedValue({
       items: [
         {
           id: 40,

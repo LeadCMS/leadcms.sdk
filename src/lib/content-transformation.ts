@@ -128,8 +128,14 @@ function transformToMDXFormatForComparison(remote: RemoteContentData, localConte
   // Filter out null and undefined values to prevent them from appearing in frontmatter
   const filteredFrontmatter = filterNullValues(mergedFrontmatter);
 
+  // Filter out empty arrays (e.g. tags: []) — they add no value to frontmatter
+  const compactFrontmatter = filterEmptyArrays(filteredFrontmatter);
+
+  // Ensure id/createdAt/updatedAt always appear first in frontmatter
+  const orderedFrontmatter = hoistMetadataFields(compactFrontmatter);
+
   // Apply media path replacements to both frontmatter and body content
-  const cleanedFrontmatter = replaceApiMediaPaths(filteredFrontmatter);
+  const cleanedFrontmatter = replaceApiMediaPaths(orderedFrontmatter);
   const cleanedContent = replaceApiMediaPaths(bodyContent);
 
   // Use gray-matter's stringify to build frontmatter + content, adding extra newline for consistency
@@ -211,8 +217,14 @@ function transformToMDXFormat(remote: RemoteContentData): string {
   // Filter out null and undefined values to prevent them from appearing in frontmatter
   const filteredFrontmatter = filterNullValues(mergedFrontmatter);
 
+  // Filter out empty arrays (e.g. tags: []) — they add no value to frontmatter
+  const compactFrontmatter = filterEmptyArrays(filteredFrontmatter);
+
+  // Ensure id/createdAt/updatedAt always appear first in frontmatter
+  const orderedFrontmatter = hoistMetadataFields(compactFrontmatter);
+
   // Apply media path replacements to both frontmatter and body content
-  const cleanedFrontmatter = replaceApiMediaPaths(filteredFrontmatter);
+  const cleanedFrontmatter = replaceApiMediaPaths(orderedFrontmatter);
   const cleanedContent = replaceApiMediaPaths(bodyContent);
 
   // Use gray-matter's stringify to build frontmatter + content, adding extra newline for consistency
@@ -323,6 +335,14 @@ export function hasContentDifferences(content1: string, content2: string): boole
 }
 
 /**
+ * Strip id/createdAt/updatedAt lines from content so server-managed metadata
+ * don't cause false diffs when comparing across different remotes.
+ */
+export function stripTimestampMetadata(content: string): string {
+  return content.replace(/^\s*(id|createdAt|updatedAt):.*$/gm, '').replace(/\n{3,}/g, '\n\n');
+}
+
+/**
  * Filter out null and undefined values from an object
  * This prevents empty/null fields from appearing in frontmatter
  */
@@ -334,6 +354,39 @@ function filterNullValues(obj: Record<string, any>): Record<string, any> {
     }
   }
   return filtered;
+}
+
+/**
+ * Remove empty arrays from an object so they don't clutter frontmatter
+ * (e.g. tags: [] adds no useful information).
+ */
+function filterEmptyArrays(obj: Record<string, any>): Record<string, any> {
+  const filtered: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (Array.isArray(value) && value.length === 0) continue;
+    filtered[key] = value;
+  }
+  return filtered;
+}
+
+/**
+ * Reorder an object so that `id`, `createdAt` and `updatedAt` come first.
+ * This keeps frontmatter stable regardless of the order the API returns fields.
+ */
+function hoistMetadataFields(obj: Record<string, any>): Record<string, any> {
+  const hoisted: Record<string, any> = {};
+  const priorityKeys = ['id', 'createdAt', 'updatedAt'];
+  for (const key of priorityKeys) {
+    if (key in obj) {
+      hoisted[key] = obj[key];
+    }
+  }
+  for (const [key, value] of Object.entries(obj)) {
+    if (!priorityKeys.includes(key)) {
+      hoisted[key] = value;
+    }
+  }
+  return hoisted;
 }
 
 /**

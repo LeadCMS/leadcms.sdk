@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Orchestrator for pulling all content from LeadCMS
- * Checks entity support before fetching content, media, and comments
+ * Checks entity support before pulling content, media, and comments
  */
 
 import "dotenv/config";
@@ -12,6 +12,8 @@ import { leadCMSUrl, leadCMSApiKey } from "./leadcms-helpers.js";
 import { setCMSConfig, isContentSupported, isMediaSupported, isCommentsSupported, isEmailTemplatesSupported, isSettingsSupported } from "../lib/cms-config-types.js";
 import { getConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
+import { syncTokenPath, metadataMapPath } from "../lib/remote-context.js";
+import type { RemoteContext } from "../lib/remote-context.js";
 
 interface PullAllOptions {
   targetId?: string;
@@ -20,12 +22,14 @@ interface PullAllOptions {
   reset?: boolean;
   /** When true, skip three-way merge and always overwrite local files with remote content. */
   force?: boolean;
+  /** Remote context for multi-remote support. */
+  remoteContext?: RemoteContext;
 }
 
 /**
  * Fetch CMS config to determine which entities are supported
  */
-async function fetchAndCacheCMSConfig(): Promise<{
+async function fetchAndCacheCMSConfig(baseUrl?: string): Promise<{
   content: boolean;
   media: boolean;
   comments: boolean;
@@ -33,8 +37,9 @@ async function fetchAndCacheCMSConfig(): Promise<{
   settings: boolean;
 }> {
   try {
+    const effectiveUrl = baseUrl || leadCMSUrl;
     logger.info(`🔍 Checking CMS configuration...`);
-    const configUrl = new URL('/api/config', leadCMSUrl).toString();
+    const configUrl = new URL('/api/config', effectiveUrl).toString();
     const response = await axios.get(configUrl, { timeout: 10000 });
 
     if (response.data) {
@@ -69,8 +74,9 @@ async function fetchAndCacheCMSConfig(): Promise<{
 /**
  * Reset content directory and its sync tokens.
  * Deletes content files, the sync token inside contentDir, and any legacy sync tokens.
+ * When remoteCtx is provided, also clears per-remote sync tokens.
  */
-async function resetContentState(): Promise<void> {
+async function resetContentState(remoteCtx?: RemoteContext): Promise<void> {
   const config = getConfig();
   const contentDir = path.resolve(config.contentDir);
 
@@ -84,13 +90,22 @@ async function resetContentState(): Promise<void> {
     await fs.unlink(path.join(path.dirname(contentDir), 'sync-token.txt'));
     logger.verbose(`   ✓ Removed legacy content sync token`);
   } catch { /* not found — ok */ }
+
+  // Clear per-remote content sync token when remote context is provided
+  if (remoteCtx) {
+    try {
+      await fs.unlink(syncTokenPath(remoteCtx, 'content'));
+      logger.verbose(`   ✓ Removed per-remote content sync token (${remoteCtx.name})`);
+    } catch { /* not found — ok */ }
+  }
 }
 
 /**
  * Reset media directory and its sync tokens.
  * Deletes media files, the sync token inside mediaDir, and any legacy sync tokens.
+ * When remoteCtx is provided, also clears per-remote media sync token.
  */
-async function resetMediaState(): Promise<void> {
+async function resetMediaState(remoteCtx?: RemoteContext): Promise<void> {
   const config = getConfig();
   const mediaDir = path.resolve(config.mediaDir);
   const contentDir = path.resolve(config.contentDir);
@@ -105,13 +120,22 @@ async function resetMediaState(): Promise<void> {
     await fs.unlink(path.join(path.dirname(contentDir), 'media-sync-token.txt'));
     logger.verbose(`   ✓ Removed legacy media sync token`);
   } catch { /* not found — ok */ }
+
+  // Clear per-remote media sync token
+  if (remoteCtx) {
+    try {
+      await fs.unlink(syncTokenPath(remoteCtx, 'media'));
+      logger.verbose(`   ✓ Removed per-remote media sync token (${remoteCtx.name})`);
+    } catch { /* not found — ok */ }
+  }
 }
 
 /**
  * Reset comments directory and its sync tokens.
  * Deletes comment files, the sync token inside commentsDir, and any legacy sync tokens.
+ * When remoteCtx is provided, also clears per-remote comments sync token.
  */
-async function resetCommentsState(): Promise<void> {
+async function resetCommentsState(remoteCtx?: RemoteContext): Promise<void> {
   const config = getConfig();
   const commentsDir = path.resolve(config.commentsDir);
 
@@ -125,12 +149,21 @@ async function resetCommentsState(): Promise<void> {
     await fs.unlink(path.join(path.dirname(commentsDir), 'comment-sync-token.txt'));
     logger.verbose(`   ✓ Removed legacy comment sync token`);
   } catch { /* not found — ok */ }
+
+  // Clear per-remote comments sync token
+  if (remoteCtx) {
+    try {
+      await fs.unlink(syncTokenPath(remoteCtx, 'comments'));
+      logger.verbose(`   ✓ Removed per-remote comments sync token (${remoteCtx.name})`);
+    } catch { /* not found — ok */ }
+  }
 }
 
 /**
  * Reset email templates directory and its sync tokens.
+ * When remoteCtx is provided, also clears per-remote email-templates sync token.
  */
-async function resetEmailTemplatesState(): Promise<void> {
+async function resetEmailTemplatesState(remoteCtx?: RemoteContext): Promise<void> {
   const config = getConfig();
   const emailTemplatesDir = path.resolve(config.emailTemplatesDir);
 
@@ -138,6 +171,14 @@ async function resetEmailTemplatesState(): Promise<void> {
     await fs.rm(emailTemplatesDir, { recursive: true, force: true });
     logger.verbose(`   ✓ Cleared email templates directory: ${emailTemplatesDir}`);
   } catch { /* directory may not exist */ }
+
+  // Clear per-remote email-templates sync token
+  if (remoteCtx) {
+    try {
+      await fs.unlink(syncTokenPath(remoteCtx, 'email-templates'));
+      logger.verbose(`   ✓ Removed per-remote email-templates sync token (${remoteCtx.name})`);
+    } catch { /* not found — ok */ }
+  }
 }
 
 /**
@@ -156,15 +197,24 @@ async function resetSettingsState(): Promise<void> {
 /**
  * Delete all local content, media, comments, and sync tokens.
  * Used by --reset to do a clean pull from scratch.
+ * When remoteCtx is provided, also clears per-remote state (sync tokens and metadata).
  */
-async function resetLocalState(): Promise<void> {
+async function resetLocalState(remoteCtx?: RemoteContext): Promise<void> {
   console.log(`🗑️  Resetting local state...`);
 
-  await resetContentState();
-  await resetMediaState();
-  await resetCommentsState();
-  await resetEmailTemplatesState();
+  await resetContentState(remoteCtx);
+  await resetMediaState(remoteCtx);
+  await resetCommentsState(remoteCtx);
+  await resetEmailTemplatesState(remoteCtx);
   await resetSettingsState();
+
+  // Clear per-remote metadata
+  if (remoteCtx) {
+    try {
+      await fs.unlink(metadataMapPath(remoteCtx));
+      logger.verbose(`   ✓ Removed per-remote metadata (${remoteCtx.name})`);
+    } catch { /* not found — ok */ }
+  }
 
   console.log(`   ✅ Local state reset complete\n`);
 }
@@ -173,26 +223,27 @@ async function resetLocalState(): Promise<void> {
  * Main orchestrator function
  */
 async function main(options: PullAllOptions = {}): Promise<void> {
-  const { targetId, targetSlug, reset, force } = options;
+  const { targetId, targetSlug, reset, force, remoteContext: remoteCtx } = options;
+  const effectiveUrl = remoteCtx?.url || leadCMSUrl;
 
   // If pulling specific content by ID or slug, use pull-content logic directly
   if (targetId || targetSlug) {
-    console.log(`\n🚀 LeadCMS Pull - Fetching specific content\n`);
+    console.log(`\n🚀 LeadCMS Pull - Pulling specific content\n`);
     const { pullContent } = await import('./pull-content.js');
-    await pullContent({ targetId, targetSlug });
+    await pullContent({ targetId, targetSlug, remoteContext: remoteCtx });
     return;
   }
 
   // Handle --reset flag: clear everything before pulling
   if (reset) {
     console.log(`\n🔄 LeadCMS Pull --reset - Fresh pull from scratch\n`);
-    await resetLocalState();
+    await resetLocalState(remoteCtx);
   } else {
-    console.log(`\n🚀 LeadCMS Pull - Fetching all content\n`);
+    console.log(`\n🚀 LeadCMS Pull - Pulling all content\n`);
   }
 
   // Check which entities are supported
-  const { content, media, comments, emailTemplates, settings } = await fetchAndCacheCMSConfig();
+  const { content, media, comments, emailTemplates, settings } = await fetchAndCacheCMSConfig(effectiveUrl);
 
   if (!content && !media && !comments && !emailTemplates && !settings) {
     console.log(`⏭️  No supported entities found - nothing to sync`);
@@ -201,7 +252,7 @@ async function main(options: PullAllOptions = {}): Promise<void> {
 
   // Pull settings first — other content may depend on settings
   if (settings) {
-    console.log(`\n⚙️  Fetching settings...`);
+    console.log(`\n⚙️  Pulling settings...`);
     try {
       const { pullSettings } = await import('./pull-settings.js');
       await pullSettings({ reset: false });
@@ -211,30 +262,36 @@ async function main(options: PullAllOptions = {}): Promise<void> {
     }
   }
 
-  // Import and run fetch functions for supported entities
-  const fetchPromises: Promise<void>[] = [];
+  // Import and run pull functions for supported entities
+  const pullPromises: Promise<void>[] = [];
 
-  if (content || media) {
-    console.log(`📄 Fetching content and media...`);
-    const { fetchLeadCMSContent } = await import('./fetch-leadcms-content.js');
-    fetchPromises.push(fetchLeadCMSContent({ forceOverwrite: force }));
+  if (content) {
+    console.log(`📄 Pulling content...`);
+    const { pullLeadCMSContent } = await import('./pull-leadcms-content.js');
+    pullPromises.push(pullLeadCMSContent({ forceOverwrite: force, remoteContext: remoteCtx }));
+  }
+
+  if (media) {
+    console.log(`🖼️  Pulling media...`);
+    const { pullLeadCMSMedia } = await import('./pull-leadcms-media.js');
+    pullPromises.push(pullLeadCMSMedia({ remoteContext: remoteCtx }));
   }
 
   if (comments) {
-    console.log(`💬 Fetching comments...`);
-    const { fetchLeadCMSComments } = await import('./fetch-leadcms-comments.js');
-    fetchPromises.push(fetchLeadCMSComments());
+    console.log(`💬 Pulling comments...`);
+    const { pullLeadCMSComments } = await import('./pull-leadcms-comments.js');
+    pullPromises.push(pullLeadCMSComments(remoteCtx));
   }
 
   if (emailTemplates) {
-    console.log(`📧 Fetching email templates...`);
-    const { fetchLeadCMSEmailTemplates } = await import('./fetch-leadcms-email-templates.js');
-    fetchPromises.push(fetchLeadCMSEmailTemplates());
+    console.log(`📧 Pulling email templates...`);
+    const { pullLeadCMSEmailTemplates } = await import('./pull-leadcms-email-templates.js');
+    pullPromises.push(pullLeadCMSEmailTemplates(remoteCtx));
   }
 
-  // Wait for all fetches to complete
+  // Wait for all pulls to complete
   try {
-    await Promise.all(fetchPromises);
+    await Promise.all(pullPromises);
     console.log(`\n✨ Pull completed successfully!\n`);
   } catch (error: any) {
     console.error(`\n❌ Pull failed: ${error.message}\n`);

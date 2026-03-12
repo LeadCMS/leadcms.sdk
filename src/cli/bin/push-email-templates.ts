@@ -7,9 +7,11 @@ import { pushEmailTemplates } from '../../scripts/push-email-templates.js';
 import { requireAuthenticatedUser, resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
+import { parseRemoteFlag } from './remote-flag.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+const remoteContext = parseRemoteFlag(args);
 
 const force = args.includes('--force') || args.includes('-f');
 const dryRun = args.includes('--dry-run') || args.includes('-d');
@@ -36,7 +38,7 @@ if (!dryRun) {
 }
 
 const spinner = startSpinner('Pushing email templates to LeadCMS…');
-pushEmailTemplates({ force, dryRun, allowDelete, targetId, targetName })
+pushEmailTemplates({ force, dryRun, allowDelete, targetId, targetName, remoteContext })
   .then(() => spinner.stop())
   .catch((error: any) => {
     spinner.fail('Email template push failed');

@@ -6,7 +6,10 @@
 import { startSSEWatcher } from '../../scripts/sse-watcher.js';
 import { resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
+import { parseRemoteFlag } from './remote-flag.js';
 
-initVerboseFromArgs();
-await resolveIdentity();
-startSSEWatcher();
+const args = process.argv.slice(2);
+initVerboseFromArgs(args);
+const remoteContext = parseRemoteFlag(args);
+await resolveIdentity(remoteContext?.apiKey);
+startSSEWatcher(remoteContext);

@@ -9,9 +9,11 @@ import { resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
 import { parseContentStatusFilter } from './content-status-args.js';
+import { parseRemoteFlag } from './remote-flag.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+const remoteContext = parseRemoteFlag(args);
 
 // Parse target ID or slug
 let targetId: string | undefined;
@@ -37,10 +39,10 @@ if (args.includes('--preview')) {
 const showDelete = args.includes('--delete');
 const statusFilter = parseContentStatusFilter(args);
 
-await resolveIdentity();
+await resolveIdentity(remoteContext?.apiKey);
 
 const spinner = startSpinner('Checking content status…');
-pushLeadCMSContent({ statusOnly: true, targetId, targetSlug, statusFilter, showDetailedPreview, showDelete })
+pushLeadCMSContent({ statusOnly: true, targetId, targetSlug, statusFilter, showDetailedPreview, showDelete, remoteContext })
   .then(() => spinner.stop())
   .catch((error: any) => {
     spinner.fail('Failed to check content status');

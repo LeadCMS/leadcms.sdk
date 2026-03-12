@@ -8,9 +8,11 @@ import { statusComments } from '../../scripts/push-comments.js';
 import { resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
+import { parseRemoteFlag } from './remote-flag.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+parseRemoteFlag(args);
 
 const showDelete = args.includes('--delete');
 const showDetailedPreview = args.includes('--preview');

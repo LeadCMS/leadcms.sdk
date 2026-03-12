@@ -68,7 +68,6 @@ export type { CommentTreeNode, CommentTreeOptions, CommentStatistics, CommentSor
 // - npx leadcms login     - Authenticate with LeadCMS (device auth or manual token)
 // - npx leadcms pull      - Pull content and comments from LeadCMS
 // - npx leadcms pull-comments - Pull only comments from LeadCMS
-// - npx leadcms fetch     - Alias for pull (backward compatibility)
 // - npx leadcms watch     - Watch for real-time updates
 // - npx leadcms generate-env - Generate environment file
 //

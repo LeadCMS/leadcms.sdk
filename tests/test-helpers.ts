@@ -16,7 +16,7 @@
  *
  *   // in test:
  *   harness.addContentSync([item], [], 'token-1');
- *   await fetchLeadCMSContent();
+ *   await pullLeadCMSContent();
  */
 
 import path from 'path';
@@ -150,7 +150,7 @@ interface SyncTestHarnessOptions {
  *
  *   // In each test:
  *   harness.addContentSync([item1, item2], [deletedId], 'token-1');
- *   await fetchLeadCMSContent();
+ *   await pullLeadCMSContent();
  */
 export function createSyncTestHarness(options: SyncTestHarnessOptions) {
   const {
@@ -171,6 +171,8 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
   const state = {
     contentSyncQueue: [] as Array<{ items: any[]; deleted: number[]; token: string; baseItems?: Record<string, any> }>,
     mediaSyncQueue: [] as Array<{ items: any[]; deleted: any[]; token: string }>,
+    emailTemplateSyncQueue: [] as Array<{ items: any[]; deleted: number[]; token: string; baseItems?: Record<string, any> }>,
+    emailGroups: [] as Array<{ id: number; name: string; language: string }>,
     contentTypes: [...contentTypes],
   };
 
@@ -224,6 +226,40 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
         status: 200,
         data: { items: [], deleted: [] },
         headers: { 'x-next-sync-token': sentToken || 'done' },
+      });
+    }
+
+    if (url.includes('/api/email-templates/sync')) {
+      const urlObj = new URL(url);
+      const sentToken = urlObj.searchParams.get('syncToken') || '';
+      const pending = state.emailTemplateSyncQueue[0];
+
+      if (pending && sentToken !== pending.token) {
+        const responseData: any = { items: pending.items, deleted: pending.deleted };
+        if (pending.baseItems) {
+          responseData.baseItems = pending.baseItems;
+        }
+        return Promise.resolve({
+          status: 200,
+          data: responseData,
+          headers: { 'x-next-sync-token': pending.token },
+        });
+      }
+      if (pending && sentToken === pending.token) {
+        state.emailTemplateSyncQueue.shift();
+      }
+      return Promise.resolve({
+        status: 200,
+        data: { items: [], deleted: [] },
+        headers: { 'x-next-sync-token': sentToken || 'done' },
+      });
+    }
+
+    if (url.includes('/api/email-groups')) {
+      return Promise.resolve({
+        status: 200,
+        data: state.emailGroups,
+        headers: {},
       });
     }
 
@@ -301,6 +337,17 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
       state.mediaSyncQueue.push({ items, deleted, token });
     },
 
+    /** Queue an email template sync response for the next pull call. */
+    addEmailTemplateSync(items: any[], deleted: number[], token: string, baseItems?: Record<string, any>) {
+      state.emailTemplateSyncQueue.push({ items, deleted, token, baseItems });
+    },
+
+    /** Set the email groups the mock API will return. */
+    setEmailGroups(groups: Array<{ id: number; name: string; language: string }>) {
+      state.emailGroups.length = 0;
+      state.emailGroups.push(...groups);
+    },
+
     /** Set the content types the mock API will return. */
     setContentTypes(types: Array<{ uid: string; format: string }>) {
       state.contentTypes.length = 0;
@@ -317,6 +364,7 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
       await fs.mkdir(mediaDir, { recursive: true });
       state.contentSyncQueue.length = 0;
       state.mediaSyncQueue.length = 0;
+      state.emailTemplateSyncQueue.length = 0;
       // Clean up both new and legacy sync token locations
       try { await fs.unlink(syncTokenPath); } catch { /* not found */ }
       try { await fs.unlink(mediaSyncTokenPath); } catch { /* not found */ }

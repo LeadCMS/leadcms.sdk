@@ -9,7 +9,7 @@ import { leadCMSDataService } from '../lib/data-service.js';
 import { isValidLocaleCode } from '../lib/locale-utils.js';
 import { colorConsole, diffColors, statusColors } from '../lib/console-colors.js';
 import { logger } from '../lib/logger.js';
-import { fetchCommentSync, fetchLeadCMSComments, saveCommentsForEntity } from './fetch-leadcms-comments.js';
+import { pullCommentSync, pullLeadCMSComments, saveCommentsForEntity } from './pull-leadcms-comments.js';
 
 import type { Comment, StoredComment } from '../lib/comment-types.js';
 import type { CommentCreateItem, CommentUpdateItem } from '../lib/data-service.js';
@@ -233,7 +233,7 @@ function filterUndefinedValues<T extends Record<string, any>>(value: T): T {
 }
 
 async function fetchRemoteComments(): Promise<RemoteCommentItem[]> {
-  const result = await fetchCommentSync(undefined);
+  const result = await pullCommentSync(undefined);
   return result.items as RemoteCommentItem[];
 }
 
@@ -543,7 +543,7 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
 
   if (!dryRun && didMutate) {
     console.log('🔄 Refreshing local comments anonymously...');
-    await fetchLeadCMSComments();
+    await pullLeadCMSComments();
   }
 }
 

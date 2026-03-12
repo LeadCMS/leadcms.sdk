@@ -12,12 +12,13 @@ import {
   formatEmailTemplateForApi,
   type EmailTemplateRemoteData,
 } from "../lib/email-template-transformation.js";
-import { hasContentDifferences, normalizeContentForComparison } from "../lib/content-transformation.js";
+import { hasContentDifferences, normalizeContentForComparison, stripTimestampMetadata } from "../lib/content-transformation.js";
 import { threeWayMerge, isLocallyModified } from "../lib/content-merge.js";
 import { leadCMSDataService } from "../lib/data-service.js";
-import { fetchEmailTemplateSync } from "./fetch-leadcms-email-templates.js";
+import { pullEmailTemplateSync } from "./pull-leadcms-email-templates.js";
 import { colorConsole, statusColors, diffColors } from "../lib/console-colors.js";
 import { logger } from "../lib/logger.js";
+import type { RemoteContext, MetadataMap } from "../lib/remote-context.js";
 
 interface LocalEmailTemplateItem {
   filePath: string;
@@ -54,12 +55,16 @@ interface PushOptions {
   allowDelete?: boolean;
   targetId?: string;
   targetName?: string;
+  /** Remote context for multi-remote support. When provided, API calls target this remote. */
+  remoteContext?: RemoteContext;
 }
 
 interface StatusOptions {
   showDelete?: boolean;
   targetId?: string;
   showDetailedPreview?: boolean;
+  /** Remote context for multi-remote support. */
+  remoteContext?: RemoteContext;
 }
 
 interface EmailTemplateOperation {
@@ -283,7 +288,8 @@ async function createMissingEmailGroups(
 
 function getRemoteMatch(
   local: LocalEmailTemplateItem,
-  remoteTemplates: RemoteEmailTemplateItem[]
+  remoteTemplates: RemoteEmailTemplateItem[],
+  metadataMap?: MetadataMap,
 ): RemoteEmailTemplateItem | undefined {
   // Priority 1: Match by name + language (name is the "slug" equivalent for templates)
   const name = local.metadata.name;
@@ -297,13 +303,27 @@ function getRemoteMatch(
     if (nameMatch) return nameMatch;
   }
 
-  // Priority 2: Fall back to ID match (handles renames where local still has old remote ID)
-  const localId = local.metadata.id != null ? Number(local.metadata.id) : undefined;
-  if (localId != null) {
-    return remoteTemplates.find(template => template.id === localId);
+  // Priority 2: Use remote-specific id-map when available,
+  // falling back to frontmatter ID for single-remote backward compatibility
+  const remoteId = metadataMap
+    ? (lookupEmailTemplateRemoteIdSync(metadataMap, language, name))
+    : undefined;
+  const matchId = remoteId ?? (local.metadata.id != null ? Number(local.metadata.id) : undefined);
+  if (matchId != null) {
+    return remoteTemplates.find(template => template.id === matchId);
   }
 
   return undefined;
+}
+
+/** Synchronous id-map lookup (avoids async import in hot loop). */
+function lookupEmailTemplateRemoteIdSync(
+  map: MetadataMap,
+  language: string,
+  name: string | undefined,
+): number | string | undefined {
+  if (!name || !map.emailTemplates) return undefined;
+  return map.emailTemplates[language]?.[name]?.id;
 }
 
 function filterUndefinedValues(obj: Record<string, any>): Record<string, any> {
@@ -317,8 +337,8 @@ function filterUndefinedValues(obj: Record<string, any>): Record<string, any> {
 }
 
 async function hasTemplateChanges(local: LocalEmailTemplateItem, remote: RemoteEmailTemplateItem): Promise<boolean> {
-  const localContent = await fs.readFile(local.filePath, 'utf8');
-  const remoteTransformed = transformEmailTemplateRemoteToLocalFormat(remote);
+  const localContent = stripTimestampMetadata(await fs.readFile(local.filePath, 'utf8'));
+  const remoteTransformed = stripTimestampMetadata(transformEmailTemplateRemoteToLocalFormat(remote));
   return hasContentDifferences(localContent, remoteTransformed);
 }
 
@@ -329,8 +349,36 @@ async function hasTemplateChanges(local: LocalEmailTemplateItem, remote: RemoteE
 async function updateLocalFileFromResponse(
   local: LocalEmailTemplateItem,
   response: RemoteEmailTemplateItem,
-  emailGroups: EmailGroupItem[]
+  emailGroups: EmailGroupItem[],
+  remoteCtx?: RemoteContext,
 ): Promise<void> {
+  // Per-remote map updates
+  if (remoteCtx) {
+    try {
+      const rc = await import('../lib/remote-context.js');
+      const metaMap = await rc.readMetadataMap(remoteCtx);
+      const language = response.language || local.locale;
+      const name = response.name || local.metadata.name;
+      if (response.id != null && name) {
+        rc.setEmailTemplateRemoteId(metaMap, language, name, response.id);
+      }
+      if (name) {
+        rc.setMetadataForEmailTemplate(metaMap, language, name, {
+          createdAt: response.createdAt,
+          updatedAt: response.updatedAt ?? undefined,
+        });
+      }
+      await rc.writeMetadataMap(remoteCtx, metaMap);
+    } catch (error: any) {
+      console.warn(`Failed to update remote map files for ${local.filePath}:`, error.message);
+    }
+  }
+
+  // Only update local file in single-remote mode or for the default remote
+  if (remoteCtx && !remoteCtx.isDefault) {
+    return;
+  }
+
   try {
     // Enrich the response with group name if missing
     if (response.emailGroupId != null && !response.emailGroup?.name) {
@@ -394,7 +442,7 @@ async function fetchBaseItemsForMerge(
 
     if (!syncToken) return {};
 
-    const { baseItems } = await fetchEmailTemplateSync(syncToken);
+    const { baseItems } = await pullEmailTemplateSync(syncToken);
 
     // Enrich base items with email group data
     const groupById = new Map(emailGroups.map(g => [Number(g.id), g]));
@@ -465,7 +513,7 @@ export interface EmailTemplateStatusResult {
 }
 
 async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<EmailTemplateStatusResult> {
-  const { showDelete } = options;
+  const { showDelete, remoteContext: remoteCtx } = options;
   const operations: EmailTemplateOperation[] = [];
 
   const localTemplates = await readLocalEmailTemplates();
@@ -478,6 +526,13 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
 
   // Fetch base items for three-way auto-merge detection
   const baseItems = await fetchBaseItemsForMerge(emailGroups);
+
+  // Load per-remote metadata-map for multi-remote support
+  let metadataMap: MetadataMap | undefined;
+  if (remoteCtx) {
+    const rc = await import('../lib/remote-context.js');
+    metadataMap = await rc.readMetadataMap(remoteCtx);
+  }
 
   for (const local of localTemplates) {
     const resolvedGroupId = resolveEmailGroupId(local, groupIndex);
@@ -495,7 +550,7 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
       }
     }
 
-    const match = getRemoteMatch(local, remoteTemplates);
+    const match = getRemoteMatch(local, remoteTemplates, metadataMap);
 
     const payload = filterUndefinedValues(formatEmailTemplateForApi({
       metadata: local.metadata,
@@ -518,7 +573,18 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
       continue;
     }
 
-    const localUpdated = local.metadata.updatedAt ? new Date(local.metadata.updatedAt) : new Date(0);
+    // Use remote-specific metadata-map when available, falling back to frontmatter
+    const language = local.metadata.language || local.locale;
+    const name = local.metadata.name;
+    let localUpdatedStr: string | undefined;
+    if (metadataMap && name) {
+      const rc = await import('../lib/remote-context.js');
+      localUpdatedStr = rc.getMetadataForEmailTemplate(metadataMap, language, name)?.updatedAt;
+    }
+    if (!localUpdatedStr) {
+      localUpdatedStr = local.metadata.updatedAt;
+    }
+    const localUpdated = localUpdatedStr ? new Date(localUpdatedStr) : new Date(0);
     const remoteUpdated = match?.updatedAt ? new Date(match.updatedAt) : new Date(0);
 
     if (remoteUpdated > localUpdated) {
@@ -664,9 +730,9 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
     if (!op.local?.filePath) return;
 
     try {
-      const localContent = await fs.readFile(op.local.filePath, 'utf8');
+      const localContent = stripTimestampMetadata(await fs.readFile(op.local.filePath, 'utf8'));
       const remoteTransformed = op.remote
-        ? transformEmailTemplateRemoteToLocalFormat(op.remote)
+        ? stripTimestampMetadata(transformEmailTemplateRemoteToLocalFormat(op.remote))
         : '';
 
       if (!hasContentDifferences(localContent, remoteTransformed)) {
@@ -799,7 +865,20 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
     return;
   }
 
-  const { force, dryRun, allowDelete, targetId, targetName } = options;
+  const { force, dryRun, allowDelete, targetId, targetName, remoteContext: remoteCtx } = options;
+
+  // Configure data service for the target remote (multi-remote support)
+  if (remoteCtx) {
+    leadCMSDataService.configureForRemote(remoteCtx.url, remoteCtx.apiKey);
+    logger.verbose(`[PUSH] Using remote "${remoteCtx.name}" (${remoteCtx.url})`);
+  }
+
+  // Load per-remote id-map and metadata-map for multi-remote support
+  let metadataMap: MetadataMap | undefined;
+  if (remoteCtx) {
+    const rc = await import('../lib/remote-context.js');
+    metadataMap = await rc.readMetadataMap(remoteCtx);
+  }
 
   let localTemplates = await readLocalEmailTemplates();
 
@@ -848,9 +927,20 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
       local.metadata.emailGroupId = resolvedGroupId;
     }
 
-    const match = getRemoteMatch(local, remoteTemplates);
+    const match = getRemoteMatch(local, remoteTemplates, metadataMap);
 
-    const localUpdated = local.metadata.updatedAt ? new Date(local.metadata.updatedAt) : new Date(0);
+    // Use remote-specific metadata-map when available, falling back to frontmatter
+    const language = local.metadata.language || local.locale;
+    const name = local.metadata.name;
+    let localUpdatedStr: string | undefined;
+    if (metadataMap && name) {
+      const rc = await import('../lib/remote-context.js');
+      localUpdatedStr = rc.getMetadataForEmailTemplate(metadataMap, language, name)?.updatedAt;
+    }
+    if (!localUpdatedStr) {
+      localUpdatedStr = local.metadata.updatedAt;
+    }
+    const localUpdated = localUpdatedStr ? new Date(localUpdatedStr) : new Date(0);
     const remoteUpdated = match?.updatedAt ? new Date(match.updatedAt) : new Date(0);
 
     let autoMerged = false;
@@ -898,7 +988,7 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
 
       const created = await leadCMSDataService.createEmailTemplate(payload);
       console.log(`✅ Created email template: ${payload.name}`);
-      await updateLocalFileFromResponse(local, created, emailGroups);
+      await updateLocalFileFromResponse(local, created, emailGroups, remoteCtx);
       continue;
     }
 
@@ -919,7 +1009,7 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
     const updated = await leadCMSDataService.updateEmailTemplate(Number(match.id), payload);
     const label = autoMerged ? '🔀 Auto-merged and updated' : '✅ Updated';
     console.log(`${label} email template: ${payload.name}`);
-    await updateLocalFileFromResponse(local, updated, emailGroups);
+    await updateLocalFileFromResponse(local, updated, emailGroups, remoteCtx);
   }
 
   if (!allowDelete || targetId || targetName) {

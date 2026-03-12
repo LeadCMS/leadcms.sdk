@@ -16,6 +16,7 @@ import {
   supportsDeviceAuth,
   deviceAuthFlow,
 } from '../src/lib/auth';
+import { parseRemoteArg, remoteApiKeyEnvName } from '../src/scripts/login-leadcms';
 
 // Mock axios at module level
 jest.mock('axios');
@@ -116,6 +117,14 @@ describe('Login Flow (Real SDK Auth Functions)', () => {
 
       const content = fs.readFileSync(testEnvPath, 'utf-8');
       expect(content).toContain('LEADCMS_API_KEY=test-token');
+    });
+
+    it('should save token under a custom env key', () => {
+      saveTokenToEnv('remote-token-123', 'LEADCMS_REMOTE_DEV_API_KEY');
+
+      const content = fs.readFileSync(testEnvPath, 'utf-8');
+      expect(content).toContain('LEADCMS_REMOTE_DEV_API_KEY=remote-token-123');
+      expect(content).not.toContain('LEADCMS_API_KEY=remote-token-123');
     });
   });
 
@@ -322,5 +331,32 @@ describe('deviceAuthFlow', () => {
     await expect(deviceAuthFlow('https://example.com')).rejects.toThrow(
       'Failed to initiate device authentication: Network error'
     );
+  });
+});
+
+describe('login remote helpers', () => {
+  describe('parseRemoteArg', () => {
+    it('returns undefined when remote flag is not present', () => {
+      expect(parseRemoteArg(['--verbose'])).toBeUndefined();
+    });
+
+    it('parses --remote value', () => {
+      expect(parseRemoteArg(['--remote', 'dev'])).toBe('dev');
+    });
+
+    it('parses -r value', () => {
+      expect(parseRemoteArg(['-r', 'production'])).toBe('production');
+    });
+
+    it('throws when remote name is missing', () => {
+      expect(() => parseRemoteArg(['-r'])).toThrow('--remote requires a remote name');
+    });
+  });
+
+  describe('remoteApiKeyEnvName', () => {
+    it('builds env var name from remote name', () => {
+      expect(remoteApiKeyEnvName('dev')).toBe('LEADCMS_REMOTE_DEV_API_KEY');
+      expect(remoteApiKeyEnvName('staging-eu')).toBe('LEADCMS_REMOTE_STAGING_EU_API_KEY');
+    });
   });
 });

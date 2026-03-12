@@ -71,7 +71,6 @@ switch (command) {
     process.exit(0);
     break;
   case 'pull':
-  case 'fetch': // Alias for backward compatibility
     runScript('pull-all.js', commandArgs);
     break;
   case 'pull-content':
@@ -136,7 +135,10 @@ switch (command) {
     runScript('init.js');
     break;
   case 'login':
-    runScript('login.js');
+    runScript('login.js', commandArgs);
+    break;
+  case 'remote':
+    runScript('remote.js', commandArgs);
     break;
   case 'docker':
   case 'templates':
@@ -150,7 +152,16 @@ Usage:
   leadcms version        - Show SDK version
   leadcms init           - Initialize LeadCMS configuration
   leadcms login          - Authenticate and save API token to .env file
+  leadcms remote         - Manage named remotes (list/add/remove/show/set-default/reset)
   leadcms docker         - Generate Docker deployment templates
+
+  Remote commands:
+  leadcms remote list                    - List configured remotes
+  leadcms remote add <name> <url>       - Add a remote
+  leadcms remote remove <name>          - Remove a remote
+  leadcms remote show <name>            - Show remote details + state
+  leadcms remote set-default <name>     - Set default remote
+  leadcms remote reset <name>           - Clear sync state for one remote
 
   Pull commands:
   leadcms pull [options] - Pull all content, media, and comments from LeadCMS
@@ -174,7 +185,6 @@ Usage:
   leadcms pull-settings [options] - Pull CMS settings locally
     --name <key>         - Pull a specific setting by key name
     --reset              - Delete local settings directory, then pull fresh
-  leadcms fetch          - Alias for 'pull' (backward compatibility)
 
   Push commands:
   leadcms push [options] - Push all local changes (content + media) to LeadCMS
@@ -236,26 +246,42 @@ Usage:
   Global options:
   --verbose, -V          - Show detailed debug output (API calls, sync tokens, etc.)
                            Can also be enabled with LEADCMS_VERBOSE=true env var
+  --remote, -r <name>    - Target a specific named remote (multi-instance support)
+                           In multi-remote mode: defaults to defaultRemote when omitted
+                           In single-remote mode: uses configured url/apiKey
+                           See 'leadcms remote list' for available remotes
 
 Getting Started:
   1. Initialize configuration:
      leadcms init              - Interactive setup wizard
 
-  2. Authenticate (optional, required for push operations):
-     leadcms login             - Get and save API token
+  2. Configure remotes (multi-remote):
+     leadcms remote add production https://prod.example.com
+     leadcms remote add develop https://dev.example.com
+     leadcms remote set-default production
 
-  3. Start syncing:
-     leadcms pull              - Download content from LeadCMS
-     leadcms status            - Check what needs to be pushed
-     leadcms push              - Upload local changes
+  3. Set API keys (recommended):
+     export LEADCMS_REMOTE_PRODUCTION_API_KEY=prod-token
+     export LEADCMS_REMOTE_DEVELOP_API_KEY=dev-token
+     # Optional fallback for default remote only:
+     export LEADCMS_API_KEY=default-token
+
+  4. Start syncing:
+     leadcms pull                      - Uses default remote
+     leadcms pull -r production        - Pull from production
+     leadcms push -r develop --force   - Push to develop
+     leadcms status -r production      - Show status vs production
 
 Configuration Files:
   .env (recommended, created by 'leadcms login'):
     LEADCMS_URL=https://your-instance.leadcms.ai
     LEADCMS_API_KEY=your-token-here
     LEADCMS_DEFAULT_LANGUAGE=en
+    LEADCMS_REMOTE_PRODUCTION_API_KEY=prod-token
+    LEADCMS_REMOTE_DEVELOP_API_KEY=dev-token
+    LEADCMS_REMOTE_PRODUCTION_URL=https://prod.example.com
 
-  leadcms.config.json (created by 'leadcms init'):
+  leadcms.config.json (single-remote, backward compatible):
     {
       "url": "https://your-instance.leadcms.ai",
       "defaultLanguage": "en",
@@ -265,8 +291,19 @@ Configuration Files:
       "emailTemplatesDir": ".leadcms/email-templates"
     }
 
+  leadcms.config.json (multi-remote):
+    {
+      "defaultLanguage": "en",
+      "remotes": {
+        "production": { "url": "https://prod.example.com" },
+        "develop": { "url": "https://dev.example.com" }
+      },
+      "defaultRemote": "production"
+    }
+
   Note: Environment variables take precedence over config file.
   Next.js users can use NEXT_PUBLIC_LEADCMS_URL for client-side access.
+  For remote API keys, use LEADCMS_REMOTE_{NAME}_API_KEY (no NEXT_PUBLIC_).
 `);
     break;
 }

@@ -480,5 +480,55 @@ This is the updated content.`;
       // Should detect real differences
       expect(hasContentDifferences(content1, content2)).toBe(true);
     });
+
+    it('should not detect differences when only createdAt/updatedAt differ in MDX frontmatter', () => {
+      const { hasContentDifferences, stripTimestampMetadata } = require('../src/lib/content-transformation');
+
+      const content1 = `---
+title: Test
+createdAt: '2026-01-01T00:00:00Z'
+updatedAt: '2026-02-01T00:00:00Z'
+slug: test
+---
+
+# Content`;
+
+      const content2 = `---
+title: Test
+createdAt: '2026-01-01T00:00:00Z'
+updatedAt: '2026-03-12T15:39:28.792915Z'
+slug: test
+---
+
+# Content`;
+
+      // Without stripping, timestamps differ
+      expect(hasContentDifferences(content1, content2)).toBe(true);
+
+      // After stripping, no differences
+      expect(hasContentDifferences(stripTimestampMetadata(content1), stripTimestampMetadata(content2))).toBe(false);
+    });
+
+    it('should still detect real content changes after stripping timestamps from MDX', () => {
+      const { hasContentDifferences, stripTimestampMetadata } = require('../src/lib/content-transformation');
+
+      const content1 = `---
+title: Original Title
+updatedAt: '2026-02-01T00:00:00Z'
+slug: test
+---
+
+# Content`;
+
+      const content2 = `---
+title: Changed Title
+updatedAt: '2026-03-12T15:39:28.792915Z'
+slug: test
+---
+
+# Content`;
+
+      expect(hasContentDifferences(stripTimestampMetadata(content1), stripTimestampMetadata(content2))).toBe(true);
+    });
   });
 });

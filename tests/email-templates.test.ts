@@ -3,7 +3,7 @@ import {
   transformEmailTemplateRemoteToLocalFormat,
   formatEmailTemplateForApi,
 } from '../src/lib/email-template-transformation';
-import { hasContentDifferences } from '../src/lib/content-transformation';
+import { hasContentDifferences, stripTimestampMetadata } from '../src/lib/content-transformation';
 import { threeWayMerge, isLocallyModified } from '../src/lib/content-merge';
 
 describe('email template HTML frontmatter', () => {
@@ -132,7 +132,7 @@ emailGroupId: 12
   });
 
   it('includes groupName when emailGroup is enriched before transformation', () => {
-    // After enrichment (fetch-leadcms-email-templates resolves groups),
+    // After enrichment (pull-leadcms-email-templates resolves groups),
     // the template should include groupName.
     const remote = {
       id: 3,
@@ -395,6 +395,61 @@ emailGroupId: 12
       expect(result.merged).toContain('2026-02-15');
       // Local subject change preserved
       expect(result.merged).toContain('subject: Updated locally');
+    });
+  });
+
+  describe('timestamp metadata exclusion from comparison', () => {
+    it('should not detect differences when only updatedAt differs', () => {
+      const remote1 = {
+        id: 11,
+        name: 'WS_Contact_Us',
+        subject: 'Contact form',
+        bodyTemplate: '<p>Hello</p>',
+        fromEmail: 'hello@example.com',
+        fromName: 'Team',
+        language: 'ru-RU',
+        createdAt: '2026-02-28T10:07:23.248368Z',
+        updatedAt: '2026-03-03T08:44:58.037472Z',
+      };
+
+      const remote2 = {
+        ...remote1,
+        updatedAt: '2026-03-12T15:39:28.792915Z',
+      };
+
+      const local1 = transformEmailTemplateRemoteToLocalFormat(remote1);
+      const local2 = transformEmailTemplateRemoteToLocalFormat(remote2);
+
+      // Without stripping, timestamps differ
+      expect(hasContentDifferences(local1, local2)).toBe(true);
+
+      // After stripping timestamp metadata, no differences
+      expect(hasContentDifferences(stripTimestampMetadata(local1), stripTimestampMetadata(local2))).toBe(false);
+    });
+
+    it('should still detect real content changes after stripping timestamps', () => {
+      const remote1 = {
+        id: 11,
+        name: 'WS_Contact_Us',
+        subject: 'Contact form',
+        bodyTemplate: '<p>Hello</p>',
+        fromEmail: 'hello@example.com',
+        fromName: 'Team',
+        language: 'ru-RU',
+        createdAt: '2026-02-28T10:07:23.248368Z',
+        updatedAt: '2026-03-03T08:44:58.037472Z',
+      };
+
+      const remote2 = {
+        ...remote1,
+        subject: 'Updated contact form',
+        updatedAt: '2026-03-12T15:39:28.792915Z',
+      };
+
+      const local1 = transformEmailTemplateRemoteToLocalFormat(remote1);
+      const local2 = transformEmailTemplateRemoteToLocalFormat(remote2);
+
+      expect(hasContentDifferences(stripTimestampMetadata(local1), stripTimestampMetadata(local2))).toBe(true);
     });
   });
 });

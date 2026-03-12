@@ -1,0 +1,419 @@
+/**
+ * Multi-remote support for LeadCMS SDK.
+ *
+ * Provides the concept of named remotes (similar to git remotes), each
+ * representing a CMS instance with its own URL, API key, sync tokens,
+ * ID mapping, and metadata.
+ */
+
+import path from "path";
+import fs from "fs/promises";
+import { getConfig, type LeadCMSConfig } from "./config.js";
+
+// ── Types ──────────────────────────────────────────────────────────────
+
+/** Configuration for a single named remote in leadcms.config.json */
+export interface RemoteConfig {
+  /** CMS instance URL */
+  url: string;
+}
+
+/** Resolved context for a remote — everything needed to interact with it */
+export interface RemoteContext {
+  /** Remote name (e.g., "production", "develop", or "default" for single-remote) */
+  name: string;
+  /** CMS instance URL (trailing slashes stripped) */
+  url: string;
+  /** API key (resolved from env vars) */
+  apiKey?: string;
+  /** Whether this is the default remote */
+  isDefault: boolean;
+  /** Absolute path to remote state directory: .leadcms/remotes/{name}/ */
+  stateDir: string;
+}
+
+// ── Internal constants ─────────────────────────────────────────────────
+
+const REMOTES_BASE_DIR = ".leadcms/remotes";
+
+// ── Resolution ─────────────────────────────────────────────────────────
+
+/**
+ * Resolve a RemoteContext from the current configuration.
+ *
+ * - Single-remote mode (no `remotes` in config): returns a synthetic
+ *   "default" remote built from the flat `url` / `apiKey` fields.
+ * - Multi-remote mode: looks up the named remote (or `defaultRemote`
+ *   when `remoteName` is undefined).
+ *
+ * @param remoteName  Explicit remote name, e.g. from `--remote` CLI flag.
+ *                    When omitted the default remote is used.
+ * @param config      Optional config override (for testing). Falls back
+ *                    to `getConfig()`.
+ */
+export function resolveRemote(
+  remoteName?: string,
+  config?: LeadCMSConfig,
+): RemoteContext {
+  const cfg = config ?? getConfig();
+
+  // ── Single-remote mode ───────────────────────────────────────────
+  if (!cfg.remotes || Object.keys(cfg.remotes).length === 0) {
+    if (remoteName && remoteName !== "default") {
+      throw new Error(
+        `Remote "${remoteName}" is not configured. ` +
+        `Add a "remotes" block to your leadcms config file to use named remotes.`,
+      );
+    }
+    return {
+      name: "default",
+      url: (cfg.url || "").replace(/\/+$/, ""),
+      apiKey: cfg.apiKey ?? resolveApiKeyFromEnv("default", true),
+      isDefault: true,
+      stateDir: path.resolve(REMOTES_BASE_DIR, "default"),
+    };
+  }
+
+  // ── Multi-remote mode ────────────────────────────────────────────
+  // Resolution priority (when remoteName not explicitly provided):
+  // 1. remoteName argument (from --remote CLI flag)
+  // 2. LEADCMS_REMOTE env var
+  // 3. URL match: LEADCMS_URL / NEXT_PUBLIC_LEADCMS_URL against configured remotes
+  // 4. defaultRemote from config
+  const name = remoteName
+    ?? process.env.LEADCMS_REMOTE
+    ?? resolveRemoteByUrl(cfg)
+    ?? cfg.defaultRemote;
+  if (!name) {
+    throw new Error(
+      `No remote specified and no "defaultRemote" configured. ` +
+      `Either pass --remote <name> or set "defaultRemote" in your config.`,
+    );
+  }
+
+  const remote = cfg.remotes[name];
+  if (!remote) {
+    const available = Object.keys(cfg.remotes).join(", ");
+    throw new Error(
+      `Remote "${name}" is not configured. Available remotes: ${available}`,
+    );
+  }
+
+  const isDefault = name === cfg.defaultRemote;
+
+  return {
+    name,
+    url: (remote.url || "").replace(/\/+$/, ""),
+    apiKey: resolveApiKeyFromEnv(name, isDefault),
+    isDefault,
+    stateDir: path.resolve(REMOTES_BASE_DIR, name),
+  };
+}
+
+/**
+ * List all configured remotes. Returns an empty array in single-remote mode.
+ */
+export function listRemotes(config?: LeadCMSConfig): RemoteContext[] {
+  const cfg = config ?? getConfig();
+
+  if (!cfg.remotes || Object.keys(cfg.remotes).length === 0) {
+    // Single-remote mode — return the implicit default
+    return [resolveRemote(undefined, cfg)];
+  }
+
+  return Object.keys(cfg.remotes).map((name) => resolveRemote(name, cfg));
+}
+
+// ── API key resolution ────────────────────────────────────────────────
+
+/**
+ * Find a remote whose URL matches LEADCMS_URL or NEXT_PUBLIC_LEADCMS_URL.
+ * Returns the matching remote name, or undefined if no match.
+ */
+function resolveRemoteByUrl(cfg: LeadCMSConfig): string | undefined {
+  const envUrl = (process.env.LEADCMS_URL || process.env.NEXT_PUBLIC_LEADCMS_URL || '').replace(/\/+$/, '');
+  if (!envUrl || !cfg.remotes) return undefined;
+
+  for (const [name, remote] of Object.entries(cfg.remotes)) {
+    if ((remote.url || '').replace(/\/+$/, '') === envUrl) {
+      return name;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Resolve the API key for a remote from environment variables.
+ *
+ * Resolution order:
+ * 1. `LEADCMS_REMOTE_{NAME}_API_KEY` (remote-specific)
+ * 2. `LEADCMS_API_KEY` (generic fallback, only for the default remote)
+ *
+ * NOTE: NEXT_PUBLIC_* prefixed keys are intentionally NOT checked here.
+ * API keys must never be exposed to the browser via NEXT_PUBLIC_.
+ */
+function resolveApiKeyFromEnv(
+  remoteName: string,
+  isDefault: boolean,
+): string | undefined {
+  const envName = remoteName.toUpperCase().replace(/-/g, "_");
+  const remoteSpecific = process.env[`LEADCMS_REMOTE_${envName}_API_KEY`];
+  if (remoteSpecific) return remoteSpecific;
+
+  if (isDefault) {
+    return process.env.LEADCMS_API_KEY;
+  }
+
+  return undefined;
+}
+
+// ── Path helpers ──────────────────────────────────────────────────────
+
+/** Absolute path to a sync token file for a given remote + entity type. */
+export function syncTokenPath(
+  ctx: RemoteContext,
+  entityType: "content" | "media" | "comments" | "email-templates",
+): string {
+  return path.join(ctx.stateDir, `${entityType}-sync-token`);
+}
+
+/** Absolute path to the metadata.json for a given remote. */
+export function metadataMapPath(ctx: RemoteContext): string {
+  return path.join(ctx.stateDir, "metadata.json");
+}
+
+/**
+ * Build a canonical content key used for display / logging.
+ * Format: `{language}/{slug}`
+ */
+export function contentKey(language: string, slug: string): string {
+  return `${language}/${slug}`;
+}
+
+/**
+ * Build a canonical email template key used for display / logging.
+ * Format: `{language}/{name}`
+ */
+export function emailTemplateKey(language: string, name: string): string {
+  return `${language}/${name}`;
+}
+
+/**
+ * Remove other entries in a nested `section` that already claim the given `id`.
+ * Called by setRemoteId / setEmailTemplateRemoteId to enforce 1-to-1
+ * mapping between keys and IDs.
+ */
+function deduplicateSection(
+  section: Record<string, Record<string, MetadataEntry>>,
+  incomingLang: string,
+  incomingSlug: string,
+  id: number | string,
+): void {
+  for (const [lang, slugs] of Object.entries(section)) {
+    for (const [slug, entry] of Object.entries(slugs)) {
+      if ((lang !== incomingLang || slug !== incomingSlug) && entry.id != null && String(entry.id) === String(id)) {
+        delete slugs[slug];
+      }
+    }
+    if (Object.keys(slugs).length === 0) {
+      delete section[lang];
+    }
+  }
+}
+
+/**
+ * Deduplicate a nested section on read: if multiple keys map to the same
+ * ID, keep only the last one (file order) and drop earlier duplicates.
+ */
+function deduplicateSectionOnRead(section: Record<string, Record<string, MetadataEntry>>): void {
+  // id → { lang, slug } (last wins)
+  const seen = new Map<string, { lang: string; slug: string }>();
+  for (const [lang, slugs] of Object.entries(section)) {
+    for (const [slug, entry] of Object.entries(slugs)) {
+      if (entry.id != null) {
+        seen.set(String(entry.id), { lang, slug });
+      }
+    }
+  }
+  // Remove entries that are not the winner for their ID
+  for (const [lang, slugs] of Object.entries(section)) {
+    for (const [slug, entry] of Object.entries(slugs)) {
+      if (entry.id == null) continue;
+      const winner = seen.get(String(entry.id));
+      if (winner && (winner.lang !== lang || winner.slug !== slug)) {
+        delete slugs[slug];
+      }
+    }
+    if (Object.keys(slugs).length === 0) {
+      delete section[lang];
+    }
+  }
+}
+
+/**
+ * Sort a nested map: language keys sorted alphabetically,
+ * and slugs within each language sorted alphabetically.
+ */
+function sortNestedMap<T>(map: Record<string, Record<string, T>>): Record<string, Record<string, T>> {
+  const sorted: Record<string, Record<string, T>> = {};
+  for (const lang of Object.keys(map).sort()) {
+    sorted[lang] = {};
+    for (const slug of Object.keys(map[lang]).sort()) {
+      sorted[lang][slug] = map[lang][slug];
+    }
+  }
+  return sorted;
+}
+
+/** Look up the remote ID for a content item. */
+export function lookupRemoteId(
+  map: MetadataMap,
+  language: string,
+  slug: string,
+): number | string | undefined {
+  return map.content[language]?.[slug]?.id;
+}
+
+/** Set the remote ID for a content item.
+ *  Enforces uniqueness: if another key already maps to the same ID,
+ *  that stale mapping is removed so only one key owns each ID.
+ */
+export function setRemoteId(
+  map: MetadataMap,
+  language: string,
+  slug: string,
+  id: number | string,
+): void {
+  deduplicateSection(map.content, language, slug, id);
+  if (!map.content[language]) map.content[language] = {};
+  const current = map.content[language][slug] || {};
+  map.content[language][slug] = { ...current, id };
+}
+
+/** Look up the remote ID for an email template. */
+export function lookupEmailTemplateRemoteId(
+  map: MetadataMap,
+  language: string,
+  name: string,
+): number | string | undefined {
+  return map.emailTemplates?.[language]?.[name]?.id;
+}
+
+/** Set the remote ID for an email template.
+ *  Enforces uniqueness: if another key already maps to the same ID,
+ *  that stale mapping is removed so only one key owns each ID.
+ */
+export function setEmailTemplateRemoteId(
+  map: MetadataMap,
+  language: string,
+  name: string,
+  id: number | string,
+): void {
+  if (!map.emailTemplates) map.emailTemplates = {};
+  deduplicateSection(map.emailTemplates, language, name, id);
+  if (!map.emailTemplates[language]) map.emailTemplates[language] = {};
+  const current = map.emailTemplates[language][name] || {};
+  map.emailTemplates[language][name] = { ...current, id };
+}
+
+// ── Metadata Map ──────────────────────────────────────────────────────
+
+/** Timestamps stored per content item per remote. */
+export interface MetadataEntry {
+  id?: number | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** Structure of .leadcms/remotes/{name}/metadata.json */
+export interface MetadataMap {
+  content: Record<string, Record<string, MetadataEntry>>;
+  emailTemplates?: Record<string, Record<string, MetadataEntry>>;
+}
+
+/** Read the metadata-map for a remote. Returns empty map if file doesn't exist. */
+export async function readMetadataMap(ctx: RemoteContext): Promise<MetadataMap> {
+  try {
+    const data = await fs.readFile(metadataMapPath(ctx), "utf-8");
+    const parsed = JSON.parse(data);
+    if (!parsed.content) parsed.content = {};
+    if (!parsed.emailTemplates) parsed.emailTemplates = {};
+    deduplicateSectionOnRead(parsed.content);
+    deduplicateSectionOnRead(parsed.emailTemplates);
+    return parsed;
+  } catch {
+    return { content: {}, emailTemplates: {} };
+  }
+}
+
+/** Write the metadata-map for a remote, creating the directory if needed.
+ *  Keys are sorted alphabetically for consistency across regenerations.
+ */
+export async function writeMetadataMap(
+  ctx: RemoteContext,
+  map: MetadataMap,
+): Promise<void> {
+  await fs.mkdir(ctx.stateDir, { recursive: true });
+  const sorted: MetadataMap = {
+    content: sortNestedMap(map.content),
+    ...(map.emailTemplates && Object.keys(map.emailTemplates).length > 0
+      ? { emailTemplates: sortNestedMap(map.emailTemplates) }
+      : {}),
+  };
+  await fs.writeFile(
+    metadataMapPath(ctx),
+    JSON.stringify(sorted, null, 2),
+    "utf-8",
+  );
+}
+
+/** Get metadata for a content item from the map. */
+export function getMetadataForContent(
+  map: MetadataMap,
+  language: string,
+  slug: string,
+): MetadataEntry | undefined {
+  return map.content[language]?.[slug];
+}
+
+function stripNulls(entry: MetadataEntry): MetadataEntry {
+  const result: MetadataEntry = {};
+  if (entry.id != null) result.id = entry.id;
+  if (entry.createdAt != null) result.createdAt = entry.createdAt;
+  if (entry.updatedAt != null) result.updatedAt = entry.updatedAt;
+  return result;
+}
+
+/** Set metadata for a content item in the map. */
+export function setMetadataForContent(
+  map: MetadataMap,
+  language: string,
+  slug: string,
+  entry: MetadataEntry,
+): void {
+  if (!map.content[language]) map.content[language] = {};
+  const current = map.content[language][slug] || {};
+  map.content[language][slug] = { ...current, ...stripNulls(entry) };
+}
+
+/** Get metadata for an email template from the map. */
+export function getMetadataForEmailTemplate(
+  map: MetadataMap,
+  language: string,
+  name: string,
+): MetadataEntry | undefined {
+  return map.emailTemplates?.[language]?.[name];
+}
+
+/** Set metadata for an email template in the map. */
+export function setMetadataForEmailTemplate(
+  map: MetadataMap,
+  language: string,
+  name: string,
+  entry: MetadataEntry,
+): void {
+  if (!map.emailTemplates) map.emailTemplates = {};
+  if (!map.emailTemplates[language]) map.emailTemplates[language] = {};
+  const current = map.emailTemplates[language][name] || {};
+  map.emailTemplates[language][name] = { ...current, ...stripNulls(entry) };
+}

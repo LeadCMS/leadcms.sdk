@@ -16,6 +16,7 @@ jest.mock('../src/lib/content-transformation.js', () => ({
     transformRemoteToLocalFormat: jest.fn(async () => Array.from({ length: 12 }, (_, index) => `old line ${index + 1}`).join('\n')),
     transformRemoteForComparison: jest.fn(),
     hasContentDifferences: jest.fn(),
+    stripTimestampMetadata: jest.fn((content: string) => content),
 }));
 
 import { displayDetailedDiff } from '../src/scripts/push-leadcms-content';

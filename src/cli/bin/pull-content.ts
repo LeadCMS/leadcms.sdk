@@ -8,9 +8,11 @@ import { resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
 import { parseContentStatusFilter } from './content-status-args.js';
+import { parseRemoteFlag } from './remote-flag.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+const remoteContext = parseRemoteFlag(args);
 
 // Parse target ID or slug
 let targetId: string | undefined;
@@ -30,10 +32,10 @@ const reset = args.includes('--reset');
 const force = args.includes('--force') || args.includes('-f');
 const statusFilter = parseContentStatusFilter(args);
 
-await resolveIdentity();
+await resolveIdentity(remoteContext?.apiKey);
 
 const spinner = startSpinner('Pulling content from LeadCMS…');
-pullContent({ targetId, targetSlug, statusFilter, reset, force })
+pullContent({ targetId, targetSlug, statusFilter, reset, force, remoteContext })
   .then(() => {
     spinner.stop();
     process.exit(0);

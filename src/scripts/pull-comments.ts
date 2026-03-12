@@ -7,27 +7,30 @@ import "dotenv/config";
 import axios from "axios";
 import { leadCMSUrl } from "./leadcms-helpers.js";
 import { setCMSConfig, isCommentsSupported } from "../lib/cms-config-types.js";
-import { fetchLeadCMSComments } from "./fetch-leadcms-comments.js";
+import { pullLeadCMSComments } from "./pull-leadcms-comments.js";
 import { resetCommentsState } from "./pull-all.js";
 import { logger } from "../lib/logger.js";
+import type { RemoteContext } from "../lib/remote-context.js";
 
 interface PullCommentsOptions {
   /** When true, delete all local comment files and sync tokens before pulling, effectively doing a fresh pull. */
   reset?: boolean;
+  /** Optional remote context for multi-remote sync token isolation. */
+  remoteContext?: RemoteContext;
 }
 
 /**
  * Main function
  */
 async function main(options: PullCommentsOptions = {}): Promise<void> {
-  const { reset } = options;
+  const { reset, remoteContext } = options;
 
   console.log(`\n💬 LeadCMS Pull Comments\n`);
 
   // Handle --reset flag: clear comments before pulling
   if (reset) {
     console.log(`🔄 Resetting comments state...\n`);
-    await resetCommentsState();
+    await resetCommentsState(remoteContext);
   }
 
   // Check if comments are supported
@@ -52,7 +55,7 @@ async function main(options: PullCommentsOptions = {}): Promise<void> {
   }
 
   // Fetch comments
-  await fetchLeadCMSComments();
+  await pullLeadCMSComments(remoteContext);
 
   console.log(`\n✨ Comments pull completed!\n`);
 }

@@ -6,17 +6,19 @@
 import { pushLeadCMSContent } from '../../scripts/push-leadcms-content.js';
 import { requireAuthenticatedUser, resolveIdentity } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
+import { parseRemoteFlag } from './remote-flag.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+const remoteContext = parseRemoteFlag(args);
 const statusOnly = args.includes('--status');
 const force = args.includes('--force');
 const dryRun = args.includes('--dry-run');
 
 if (!statusOnly && !dryRun) {
-  await requireAuthenticatedUser();
+  await requireAuthenticatedUser(remoteContext?.apiKey);
 } else {
-  await resolveIdentity();
+  await resolveIdentity(remoteContext?.apiKey);
 }
 
 // Parse target ID or slug
@@ -33,7 +35,7 @@ if (slugIndex !== -1 && args[slugIndex + 1]) {
   targetSlug = args[slugIndex + 1];
 }
 
-pushLeadCMSContent({ statusOnly, force, targetId, targetSlug, dryRun }).catch((error: any) => {
+pushLeadCMSContent({ statusOnly, force, targetId, targetSlug, dryRun, remoteContext }).catch((error: any) => {
   console.error('Error running LeadCMS push:', error.message);
   process.exit(1);
 });
