@@ -290,10 +290,6 @@ function validateConfig(config: LeadCMSConfig): void {
       errors.push(`"remotes" is configured but "defaultRemote" is not set. Add "defaultRemote" to your config.`);
     }
 
-    // Warn if flat url/apiKey also exist (they are ignored in multi-remote mode)
-    if (config.url && DEBUG_LOGGING) {
-      console.warn(`[LeadCMS] Both "remotes" and flat "url" are configured. The flat "url" will be ignored in multi-remote mode.`);
-    }
   } else {
     // Single-remote mode — url is required
     if (!config.url) {

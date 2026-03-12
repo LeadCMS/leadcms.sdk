@@ -356,6 +356,28 @@ describe('Config Module', () => {
       expect(config.remotes!.production.url).toBe('https://prod.leadcms.ai');
       expect(config.defaultRemote).toBe('production');
     });
+
+    it('should not warn when remotes are configured and a flat url is also present', () => {
+      process.env.LEADCMS_URL = 'https://legacy.leadcms.ai';
+
+      const testConfig = {
+        remotes: {
+          production: { url: 'https://prod.leadcms.ai' },
+        },
+        defaultRemote: 'production',
+      };
+      fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      expect(() => getConfigFresh()).not.toThrow();
+      expect(warnSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('Both "remotes" and flat "url" are configured')
+      );
+
+      warnSpy.mockRestore();
+    });
   });
 
   describe('Default Values', () => {
