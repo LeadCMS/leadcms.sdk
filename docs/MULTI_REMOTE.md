@@ -812,13 +812,13 @@ Validation rules:
 | `src/lib/cms-config-types.ts`         | 1       | `RemoteConfig`, `RemoteContext` types                                       |
 | `src/scripts/leadcms-helpers.ts`      | 1       | Deprecate module-level constants; add context-aware helpers                 |
 | `src/scripts/pull-leadcms-content.ts` | 1, 4    | Remote-aware sync tokens; remote-aware timestamp storage                    |
-| `src/scripts/push-leadcms-content.ts` | 1, 3, 4 | Remote-aware URL/key; ID map lookup; timestamp baseline from metadata       |
+| `src/scripts/push-leadcms-content.ts` | 1, 3, 4 | Remote-aware URL/key; metadata lookup; timestamp baseline from metadata     |
 | `src/scripts/pull-content.ts`         | 1       | Thread `--remote` through to pull functions                                 |
 | `src/cli/index.ts`                    | 1, 2    | `--remote` flag on all commands; `remote` subcommands                       |
 | `src/lib/data-service.ts`             | 1       | Accept URL/apiKey per call instead of from module-level config              |
 | `src/lib/content-merge.ts`            | 4       | No algorithmic changes; timestamp source changes in callers                 |
 | `src/lib/content-transformation.ts`   | 3, 4    | Conditional frontmatter ID/timestamp writes based on `isDefault`            |
-| `src/scripts/push-comments.ts`        | 1, 3    | Remote-aware API calls and ID mapping                                       |
+| `src/scripts/push-comments.ts`        | 1, 3    | Remote-aware API calls and metadata lookup                                  |
 | `src/scripts/push-media.ts`           | 1       | Remote-aware API calls                                                      |
 | `src/scripts/settings-manager.ts`     | 1       | Remote-aware API calls                                                      |
 | `src/scripts/sse-watcher.ts`          | 1       | Remote-aware SSE connection                                                 |
@@ -829,7 +829,7 @@ Validation rules:
 ## .gitignore Considerations
 
 ```gitignore
-# Remote state (sync tokens, ID maps, timestamps) — developer-local state
+# Remote state (sync tokens, metadata, timestamps) — developer-local state
 .leadcms/remotes/
 ```
 
@@ -845,7 +845,7 @@ OR selectively:
 # .leadcms/remotes/*/metadata.json
 ```
 
-Whether `metadata.json` is committed is a team decision. Committing it means new team members get the correct ID mappings and timestamp baselines without pulling first. Not committing means each developer builds their own metadata locally.
+Whether `metadata.json` is committed is a team decision. Committing it means new team members get the correct remote IDs and timestamp baselines without pulling first. Not committing means each developer builds their own metadata locally.
 
 ---
 
