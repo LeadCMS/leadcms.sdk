@@ -489,4 +489,183 @@ describe('push-comments', () => {
 
     logSpy.mockRestore();
   });
+
+  describe('metadata-aware comment matching', () => {
+    it('uses metadata map to match comments by translationKey when remoteContext is provided', async () => {
+      // Local file has defaultRemote's ID (id: 50) but the non-default remote has id: 500
+      await writeCommentFile('content/110.json', [
+        {
+          id: 50, // default remote's ID
+          translationKey: 'tk-match-1',
+          authorName: 'Test Author',
+          body: 'Updated locally',
+          status: 'Approved',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-02T00:00:00Z',
+          commentableId: 110,
+          commentableType: 'Content',
+          language: 'en',
+        },
+      ]);
+
+      // Remote returns the non-default remote's comment with id: 500
+      mockedPullCommentSync.mockResolvedValue({
+        items: [
+          {
+            id: 500,
+            translationKey: 'tk-match-1',
+            authorName: 'Test Author',
+            body: 'Remote body - same',
+            status: 'Approved',
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-02T00:00:00Z',
+            commentableId: 110,
+            commentableType: 'Content',
+            language: 'en',
+          },
+        ],
+        deleted: [],
+        nextSyncToken: 'sync-meta-1',
+      } as any);
+
+      // Mock the remote-context module to provide a metadata map
+      const metaStateDir = path.join(tmpRoot, '.leadcms', 'remotes', 'develop');
+      await fs.mkdir(metaStateDir, { recursive: true });
+      await fs.writeFile(
+        path.join(metaStateDir, 'metadata.json'),
+        JSON.stringify({
+          content: {},
+          emailTemplates: {},
+          comments: {
+            en: { 'tk-match-1': { id: 500, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-02T00:00:00Z' } },
+          },
+        }),
+      );
+
+      const remoteContext = {
+        name: 'develop',
+        url: 'https://dev.example.com',
+        apiKey: 'dev-key',
+        isDefault: false,
+        stateDir: metaStateDir,
+      };
+
+      const result = await buildCommentStatus({ remoteContext });
+
+      // Should match via metadata map (translationKey) → finds the update, not a create
+      const creates = result.operations.filter(op => op.type === 'create');
+      const updates = result.operations.filter(op => op.type === 'update');
+      expect(creates).toHaveLength(0);
+      // The body differs so it should be an update
+      expect(updates).toHaveLength(1);
+    });
+
+    it('falls back to translationKey matching against remote when no metadata entry exists', async () => {
+      await writeCommentFile('content/110.json', [
+        {
+          // No id — brand new locally but has translationKey
+          translationKey: 'tk-new-remote',
+          authorName: 'New Author',
+          body: 'Local body',
+          status: 'Approved',
+          commentableId: 110,
+          commentableType: 'Content',
+          language: 'en',
+        },
+      ]);
+
+      // Remote happens to have a comment with the same translationKey
+      mockedPullCommentSync.mockResolvedValue({
+        items: [
+          {
+            id: 700,
+            translationKey: 'tk-new-remote',
+            authorName: 'New Author',
+            body: 'Remote body different',
+            status: 'Approved',
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-02T00:00:00Z',
+            commentableId: 110,
+            commentableType: 'Content',
+            language: 'en',
+          },
+        ],
+        deleted: [],
+        nextSyncToken: 'sync-tk-1',
+      } as any);
+
+      const result = await buildCommentStatus({});
+
+      // Should match via translationKey fallback → update, not create
+      const creates = result.operations.filter(op => op.type === 'create');
+      const updates = result.operations.filter(op => op.type === 'update');
+      expect(creates).toHaveLength(0);
+      expect(updates).toHaveLength(1);
+    });
+
+    it('uses metadata map timestamps for conflict detection', async () => {
+      await writeCommentFile('content/110.json', [
+        {
+          id: 60,
+          translationKey: 'tk-conflict',
+          authorName: 'Author',
+          body: 'Local edit',
+          status: 'Approved',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-05T00:00:00Z', // Default remote's timestamp
+          commentableId: 110,
+          commentableType: 'Content',
+          language: 'en',
+        },
+      ]);
+
+      // Remote has newer updatedAt than what's in the metadata map
+      mockedPullCommentSync.mockResolvedValue({
+        items: [
+          {
+            id: 600,
+            translationKey: 'tk-conflict',
+            authorName: 'Author',
+            body: 'Remote changed body',
+            status: 'Approved',
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-03-01T00:00:00Z', // Newer than metadata map
+            commentableId: 110,
+            commentableType: 'Content',
+            language: 'en',
+          },
+        ],
+        deleted: [],
+        nextSyncToken: 'sync-conflict-1',
+      } as any);
+
+      const metaStateDir = path.join(tmpRoot, '.leadcms', 'remotes', 'staging');
+      await fs.mkdir(metaStateDir, { recursive: true });
+      await fs.writeFile(
+        path.join(metaStateDir, 'metadata.json'),
+        JSON.stringify({
+          content: {},
+          emailTemplates: {},
+          comments: {
+            en: { 'tk-conflict': { id: 600, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-02-01T00:00:00Z' } },
+          },
+        }),
+      );
+
+      const remoteContext = {
+        name: 'staging',
+        url: 'https://staging.example.com',
+        apiKey: 'staging-key',
+        isDefault: false,
+        stateDir: metaStateDir,
+      };
+
+      const result = await buildCommentStatus({ remoteContext });
+
+      // Remote updatedAt (2024-03) > metadata map updatedAt (2024-02) → conflict
+      const conflicts = result.operations.filter(op => op.type === 'conflict');
+      expect(conflicts).toHaveLength(1);
+      expect(conflicts[0].reason).toContain('Remote comment changed after the last pull');
+    });
+  });
 });

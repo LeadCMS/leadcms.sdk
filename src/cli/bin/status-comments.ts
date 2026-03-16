@@ -12,7 +12,7 @@ import { parseRemoteFlag } from './remote-flag.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
-parseRemoteFlag(args);
+const remoteContext = parseRemoteFlag(args);
 
 const showDelete = args.includes('--delete');
 const showDetailedPreview = args.includes('--preview');
@@ -23,10 +23,10 @@ if (idIndex !== -1 && args[idIndex + 1]) {
   targetId = args[idIndex + 1];
 }
 
-await resolveIdentity();
+await resolveIdentity(remoteContext?.apiKey);
 
 const spinner = startSpinner('Checking comment status…');
-statusComments({ showDelete, targetId, showDetailedPreview })
+statusComments({ showDelete, targetId, showDetailedPreview, remoteContext })
   .then(() => spinner.stop())
   .catch((error: any) => {
     spinner.fail('Failed to check comment status');

@@ -17,6 +17,7 @@ export interface Comment {
   answerStatus?: 'Unanswered' | 'Answered' | 'Closed';
   createdAt: string;
   updatedAt?: string | null;
+  publishedAt?: string | null;
   commentableId: number;
   commentableType: string;
   avatarUrl?: string;
@@ -45,6 +46,7 @@ export interface StoredComment {
   answerStatus?: 'Unanswered' | 'Answered' | 'Closed';
   createdAt: string;
   updatedAt?: string | null;
+  publishedAt?: string | null;
   commentableId: number;
   commentableType: string;
   avatarUrl?: string;

@@ -114,6 +114,7 @@ interface CommentCreateItem {
   commentableUid?: string | null;
   status?: 'NotApproved' | 'Approved' | 'Spam' | 'Answer';
   answerStatus?: 'Unanswered' | 'Answered' | 'Closed';
+  publishedAt?: string | null;
 }
 
 interface CommentUpdateItem {
@@ -124,6 +125,7 @@ interface CommentUpdateItem {
   answerStatus?: 'Unanswered' | 'Answered' | 'Closed';
   translationKey?: string | null;
   tags?: string[] | null;
+  publishedAt?: string | null;
 }
 
 export interface MediaItem {

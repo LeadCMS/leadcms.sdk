@@ -229,8 +229,10 @@ function showRemoteCommand(subArgs: string[]): void {
       const metaData = JSON.parse(fs.readFileSync(metadataMapPath(ctx), 'utf-8'));
       const contentCount = Object.values(metaData.content || {}).reduce((sum: number, section: any) => sum + Object.keys(section || {}).length, 0);
       const templateCount = Object.values(metaData.emailTemplates || {}).reduce((sum: number, section: any) => sum + Object.keys(section || {}).length, 0);
+      const commentCount = Object.values(metaData.comments || {}).reduce((sum: number, section: any) => sum + Object.keys(section || {}).length, 0);
       console.log(`  Content entries:      ${contentCount}`);
       console.log(`  Email templates:      ${templateCount}`);
+      console.log(`  Comment entries:      ${commentCount}`);
     } catch {
       // No metadata-map
     }

@@ -199,6 +199,14 @@ export function emailTemplateKey(language: string, name: string): string {
 }
 
 /**
+ * Build a canonical comment key used for display / logging.
+ * Format: `{language}/{translationKey}`
+ */
+export function commentKey(language: string, translationKey: string): string {
+  return `${language}/${translationKey}`;
+}
+
+/**
  * Remove other entries in a nested `section` that already claim the given `id`.
  * Called by setRemoteId / setEmailTemplateRemoteId to enforce 1-to-1
  * mapping between keys and IDs.
@@ -329,6 +337,7 @@ export interface MetadataEntry {
 export interface MetadataMap {
   content: Record<string, Record<string, MetadataEntry>>;
   emailTemplates?: Record<string, Record<string, MetadataEntry>>;
+  comments?: Record<string, Record<string, MetadataEntry>>;
 }
 
 /** Read the metadata-map for a remote. Returns empty map if file doesn't exist. */
@@ -338,11 +347,13 @@ export async function readMetadataMap(ctx: RemoteContext): Promise<MetadataMap> 
     const parsed = JSON.parse(data);
     if (!parsed.content) parsed.content = {};
     if (!parsed.emailTemplates) parsed.emailTemplates = {};
+    if (!parsed.comments) parsed.comments = {};
     deduplicateSectionOnRead(parsed.content);
     deduplicateSectionOnRead(parsed.emailTemplates);
+    deduplicateSectionOnRead(parsed.comments);
     return parsed;
   } catch {
-    return { content: {}, emailTemplates: {} };
+    return { content: {}, emailTemplates: {}, comments: {} };
   }
 }
 
@@ -358,6 +369,9 @@ export async function writeMetadataMap(
     content: sortNestedMap(map.content),
     ...(map.emailTemplates && Object.keys(map.emailTemplates).length > 0
       ? { emailTemplates: sortNestedMap(map.emailTemplates) }
+      : {}),
+    ...(map.comments && Object.keys(map.comments).length > 0
+      ? { comments: sortNestedMap(map.comments) }
       : {}),
   };
   await fs.writeFile(
@@ -416,4 +430,53 @@ export function setMetadataForEmailTemplate(
   if (!map.emailTemplates[language]) map.emailTemplates[language] = {};
   const current = map.emailTemplates[language][name] || {};
   map.emailTemplates[language][name] = { ...current, ...stripNulls(entry) };
+}
+
+// ── Comment helpers ───────────────────────────────────────────────────
+
+/** Look up the remote ID for a comment by language + translationKey. */
+export function lookupCommentRemoteId(
+  map: MetadataMap,
+  language: string,
+  translationKey: string,
+): number | string | undefined {
+  return map.comments?.[language]?.[translationKey]?.id;
+}
+
+/** Set the remote ID for a comment (language + translationKey).
+ *  Enforces uniqueness across the comments section.
+ */
+export function setCommentRemoteId(
+  map: MetadataMap,
+  language: string,
+  translationKey: string,
+  id: number | string,
+): void {
+  if (!map.comments) map.comments = {};
+  deduplicateSection(map.comments, language, translationKey, id);
+  if (!map.comments[language]) map.comments[language] = {};
+  const current = map.comments[language][translationKey] || {};
+  map.comments[language][translationKey] = { ...current, id };
+}
+
+/** Get metadata for a comment from the map. */
+export function getMetadataForComment(
+  map: MetadataMap,
+  language: string,
+  translationKey: string,
+): MetadataEntry | undefined {
+  return map.comments?.[language]?.[translationKey];
+}
+
+/** Set metadata for a comment in the map. */
+export function setMetadataForComment(
+  map: MetadataMap,
+  language: string,
+  translationKey: string,
+  entry: MetadataEntry,
+): void {
+  if (!map.comments) map.comments = {};
+  if (!map.comments[language]) map.comments[language] = {};
+  const current = map.comments[language][translationKey] || {};
+  map.comments[language][translationKey] = { ...current, ...stripNulls(entry) };
 }

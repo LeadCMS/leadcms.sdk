@@ -20,6 +20,11 @@ import {
   setRemoteId,
   lookupEmailTemplateRemoteId,
   setEmailTemplateRemoteId,
+  lookupCommentRemoteId,
+  setCommentRemoteId,
+  getMetadataForComment,
+  setMetadataForComment,
+  commentKey,
   readMetadataMap,
   writeMetadataMap,
   getMetadataForContent,
@@ -87,7 +92,7 @@ describe('Remote ID helpers in metadata.json (Phase 3)', () => {
     it('returns empty map when file does not exist', async () => {
       const ctx = makeRemoteCtx({ stateDir: path.join(tmpDir, 'nonexistent') });
       const map = await readMetadataMap(ctx);
-      expect(map).toEqual({ content: {}, emailTemplates: {} });
+      expect(map).toEqual({ content: {}, emailTemplates: {}, comments: {} });
     });
 
     it('round-trips through write and read', async () => {
@@ -100,7 +105,7 @@ describe('Remote ID helpers in metadata.json (Phase 3)', () => {
       };
       await writeMetadataMap(ctx, map);
       const read = await readMetadataMap(ctx);
-      expect(read).toEqual({ ...map, emailTemplates: {} });
+      expect(read).toEqual({ ...map, emailTemplates: {}, comments: {} });
     });
 
     it('creates state directory when writing', async () => {
@@ -209,7 +214,7 @@ describe('MetadataMap helpers (Phase 4)', () => {
     it('returns empty map when file does not exist', async () => {
       const ctx = makeRemoteCtx({ stateDir: path.join(tmpDir, 'nonexistent') });
       const map = await readMetadataMap(ctx);
-      expect(map).toEqual({ content: {}, emailTemplates: {} });
+      expect(map).toEqual({ content: {}, emailTemplates: {}, comments: {} });
     });
 
     it('round-trips through write and read', async () => {
@@ -223,7 +228,7 @@ describe('MetadataMap helpers (Phase 4)', () => {
       };
       await writeMetadataMap(ctx, map);
       const read = await readMetadataMap(ctx);
-      expect(read).toEqual({ ...map, emailTemplates: {} });
+      expect(read).toEqual({ ...map, emailTemplates: {}, comments: {} });
     });
   });
 
@@ -867,5 +872,185 @@ describe('contentKey', () => {
 
   it('handles multi-level slugs', () => {
     expect(contentKey('fr', 'blog/nested-post')).toBe('fr/blog/nested-post');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// Comment metadata helpers
+// ══════════════════════════════════════════════════════════════════════
+
+describe('commentKey', () => {
+  it('builds language/translationKey key', () => {
+    expect(commentKey('en', 'abc-123')).toBe('en/abc-123');
+  });
+
+  it('works with non-latin locales', () => {
+    expect(commentKey('ja', 'comment-uuid')).toBe('ja/comment-uuid');
+  });
+});
+
+describe('Comment metadata map helpers', () => {
+  describe('lookupCommentRemoteId / setCommentRemoteId', () => {
+    it('returns undefined for unmapped comment', () => {
+      const map: MetadataMap = { content: {}, comments: {} };
+      expect(lookupCommentRemoteId(map, 'en', 'no-such-key')).toBeUndefined();
+    });
+
+    it('looks up by language/translationKey', () => {
+      const map: MetadataMap = {
+        content: {},
+        comments: { en: { 'tk-1': { id: 501 } } },
+      };
+      expect(lookupCommentRemoteId(map, 'en', 'tk-1')).toBe(501);
+    });
+
+    it('sets and retrieves an id', () => {
+      const map: MetadataMap = { content: {}, comments: {} };
+      setCommentRemoteId(map, 'en', 'tk-2', 502);
+      expect(lookupCommentRemoteId(map, 'en', 'tk-2')).toBe(502);
+    });
+
+    it('overwrites existing id', () => {
+      const map: MetadataMap = {
+        content: {},
+        comments: { en: { 'tk-3': { id: 100 } } },
+      };
+      setCommentRemoteId(map, 'en', 'tk-3', 200);
+      expect(lookupCommentRemoteId(map, 'en', 'tk-3')).toBe(200);
+    });
+
+    it('removes stale entry when another key claims the same id', () => {
+      const map: MetadataMap = {
+        content: {},
+        comments: { en: { 'old-key': { id: 600 } } },
+      };
+      setCommentRemoteId(map, 'en', 'new-key', 600);
+      expect(lookupCommentRemoteId(map, 'en', 'new-key')).toBe(600);
+      expect(lookupCommentRemoteId(map, 'en', 'old-key')).toBeUndefined();
+    });
+
+    it('does not remove entries with different ids', () => {
+      const map: MetadataMap = {
+        content: {},
+        comments: { en: { a: { id: 1 }, b: { id: 2 } } },
+      };
+      setCommentRemoteId(map, 'en', 'c', 3);
+      expect(Object.keys(map.comments!.en)).toHaveLength(3);
+    });
+
+    it('initializes comments section when missing', () => {
+      const map: MetadataMap = { content: {} };
+      setCommentRemoteId(map, 'fr', 'tk-4', 700);
+      expect(lookupCommentRemoteId(map, 'fr', 'tk-4')).toBe(700);
+    });
+  });
+
+  describe('getMetadataForComment / setMetadataForComment', () => {
+    it('returns undefined for unmapped comment', () => {
+      const map: MetadataMap = { content: {}, comments: {} };
+      expect(getMetadataForComment(map, 'en', 'no-key')).toBeUndefined();
+    });
+
+    it('sets and retrieves metadata entry', () => {
+      const map: MetadataMap = { content: {}, comments: {} };
+      setMetadataForComment(map, 'en', 'tk-5', {
+        id: 800,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-06-15T12:00:00Z',
+      });
+      const entry = getMetadataForComment(map, 'en', 'tk-5');
+      expect(entry).toEqual({
+        id: 800,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-06-15T12:00:00Z',
+      });
+    });
+
+    it('merges with existing metadata', () => {
+      const map: MetadataMap = {
+        content: {},
+        comments: { en: { 'tk-6': { id: 900 } } },
+      };
+      setMetadataForComment(map, 'en', 'tk-6', {
+        createdAt: '2024-02-01T00:00:00Z',
+        updatedAt: '2024-07-01T00:00:00Z',
+      });
+      const entry = getMetadataForComment(map, 'en', 'tk-6');
+      expect(entry).toEqual({
+        id: 900,
+        createdAt: '2024-02-01T00:00:00Z',
+        updatedAt: '2024-07-01T00:00:00Z',
+      });
+    });
+
+    it('omits null fields', () => {
+      const map: MetadataMap = { content: {}, comments: {} };
+      setMetadataForComment(map, 'en', 'tk-7', {
+        id: 999,
+        createdAt: null as any,
+        updatedAt: '2024-01-01T00:00:00Z',
+      });
+      const entry = getMetadataForComment(map, 'en', 'tk-7');
+      expect(entry).toEqual({
+        id: 999,
+        updatedAt: '2024-01-01T00:00:00Z',
+      });
+    });
+  });
+
+  describe('readMetadataMap / writeMetadataMap round-trip with comments', () => {
+    let tmpDir: string;
+
+    beforeEach(async () => {
+      tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'comments-meta-'));
+    });
+
+    afterEach(async () => {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    });
+
+    it('preserves comment metadata through round-trip', async () => {
+      const ctx = makeRemoteCtx({ stateDir: tmpDir });
+      const map: MetadataMap = {
+        content: {},
+        comments: {
+          en: {
+            'tk-a': { id: 100, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-06-01T00:00:00Z' },
+            'tk-b': { id: 101 },
+          },
+          fr: {
+            'tk-c': { id: 200, createdAt: '2024-02-01T00:00:00Z' },
+          },
+        },
+      };
+      await writeMetadataMap(ctx, map);
+      const read = await readMetadataMap(ctx);
+      expect(read.comments).toEqual(map.comments);
+    });
+
+    it('deduplicates comments section on read', async () => {
+      const ctx = makeRemoteCtx({ stateDir: tmpDir });
+      // Manually write a metadata.json with duplicate IDs
+      const raw = {
+        content: {},
+        comments: {
+          en: {
+            'old-key': { id: 42 },
+            'new-key': { id: 42 },
+          },
+        },
+      };
+      await fs.writeFile(
+        path.join(tmpDir, 'metadata.json'),
+        JSON.stringify(raw, null, 2),
+      );
+      const read = await readMetadataMap(ctx);
+      // Deduplication keeps only the last entry with id 42
+      const entries = Object.entries(read.comments!.en || {}).filter(
+        ([, v]) => v.id === 42,
+      );
+      expect(entries).toHaveLength(1);
+      expect(entries[0][0]).toBe('new-key');
+    });
   });
 });

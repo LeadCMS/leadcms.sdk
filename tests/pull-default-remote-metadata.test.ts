@@ -51,6 +51,7 @@ jest.mock('../src/lib/data-service.js', () => ({
 
 import { pullLeadCMSContent } from '../src/scripts/pull-leadcms-content';
 import { pullLeadCMSEmailTemplates } from '../src/scripts/pull-leadcms-email-templates';
+import { pullLeadCMSComments } from '../src/scripts/pull-leadcms-comments';
 import { parseEmailTemplateFileContent } from '../src/lib/email-template-transformation';
 
 // We need the real remote-context module but must override `REMOTES_BASE_DIR`.
@@ -88,16 +89,18 @@ function makeLocalCtx() {
 async function writeProdMetadata(
   content: Record<string, Record<string, { id?: number | string; createdAt?: string; updatedAt?: string }>>,
   emailTemplates: Record<string, Record<string, { id?: number | string; createdAt?: string; updatedAt?: string }>> = {},
+  comments: Record<string, Record<string, { id?: number | string; createdAt?: string; updatedAt?: string }>> = {},
 ) {
   await fs.writeFile(
     path.join(prodStateDir, 'metadata.json'),
-    JSON.stringify({ content, emailTemplates }, null, 2),
+    JSON.stringify({ content, emailTemplates, comments }, null, 2),
   );
 }
 
 async function readLocalMetadata(): Promise<{
   content: Record<string, Record<string, { id?: number | string; createdAt?: string; updatedAt?: string }>>;
   emailTemplates: Record<string, Record<string, { id?: number | string; createdAt?: string; updatedAt?: string }>>;
+  comments: Record<string, Record<string, { id?: number | string; createdAt?: string; updatedAt?: string }>>;
 }> {
   const data = JSON.parse(await fs.readFile(path.join(localStateDir, 'metadata.json'), 'utf-8'));
   return data;
@@ -462,5 +465,165 @@ describe('pull email templates from non-default remote: frontmatter metadata fro
     expect(localMeta.emailTemplates['en']['WelcomeEmail'].id).toBe(999);
     expect(localMeta.emailTemplates['en']['WelcomeEmail'].createdAt).toBe('2026-01-01T00:00:00Z');
     expect(localMeta.emailTemplates['en']['WelcomeEmail'].updatedAt).toBe('2026-03-01T00:00:00Z');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+//  Comments: stored metadata sourced from defaultRemote
+// ════════════════════════════════════════════════════════════════════════
+
+describe('pull comments from non-default remote: metadata from defaultRemote', () => {
+  const commentsDir = path.join(tmpRoot, 'comments');
+
+  function makeComment(overrides: Record<string, any>) {
+    return {
+      id: 1,
+      parentId: null,
+      authorName: 'Test Author',
+      body: 'Test comment',
+      status: 'Approved',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-03-01T00:00:00Z',
+      commentableId: 10,
+      commentableType: 'Content',
+      language: 'en',
+      translationKey: 'comment-key-1',
+      ...overrides,
+    };
+  }
+
+  async function readStoredComments(commentableType: string, commentableId: number, language = 'en') {
+    const defaultLang = harness.config.defaultLanguage || 'en';
+    const typeLower = commentableType.toLowerCase();
+    const filePath = language === defaultLang
+      ? path.join(commentsDir, typeLower, `${commentableId}.json`)
+      : path.join(commentsDir, language, typeLower, `${commentableId}.json`);
+    return JSON.parse(await fs.readFile(filePath, 'utf8'));
+  }
+
+  it('uses defaultRemote ids and timestamps in stored comments', async () => {
+    await writeProdMetadata({}, {}, {
+      en: {
+        'comment-key-1': {
+          id: 42,
+          createdAt: '2025-01-01T00:00:00Z',
+          updatedAt: '2025-06-15T12:00:00Z',
+        },
+      },
+    });
+
+    const remoteComment = makeComment({
+      id: 999,
+      translationKey: 'comment-key-1',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-03-01T00:00:00Z',
+    });
+
+    harness.addCommentSync([remoteComment], [], 'comment-token-1');
+    await pullLeadCMSComments(makeLocalCtx());
+
+    const stored = await readStoredComments('Content', 10);
+    expect(stored).toHaveLength(1);
+    expect(stored[0].id).toBe(42);
+    expect(stored[0].createdAt).toBe('2025-01-01T00:00:00Z');
+    expect(stored[0].updatedAt).toBe('2025-06-15T12:00:00Z');
+  });
+
+  it('omits id/dates from stored comments when new to defaultRemote', async () => {
+    await writeProdMetadata({}, {}, {});
+
+    const remoteComment = makeComment({
+      id: 100,
+      translationKey: 'brand-new-comment',
+      createdAt: '2026-02-01T00:00:00Z',
+      updatedAt: '2026-02-01T00:00:00Z',
+    });
+
+    harness.addCommentSync([remoteComment], [], 'comment-token-2');
+    await pullLeadCMSComments(makeLocalCtx());
+
+    const stored = await readStoredComments('Content', 10);
+    expect(stored).toHaveLength(1);
+    expect(stored[0].id).toBeUndefined();
+    expect(stored[0].createdAt).toBeUndefined();
+    expect(stored[0].updatedAt).toBeUndefined();
+    // Non-metadata fields should still be present
+    expect(stored[0].authorName).toBe('Test Author');
+    expect(stored[0].body).toBe('Test comment');
+    expect(stored[0].translationKey).toBe('brand-new-comment');
+  });
+
+  it('handles mixed comments: some in prod, some not', async () => {
+    await writeProdMetadata({}, {}, {
+      en: {
+        'existing-comment': {
+          id: 10,
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-06-01T00:00:00Z',
+        },
+      },
+    });
+
+    const existingInProd = makeComment({
+      id: 500,
+      translationKey: 'existing-comment',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    });
+
+    const newInLocal = makeComment({
+      id: 501,
+      translationKey: 'local-only-comment',
+      body: 'New comment',
+      createdAt: '2026-02-01T00:00:00Z',
+      updatedAt: '2026-02-01T00:00:00Z',
+    });
+
+    harness.addCommentSync([existingInProd, newInLocal], [], 'comment-token-3');
+    await pullLeadCMSComments(makeLocalCtx());
+
+    const stored = await readStoredComments('Content', 10);
+    expect(stored).toHaveLength(2);
+
+    const existing = stored.find((c: any) => c.translationKey === 'existing-comment');
+    const newComment = stored.find((c: any) => c.translationKey === 'local-only-comment');
+
+    // "existing-comment" should get prod's metadata
+    expect(existing.id).toBe(10);
+    expect(existing.createdAt).toBe('2024-01-01T00:00:00Z');
+    expect(existing.updatedAt).toBe('2024-06-01T00:00:00Z');
+
+    // "local-only-comment" should have no id/dates
+    expect(newComment.id).toBeUndefined();
+    expect(newComment.createdAt).toBeUndefined();
+    expect(newComment.updatedAt).toBeUndefined();
+    expect(newComment.body).toBe('New comment');
+  });
+
+  it('stores the pulled remote own comment metadata in its per-remote maps', async () => {
+    await writeProdMetadata({}, {}, {
+      en: {
+        'comment-key-1': {
+          id: 42,
+          createdAt: '2025-01-01T00:00:00Z',
+          updatedAt: '2025-06-15T12:00:00Z',
+        },
+      },
+    });
+
+    const remoteComment = makeComment({
+      id: 999,
+      translationKey: 'comment-key-1',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-03-01T00:00:00Z',
+    });
+
+    harness.addCommentSync([remoteComment], [], 'comment-token-4');
+    await pullLeadCMSComments(makeLocalCtx());
+
+    const localMeta = await readLocalMetadata();
+    expect(localMeta.comments['en']['comment-key-1'].id).toBe(999);
+    expect(localMeta.comments['en']['comment-key-1'].createdAt).toBe('2026-01-01T00:00:00Z');
+    expect(localMeta.comments['en']['comment-key-1'].updatedAt).toBe('2026-03-01T00:00:00Z');
   });
 });

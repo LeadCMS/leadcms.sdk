@@ -15,7 +15,11 @@ import type {
 import { getConfig } from "../lib/config.js";
 import { isValidLocaleCode } from "../lib/locale-utils.js";
 import { logger } from "../lib/logger.js";
-import { syncTokenPath, type RemoteContext } from "../lib/remote-context.js";
+import {
+  syncTokenPath,
+  type RemoteContext,
+  type MetadataMap,
+} from "../lib/remote-context.js";
 
 // Load config to get commentsDir
 const config = getConfig();
@@ -431,6 +435,24 @@ export async function main(remoteCtx?: RemoteContext): Promise<void> {
 
   console.log(`\x1b[32mPulled ${items.length} comment items, ${deleted.length} deleted.\x1b[0m`);
 
+  // Load per-remote metadata for multi-remote support
+  const rcModule = remoteCtx ? await import('../lib/remote-context.js') : undefined;
+  let metadataMap: MetadataMap | undefined;
+  if (remoteCtx && rcModule) {
+    metadataMap = await rcModule.readMetadataMap(remoteCtx);
+  }
+
+  // Load defaultRemote's metadata so stored comment files always reflect the
+  // default remote's ids and timestamps, even when pulling from another remote.
+  let defaultMetadataMap: MetadataMap | undefined;
+  if (remoteCtx && !remoteCtx.isDefault && rcModule) {
+    const cfg = getConfig();
+    if (cfg.defaultRemote) {
+      const defaultCtx = rcModule.resolveRemote(cfg.defaultRemote, cfg);
+      defaultMetadataMap = await rcModule.readMetadataMap(defaultCtx);
+    }
+  }
+
   // Process updated/new comments
   if (items.length > 0) {
     const groupedComments = groupCommentsByEntityAndLanguage(items);
@@ -442,13 +464,43 @@ export async function main(remoteCtx?: RemoteContext): Promise<void> {
       // Load existing comments for this language
       const existing = await loadCommentsForEntity(commentableType, commentableId, language);
 
-      // Create a map of existing comments by ID for quick lookup
-      const existingMap = new Map(existing.map((c) => [c.id, c]));
+      // Create a map of existing comments by ID (or translationKey for id-less
+      // comments from non-default remotes) for quick lookup
+      const existingMap = new Map<number | string | undefined, StoredComment>(
+        existing.map((c) => [c.id ?? c.translationKey, c]),
+      );
 
       // Update or add comments
       for (const comment of comments) {
-        const stored = toStoredComment(comment);
-        existingMap.set(stored.id, stored);
+        // Update per-remote metadata with this comment's data
+        if (remoteCtx && rcModule && metadataMap && comment.translationKey && comment.language) {
+          if (comment.id != null) {
+            rcModule.setCommentRemoteId(metadataMap, comment.language, comment.translationKey, comment.id);
+          }
+          rcModule.setMetadataForComment(metadataMap, comment.language, comment.translationKey, {
+            createdAt: comment.createdAt,
+            updatedAt: comment.updatedAt ?? undefined,
+          });
+        }
+
+        let commentToStore = toStoredComment(comment);
+
+        // For non-default remotes, replace id/createdAt/updatedAt with the
+        // default remote's values so local files always reflect prod metadata.
+        // If the comment has no default entry yet, strip these fields entirely.
+        // The current remote's values are already saved in its per-remote maps.
+        if (remoteCtx && !remoteCtx.isDefault && comment.translationKey && comment.language) {
+          const defaultEntry = defaultMetadataMap?.comments?.[comment.language]?.[comment.translationKey];
+          const { id, createdAt, updatedAt, ...rest } = commentToStore;
+          commentToStore = {
+            ...(defaultEntry?.id != null ? { id: Number(defaultEntry.id) } : {}),
+            ...(defaultEntry?.createdAt ? { createdAt: defaultEntry.createdAt as string } : {}),
+            ...(defaultEntry?.updatedAt ? { updatedAt: defaultEntry.updatedAt as string } : {}),
+            ...rest,
+          } as StoredComment;
+        }
+
+        existingMap.set(commentToStore.id ?? commentToStore.translationKey, commentToStore);
       }
 
       // Convert back to array and save
@@ -469,6 +521,11 @@ export async function main(remoteCtx?: RemoteContext): Promise<void> {
   if (nextSyncToken) {
     await writeCommentSyncToken(nextSyncToken, remoteCtx);
     logger.verbose(`Comment sync token updated: ${nextSyncToken}`);
+  }
+
+  // Write per-remote metadata map
+  if (remoteCtx && rcModule && metadataMap && items.length > 0) {
+    await rcModule.writeMetadataMap(remoteCtx, metadataMap);
   }
 
   // Clean up legacy sync token after successful migration

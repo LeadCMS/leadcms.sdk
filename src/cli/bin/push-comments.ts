@@ -11,7 +11,7 @@ import { parseRemoteFlag } from './remote-flag.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
-parseRemoteFlag(args);
+const remoteContext = parseRemoteFlag(args);
 
 const force = args.includes('--force') || args.includes('-f');
 const dryRun = args.includes('--dry-run') || args.includes('-d');
@@ -24,13 +24,13 @@ if (idIndex !== -1 && args[idIndex + 1]) {
 }
 
 if (!dryRun) {
-  await requireAuthenticatedUser();
+  await requireAuthenticatedUser(remoteContext?.apiKey);
 } else {
-  await resolveIdentity();
+  await resolveIdentity(remoteContext?.apiKey);
 }
 
 const spinner = startSpinner('Pushing comments to LeadCMS…');
-pushComments({ force, dryRun, allowDelete, targetId })
+pushComments({ force, dryRun, allowDelete, targetId, remoteContext })
   .then(() => spinner.stop())
   .catch((error: any) => {
     spinner.fail('Comment push failed');

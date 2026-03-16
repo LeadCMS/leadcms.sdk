@@ -172,6 +172,7 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
     contentSyncQueue: [] as Array<{ items: any[]; deleted: number[]; token: string; baseItems?: Record<string, any> }>,
     mediaSyncQueue: [] as Array<{ items: any[]; deleted: any[]; token: string }>,
     emailTemplateSyncQueue: [] as Array<{ items: any[]; deleted: number[]; token: string; baseItems?: Record<string, any> }>,
+    commentSyncQueue: [] as Array<{ items: any[]; deleted: number[]; token: string }>,
     emailGroups: [] as Array<{ id: number; name: string; language: string }>,
     contentTypes: [...contentTypes],
   };
@@ -190,8 +191,30 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
     if (url.includes('/api/config')) {
       return Promise.resolve({
         status: 200,
-        data: { entities: ['Content', 'Media'] },
+        data: { entities: ['Content', 'Media', 'Comment'] },
         headers: {},
+      });
+    }
+
+    if (url.includes('/api/comments/sync')) {
+      const urlObj = new URL(url);
+      const sentToken = urlObj.searchParams.get('syncToken') || '';
+      const pending = state.commentSyncQueue[0];
+
+      if (pending && sentToken !== pending.token) {
+        return Promise.resolve({
+          status: 200,
+          data: { items: pending.items, deleted: pending.deleted },
+          headers: { 'x-next-sync-token': pending.token },
+        });
+      }
+      if (pending && sentToken === pending.token) {
+        state.commentSyncQueue.shift();
+      }
+      return Promise.resolve({
+        status: 200,
+        data: { items: [], deleted: [] },
+        headers: { 'x-next-sync-token': sentToken || 'done' },
       });
     }
 
@@ -337,6 +360,11 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
       state.mediaSyncQueue.push({ items, deleted, token });
     },
 
+    /** Queue a comment sync response for the next pull call. */
+    addCommentSync(items: any[], deleted: number[], token: string) {
+      state.commentSyncQueue.push({ items, deleted, token });
+    },
+
     /** Queue an email template sync response for the next pull call. */
     addEmailTemplateSync(items: any[], deleted: number[], token: string, baseItems?: Record<string, any>) {
       state.emailTemplateSyncQueue.push({ items, deleted, token, baseItems });
@@ -364,6 +392,7 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
       await fs.mkdir(mediaDir, { recursive: true });
       state.contentSyncQueue.length = 0;
       state.mediaSyncQueue.length = 0;
+      state.commentSyncQueue.length = 0;
       state.emailTemplateSyncQueue.length = 0;
       // Clean up both new and legacy sync token locations
       try { await fs.unlink(syncTokenPath); } catch { /* not found */ }
