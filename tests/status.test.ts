@@ -535,7 +535,7 @@ describe('LeadCMS Status Analysis (Real SDK Logic)', () => {
         body: JSON.stringify({ pricing: { currency: 'USD' } }),
       };
 
-      const typeMap = { component: 'JSON' };
+      const typeMap = { component: 'JSON' } as const;
       const transformed = await transformRemoteForComparison(remote, localContent, typeMap);
 
       // The transformed remote should include coverImageUrl since it exists remotely
@@ -570,12 +570,476 @@ describe('LeadCMS Status Analysis (Real SDK Logic)', () => {
         body: JSON.stringify({ pricing: { currency: 'USD' } }),
       };
 
-      const typeMap = { component: 'JSON' };
+      const typeMap = { component: 'JSON' } as const;
       const transformed = await transformRemoteForComparison(remote, localContent, typeMap);
       const hasDiff = hasContentDifferences(localContent, transformed);
 
       // No differences - content is the same (coverImageUrl present in both, /api/media/ transformed to /media/)
       expect(hasDiff).toBe(false);
+    });
+  });
+
+  describe('matchContent - Multi-remote slug rename with metadata map', () => {
+    it('should detect rename (not conflict) when slug changes locally and timestamps match via metadata map', async () => {
+      // User moved components/header.json → header.json
+      // Metadata map still has the entry under the old slug
+      const filePath = path.join(tmpDir, 'header.json');
+      await fs.writeFile(filePath, JSON.stringify({
+        title: 'Header',
+        type: 'component',
+        body: '{}',
+      }));
+
+      const local = [makeLocal({
+        slug: 'header',
+        filePath,
+        type: 'component',
+        metadata: { id: 14, title: 'Header', type: 'component' },
+      })];
+
+      const remote = [makeRemote({
+        id: 14,
+        slug: 'components/header',
+        type: 'component',
+        title: 'Header',
+        createdAt: '2025-07-29T19:18:59.897718Z',
+        updatedAt: '2025-07-29T19:19:42.203593Z',
+      })];
+
+      // Metadata map stores timestamps under the OLD slug
+      const metadataMap = {
+        content: {
+          en: {
+            'components/header': {
+              id: 14,
+              createdAt: '2025-07-29T19:18:59.897718Z',
+              updatedAt: '2025-07-29T19:19:42.203593Z',
+            },
+          },
+        },
+        emailTemplates: {},
+        comments: {},
+      };
+
+      const ops = await (matchContent as any)(local, remote, undefined, false, metadataMap);
+
+      expect(ops.rename).toHaveLength(1);
+      expect(ops.rename[0].oldSlug).toBe('components/header');
+      expect(ops.rename[0].local.slug).toBe('header');
+      expect(ops.conflict).toHaveLength(0);
+    });
+
+    it('should detect type change (not conflict) when type changes locally and timestamps match via metadata map', async () => {
+      const filePath = path.join(tmpDir, 'home.json');
+      await fs.writeFile(filePath, JSON.stringify({
+        title: 'Home',
+        type: 'home',
+        body: '{}',
+      }));
+
+      const local = [makeLocal({
+        slug: 'home',
+        filePath,
+        type: 'home',
+        metadata: { id: 14, title: 'Home', type: 'home' },
+      })];
+
+      const remote = [makeRemote({
+        id: 14,
+        slug: 'home',
+        type: 'component',
+        title: 'Home',
+        createdAt: '2025-07-29T19:18:59.897718Z',
+        updatedAt: '2025-07-29T19:19:42.203593Z',
+      })];
+
+      const metadataMap = {
+        content: {
+          en: {
+            home: {
+              id: 14,
+              createdAt: '2025-07-29T19:18:59.897718Z',
+              updatedAt: '2025-07-29T19:19:42.203593Z',
+            },
+          },
+        },
+        emailTemplates: {},
+        comments: {},
+      };
+
+      const ops = await (matchContent as any)(local, remote, undefined, false, metadataMap);
+
+      expect(ops.typeChange).toHaveLength(1);
+      expect(ops.typeChange[0].oldType).toBe('component');
+      expect(ops.typeChange[0].newType).toBe('home');
+      expect(ops.conflict).toHaveLength(0);
+    });
+
+    it('should detect combined slug + type change (not conflict) when timestamps match via metadata map', async () => {
+      const filePath = path.join(tmpDir, 'home.json');
+      await fs.writeFile(filePath, JSON.stringify({
+        title: 'Home',
+        type: 'home',
+        body: '{}',
+      }));
+
+      const local = [makeLocal({
+        slug: 'home',
+        filePath,
+        type: 'home',
+        metadata: { id: 14, title: 'Home', type: 'home' },
+      })];
+
+      const remote = [makeRemote({
+        id: 14,
+        slug: 'components/home',
+        type: 'component',
+        title: 'Home',
+        createdAt: '2025-07-29T19:18:59.897718Z',
+        updatedAt: '2025-07-29T19:19:42.203593Z',
+      })];
+
+      // Metadata map stores under the old slug
+      const metadataMap = {
+        content: {
+          en: {
+            'components/home': {
+              id: 14,
+              createdAt: '2025-07-29T19:18:59.897718Z',
+              updatedAt: '2025-07-29T19:19:42.203593Z',
+            },
+          },
+        },
+        emailTemplates: {},
+        comments: {},
+      };
+
+      const ops = await (matchContent as any)(local, remote, undefined, false, metadataMap);
+
+      expect(ops.typeChange).toHaveLength(1);
+      expect(ops.typeChange[0].oldSlug).toBe('components/home');
+      expect(ops.typeChange[0].oldType).toBe('component');
+      expect(ops.typeChange[0].newType).toBe('home');
+      expect(ops.conflict).toHaveLength(0);
+    });
+
+    it('should still detect conflict when remote timestamps are genuinely newer even via metadata map fallback', async () => {
+      const filePath = path.join(tmpDir, 'footer.json');
+      await fs.writeFile(filePath, JSON.stringify({
+        title: 'Footer',
+        type: 'component',
+        body: '{}',
+      }));
+
+      const local = [makeLocal({
+        slug: 'footer',
+        filePath,
+        type: 'component',
+        metadata: { id: 13, title: 'Footer', type: 'component' },
+      })];
+
+      const remote = [makeRemote({
+        id: 13,
+        slug: 'components/footer',
+        type: 'component',
+        title: 'Footer',
+        createdAt: '2025-07-29T19:13:54.179299Z',
+        updatedAt: '2025-08-15T10:00:00.000000Z',  // genuinely newer
+      })];
+
+      // Metadata map has OLDER timestamps under old slug
+      const metadataMap = {
+        content: {
+          en: {
+            'components/footer': {
+              id: 13,
+              createdAt: '2025-07-29T19:13:54.179299Z',
+              updatedAt: '2025-07-29T19:29:03.455362Z',  // older than remote
+            },
+          },
+        },
+        emailTemplates: {},
+        comments: {},
+      };
+
+      const ops = await (matchContent as any)(local, remote, undefined, false, metadataMap);
+
+      expect(ops.conflict).toHaveLength(1);
+      expect(ops.conflict[0].reason).toContain('Slug changed remotely');
+      expect(ops.rename).toHaveLength(0);
+    });
+
+    it('should detect rename for MDX file slug change with metadata map', async () => {
+      const filePath = path.join(tmpDir, 'about.mdx');
+      await fs.writeFile(filePath, matter.stringify('# About', {
+        title: 'About Us',
+        type: 'page',
+      }));
+
+      const local = [makeLocal({
+        slug: 'about',
+        filePath,
+        type: 'page',
+        metadata: { id: 1, title: 'About Us', type: 'page' },
+      })];
+
+      const remote = [makeRemote({
+        id: 1,
+        slug: 'pages/about',
+        type: 'page',
+        title: 'About Us',
+        createdAt: '2025-06-17T08:27:57.696581Z',
+        updatedAt: '2025-07-29T01:09:14.599350Z',
+      })];
+
+      const metadataMap = {
+        content: {
+          en: {
+            'pages/about': {
+              id: 1,
+              createdAt: '2025-06-17T08:27:57.696581Z',
+              updatedAt: '2025-07-29T01:09:14.599350Z',
+            },
+          },
+        },
+        emailTemplates: {},
+        comments: {},
+      };
+
+      const ops = await (matchContent as any)(local, remote, undefined, false, metadataMap);
+
+      expect(ops.rename).toHaveLength(1);
+      expect(ops.rename[0].oldSlug).toBe('pages/about');
+      expect(ops.rename[0].local.slug).toBe('about');
+      expect(ops.conflict).toHaveLength(0);
+    });
+  });
+
+  describe('matchContent - Title matching requires same content type', () => {
+    it('should treat content as new when title matches but type differs', async () => {
+      // User repurposed "about" (type about-us) into "home" (type home),
+      // keeping the same title. After removing the id from frontmatter,
+      // the title-based fallback should NOT match across different types.
+      const filePath = path.join(tmpDir, 'home.mdx');
+      await fs.writeFile(filePath, matter.stringify('# Home', {
+        title: 'About Transpayrent',
+        type: 'home',
+      }));
+
+      const local = [makeLocal({
+        slug: 'home',
+        filePath,
+        type: 'home',
+        metadata: { title: 'About Transpayrent', type: 'home' },
+      })];
+
+      const remote = [makeRemote({
+        id: 1,
+        slug: 'about',
+        type: 'about-us',
+        title: 'About Transpayrent',
+        updatedAt: '2025-07-29T01:09:14.59935Z',
+      })];
+
+      const ops = await (matchContent as any)(local, remote);
+
+      expect(ops.create).toHaveLength(1);
+      expect(ops.create[0].local.slug).toBe('home');
+      expect(ops.typeChange).toHaveLength(0);
+      expect(ops.conflict).toHaveLength(0);
+    });
+
+    it('should still match by title when type is the same', async () => {
+      const filePath = path.join(tmpDir, 'new-slug.mdx');
+      await fs.writeFile(filePath, matter.stringify('Content', {
+        title: 'My Page',
+        type: 'page',
+        updatedAt: '2024-06-15T00:00:00Z',
+      }));
+
+      const local = [makeLocal({
+        slug: 'new-slug',
+        filePath,
+        type: 'page',
+        metadata: { title: 'My Page', type: 'page', updatedAt: '2024-06-15T00:00:00Z' },
+      })];
+
+      const remote = [makeRemote({
+        id: 10,
+        slug: 'old-slug',
+        type: 'page',
+        title: 'My Page',
+        updatedAt: '2024-01-01T00:00:00Z',
+      })];
+
+      const ops = await (matchContent as any)(local, remote);
+
+      expect(ops.rename).toHaveLength(1);
+      expect(ops.rename[0].oldSlug).toBe('old-slug');
+      expect(ops.create).toHaveLength(0);
+    });
+
+    it('should treat content as new with metadata map when title matches but type differs', async () => {
+      // Same scenario but with a metadata map — the old slug entry exists
+      // in the map but does NOT correspond to this local file.
+      const filePath = path.join(tmpDir, 'home.mdx');
+      await fs.writeFile(filePath, matter.stringify('# Home', {
+        title: 'About Transpayrent',
+        type: 'home',
+      }));
+
+      const local = [makeLocal({
+        slug: 'home',
+        filePath,
+        type: 'home',
+        metadata: { title: 'About Transpayrent', type: 'home' },
+      })];
+
+      const remote = [makeRemote({
+        id: 1,
+        slug: 'about',
+        type: 'about-us',
+        title: 'About Transpayrent',
+        createdAt: '2025-06-17T08:27:57.696581Z',
+        updatedAt: '2025-07-29T01:09:14.59935Z',
+      })];
+
+      const metadataMap = {
+        content: {
+          en: {
+            about: {
+              id: 1,
+              createdAt: '2025-06-17T08:27:57.696581Z',
+              updatedAt: '2025-07-29T01:09:14.59935Z',
+            },
+          },
+        },
+        emailTemplates: {},
+        comments: {},
+      };
+
+      const ops = await (matchContent as any)(local, remote, undefined, false, metadataMap);
+
+      expect(ops.create).toHaveLength(1);
+      expect(ops.create[0].local.slug).toBe('home');
+      expect(ops.typeChange).toHaveLength(0);
+      expect(ops.conflict).toHaveLength(0);
+    });
+  });
+
+  describe('matchContent - Duplicate remote ID prevention', () => {
+    it('should not allow two local items to match the same remote item by frontmatter ID', async () => {
+      // header.json has id=14 (legitimate), home.mdx also has id=14 (stale).
+      // Only the first one processed should claim the remote; the second becomes new.
+      const headerPath = path.join(tmpDir, 'header.json');
+      await fs.writeFile(headerPath, JSON.stringify({
+        title: 'Header',
+        type: 'component',
+        body: '{}',
+      }));
+
+      const homePath = path.join(tmpDir, 'home.mdx');
+      await fs.writeFile(homePath, matter.stringify('# Home', {
+        title: 'Home',
+        type: 'home',
+        id: 14,
+      }));
+
+      const local = [
+        makeLocal({
+          slug: 'header',
+          filePath: headerPath,
+          type: 'component',
+          metadata: { id: 14, title: 'Header', type: 'component' },
+        }),
+        makeLocal({
+          slug: 'home',
+          filePath: homePath,
+          type: 'home',
+          metadata: { id: 14, title: 'Home', type: 'home' },
+        }),
+      ];
+
+      const remote = [makeRemote({
+        id: 14,
+        slug: 'components/header',
+        type: 'component',
+        title: 'Header',
+        updatedAt: '2025-07-29T19:19:42.203593Z',
+      })];
+
+      const ops = await (matchContent as any)(local, remote);
+
+      // header should match (rename from components/header → header)
+      // home should become create (cannot claim the same remote item)
+      const totalMatches = ops.rename.length + ops.update.length + ops.typeChange.length + ops.conflict.length;
+      expect(totalMatches).toBe(1); // only header matched
+      expect(ops.create).toHaveLength(1);
+      expect(ops.create[0].local.slug).toBe('home');
+    });
+
+    it('should not allow two local items to match the same remote via metadata map and frontmatter', async () => {
+      // metadata map maps components/header → id 14
+      // home.mdx frontmatter has id=14 (stale)
+      const headerPath = path.join(tmpDir, 'header.json');
+      await fs.writeFile(headerPath, JSON.stringify({
+        title: 'Header',
+        type: 'component',
+        body: '{}',
+      }));
+
+      const homePath = path.join(tmpDir, 'home.mdx');
+      await fs.writeFile(homePath, matter.stringify('# Home', {
+        title: 'Home',
+        type: 'home',
+        id: 14,
+      }));
+
+      const local = [
+        makeLocal({
+          slug: 'header',
+          filePath: headerPath,
+          type: 'component',
+          metadata: { id: 14, title: 'Header', type: 'component' },
+        }),
+        makeLocal({
+          slug: 'home',
+          filePath: homePath,
+          type: 'home',
+          metadata: { id: 14, title: 'Home', type: 'home' },
+        }),
+      ];
+
+      const remote = [makeRemote({
+        id: 14,
+        slug: 'components/header',
+        type: 'component',
+        title: 'Header',
+        createdAt: '2025-07-29T19:18:59.897718Z',
+        updatedAt: '2025-07-29T19:19:42.203593Z',
+      })];
+
+      const metadataMap = {
+        content: {
+          en: {
+            'components/header': {
+              id: 14,
+              createdAt: '2025-07-29T19:18:59.897718Z',
+              updatedAt: '2025-07-29T19:19:42.203593Z',
+            },
+          },
+        },
+        emailTemplates: {},
+        comments: {},
+      };
+
+      const ops = await (matchContent as any)(local, remote, undefined, false, metadataMap);
+
+      // header renamed from components/header → header (claimed via frontmatter id)
+      // home becomes new (cannot claim same remote id=14)
+      expect(ops.create).toHaveLength(1);
+      expect(ops.create[0].local.slug).toBe('home');
+      expect(ops.create[0].local.type).toBe('home');
     });
   });
 });

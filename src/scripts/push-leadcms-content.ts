@@ -339,6 +339,11 @@ async function matchContent(
     delete: []
   };
 
+  // Track which remote items have already been claimed by a local item.
+  // This prevents two local files from matching the same remote content
+  // (e.g., when a stale frontmatter ID duplicates a metadata-map entry).
+  const matchedRemoteIds = new Set<number | string>();
+
   for (const local of localContent) {
     let match: RemoteContentItem | undefined = undefined;
 
@@ -349,14 +354,15 @@ async function matchContent(
       : undefined;
     const matchId = remoteId ?? local.metadata.id;
     if (matchId) {
-      match = remoteContent.find(remote => remote.id === matchId);
+      match = remoteContent.find(remote => remote.id === matchId && !matchedRemoteIds.has(remote.id!));
     }
 
     // If no ID match, try to match by current filename slug and locale
     if (!match) {
       match = remoteContent.find(remote =>
         remote.slug === local.slug &&
-        (remote.language || defaultLanguage) === local.locale
+        (remote.language || defaultLanguage) === local.locale &&
+        !matchedRemoteIds.has(remote.id!)
       );
     }
 
@@ -364,25 +370,41 @@ async function matchContent(
     if (!match && local.metadata.slug && local.metadata.slug !== local.slug) {
       match = remoteContent.find(remote =>
         remote.slug === local.metadata.slug &&
-        (remote.language || defaultLanguage) === local.locale
+        (remote.language || defaultLanguage) === local.locale &&
+        !matchedRemoteIds.has(remote.id!)
       );
     }
 
-    // If still no match, try by title and locale (if title exists)
+    // If still no match, try by title and locale (if title exists).
+    // Require the same content type — title alone is too weak to link
+    // items across different types (e.g., "about-us" page vs "home" page
+    // that reuses the same title).
     if (!match && local.metadata.title) {
       match = remoteContent.find(remote =>
         remote.title === local.metadata.title &&
-        (remote.language || defaultLanguage) === local.locale
+        remote.type === local.type &&
+        (remote.language || defaultLanguage) === local.locale &&
+        !matchedRemoteIds.has(remote.id!)
       );
     }
 
     if (match) {
+      // Claim this remote item so no subsequent local item can match it
+      if (match.id != null) {
+        matchedRemoteIds.add(match.id);
+      }
+
       // Check for conflicts by comparing updatedAt timestamps.
       // Use remote-specific metadata-map when available, falling back to frontmatter.
+      // When a file is renamed locally the metadata map still stores timestamps
+      // under the OLD slug. Fall back to the remote's slug (the old slug) when
+      // the primary lookup by the new local slug returns nothing.
       const localUpdatedStr = metadataMap
-        ? (await import('../lib/remote-context.js')).getMetadataForContent(
+        ? ((await import('../lib/remote-context.js')).getMetadataForContent(
           metadataMap, local.locale, local.slug,
-        )?.updatedAt
+        ) ?? (await import('../lib/remote-context.js')).getMetadataForContent(
+          metadataMap, local.locale, match.slug,
+        ))?.updatedAt
         : local.metadata.updatedAt;
       const localUpdated = localUpdatedStr ? new Date(localUpdatedStr) : new Date(0);
       const remoteUpdated = match.updatedAt ? new Date(match.updatedAt) : new Date(0);
@@ -552,7 +574,13 @@ function analyzeContentTypeFromFiles(localContent: LocalContentItem[], typeName:
 /**
  * Validate that all required content types exist remotely
  */
-async function validateContentTypes(localTypes: Set<string>, remoteTypeMap: Record<string, string>, localContent: LocalContentItem[], dryRun: boolean = false): Promise<void> {
+async function validateContentTypes(
+  localTypes: Set<string>,
+  remoteTypeMap: Record<string, string>,
+  localContent: LocalContentItem[],
+  options: { dryRun?: boolean; statusOnly?: boolean } = {}
+): Promise<void> {
+  const { dryRun = false, statusOnly = false } = options;
   const missingTypes: string[] = [];
 
   for (const type of localTypes) {
@@ -584,6 +612,17 @@ async function validateContentTypes(localTypes: Set<string>, remoteTypeMap: Reco
         colorConsole.success(`✅ Would create content type: ${colorConsole.highlight(type)}`);
       }
       return; // Skip interactive creation in dry run mode
+    }
+
+    if (statusOnly) {
+      colorConsole.info('\nℹ️  Status mode only reports missing content types. Run an authenticated push to create them automatically.');
+      return;
+    }
+
+    if (!leadCMSDataService.isApiKeyConfigured()) {
+      colorConsole.error('\n❌ Automatic content type creation requires authentication.');
+      colorConsole.info('\n💡 Configure LEADCMS_API_KEY or run leadcms login, then try pushing again.');
+      process.exit(1);
     }
 
     const createChoice = await question('\nWould you like me to create these content types automatically? (y/n) [y]: ');
@@ -1147,7 +1186,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
       // Get local content types and validate them
       const localTypes = getLocalContentTypes(localContent);
       logger.verbose(`[LOCAL] Found content types: ${Array.from(localTypes).join(', ')}`);
-      await validateContentTypes(localTypes, remoteTypeMap, localContent, dryRun);
+      await validateContentTypes(localTypes, remoteTypeMap, localContent, { dryRun, statusOnly });
     }
 
     // Fetch remote content for comparison

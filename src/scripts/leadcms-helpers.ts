@@ -202,9 +202,7 @@ export function configureDataServiceForRemote(ctx: RemoteContext): void {
   // directly (pull-settings, fetch-comments, fetch-email-templates, push-settings)
   // pick up the correct values via ESM live bindings.
   leadCMSUrl = ctx.url;
-  if (ctx.apiKey !== undefined) {
-    leadCMSApiKey = ctx.apiKey;
-  }
+  leadCMSApiKey = ctx.apiKey;
 }
 
 /**

@@ -36,6 +36,29 @@ describe('configureDataServiceForRemote updates module-level vars', () => {
     // Verify they actually changed (not coincidentally the same)
     expect(helpers.leadCMSUrl).not.toBe(originalUrl);
   });
+
+  it('should clear leadCMSApiKey when the remote has no API key', async () => {
+    const helpers = await import('../src/scripts/leadcms-helpers');
+
+    configureDataServiceForRemote({
+      name: 'staging',
+      url: 'https://staging.example.com',
+      apiKey: 'staging-api-key-123',
+      isDefault: false,
+      stateDir: '/tmp/.leadcms/remotes/staging',
+    });
+
+    configureDataServiceForRemote({
+      name: 'dev',
+      url: 'https://dev.example.com',
+      apiKey: undefined,
+      isDefault: false,
+      stateDir: '/tmp/.leadcms/remotes/dev',
+    });
+
+    expect(helpers.leadCMSUrl).toBe('https://dev.example.com');
+    expect(helpers.leadCMSApiKey).toBeUndefined();
+  });
 });
 
 describe('extractMediaUrlsFromContent', () => {

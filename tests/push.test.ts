@@ -424,4 +424,83 @@ coverImageUrl: /media/blog/covers/test-article.jpg
       expect(parsed.updatedAt).toBe('2024-06-15T12:00:00Z');
     });
   });
+
+  describe('status mode with missing content types', () => {
+    let tmpDir: string;
+
+    async function runStatusOnlyMissingTypesTest(apiKey?: string) {
+      const question = jest.fn(() => Promise.resolve('y'));
+      const consoleLog = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+      const consoleWarn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      jest.unstable_mockModule('readline', () => ({
+        default: {
+          createInterface: jest.fn(() => ({
+            question,
+            close: jest.fn(),
+          })),
+        },
+      }));
+
+      jest.unstable_mockModule('../src/lib/data-service.js', () => ({
+        leadCMSDataService: {
+          getAllContent: jest.fn(() => Promise.resolve([])),
+          getContentTypes: jest.fn(() => Promise.resolve([])),
+          isMockMode: jest.fn(() => true),
+          isApiKeyConfigured: jest.fn(() => !!apiKey),
+        },
+      }));
+
+      jest.unstable_mockModule('../src/lib/config.js', () => ({
+        getConfig: jest.fn(() => ({
+          url: 'https://test.leadcms.com',
+          apiKey,
+          defaultLanguage: 'en',
+          contentDir: tmpDir,
+          mediaDir: path.join(tmpDir, 'media'),
+          emailTemplatesDir: path.join(tmpDir, 'email-templates'),
+          settingsDir: path.join(tmpDir, 'settings'),
+        })),
+      }));
+
+      const { pushLeadCMSContent } = await import('../src/scripts/push-leadcms-content.js');
+
+      await pushLeadCMSContent({ statusOnly: true });
+
+      expect(question).not.toHaveBeenCalled();
+      expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('Missing content types in remote LeadCMS'));
+      expect(consoleLog).toHaveBeenCalledWith(expect.stringContaining('Status mode only reports missing content types'));
+
+      consoleLog.mockRestore();
+      consoleError.mockRestore();
+      consoleWarn.mockRestore();
+    }
+
+    beforeEach(async () => {
+      tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'leadcms-status-test-'));
+      await fs.writeFile(
+        path.join(tmpDir, 'home.mdx'),
+        matter.stringify('# Home', {
+          title: 'Home',
+          type: 'home',
+        }),
+        'utf-8'
+      );
+      jest.resetModules();
+    });
+
+    afterEach(async () => {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+      jest.restoreAllMocks();
+    });
+
+    it('does not prompt to create missing content types during anonymous status-only checks', async () => {
+      await runStatusOnlyMissingTypesTest();
+    });
+
+    it('does not prompt to create missing content types during authenticated status-only checks', async () => {
+      await runStatusOnlyMissingTypesTest('test-key');
+    });
+  });
 });
