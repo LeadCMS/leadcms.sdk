@@ -186,11 +186,65 @@ async function pullCommentSync(syncToken?: string): Promise<CommentSyncResult> {
 }
 
 /**
- * Convert Comment to StoredComment by removing nested objects
+ * Convert Comment to StoredComment by removing nested objects.
+ * Uses explicit property assignment to ensure consistent key order
+ * regardless of the order returned by different API remotes.
  */
 function toStoredComment(comment: Comment): StoredComment {
-  const { content, parent, contact, authorEmail, ...stored } = comment;
+  const stored: StoredComment = {
+    id: comment.id,
+    createdAt: comment.createdAt,
+    updatedAt: comment.updatedAt,
+    parentId: comment.parentId,
+    authorName: comment.authorName,
+    body: comment.body,
+    status: comment.status,
+    answerStatus: comment.answerStatus,
+    publishedAt: comment.publishedAt,
+    commentableId: comment.commentableId,
+    commentableType: comment.commentableType,
+    avatarUrl: comment.avatarUrl,
+    language: comment.language,
+    translationKey: comment.translationKey,
+    contactId: comment.contactId,
+    source: comment.source,
+    tags: comment.tags,
+  };
+
+  // Remove undefined properties to keep files clean
+  for (const key of Object.keys(stored) as (keyof StoredComment)[]) {
+    if (stored[key] === undefined) {
+      delete stored[key];
+    }
+  }
+
   return stored;
+}
+
+/**
+ * Canonical property order for StoredComment serialization.
+ * Ensures consistent JSON output regardless of the order properties arrive from the API.
+ */
+const STORED_COMMENT_KEY_ORDER: (keyof StoredComment)[] = [
+  'id', 'createdAt', 'updatedAt',
+  'parentId', 'authorName', 'body',
+  'status', 'answerStatus', 'publishedAt',
+  'commentableId', 'commentableType',
+  'avatarUrl', 'language', 'translationKey',
+  'contactId', 'source', 'tags',
+];
+
+/**
+ * Normalize a StoredComment to have consistent property order for serialization.
+ */
+function normalizeCommentKeys(comment: StoredComment): StoredComment {
+  const normalized = {} as StoredComment;
+  for (const key of STORED_COMMENT_KEY_ORDER) {
+    if (key in comment) {
+      (normalized as any)[key] = comment[key];
+    }
+  }
+  return normalized;
 }
 
 /**
@@ -259,7 +313,10 @@ async function saveCommentsForEntity(
       return (a.id || 0) - (b.id || 0);
     });
 
-    await fs.writeFile(filePath, JSON.stringify(sortedComments, null, 2), "utf8");
+    // Normalize property order for consistent serialization across remotes
+    const normalized = sortedComments.map(normalizeCommentKeys);
+
+    await fs.writeFile(filePath, JSON.stringify(normalized, null, 2), "utf8");
     logger.verbose(`Saved ${sortedComments.length} comments to ${filePath}`);
   }
 }

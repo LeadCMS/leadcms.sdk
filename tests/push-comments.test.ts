@@ -668,4 +668,42 @@ describe('push-comments', () => {
       expect(conflicts[0].reason).toContain('Remote comment changed after the last pull');
     });
   });
+
+  it('passes remoteContext to pullLeadCMSComments during post-push refresh', async () => {
+    await writeCommentFile('content/110.json', [
+      {
+        parentId: null,
+        authorName: 'Test Author',
+        authorEmail: 'test@example.com',
+        body: 'Brand new comment',
+        status: 'Approved',
+      },
+    ]);
+
+    dataServiceMock.createComment.mockResolvedValue({
+      id: 2000,
+      parentId: null,
+      authorName: 'Test Author',
+      body: 'Brand new comment',
+      status: 'Approved',
+      createdAt: '2024-06-01T00:00:00Z',
+      updatedAt: '2024-06-01T00:00:00Z',
+      commentableId: 110,
+      commentableType: 'Content',
+      language: 'en',
+    });
+
+    const remoteContext = {
+      name: 'prod',
+      url: 'https://prod.example.com',
+      apiKey: 'prod-key',
+      isDefault: true,
+      stateDir: path.join(tmpRoot, '.leadcms', 'remotes', 'prod'),
+    };
+
+    await pushComments({ remoteContext });
+
+    expect(mockedPullLeadCMSComments).toHaveBeenCalledTimes(1);
+    expect(mockedPullLeadCMSComments).toHaveBeenCalledWith(remoteContext);
+  });
 });

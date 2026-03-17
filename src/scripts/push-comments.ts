@@ -754,7 +754,7 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
 
   if (!dryRun && didMutate) {
     console.log('🔄 Refreshing local comments anonymously...');
-    await pullLeadCMSComments();
+    await pullLeadCMSComments(remoteCtx);
   }
 }
 

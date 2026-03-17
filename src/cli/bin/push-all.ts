@@ -76,7 +76,8 @@ async function pushAll() {
     await pushEmailTemplates({
       dryRun,
       force,
-      allowDelete
+      allowDelete,
+      remoteContext,
     });
 
     console.log('\n💬 Pushing comments...');
@@ -85,6 +86,7 @@ async function pushAll() {
       dryRun,
       force,
       allowDelete,
+      remoteContext,
     });
 
     console.log('\n📷 Pushing media...');

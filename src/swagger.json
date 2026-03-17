@@ -2,7 +2,7 @@
   "openapi": "3.0.1",
   "info": {
     "title": "LeadCMS API",
-    "version": "1.4.4.0"
+    "version": "1.4.16.0"
   },
   "paths": {
     "/api/accounts/{id}/comments": {
@@ -2959,6 +2959,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "segmentId",
+            "in": "query",
+            "description": "Filter contacts to the evaluated members of the specified segment before applying the remaining query filters",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
           }
         ],
         "responses": {
@@ -3109,6 +3118,51 @@
               "text/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ContactDetailsDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/contacts/export": {
+      "get": {
+        "tags": [
+          "Contacts"
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "segmentId",
+            "in": "query",
+            "description": "Filter contacts to the evaluated members of the specified segment before applying the remaining query filters",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -3558,6 +3612,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "segmentId",
+            "in": "query",
+            "description": "Filter contacts to the evaluated members of the specified segment before applying the remaining query filters",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
           }
         ],
         "responses": {
@@ -3777,186 +3840,6 @@
                 }
               }
             }
-          }
-        }
-      }
-    },
-    "/api/contacts/export": {
-      "get": {
-        "tags": [
-          "Contacts"
-        ],
-        "parameters": [
-          {
-            "name": "query",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error",
-            "content": {
-              "text/csv": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/contact-us": {
-      "post": {
-        "tags": [
-          "ContactUs"
-        ],
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "required": [
-                  "Email",
-                  "FirstName",
-                  "Language",
-                  "Message",
-                  "TimeZoneOffset"
-                ],
-                "type": "object",
-                "properties": {
-                  "Attachment": {
-                    "type": "string",
-                    "format": "binary"
-                  },
-                  "Title": {
-                    "type": "string"
-                  },
-                  "NotificationType": {
-                    "type": "string"
-                  },
-                  "AcknowledgmentType": {
-                    "type": "string"
-                  },
-                  "PageUrl": {
-                    "type": "string"
-                  },
-                  "FirstName": {
-                    "type": "string"
-                  },
-                  "LastName": {
-                    "type": "string"
-                  },
-                  "Company": {
-                    "type": "string"
-                  },
-                  "Subject": {
-                    "type": "string"
-                  },
-                  "ExtraData": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string",
-                      "nullable": true
-                    }
-                  },
-                  "Message": {
-                    "type": "string"
-                  },
-                  "Email": {
-                    "type": "string",
-                    "format": "email"
-                  },
-                  "Phone": {
-                    "type": "string"
-                  },
-                  "RecaptchaToken": {
-                    "type": "string"
-                  },
-                  "TimeZoneOffset": {
-                    "type": "integer",
-                    "format": "int32"
-                  },
-                  "Language": {
-                    "type": "string"
-                  }
-                }
-              },
-              "encoding": {
-                "Attachment": {
-                  "style": "form"
-                },
-                "Title": {
-                  "style": "form"
-                },
-                "NotificationType": {
-                  "style": "form"
-                },
-                "AcknowledgmentType": {
-                  "style": "form"
-                },
-                "PageUrl": {
-                  "style": "form"
-                },
-                "FirstName": {
-                  "style": "form"
-                },
-                "LastName": {
-                  "style": "form"
-                },
-                "Company": {
-                  "style": "form"
-                },
-                "Subject": {
-                  "style": "form"
-                },
-                "ExtraData": {
-                  "style": "form"
-                },
-                "Message": {
-                  "style": "form"
-                },
-                "Email": {
-                  "style": "form"
-                },
-                "Phone": {
-                  "style": "form"
-                },
-                "RecaptchaToken": {
-                  "style": "form"
-                },
-                "TimeZoneOffset": {
-                  "style": "form"
-                },
-                "Language": {
-                  "style": "form"
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "422": {
-            "description": "Client Error"
-          },
-          "500": {
-            "description": "Server Error"
           }
         }
       }
@@ -18016,6 +17899,21 @@
         }
       }
     },
+    "/api/media/reindex-usage": {
+      "post": {
+        "tags": [
+          "Media"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
     "/api/order-items": {
       "post": {
         "tags": [
@@ -20882,6 +20780,1769 @@
         }
       }
     },
+    "/api/sequences/{sequenceId}/contacts": {
+      "get": {
+        "tags": [
+          "SequenceContacts"
+        ],
+        "parameters": [
+          {
+            "name": "sequenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContactDetailsDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContactDetailsDto"
+                  }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContactDetailsDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequenceId}/deliveries": {
+      "get": {
+        "tags": [
+          "SequenceDeliveries"
+        ],
+        "parameters": [
+          {
+            "name": "sequenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceDeliveryDetailsDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceDeliveryDetailsDto"
+                  }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceDeliveryDetailsDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequenceId}/deliveries/{deliveryId}": {
+      "get": {
+        "tags": [
+          "SequenceDeliveries"
+        ],
+        "parameters": [
+          {
+            "name": "sequenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "deliveryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDeliveryDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDeliveryDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequenceId}/enrollments": {
+      "get": {
+        "tags": [
+          "SequenceEnrollments"
+        ],
+        "parameters": [
+          {
+            "name": "sequenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceEnrollmentDetailsDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceEnrollmentDetailsDto"
+                  }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceEnrollmentDetailsDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "SequenceEnrollments"
+        ],
+        "parameters": [
+          {
+            "name": "sequenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceEnrollmentCreateDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceEnrollmentCreateDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceEnrollmentCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceEnrollmentDetailsDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceEnrollmentDetailsDto"
+                  }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceEnrollmentDetailsDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequenceId}/enrollments/{enrollmentId}": {
+      "get": {
+        "tags": [
+          "SequenceEnrollments"
+        ],
+        "parameters": [
+          {
+            "name": "sequenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "enrollmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceEnrollmentDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceEnrollmentDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "SequenceEnrollments"
+        ],
+        "parameters": [
+          {
+            "name": "sequenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "enrollmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceEnrollmentDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceEnrollmentDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{id}": {
+      "get": {
+        "tags": [
+          "Sequences"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Sequences"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceCreateDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceCreateDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Sequences"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceUpdateDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceUpdateDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Sequences"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences": {
+      "post": {
+        "tags": [
+          "Sequences"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceCreateDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceCreateDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Sequences"
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceDetailsDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceDetailsDto"
+                  }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceDetailsDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{id}/activate": {
+      "post": {
+        "tags": [
+          "Sequences"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{id}/pause": {
+      "post": {
+        "tags": [
+          "Sequences"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{id}/archive": {
+      "post": {
+        "tags": [
+          "Sequences"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{id}/statistics": {
+      "get": {
+        "tags": [
+          "Sequences"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceStatisticsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceStatisticsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/sync": {
+      "get": {
+        "tags": [
+          "Sequences"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailsDtoInt32SyncResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailsDtoInt32SyncResponseDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/bulk": {
+      "delete": {
+        "tags": [
+          "Sequences"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            },
+            "text/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            },
+            "text/csv": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/export": {
+      "get": {
+        "tags": [
+          "Sequences"
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequenceId}/steps": {
+      "get": {
+        "tags": [
+          "SequenceSteps"
+        ],
+        "parameters": [
+          {
+            "name": "sequenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceStepDetailsDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceStepDetailsDto"
+                  }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceStepDetailsDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "SequenceSteps"
+        ],
+        "parameters": [
+          {
+            "name": "sequenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceStepCreateDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceStepCreateDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceStepCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceStepDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceStepDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequenceId}/steps/{stepId}": {
+      "get": {
+        "tags": [
+          "SequenceSteps"
+        ],
+        "parameters": [
+          {
+            "name": "sequenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "stepId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceStepDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceStepDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "SequenceSteps"
+        ],
+        "parameters": [
+          {
+            "name": "sequenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "stepId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceStepUpdateDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceStepUpdateDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceStepUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceStepDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceStepDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "SequenceSteps"
+        ],
+        "parameters": [
+          {
+            "name": "sequenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "stepId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequenceId}/steps/reorder": {
+      "post": {
+        "tags": [
+          "SequenceSteps"
+        ],
+        "parameters": [
+          {
+            "name": "sequenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceStepReorderDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceStepReorderDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceStepReorderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceStepDetailsDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceStepDetailsDto"
+                  }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceStepDetailsDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings": {
       "post": {
         "tags": [
@@ -22242,126 +23903,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Server Error"
-          }
-        }
-      }
-    },
-    "/api/subscribe": {
-      "post": {
-        "tags": [
-          "Subscribes"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SubscribeDto"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SubscribeDto"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/SubscribeDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "422": {
-            "description": "Client Error"
-          },
-          "500": {
-            "description": "Server Error"
-          }
-        }
-      }
-    },
-    "/api/subscribe/confirm": {
-      "post": {
-        "tags": [
-          "Subscribes"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConfirmSubscribeDto"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConfirmSubscribeDto"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConfirmSubscribeDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "422": {
-            "description": "Client Error"
-          },
-          "500": {
-            "description": "Server Error"
-          }
-        }
-      }
-    },
-    "/api/unsubscribe": {
-      "post": {
-        "tags": [
-          "Subscribes"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UnsibscribeDto"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UnsibscribeDto"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/UnsibscribeDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "422": {
-            "description": "Client Error"
           },
           "500": {
             "description": "Server Error"
@@ -25594,6 +27135,9 @@
             "type": "string",
             "nullable": true,
             "example": "string"
+          },
+          "utmParameters": {
+            "$ref": "#/components/schemas/Utms"
           }
         },
         "additionalProperties": false
@@ -25666,6 +27210,9 @@
             "type": "string",
             "nullable": true,
             "example": "string"
+          },
+          "utmParameters": {
+            "$ref": "#/components/schemas/Utms"
           },
           "id": {
             "title": "Id",
@@ -25774,6 +27321,11 @@
             "title": "Use Contact Time Zone",
             "type": "boolean",
             "example": true
+          },
+          "allowPastTimeZones": {
+            "title": "Allow Past Time Zones",
+            "type": "boolean",
+            "example": true
           }
         },
         "additionalProperties": false
@@ -25840,6 +27392,9 @@
               "nullable": true
             },
             "nullable": true
+          },
+          "utmParameters": {
+            "$ref": "#/components/schemas/Utms"
           }
         },
         "additionalProperties": false
@@ -25939,6 +27494,12 @@
             "format": "date-time",
             "nullable": true,
             "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "effectiveTimezone": {
+            "title": "Effective Timezone",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
           },
           "errorMessage": {
             "title": "Error Message",
@@ -26091,6 +27652,9 @@
             "type": "string",
             "nullable": true,
             "example": "string"
+          },
+          "utmParameters": {
+            "$ref": "#/components/schemas/Utms"
           }
         },
         "additionalProperties": false
@@ -26222,6 +27786,14 @@
             "type": "string",
             "example": "string"
           },
+          "publishedAt": {
+            "title": "Published At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
           "translationKey": {
             "title": "Translation Key",
             "type": "string",
@@ -26294,6 +27866,14 @@
             "title": "Language",
             "type": "string",
             "example": "string"
+          },
+          "publishedAt": {
+            "title": "Published At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
           },
           "translationKey": {
             "title": "Translation Key",
@@ -26370,6 +27950,14 @@
           },
           "updatedAt": {
             "title": "Updated At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "publishedAt": {
+            "title": "Published At",
             "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
             "type": "string",
             "format": "date-time",
@@ -26608,6 +28196,14 @@
             "nullable": true,
             "example": "string"
           },
+          "publishedAt": {
+            "title": "Published At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
           "translationKey": {
             "title": "Translation Key",
             "type": "string",
@@ -26743,6 +28339,14 @@
             "nullable": true,
             "example": "string"
           },
+          "publishedAt": {
+            "title": "Published At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
           "status": {
             "title": "Status",
             "enum": [
@@ -26765,12 +28369,6 @@
             "type": "string",
             "nullable": true,
             "example": "Unanswered"
-          },
-          "translationKey": {
-            "title": "Translation Key",
-            "type": "string",
-            "nullable": true,
-            "example": "string"
           },
           "tags": {
             "title": "Tags",
@@ -26866,25 +28464,7 @@
         },
         "additionalProperties": false
       },
-      "ConfirmSubscribeDto": {
-        "required": [
-          "token"
-        ],
-        "type": "object",
-        "properties": {
-          "token": {
-            "title": "Token",
-            "minLength": 1,
-            "type": "string",
-            "example": "string"
-          }
-        },
-        "additionalProperties": false
-      },
       "ContactCreateDto": {
-        "required": [
-          "email"
-        ],
         "type": "object",
         "properties": {
           "prefix": {
@@ -27247,6 +28827,12 @@
             "nullable": true,
             "example": "string"
           },
+          "phoneRaw": {
+            "title": "Phone Raw",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
           "timezone": {
             "title": "Timezone",
             "type": "integer",
@@ -27307,19 +28893,16 @@
           },
           "email": {
             "title": "Email",
-            "minLength": 1,
             "pattern": "^([\\w\\.\\-]+)@([\\w\\-]+)((\\.(\\w){1,63})+)$",
             "type": "string",
             "format": "email",
+            "nullable": true,
             "example": "example@example.com"
           }
         },
         "additionalProperties": false
       },
       "ContactDetailsDto": {
-        "required": [
-          "email"
-        ],
         "type": "object",
         "properties": {
           "prefix": {
@@ -27682,6 +29265,12 @@
             "nullable": true,
             "example": "string"
           },
+          "phoneRaw": {
+            "title": "Phone Raw",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
           "timezone": {
             "title": "Timezone",
             "type": "integer",
@@ -27742,10 +29331,10 @@
           },
           "email": {
             "title": "Email",
-            "minLength": 1,
             "pattern": "^([\\w\\.\\-]+)@([\\w\\-]+)((\\.(\\w){1,63})+)$",
             "type": "string",
             "format": "email",
+            "nullable": true,
             "example": "example@example.com"
           },
           "id": {
@@ -27759,6 +29348,21 @@
             "type": "string",
             "nullable": true,
             "example": "string"
+          },
+          "ipAddress": {
+            "title": "Ip Address",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "userDeviceSummary": {
+            "title": "User Device Summary",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "utms": {
+            "$ref": "#/components/schemas/Utms"
           },
           "avatarUrl": {
             "title": "Avatar Url",
@@ -27784,6 +29388,7 @@
             "title": "Domain Id",
             "type": "integer",
             "format": "int32",
+            "nullable": true,
             "example": 1
           },
           "dealsCount": {
@@ -27811,6 +29416,14 @@
             "type": "number",
             "format": "double",
             "example": 1
+          },
+          "pendingUpdates": {
+            "title": "Pending Updates",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PendingContactUpdate"
+            },
+            "nullable": true
           },
           "domain": {
             "$ref": "#/components/schemas/DomainDetailsDto"
@@ -28603,6 +30216,12 @@
             "nullable": true,
             "example": "string"
           },
+          "phoneRaw": {
+            "title": "Phone Raw",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
           "timezone": {
             "title": "Timezone",
             "type": "integer",
@@ -29033,6 +30652,12 @@
             "nullable": true,
             "example": "string"
           },
+          "phoneRaw": {
+            "title": "Phone Raw",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
           "timezone": {
             "title": "Timezone",
             "type": "integer",
@@ -29150,6 +30775,12 @@
             "type": "string",
             "example": "string"
           },
+          "previewSlug": {
+            "title": "Preview Slug",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
           "type": {
             "title": "Type",
             "minLength": 1,
@@ -29258,6 +30889,12 @@
             "title": "Slug",
             "minLength": 1,
             "type": "string",
+            "example": "string"
+          },
+          "previewSlug": {
+            "title": "Preview Slug",
+            "type": "string",
+            "nullable": true,
             "example": "string"
           },
           "type": {
@@ -29449,6 +31086,12 @@
           "slug": {
             "title": "Slug",
             "minLength": 1,
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "previewSlug": {
+            "title": "Preview Slug",
             "type": "string",
             "nullable": true,
             "example": "string"
@@ -29730,6 +31373,12 @@
             "example": "string",
             "x-unique": true
           },
+          "previewSlug": {
+            "title": "Preview Slug",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
           "type": {
             "title": "Type",
             "type": "string",
@@ -29860,6 +31509,11 @@
             "title": "Supports Cover Image",
             "type": "boolean",
             "example": true
+          },
+          "supportsPreviewSlug": {
+            "title": "Supports Preview Slug",
+            "type": "boolean",
+            "example": true
           }
         },
         "additionalProperties": false
@@ -29897,6 +31551,11 @@
           },
           "supportsCoverImage": {
             "title": "Supports Cover Image",
+            "type": "boolean",
+            "example": true
+          },
+          "supportsPreviewSlug": {
+            "title": "Supports Preview Slug",
             "type": "boolean",
             "example": true
           },
@@ -30058,6 +31717,12 @@
             "type": "boolean",
             "nullable": true,
             "example": true
+          },
+          "supportsPreviewSlug": {
+            "title": "Supports Preview Slug",
+            "type": "boolean",
+            "nullable": true,
+            "example": true
           }
         },
         "additionalProperties": false
@@ -30093,6 +31758,12 @@
           },
           "supportsCoverImage": {
             "title": "Supports Cover Image",
+            "type": "boolean",
+            "nullable": true,
+            "example": true
+          },
+          "supportsPreviewSlug": {
+            "title": "Supports Preview Slug",
             "type": "boolean",
             "nullable": true,
             "example": true
@@ -30139,6 +31810,12 @@
           "slug": {
             "title": "Slug",
             "minLength": 1,
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "previewSlug": {
+            "title": "Preview Slug",
             "type": "string",
             "nullable": true,
             "example": "string"
@@ -32787,6 +34464,9 @@
               "nullable": true
             },
             "nullable": true
+          },
+          "utmParameters": {
+            "$ref": "#/components/schemas/Utms"
           }
         },
         "additionalProperties": false
@@ -35017,6 +36697,54 @@
         },
         "additionalProperties": false
       },
+      "PendingContactUpdate": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string",
+            "example": "string"
+          },
+          "oldValue": {
+            "title": "Old Value",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "proposedValue": {
+            "title": "Proposed Value",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "ip": {
+            "title": "Ip",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "userAgent": {
+            "title": "User Agent",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "createdAt": {
+            "title": "Created At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "example": "2023-04-18T12:00:00.0000000Z"
+          }
+        },
+        "additionalProperties": false
+      },
       "ProblemDetails": {
         "type": "object",
         "properties": {
@@ -35629,6 +37357,862 @@
         },
         "additionalProperties": false
       },
+      "SequenceCreateDto": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "minLength": 1,
+            "type": "string",
+            "example": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string",
+            "example": "string"
+          },
+          "stopOnReply": {
+            "title": "Stop On Reply",
+            "type": "boolean",
+            "example": true
+          },
+          "useContactTimeZone": {
+            "title": "Use Contact Time Zone",
+            "type": "boolean",
+            "example": true
+          },
+          "timeZone": {
+            "title": "Time Zone",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "enrollment": {
+            "$ref": "#/components/schemas/SequenceEnrollmentConfig"
+          },
+          "utmParameters": {
+            "$ref": "#/components/schemas/Utms"
+          },
+          "steps": {
+            "title": "Steps",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SequenceStepCreateDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "SequenceDeliveryDetailsDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "sequenceId": {
+            "title": "Sequence Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "sequenceEnrollmentId": {
+            "title": "Sequence Enrollment Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "sequenceStepId": {
+            "title": "Sequence Step Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "contactId": {
+            "title": "Contact Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "contact": {
+            "$ref": "#/components/schemas/ContactDetailsDto"
+          },
+          "status": {
+            "title": "Status",
+            "enum": [
+              "Scheduled",
+              "Sent",
+              "Failed",
+              "Skipped"
+            ],
+            "type": "string",
+            "example": "Scheduled"
+          },
+          "scheduledAt": {
+            "title": "Scheduled At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "sentAt": {
+            "title": "Sent At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "skipReason": {
+            "title": "Skip Reason",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "errorMessage": {
+            "title": "Error Message",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "emailLogId": {
+            "title": "Email Log Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "createdAt": {
+            "title": "Created At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "updatedAt": {
+            "title": "Updated At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SequenceDetailsDto": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "minLength": 1,
+            "type": "string",
+            "example": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string",
+            "example": "string"
+          },
+          "stopOnReply": {
+            "title": "Stop On Reply",
+            "type": "boolean",
+            "example": true
+          },
+          "useContactTimeZone": {
+            "title": "Use Contact Time Zone",
+            "type": "boolean",
+            "example": true
+          },
+          "timeZone": {
+            "title": "Time Zone",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "enrollment": {
+            "$ref": "#/components/schemas/SequenceEnrollmentConfig"
+          },
+          "utmParameters": {
+            "$ref": "#/components/schemas/Utms"
+          },
+          "steps": {
+            "title": "Steps",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SequenceStepDetailsDto"
+            }
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "status": {
+            "title": "Status",
+            "enum": [
+              "Draft",
+              "Active",
+              "Paused",
+              "Archived"
+            ],
+            "type": "string",
+            "example": "Draft"
+          },
+          "lastActivatedAt": {
+            "title": "Last Activated At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "lastPausedAt": {
+            "title": "Last Paused At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "archivedAt": {
+            "title": "Archived At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "activeEnrollmentCount": {
+            "title": "Active Enrollment Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "completedEnrollmentCount": {
+            "title": "Completed Enrollment Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "exitedEnrollmentCount": {
+            "title": "Exited Enrollment Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "sentCount": {
+            "title": "Sent Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "failedCount": {
+            "title": "Failed Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "createdAt": {
+            "title": "Created At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "updatedAt": {
+            "title": "Updated At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SequenceDetailsDtoInt32SyncResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "title": "Items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SequenceDetailsDto"
+            }
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "baseItems": {
+            "title": "Base Items",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SequenceDetailsDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "SequenceEnrollmentConfig": {
+        "type": "object",
+        "properties": {
+          "modes": {
+            "title": "Modes",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "string1",
+              "string2"
+            ]
+          },
+          "includeSegmentIds": {
+            "title": "Include Segment Ids",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "nullable": true
+          },
+          "excludeSegmentIds": {
+            "title": "Exclude Segment Ids",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "nullable": true
+          },
+          "reentryPolicy": {
+            "title": "Reentry Policy",
+            "enum": [
+              "OnceEver",
+              "AllowAfterCompletion",
+              "Always"
+            ],
+            "type": "string",
+            "example": "OnceEver"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SequenceEnrollmentCreateDto": {
+        "required": [
+          "contactIds"
+        ],
+        "type": "object",
+        "properties": {
+          "contactIds": {
+            "title": "Contact Ids",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "enrollmentReason": {
+            "title": "Enrollment Reason",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "templateArguments": {
+            "title": "Template Arguments",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true,
+            "example": {
+              "key1": "value1",
+              "key2": "value2"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "SequenceEnrollmentDetailsDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "sequenceId": {
+            "title": "Sequence Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "contactId": {
+            "title": "Contact Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "contact": {
+            "$ref": "#/components/schemas/ContactDetailsDto"
+          },
+          "status": {
+            "title": "Status",
+            "enum": [
+              "Active",
+              "Completed",
+              "Exited"
+            ],
+            "type": "string",
+            "example": "Active"
+          },
+          "lastCompletedStepKey": {
+            "title": "Last Completed Step Key",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "enteredAt": {
+            "title": "Entered At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "completedAt": {
+            "title": "Completed At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "exitedAt": {
+            "title": "Exited At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "exitReason": {
+            "title": "Exit Reason",
+            "enum": [
+              "None",
+              "Completed",
+              "Failed",
+              "Unsubscribed",
+              "ReplyStopped",
+              "ManuallyRemoved",
+              "Archived"
+            ],
+            "type": "string",
+            "example": "None"
+          },
+          "enrollmentSource": {
+            "title": "Enrollment Source",
+            "enum": [
+              "Manual",
+              "Api",
+              "Segment",
+              "Migration"
+            ],
+            "type": "string",
+            "example": "Manual"
+          },
+          "enrollmentReason": {
+            "title": "Enrollment Reason",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "templateArguments": {
+            "title": "Template Arguments",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true,
+            "example": {
+              "key1": "value1",
+              "key2": "value2"
+            }
+          },
+          "createdAt": {
+            "title": "Created At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "updatedAt": {
+            "title": "Updated At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SequenceStatisticsDto": {
+        "type": "object",
+        "properties": {
+          "activeEnrollmentCount": {
+            "title": "Active Enrollment Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "completedEnrollmentCount": {
+            "title": "Completed Enrollment Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "exitedEnrollmentCount": {
+            "title": "Exited Enrollment Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "sentCount": {
+            "title": "Sent Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "failedCount": {
+            "title": "Failed Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "stepsCount": {
+            "title": "Steps Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "SequenceStepCreateDto": {
+        "required": [
+          "emailTemplateId",
+          "stepKey",
+          "timing"
+        ],
+        "type": "object",
+        "properties": {
+          "emailTemplateId": {
+            "title": "Email Template Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "stepKey": {
+            "title": "Step Key",
+            "minLength": 1,
+            "type": "string",
+            "example": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "type": {
+            "title": "Type",
+            "enum": [
+              "Email"
+            ],
+            "type": "string",
+            "example": "Email"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "timing": {
+            "$ref": "#/components/schemas/SequenceStepTiming"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SequenceStepDelay": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "title": "Value",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string",
+            "example": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SequenceStepDetailsDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "sequenceId": {
+            "title": "Sequence Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "emailTemplateId": {
+            "title": "Email Template Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "stepKey": {
+            "title": "Step Key",
+            "type": "string",
+            "example": "string"
+          },
+          "type": {
+            "title": "Type",
+            "enum": [
+              "Email"
+            ],
+            "type": "string",
+            "example": "Email"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "timing": {
+            "$ref": "#/components/schemas/SequenceStepTiming"
+          },
+          "scheduledCount": {
+            "title": "Scheduled Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "sentCount": {
+            "title": "Sent Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "failedCount": {
+            "title": "Failed Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "skippedCount": {
+            "title": "Skipped Count",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "createdAt": {
+            "title": "Created At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "updatedAt": {
+            "title": "Updated At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SequenceStepReorderDto": {
+        "required": [
+          "stepIds"
+        ],
+        "type": "object",
+        "properties": {
+          "stepIds": {
+            "title": "Step Ids",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "SequenceStepTiming": {
+        "type": "object",
+        "properties": {
+          "delay": {
+            "$ref": "#/components/schemas/SequenceStepDelay"
+          },
+          "sendAt": {
+            "title": "Send At",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "allowedWeekDays": {
+            "title": "Allowed Week Days",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "example": [
+              "string1",
+              "string2"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "SequenceStepUpdateDto": {
+        "type": "object",
+        "properties": {
+          "emailTemplateId": {
+            "title": "Email Template Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "stepKey": {
+            "title": "Step Key",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "timing": {
+            "$ref": "#/components/schemas/SequenceStepTiming"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SequenceUpdateDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "minLength": 1,
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "stopOnReply": {
+            "title": "Stop On Reply",
+            "type": "boolean",
+            "nullable": true,
+            "example": true
+          },
+          "useContactTimeZone": {
+            "title": "Use Contact Time Zone",
+            "type": "boolean",
+            "nullable": true,
+            "example": true
+          },
+          "timeZone": {
+            "title": "Time Zone",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "enrollment": {
+            "$ref": "#/components/schemas/SequenceEnrollmentConfig"
+          },
+          "utmParameters": {
+            "$ref": "#/components/schemas/Utms"
+          },
+          "steps": {
+            "title": "Steps",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SequenceStepCreateDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "SettingCreateDto": {
         "required": [
           "key"
@@ -35945,42 +38529,6 @@
         },
         "additionalProperties": false
       },
-      "SubscribeDto": {
-        "required": [
-          "email",
-          "language",
-          "timeZoneOffset"
-        ],
-        "type": "object",
-        "properties": {
-          "email": {
-            "title": "Email",
-            "minLength": 1,
-            "pattern": "^([\\w\\.\\-]+)@([\\w\\-]+)((\\.(\\w){1,63})+)$",
-            "type": "string",
-            "format": "email",
-            "example": "example@example.com"
-          },
-          "group": {
-            "title": "Group",
-            "type": "string",
-            "example": "string"
-          },
-          "timeZoneOffset": {
-            "title": "Time Zone Offset",
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "language": {
-            "title": "Language",
-            "minLength": 1,
-            "type": "string",
-            "example": "string"
-          }
-        },
-        "additionalProperties": false
-      },
       "TaskDetailsDto": {
         "type": "object",
         "properties": {
@@ -36267,37 +38815,6 @@
             "type": "string",
             "format": "date-time",
             "example": "2023-04-18T12:00:00.0000000Z"
-          }
-        },
-        "additionalProperties": false
-      },
-      "UnsibscribeDto": {
-        "required": [
-          "email",
-          "language",
-          "timeZoneOffset"
-        ],
-        "type": "object",
-        "properties": {
-          "email": {
-            "title": "Email",
-            "minLength": 1,
-            "pattern": "^([\\w\\.\\-]+)@([\\w\\-]+)((\\.(\\w){1,63})+)$",
-            "type": "string",
-            "format": "email",
-            "example": "example@example.com"
-          },
-          "timeZoneOffset": {
-            "title": "Time Zone Offset",
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "language": {
-            "title": "Language",
-            "minLength": 1,
-            "type": "string",
-            "example": "string"
           }
         },
         "additionalProperties": false
@@ -36602,6 +39119,48 @@
           "language": {
             "title": "Language",
             "type": "string",
+            "example": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Utms": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "title": "Source",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "medium": {
+            "title": "Medium",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "campaign": {
+            "title": "Campaign",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "term": {
+            "title": "Term",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string",
+            "nullable": true,
             "example": "string"
           }
         },

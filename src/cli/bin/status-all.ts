@@ -231,7 +231,7 @@ async function statusAll() {
           spinner.update('Fetching status… (content failed)');
           return null;
         }),
-        buildCommentStatus({ showDelete }).catch((err: any) => {
+        buildCommentStatus({ showDelete, remoteContext }).catch((err: any) => {
           spinner.update('Fetching status… (comments failed)');
           return null;
         }),

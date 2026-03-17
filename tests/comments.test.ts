@@ -121,6 +121,51 @@ describe("Comments Feature", () => {
       expect(stored).not.toHaveProperty("contact");
       expect(stored).not.toHaveProperty("authorEmail");
     });
+
+    it("should produce consistent property order regardless of API response order", () => {
+      // API from one remote might return fields in a different order
+      const commentOrderA: Comment = {
+        id: 5,
+        createdAt: "2024-01-01T00:00:00Z",
+        updatedAt: "2024-01-02T00:00:00Z",
+        parentId: null,
+        authorName: "Alice",
+        body: "Hello",
+        commentableId: 10,
+        commentableType: "Content",
+        language: "en-US",
+        content: { id: 10, slug: "test" },
+        parent: null,
+        contact: null,
+      };
+
+      const commentOrderB: Comment = {
+        id: 5,
+        parentId: null,
+        authorName: "Alice",
+        body: "Hello",
+        createdAt: "2024-01-01T00:00:00Z",
+        updatedAt: "2024-01-02T00:00:00Z",
+        commentableId: 10,
+        commentableType: "Content",
+        language: "en-US",
+        content: { id: 10, slug: "test" },
+        parent: null,
+        contact: null,
+      };
+
+      const storedA = toStoredComment(commentOrderA);
+      const storedB = toStoredComment(commentOrderB);
+
+      // Both should serialize to identical JSON
+      expect(JSON.stringify(storedA)).toBe(JSON.stringify(storedB));
+
+      // Verify canonical order
+      const keys = Object.keys(storedA);
+      expect(keys[0]).toBe("id");
+      expect(keys[1]).toBe("createdAt");
+      expect(keys[2]).toBe("updatedAt");
+    });
   });
 
   describe("Comment Grouping (real groupCommentsByEntityAndLanguage)", () => {
@@ -629,6 +674,58 @@ describe("Comments Feature", () => {
 
       expect(loadedContent[0].body).toBe("Content comment");
       expect(loadedContact[0].body).toBe("Contact comment");
+    });
+
+    it("should produce consistent property order regardless of input order", async () => {
+      // Simulate different remotes returning properties in different order
+      const commentFromDev: StoredComment = {
+        id: 13,
+        createdAt: "2014-11-04T19:38:00Z",
+        updatedAt: "2023-05-03T09:39:32.863912Z",
+        parentId: null,
+        authorName: "udi",
+        body: "Is there an option to set a different key-combo?",
+        publishedAt: "2023-05-03T09:39:32.863912Z",
+        commentableId: 1,
+        commentableType: "Content",
+        avatarUrl: "https://www.gravatar.com/avatar/0ea16b3e39e26712aa69686a4c5f9ecc?size=48&d=mp",
+        language: "en-US",
+        translationKey: "comment_content_1_ab32b2b2_2c46a776",
+      };
+
+      const commentFromProd: StoredComment = {
+        id: 13,
+        parentId: null,
+        authorName: "udi",
+        body: "Is there an option to set a different key-combo?",
+        createdAt: "2014-11-04T19:38:00Z",
+        updatedAt: "2023-05-03T09:39:32.863912Z",
+        publishedAt: "2023-05-03T09:39:32.863912Z",
+        commentableId: 1,
+        commentableType: "Content",
+        avatarUrl: "https://www.gravatar.com/avatar/0ea16b3e39e26712aa69686a4c5f9ecc?size=48&d=mp",
+        language: "en-US",
+        translationKey: "comment_content_1_ab32b2b2_2c46a776",
+      };
+
+      // Save from "dev" remote
+      await saveCommentsForEntity("Content", 1, "en", [commentFromDev]);
+      const filePath = path.join(TEST_COMMENTS_DIR, "content", "1.json");
+      const devJson = fs.readFileSync(filePath, "utf8");
+
+      // Save from "prod" remote (different property order)
+      await saveCommentsForEntity("Content", 1, "en", [commentFromProd]);
+      const prodJson = fs.readFileSync(filePath, "utf8");
+
+      // Both should produce identical JSON output
+      expect(devJson).toBe(prodJson);
+
+      // Verify the property order starts with id
+      const parsed = JSON.parse(devJson);
+      const keys = Object.keys(parsed[0]);
+      expect(keys[0]).toBe("id");
+      expect(keys[1]).toBe("createdAt");
+      expect(keys[2]).toBe("updatedAt");
     });
 
     it("should handle updates to existing comments", async () => {
