@@ -337,9 +337,10 @@ export function hasContentDifferences(content1: string, content2: string): boole
 /**
  * Strip id/createdAt/updatedAt lines from content so server-managed metadata
  * don't cause false diffs when comparing across different remotes.
+ * Handles both YAML frontmatter (`id: 155`) and JSON (`"id": 155,`) formats.
  */
 export function stripTimestampMetadata(content: string): string {
-  return content.replace(/^\s*(id|createdAt|updatedAt):.*$/gm, '').replace(/\n{3,}/g, '\n\n');
+  return content.replace(/^\s*"?(id|createdAt|updatedAt)"?\s*:.*$/gm, '').replace(/\n{3,}/g, '\n\n');
 }
 
 /**

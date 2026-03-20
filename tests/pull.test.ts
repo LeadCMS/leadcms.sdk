@@ -530,5 +530,55 @@ slug: test
 
       expect(hasContentDifferences(stripTimestampMetadata(content1), stripTimestampMetadata(content2))).toBe(true);
     });
+
+    it('should not detect differences when only id/createdAt/updatedAt differ in JSON content', () => {
+      const { hasContentDifferences, stripTimestampMetadata } = require('../src/lib/content-transformation');
+
+      const content1 = JSON.stringify({
+        id: 155,
+        createdAt: '2026-03-17T08:45:53.314064Z',
+        updatedAt: '2026-03-17T09:00:00Z',
+        slug: 'navigation',
+        type: 'component',
+        title: 'Navigation',
+        language: 'ru-RU',
+      }, null, 2);
+
+      const content2 = JSON.stringify({
+        slug: 'navigation',
+        type: 'component',
+        title: 'Navigation',
+        language: 'ru-RU',
+      }, null, 2);
+
+      // Without stripping, the fields differ
+      expect(hasContentDifferences(content1, content2)).toBe(true);
+
+      // After stripping, no differences
+      expect(hasContentDifferences(stripTimestampMetadata(content1), stripTimestampMetadata(content2))).toBe(false);
+    });
+
+    it('should still detect real content changes after stripping timestamps from JSON', () => {
+      const { hasContentDifferences, stripTimestampMetadata } = require('../src/lib/content-transformation');
+
+      const content1 = JSON.stringify({
+        id: 155,
+        createdAt: '2026-03-17T08:45:53.314064Z',
+        slug: 'navigation',
+        type: 'component',
+        title: 'Navigation',
+      }, null, 2);
+
+      const content2 = JSON.stringify({
+        id: 200,
+        createdAt: '2026-03-18T10:00:00Z',
+        slug: 'navigation',
+        type: 'component',
+        title: 'Updated Navigation',
+      }, null, 2);
+
+      // After stripping, the title change should still be detected
+      expect(hasContentDifferences(stripTimestampMetadata(content1), stripTimestampMetadata(content2))).toBe(true);
+    });
   });
 });
