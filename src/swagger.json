@@ -2,7 +2,7 @@
   "openapi": "3.0.1",
   "info": {
     "title": "LeadCMS API",
-    "version": "1.4.16.0"
+    "version": "1.5.0.0"
   },
   "paths": {
     "/api/accounts/{id}/comments": {
@@ -21255,6 +21255,92 @@
         }
       }
     },
+    "/api/sequences/{sequenceId}/enrollments/stop": {
+      "post": {
+        "tags": [
+          "SequenceEnrollments"
+        ],
+        "parameters": [
+          {
+            "name": "sequenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceEnrollmentStopDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceEnrollmentStopDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceEnrollmentStopDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceEnrollmentDetailsDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceEnrollmentDetailsDto"
+                  }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SequenceEnrollmentDetailsDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequences/{id}": {
       "get": {
         "tags": [
@@ -29431,6 +29517,9 @@
           "account": {
             "$ref": "#/components/schemas/AccountDetailsDto"
           },
+          "unsubscribe": {
+            "$ref": "#/components/schemas/UnsubscribeDetailsDto"
+          },
           "orders": {
             "title": "Orders",
             "type": "array",
@@ -34741,6 +34830,95 @@
         },
         "additionalProperties": false
       },
+      "EnrollmentStepTimelineEntryDto": {
+        "type": "object",
+        "properties": {
+          "stepId": {
+            "title": "Step Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "name": {
+            "title": "Name",
+            "type": "string",
+            "example": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "emailTemplateId": {
+            "title": "Email Template Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "timing": {
+            "$ref": "#/components/schemas/SequenceStepTiming"
+          },
+          "status": {
+            "title": "Status",
+            "enum": [
+              "Sent",
+              "Scheduled",
+              "Planned",
+              "Failed",
+              "Skipped"
+            ],
+            "type": "string",
+            "example": "Sent"
+          },
+          "sentAt": {
+            "title": "Sent At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "scheduledAt": {
+            "title": "Scheduled At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "deliveryId": {
+            "title": "Delivery Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "emailLogId": {
+            "title": "Email Log Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "skipReason": {
+            "title": "Skip Reason",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "errorMessage": {
+            "title": "Error Message",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "emailPreview": {
+            "$ref": "#/components/schemas/StepEmailPreviewDto"
+          }
+        },
+        "additionalProperties": false
+      },
       "ExportActionDto": {
         "required": [
           "exportItemsFn",
@@ -37359,6 +37537,7 @@
       },
       "SequenceCreateDto": {
         "required": [
+          "language",
           "name"
         ],
         "type": "object",
@@ -37377,6 +37556,7 @@
           },
           "language": {
             "title": "Language",
+            "minLength": 1,
             "type": "string",
             "example": "string"
           },
@@ -37433,11 +37613,17 @@
             "format": "int32",
             "example": 1
           },
+          "sequenceEnrollment": {
+            "$ref": "#/components/schemas/SequenceEnrollmentDetailsDto"
+          },
           "sequenceStepId": {
             "title": "Sequence Step Id",
             "type": "integer",
             "format": "int32",
             "example": 1
+          },
+          "sequenceStep": {
+            "$ref": "#/components/schemas/SequenceStepDetailsDto"
           },
           "contactId": {
             "title": "Contact Id",
@@ -37494,6 +37680,9 @@
             "nullable": true,
             "example": 1
           },
+          "emailLog": {
+            "$ref": "#/components/schemas/ContactEmailCommunicationDetailsDto"
+          },
           "createdAt": {
             "title": "Created At",
             "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
@@ -37514,6 +37703,7 @@
       },
       "SequenceDetailsDto": {
         "required": [
+          "language",
           "name"
         ],
         "type": "object",
@@ -37532,6 +37722,7 @@
           },
           "language": {
             "title": "Language",
+            "minLength": 1,
             "type": "string",
             "example": "string"
           },
@@ -37796,11 +37987,15 @@
             "type": "string",
             "example": "Active"
           },
-          "lastCompletedStepKey": {
-            "title": "Last Completed Step Key",
-            "type": "string",
+          "lastCompletedStepId": {
+            "title": "Last Completed Step Id",
+            "type": "integer",
+            "format": "int32",
             "nullable": true,
-            "example": "string"
+            "example": 1
+          },
+          "lastCompletedStep": {
+            "$ref": "#/components/schemas/SequenceStepDetailsDto"
           },
           "enteredAt": {
             "title": "Entered At",
@@ -37834,7 +38029,8 @@
               "Unsubscribed",
               "ReplyStopped",
               "ManuallyRemoved",
-              "Archived"
+              "Archived",
+              "ExcludedBySegment"
             ],
             "type": "string",
             "example": "None"
@@ -37882,6 +38078,31 @@
             "format": "date-time",
             "nullable": true,
             "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "steps": {
+            "title": "Steps",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnrollmentStepTimelineEntryDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "SequenceEnrollmentStopDto": {
+        "required": [
+          "enrollmentIds"
+        ],
+        "type": "object",
+        "properties": {
+          "enrollmentIds": {
+            "title": "Enrollment Ids",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
           }
         },
         "additionalProperties": false
@@ -37931,19 +38152,26 @@
       "SequenceStepCreateDto": {
         "required": [
           "emailTemplateId",
-          "stepKey",
+          "name",
           "timing"
         ],
         "type": "object",
         "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
           "emailTemplateId": {
             "title": "Email Template Id",
             "type": "integer",
             "format": "int32",
             "example": 1
           },
-          "stepKey": {
-            "title": "Step Key",
+          "name": {
+            "title": "Name",
             "minLength": 1,
             "type": "string",
             "example": "string"
@@ -37962,12 +38190,6 @@
             ],
             "type": "string",
             "example": "Email"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string",
-            "nullable": true,
-            "example": "string"
           },
           "timing": {
             "$ref": "#/components/schemas/SequenceStepTiming"
@@ -38019,8 +38241,8 @@
             "format": "int32",
             "example": 1
           },
-          "stepKey": {
-            "title": "Step Key",
+          "name": {
+            "title": "Name",
             "type": "string",
             "example": "string"
           },
@@ -38031,12 +38253,6 @@
             ],
             "type": "string",
             "example": "Email"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string",
-            "nullable": true,
-            "example": "string"
           },
           "timing": {
             "$ref": "#/components/schemas/SequenceStepTiming"
@@ -38137,14 +38353,8 @@
             "nullable": true,
             "example": 1
           },
-          "stepKey": {
-            "title": "Step Key",
-            "type": "string",
-            "nullable": true,
-            "example": "string"
-          },
-          "title": {
-            "title": "Title",
+          "name": {
+            "title": "Name",
             "type": "string",
             "nullable": true,
             "example": "string"
@@ -38173,6 +38383,7 @@
           },
           "language": {
             "title": "Language",
+            "minLength": 1,
             "type": "string",
             "nullable": true,
             "example": "string"
@@ -38509,6 +38720,33 @@
             "title": "Description",
             "type": "string",
             "nullable": true,
+            "example": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "StepEmailPreviewDto": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "title": "Subject",
+            "type": "string",
+            "example": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "fromEmail": {
+            "title": "From Email",
+            "type": "string",
+            "example": "string"
+          },
+          "fromName": {
+            "title": "From Name",
+            "type": "string",
             "example": "string"
           }
         },
