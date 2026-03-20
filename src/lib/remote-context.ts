@@ -172,7 +172,7 @@ function resolveApiKeyFromEnv(
 /** Absolute path to a sync token file for a given remote + entity type. */
 export function syncTokenPath(
   ctx: RemoteContext,
-  entityType: "content" | "media" | "comments" | "email-templates",
+  entityType: "content" | "media" | "comments" | "email-templates" | "segments" | "sequences",
 ): string {
   return path.join(ctx.stateDir, `${entityType}-sync-token`);
 }
@@ -273,6 +273,17 @@ function sortNestedMap<T>(map: Record<string, Record<string, T>>): Record<string
   return sorted;
 }
 
+/**
+ * Sort a flat map: keys sorted alphabetically.
+ */
+function sortFlatMap<T>(map: Record<string, T>): Record<string, T> {
+  const sorted: Record<string, T> = {};
+  for (const key of Object.keys(map).sort()) {
+    sorted[key] = map[key];
+  }
+  return sorted;
+}
+
 /** Look up the remote ID for a content item. */
 export function lookupRemoteId(
   map: MetadataMap,
@@ -338,6 +349,8 @@ export interface MetadataMap {
   content: Record<string, Record<string, MetadataEntry>>;
   emailTemplates?: Record<string, Record<string, MetadataEntry>>;
   comments?: Record<string, Record<string, MetadataEntry>>;
+  segments?: Record<string, MetadataEntry>;
+  sequences?: Record<string, MetadataEntry>;
 }
 
 /** Read the metadata-map for a remote. Returns empty map if file doesn't exist. */
@@ -348,12 +361,14 @@ export async function readMetadataMap(ctx: RemoteContext): Promise<MetadataMap> 
     if (!parsed.content) parsed.content = {};
     if (!parsed.emailTemplates) parsed.emailTemplates = {};
     if (!parsed.comments) parsed.comments = {};
+    if (!parsed.segments) parsed.segments = {};
+    if (!parsed.sequences) parsed.sequences = {};
     deduplicateSectionOnRead(parsed.content);
     deduplicateSectionOnRead(parsed.emailTemplates);
     deduplicateSectionOnRead(parsed.comments);
     return parsed;
   } catch {
-    return { content: {}, emailTemplates: {}, comments: {} };
+    return { content: {}, emailTemplates: {}, comments: {}, segments: {}, sequences: {} };
   }
 }
 
@@ -372,6 +387,12 @@ export async function writeMetadataMap(
       : {}),
     ...(map.comments && Object.keys(map.comments).length > 0
       ? { comments: sortNestedMap(map.comments) }
+      : {}),
+    ...(map.segments && Object.keys(map.segments).length > 0
+      ? { segments: sortFlatMap(map.segments) }
+      : {}),
+    ...(map.sequences && Object.keys(map.sequences).length > 0
+      ? { sequences: sortFlatMap(map.sequences) }
       : {}),
   };
   await fs.writeFile(
@@ -479,4 +500,121 @@ export function setMetadataForComment(
   if (!map.comments[language]) map.comments[language] = {};
   const current = map.comments[language][translationKey] || {};
   map.comments[language][translationKey] = { ...current, ...stripNulls(entry) };
+}
+
+// ── Segment helpers ───────────────────────────────────────────────────
+
+/**
+ * Deduplicate a flat section (segments, sequences) on read:
+ * if multiple keys map to the same ID, keep only the last one.
+ */
+function deduplicateFlatSectionOnRead(section: Record<string, MetadataEntry>): void {
+  const seen = new Map<string, string>();
+  for (const [key, entry] of Object.entries(section)) {
+    if (entry.id != null) {
+      seen.set(String(entry.id), key);
+    }
+  }
+  for (const [key, entry] of Object.entries(section)) {
+    if (entry.id == null) continue;
+    const winner = seen.get(String(entry.id));
+    if (winner && winner !== key) {
+      delete section[key];
+    }
+  }
+}
+
+/**
+ * Remove other entries in a flat section that already claim the given ID.
+ */
+function deduplicateFlatSection(
+  section: Record<string, MetadataEntry>,
+  incomingKey: string,
+  id: number | string,
+): void {
+  for (const [key, entry] of Object.entries(section)) {
+    if (key !== incomingKey && entry.id != null && String(entry.id) === String(id)) {
+      delete section[key];
+    }
+  }
+}
+
+/** Look up the remote ID for a segment by name. */
+export function lookupSegmentRemoteId(
+  map: MetadataMap,
+  name: string,
+): number | string | undefined {
+  return map.segments?.[name]?.id;
+}
+
+/** Set the remote ID for a segment (keyed by name). */
+export function setSegmentRemoteId(
+  map: MetadataMap,
+  name: string,
+  id: number | string,
+): void {
+  if (!map.segments) map.segments = {};
+  deduplicateFlatSection(map.segments, name, id);
+  const current = map.segments[name] || {};
+  map.segments[name] = { ...current, id };
+}
+
+/** Get metadata for a segment from the map. */
+export function getMetadataForSegment(
+  map: MetadataMap,
+  name: string,
+): MetadataEntry | undefined {
+  return map.segments?.[name];
+}
+
+/** Set metadata for a segment in the map. */
+export function setMetadataForSegment(
+  map: MetadataMap,
+  name: string,
+  entry: MetadataEntry,
+): void {
+  if (!map.segments) map.segments = {};
+  const current = map.segments[name] || {};
+  map.segments[name] = { ...current, ...stripNulls(entry) };
+}
+
+// ── Sequence helpers ──────────────────────────────────────────────────
+
+/** Look up the remote ID for a sequence by name. */
+export function lookupSequenceRemoteId(
+  map: MetadataMap,
+  name: string,
+): number | string | undefined {
+  return map.sequences?.[name]?.id;
+}
+
+/** Set the remote ID for a sequence (keyed by name). */
+export function setSequenceRemoteId(
+  map: MetadataMap,
+  name: string,
+  id: number | string,
+): void {
+  if (!map.sequences) map.sequences = {};
+  deduplicateFlatSection(map.sequences, name, id);
+  const current = map.sequences[name] || {};
+  map.sequences[name] = { ...current, id };
+}
+
+/** Get metadata for a sequence from the map. */
+export function getMetadataForSequence(
+  map: MetadataMap,
+  name: string,
+): MetadataEntry | undefined {
+  return map.sequences?.[name];
+}
+
+/** Set metadata for a sequence in the map. */
+export function setMetadataForSequence(
+  map: MetadataMap,
+  name: string,
+  entry: MetadataEntry,
+): void {
+  if (!map.sequences) map.sequences = {};
+  const current = map.sequences[name] || {};
+  map.sequences[name] = { ...current, ...stripNulls(entry) };
 }

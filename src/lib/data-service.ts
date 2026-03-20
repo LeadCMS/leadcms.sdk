@@ -6,6 +6,10 @@
 import axios, { AxiosResponse } from 'axios';
 import { logger } from './logger.js';
 import type { Comment as CommentItem } from './comment-types.js';
+import type {
+  SegmentDetailsDto, SegmentCreateDto, SegmentUpdateDto,
+  SequenceDetailsDto, SequenceCreateDto, SequenceUpdateDto,
+} from './automation-types.js';
 
 /**
  * Formats API validation errors in a user-friendly way
@@ -150,6 +154,8 @@ interface MockScenario {
   emailTemplates?: EmailTemplateItem[];
   emailGroups?: EmailGroupItem[];
   comments?: CommentItem[];
+  segments?: SegmentDetailsDto[];
+  sequences?: SequenceDetailsDto[];
 }
 
 interface MockData {
@@ -159,6 +165,8 @@ interface MockData {
   emailTemplates: EmailTemplateItem[];
   emailGroups: EmailGroupItem[];
   comments: CommentItem[];
+  segments: SegmentDetailsDto[];
+  sequences: SequenceDetailsDto[];
   scenario: string;
 }
 
@@ -361,6 +369,8 @@ class LeadCMSDataService {
       emailTemplates: JSON.parse(JSON.stringify(scenario.emailTemplates || [])),
       emailGroups: JSON.parse(JSON.stringify(scenario.emailGroups || [])),
       comments: JSON.parse(JSON.stringify(scenario.comments || [])),
+      segments: JSON.parse(JSON.stringify(scenario.segments || [])),
+      sequences: JSON.parse(JSON.stringify(scenario.sequences || [])),
       scenario: scenario.name
     };
   }
@@ -1143,6 +1153,394 @@ class LeadCMSDataService {
     }
   }
 
+  // ── Segment CRUD ──────────────────────────────────────────────────────
+
+  /**
+   * Get all segments from LeadCMS or mock data
+   */
+  async getAllSegments(): Promise<SegmentDetailsDto[]> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose('[MOCK] Returning mock segments');
+      return [...this.mockData.segments];
+    }
+
+    if (!this.apiKey) {
+      logger.verbose('[API] Segments require authentication — no API key configured, skipping');
+      return [];
+    }
+
+    try {
+      logger.verbose('[API] Fetching segments from LeadCMS...');
+
+      if (!this.baseURL) {
+        throw new Error('LeadCMS URL is not configured.');
+      }
+
+      const response: AxiosResponse<SegmentDetailsDto[]> = await axios.get(
+        `${this.baseURL}/api/segments`,
+        { headers: this.getApiHeaders() }
+      );
+
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      console.error('[API] Failed to fetch segments:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new segment in LeadCMS or mock
+   */
+  async createSegment(segment: SegmentCreateDto): Promise<SegmentDetailsDto> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose(`[MOCK] Creating segment: ${segment.name}`);
+
+      const newSegment: SegmentDetailsDto = {
+        ...segment,
+        id: Math.floor(Math.random() * 1000) + 100,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      this.mockData.segments.push(newSegment);
+      return newSegment;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Segment operations require authentication. Please configure LEADCMS_API_KEY.');
+    }
+
+    try {
+      logger.verbose(`[API] Creating segment: ${segment.name}`);
+      const response: AxiosResponse<SegmentDetailsDto> = await axios.post(
+        `${this.baseURL}/api/segments`,
+        segment,
+        { headers: this.getApiHeaders() }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      if (error.response?.status === 422 && error.response?.data?.errors) {
+        const validationMessage = formatApiValidationErrors(error.response);
+        const enhancedError = new Error(`Validation failed${validationMessage}`);
+        (enhancedError as any).status = 422;
+        (enhancedError as any).validationErrors = error.response.data.errors;
+        throw enhancedError;
+      }
+
+      console.error('[API] Failed to create segment:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Update existing segment in LeadCMS or mock
+   */
+  async updateSegment(id: number, segment: SegmentUpdateDto): Promise<SegmentDetailsDto> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose(`[MOCK] Updating segment ID ${id}: ${segment.name}`);
+
+      const existingIndex = this.mockData.segments.findIndex(s => s.id === id);
+      if (existingIndex === -1) {
+        throw new Error(`Segment with id ${id} not found`);
+      }
+
+      const updatedSegment: SegmentDetailsDto = {
+        ...this.mockData.segments[existingIndex],
+        ...segment,
+        name: segment.name ?? this.mockData.segments[existingIndex].name,
+        updatedAt: new Date().toISOString(),
+      };
+
+      this.mockData.segments[existingIndex] = updatedSegment;
+      return updatedSegment;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Segment operations require authentication. Please configure LEADCMS_API_KEY.');
+    }
+
+    try {
+      logger.verbose(`[API] Updating segment ID ${id}`);
+      const response: AxiosResponse<SegmentDetailsDto> = await axios.patch(
+        `${this.baseURL}/api/segments/${id}`,
+        segment,
+        { headers: this.getApiHeaders() }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      if (error.response?.status === 422 && error.response?.data?.errors) {
+        const validationMessage = formatApiValidationErrors(error.response);
+        const enhancedError = new Error(`Validation failed${validationMessage}`);
+        (enhancedError as any).status = 422;
+        (enhancedError as any).validationErrors = error.response.data.errors;
+        throw enhancedError;
+      }
+
+      console.error('[API] Failed to update segment:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete segment from LeadCMS
+   */
+  async deleteSegment(id: number): Promise<void> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose(`[MOCK] Deleting segment with ID: ${id}`);
+      const index = this.mockData.segments.findIndex(s => s.id === id);
+      if (index !== -1) {
+        this.mockData.segments.splice(index, 1);
+      }
+      return;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Segment operations require authentication. Please configure LEADCMS_API_KEY.');
+    }
+
+    try {
+      logger.verbose(`[API] Deleting segment with ID: ${id}`);
+
+      if (!this.baseURL) {
+        throw new Error('LeadCMS URL is not configured.');
+      }
+
+      await axios.delete(`${this.baseURL}/api/segments/${id}`, {
+        headers: this.getApiHeaders(),
+      });
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      console.error('[API] Failed to delete segment:', error.message);
+      throw error;
+    }
+  }
+
+  // ── Sequence CRUD ─────────────────────────────────────────────────────
+
+  /**
+   * Get all sequences from LeadCMS or mock data
+   */
+  async getAllSequences(): Promise<SequenceDetailsDto[]> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose('[MOCK] Returning mock sequences');
+      return [...this.mockData.sequences];
+    }
+
+    if (!this.apiKey) {
+      logger.verbose('[API] Sequences require authentication — no API key configured, skipping');
+      return [];
+    }
+
+    try {
+      logger.verbose('[API] Fetching sequences from LeadCMS...');
+
+      if (!this.baseURL) {
+        throw new Error('LeadCMS URL is not configured.');
+      }
+
+      const response: AxiosResponse<SequenceDetailsDto[]> = await axios.get(
+        `${this.baseURL}/api/sequences`,
+        { headers: this.getApiHeaders() }
+      );
+
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      console.error('[API] Failed to fetch sequences:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new sequence in LeadCMS or mock
+   */
+  async createSequence(sequence: SequenceCreateDto): Promise<SequenceDetailsDto> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose(`[MOCK] Creating sequence: ${sequence.name}`);
+
+      const newSequence: SequenceDetailsDto = {
+        ...sequence,
+        id: Math.floor(Math.random() * 1000) + 100,
+        status: 'Draft',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        steps: (sequence.steps ?? []).map((s, i) => ({
+          ...s,
+          id: s.id ?? i + 1,
+          sequenceId: 0,
+          position: s.position ?? i,
+          type: s.type ?? 'Email' as const,
+        })),
+      };
+
+      this.mockData.sequences.push(newSequence);
+      return newSequence;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Sequence operations require authentication. Please configure LEADCMS_API_KEY.');
+    }
+
+    try {
+      logger.verbose(`[API] Creating sequence: ${sequence.name}`);
+      const response: AxiosResponse<SequenceDetailsDto> = await axios.post(
+        `${this.baseURL}/api/sequences`,
+        sequence,
+        { headers: this.getApiHeaders() }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      if (error.response?.status === 422 && error.response?.data?.errors) {
+        const validationMessage = formatApiValidationErrors(error.response);
+        const enhancedError = new Error(`Validation failed${validationMessage}`);
+        (enhancedError as any).status = 422;
+        (enhancedError as any).validationErrors = error.response.data.errors;
+        throw enhancedError;
+      }
+
+      console.error('[API] Failed to create sequence:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Update existing sequence in LeadCMS or mock (full replace via PUT)
+   */
+  async updateSequence(id: number, sequence: SequenceCreateDto): Promise<SequenceDetailsDto> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose(`[MOCK] Updating sequence ID ${id}: ${sequence.name}`);
+
+      const existingIndex = this.mockData.sequences.findIndex(s => s.id === id);
+      if (existingIndex === -1) {
+        throw new Error(`Sequence with id ${id} not found`);
+      }
+
+      const updatedSequence: SequenceDetailsDto = {
+        ...this.mockData.sequences[existingIndex],
+        ...sequence,
+        updatedAt: new Date().toISOString(),
+        steps: (sequence.steps ?? this.mockData.sequences[existingIndex].steps ?? []).map((s, i) => ({
+          ...s,
+          id: s.id ?? ('id' in s ? (s as any).id : i + 1),
+          sequenceId: id,
+          position: s.position ?? ('position' in s ? (s as any).position : i),
+          type: s.type ?? 'Email' as const,
+        })),
+      };
+
+      this.mockData.sequences[existingIndex] = updatedSequence;
+      return updatedSequence;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Sequence operations require authentication. Please configure LEADCMS_API_KEY.');
+    }
+
+    try {
+      logger.verbose(`[API] Updating sequence ID ${id}`);
+      const response: AxiosResponse<SequenceDetailsDto> = await axios.put(
+        `${this.baseURL}/api/sequences/${id}`,
+        sequence,
+        { headers: this.getApiHeaders() }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      if (error.response?.status === 422 && error.response?.data?.errors) {
+        const validationMessage = formatApiValidationErrors(error.response);
+        const enhancedError = new Error(`Validation failed${validationMessage}`);
+        (enhancedError as any).status = 422;
+        (enhancedError as any).validationErrors = error.response.data.errors;
+        throw enhancedError;
+      }
+
+      console.error('[API] Failed to update sequence:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete sequence from LeadCMS
+   */
+  async deleteSequence(id: number): Promise<void> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose(`[MOCK] Deleting sequence with ID: ${id}`);
+      const index = this.mockData.sequences.findIndex(s => s.id === id);
+      if (index !== -1) {
+        this.mockData.sequences.splice(index, 1);
+      }
+      return;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Sequence operations require authentication. Please configure LEADCMS_API_KEY.');
+    }
+
+    try {
+      logger.verbose(`[API] Deleting sequence with ID: ${id}`);
+
+      if (!this.baseURL) {
+        throw new Error('LeadCMS URL is not configured.');
+      }
+
+      await axios.delete(`${this.baseURL}/api/sequences/${id}`, {
+        headers: this.getApiHeaders(),
+      });
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+
+      console.error('[API] Failed to delete sequence:', error.message);
+      throw error;
+    }
+  }
+
   /**
    * Create content type in LeadCMS or mock
    */
@@ -1509,6 +1907,8 @@ class LeadCMSDataService {
       emailTemplates: JSON.parse(JSON.stringify(scenario.emailTemplates || [])),
       emailGroups: JSON.parse(JSON.stringify(scenario.emailGroups || [])),
       comments: JSON.parse(JSON.stringify(scenario.comments || [])),
+      segments: JSON.parse(JSON.stringify(scenario.segments || [])),
+      sequences: JSON.parse(JSON.stringify(scenario.sequences || [])),
       scenario: scenario.name
     };
 
@@ -1536,6 +1936,8 @@ class LeadCMSDataService {
       emailTemplates: [...this.mockData.emailTemplates],
       emailGroups: [...this.mockData.emailGroups],
       comments: [...this.mockData.comments],
+      segments: [...this.mockData.segments],
+      sequences: [...this.mockData.sequences],
       scenario: this.currentScenario?.name || ''
     };
   }
@@ -1559,4 +1961,4 @@ export const leadCMSDataService = new LeadCMSDataService();
 export { LeadCMSDataService };
 
 // Export types for use in other modules
-export type { ContentItem, ContentType, MockScenario, MockData, CommentCreateItem, CommentUpdateItem };
+export type { ContentItem, ContentType, MockScenario, MockData, CommentCreateItem, CommentUpdateItem, EmailTemplateItem, EmailGroupItem };

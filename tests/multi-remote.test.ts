@@ -92,7 +92,7 @@ describe('Remote ID helpers in metadata.json (Phase 3)', () => {
     it('returns empty map when file does not exist', async () => {
       const ctx = makeRemoteCtx({ stateDir: path.join(tmpDir, 'nonexistent') });
       const map = await readMetadataMap(ctx);
-      expect(map).toEqual({ content: {}, emailTemplates: {}, comments: {} });
+      expect(map).toEqual({ content: {}, emailTemplates: {}, comments: {}, segments: {}, sequences: {} });
     });
 
     it('round-trips through write and read', async () => {
@@ -105,7 +105,7 @@ describe('Remote ID helpers in metadata.json (Phase 3)', () => {
       };
       await writeMetadataMap(ctx, map);
       const read = await readMetadataMap(ctx);
-      expect(read).toEqual({ ...map, emailTemplates: {}, comments: {} });
+      expect(read).toEqual({ ...map, emailTemplates: {}, comments: {}, segments: {}, sequences: {} });
     });
 
     it('creates state directory when writing', async () => {
@@ -214,7 +214,7 @@ describe('MetadataMap helpers (Phase 4)', () => {
     it('returns empty map when file does not exist', async () => {
       const ctx = makeRemoteCtx({ stateDir: path.join(tmpDir, 'nonexistent') });
       const map = await readMetadataMap(ctx);
-      expect(map).toEqual({ content: {}, emailTemplates: {}, comments: {} });
+      expect(map).toEqual({ content: {}, emailTemplates: {}, comments: {}, segments: {}, sequences: {} });
     });
 
     it('round-trips through write and read', async () => {
@@ -228,7 +228,7 @@ describe('MetadataMap helpers (Phase 4)', () => {
       };
       await writeMetadataMap(ctx, map);
       const read = await readMetadataMap(ctx);
-      expect(read).toEqual({ ...map, emailTemplates: {}, comments: {} });
+      expect(read).toEqual({ ...map, emailTemplates: {}, comments: {}, segments: {}, sequences: {} });
     });
   });
 

@@ -10,6 +10,8 @@ import { pushComments } from '../../scripts/push-comments.js';
 import { pushMedia } from '../../scripts/push-media.js';
 import { pushEmailTemplates } from '../../scripts/push-email-templates.js';
 import { pushSettings } from '../../scripts/push-settings.js';
+import { pushSegments } from '../../scripts/push-segments.js';
+import { pushSequences } from '../../scripts/push-sequences.js';
 import { requireAuthenticatedUser } from '../../scripts/leadcms-helpers.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { startSpinner } from '../../lib/spinner.js';
@@ -96,6 +98,24 @@ async function pushAll() {
       force,
       scopeUid,
       allowDelete
+    });
+
+    console.log('\n🔖 Pushing segments...');
+    spinner.update('Pushing segments…');
+    await pushSegments({
+      dryRun,
+      force,
+      allowDelete,
+      remoteContext,
+    });
+
+    console.log('\n🔗 Pushing sequences...');
+    spinner.update('Pushing sequences…');
+    await pushSequences({
+      dryRun,
+      force,
+      allowDelete,
+      remoteContext,
     });
 
     spinner.succeed('Push operation completed successfully!');

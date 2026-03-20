@@ -120,3 +120,17 @@ export function isEmailTemplatesSupported(): boolean {
 export function isSettingsSupported(): boolean {
   return isEntitySupported('Setting') || isEntitySupported('Settings');
 }
+
+/**
+ * Check if segments are supported
+ */
+export function isSegmentsSupported(): boolean {
+  return isEntitySupported('Segment') || isEntitySupported('Segments');
+}
+
+/**
+ * Check if sequences are supported
+ */
+export function isSequencesSupported(): boolean {
+  return isEntitySupported('Sequence') || isEntitySupported('Sequences');
+}

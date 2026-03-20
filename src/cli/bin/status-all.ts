@@ -10,6 +10,8 @@ import { buildCommentStatus } from '../../scripts/push-comments.js';
 import { statusMedia } from '../../scripts/push-media.js';
 import { buildEmailTemplateStatus, getRemoteGroupLabel } from '../../scripts/push-email-templates.js';
 import { getSettingsStatusData, renderSettingsStatus, formatSettingValue, formatSettingDiff, renderSettingDiffPreview } from '../../scripts/push-settings.js';
+import { buildSegmentStatus } from '../../scripts/push-segments.js';
+import { buildSequenceStatus } from '../../scripts/push-sequences.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { colorConsole, statusColors } from '../../lib/console-colors.js';
 import { defaultLanguage, leadCMSApiKey, resolveIdentity } from '../../scripts/leadcms-helpers.js';
@@ -21,6 +23,8 @@ import type { CommentOperation, CommentStatusResult } from '../../scripts/push-c
 import type { MediaStatusResult } from '../../scripts/push-media.js';
 import type { EmailTemplateOperation, EmailTemplateStatusResult } from '../../scripts/push-email-templates.js';
 import type { SettingsStatusResult } from '../../lib/settings-types.js';
+import type { SegmentOperation, SegmentStatusResult } from '../../scripts/push-segments.js';
+import type { SequenceOperation, SequenceStatusResult } from '../../scripts/push-sequences.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
@@ -193,6 +197,74 @@ function renderEmailTemplateSection(operations: EmailTemplateOperation[]): numbe
   return changeCount;
 }
 
+// ── Segment rendering ────────────────────────────────────────────────────────
+
+function renderSegmentSection(operations: SegmentOperation[]): number {
+  const creates = operations.filter(op => op.type === 'create');
+  const updates = operations.filter(op => op.type === 'update');
+  const conflicts = operations.filter(op => op.type === 'conflict');
+  const deletes = showDelete ? operations.filter(op => op.type === 'delete') : [];
+
+  const changeCount = creates.length + updates.length + conflicts.length + deletes.length;
+
+  for (const op of creates) {
+    const nameLabel = op.local?.name || 'unknown';
+    colorConsole.log(`        ${statusColors.created('new file: ')}   ${colorConsole.highlight(nameLabel)}`);
+  }
+  for (const op of updates) {
+    const nameLabel = op.local?.name || op.remote?.name || 'unknown';
+    const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
+    colorConsole.log(`        ${statusColors.modified('modified: ')}   ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`);
+  }
+  for (const op of conflicts) {
+    const nameLabel = op.local?.name || op.remote?.name || 'unknown';
+    const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
+    colorConsole.log(`        ${statusColors.conflict('conflict: ')}   ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`);
+    if (op.reason) colorConsole.log(`                    ${colorConsole.gray(op.reason)}`);
+  }
+  for (const op of deletes) {
+    const nameLabel = op.remote?.name || 'unknown';
+    const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
+    colorConsole.log(`        ${statusColors.conflict('deleted:  ')}   ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`);
+  }
+
+  return changeCount;
+}
+
+// ── Sequence rendering ───────────────────────────────────────────────────────
+
+function renderSequenceSection(operations: SequenceOperation[]): number {
+  const creates = operations.filter(op => op.type === 'create');
+  const updates = operations.filter(op => op.type === 'update');
+  const conflicts = operations.filter(op => op.type === 'conflict');
+  const deletes = showDelete ? operations.filter(op => op.type === 'delete') : [];
+
+  const changeCount = creates.length + updates.length + conflicts.length + deletes.length;
+
+  for (const op of creates) {
+    const nameLabel = op.local?.name || 'unknown';
+    colorConsole.log(`        ${statusColors.created('new file: ')}   ${colorConsole.highlight(nameLabel)}`);
+  }
+  for (const op of updates) {
+    const nameLabel = op.local?.name || op.remote?.name || 'unknown';
+    const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
+    colorConsole.log(`        ${statusColors.modified('modified: ')}   ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`);
+  }
+  for (const op of conflicts) {
+    const nameLabel = op.local?.name || op.remote?.name || 'unknown';
+    const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
+    colorConsole.log(`        ${statusColors.conflict('conflict: ')}   ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`);
+    if (op.reason) colorConsole.log(`                    ${colorConsole.gray(op.reason)}`);
+  }
+  for (const op of deletes) {
+    const nameLabel = op.remote?.name || 'unknown';
+    const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
+    colorConsole.log(`        ${statusColors.conflict('deleted:  ')}   ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`);
+  }
+
+  return changeCount;
+}
+
 // ── Summary helper ───────────────────────────────────────────────────────────
 
 function renderSummaryLine(label: string, counts: { creates: number; updates: number; renames?: number; typeChanges?: number; conflicts: number; deletes: number; skips?: number }): string {
@@ -224,9 +296,11 @@ async function statusAll() {
     let mediaResult: MediaStatusResult | null = null;
     let emailResult: EmailTemplateStatusResult | null = null;
     let settingsResult: SettingsStatusResult | null = null;
+    let segmentResult: SegmentStatusResult | null = null;
+    let sequenceResult: SequenceStatusResult | null = null;
 
     try {
-      [contentResult, commentResult, mediaResult, emailResult, settingsResult] = await Promise.all([
+      [contentResult, commentResult, mediaResult, emailResult, settingsResult, segmentResult, sequenceResult] = await Promise.all([
         getContentStatusData({ showDelete, remoteContext }).catch((err: any) => {
           spinner.update('Fetching status… (content failed)');
           return null;
@@ -251,6 +325,18 @@ async function statusAll() {
             return null;
           })
           : Promise.resolve(null),
+        canCheckEmailTemplates
+          ? buildSegmentStatus({ showDelete, remoteContext }).catch((err: any) => {
+            spinner.update('Fetching status… (segments failed)');
+            return null;
+          })
+          : Promise.resolve(null),
+        canCheckEmailTemplates
+          ? buildSequenceStatus({ showDelete, remoteContext }).catch((err: any) => {
+            spinner.update('Fetching status… (sequences failed)');
+            return null;
+          })
+          : Promise.resolve(null),
       ]);
       spinner.stop();
     } catch (err) {
@@ -264,6 +350,8 @@ async function statusAll() {
     const contentOps = contentResult?.operations ?? null;
     const commentOps = commentResult?.operations ?? null;
     const emailOps = emailResult?.operations ?? null;
+    const segmentOps = segmentResult?.operations ?? null;
+    const sequenceOps = sequenceResult?.operations ?? null;
 
     // Count changes per section
     const contentChanges = contentOps
@@ -289,6 +377,14 @@ async function statusAll() {
       ? settingsResult.comparisons.filter(c => c.status !== 'in-sync').length
       : 0;
 
+    const segmentChanges = segmentOps
+      ? segmentOps.filter(op => showDelete ? true : op.type !== 'delete').length
+      : 0;
+
+    const sequenceChanges = sequenceOps
+      ? sequenceOps.filter(op => showDelete ? true : op.type !== 'delete').length
+      : 0;
+
     // Count up-to-date items per section
     const contentSkips = contentResult
       ? contentResult.totalLocal - contentChanges
@@ -310,7 +406,15 @@ async function statusAll() {
       ? settingsResult.comparisons.filter(c => c.status === 'in-sync').length
       : 0;
 
-    const totalChanges = contentChanges + commentChanges + mediaChanges + emailChanges + settingsChanges;
+    const segmentSkips = segmentResult
+      ? segmentResult.totalLocal - segmentChanges
+      : 0;
+
+    const sequenceSkips = sequenceResult
+      ? sequenceResult.totalLocal - sequenceChanges
+      : 0;
+
+    const totalChanges = contentChanges + commentChanges + mediaChanges + emailChanges + settingsChanges + segmentChanges + sequenceChanges;
 
     if (totalChanges === 0) {
       colorConsole.success('\n✅ Everything is in sync!\n');
@@ -323,6 +427,12 @@ async function statusAll() {
       }
       if (canCheckEmailTemplates && settingsResult) {
         console.log(`   ⚙️  Settings:         ${settingsInSync > 0 ? `${settingsInSync} setting(s) ` : ''}up to date`);
+      }
+      if (canCheckEmailTemplates && segmentResult) {
+        console.log(`   🔖 Segments:         ${segmentSkips > 0 ? `${segmentSkips} item(s) ` : ''}up to date`);
+      }
+      if (canCheckEmailTemplates && sequenceResult) {
+        console.log(`   🔗 Sequences:        ${sequenceSkips > 0 ? `${sequenceSkips} item(s) ` : ''}up to date`);
       }
       console.log('');
       process.exit(0);
@@ -377,6 +487,20 @@ async function statusAll() {
             break;
         }
       }
+      console.log('');
+    }
+
+    // ── Segments section ──
+    if (segmentOps && segmentChanges > 0) {
+      colorConsole.important(`  🔖 Segments (${segmentChanges} change${segmentChanges !== 1 ? 's' : ''}):`);
+      renderSegmentSection(segmentOps);
+      console.log('');
+    }
+
+    // ── Sequences section ──
+    if (sequenceOps && sequenceChanges > 0) {
+      colorConsole.important(`  🔗 Sequences (${sequenceChanges} change${sequenceChanges !== 1 ? 's' : ''}):`);
+      renderSequenceSection(sequenceOps);
       console.log('');
     }
 
@@ -439,6 +563,34 @@ async function statusAll() {
         conflicts: remoteOnly,
         deletes: 0,
         skips: settingsInSync,
+      }));
+    }
+
+    if (canCheckEmailTemplates && segmentOps) {
+      const counts = segmentOps.reduce(
+        (acc, op) => { acc[op.type] = (acc[op.type] || 0) + 1; return acc; },
+        {} as Record<string, number>,
+      );
+      console.log(renderSummaryLine('🔖 Segments:        ', {
+        creates: counts.create || 0,
+        updates: counts.update || 0,
+        conflicts: counts.conflict || 0,
+        deletes: showDelete ? (counts.delete || 0) : 0,
+        skips: segmentSkips,
+      }));
+    }
+
+    if (canCheckEmailTemplates && sequenceOps) {
+      const counts = sequenceOps.reduce(
+        (acc, op) => { acc[op.type] = (acc[op.type] || 0) + 1; return acc; },
+        {} as Record<string, number>,
+      );
+      console.log(renderSummaryLine('🔗 Sequences:       ', {
+        creates: counts.create || 0,
+        updates: counts.update || 0,
+        conflicts: counts.conflict || 0,
+        deletes: showDelete ? (counts.delete || 0) : 0,
+        skips: sequenceSkips,
       }));
     }
 

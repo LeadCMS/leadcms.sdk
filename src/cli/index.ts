@@ -88,6 +88,12 @@ switch (command) {
   case 'pull-settings':
     runScript('pull-settings.js', commandArgs);
     break;
+  case 'pull-segments':
+    runScript('pull-segments.js', commandArgs);
+    break;
+  case 'pull-sequences':
+    runScript('pull-sequences.js', commandArgs);
+    break;
   case 'push':
     runScript('push-all.js', commandArgs);
     break;
@@ -106,6 +112,12 @@ switch (command) {
   case 'push-settings':
     runScript('push-settings.js', commandArgs);
     break;
+  case 'push-segments':
+    runScript('push-segments.js', commandArgs);
+    break;
+  case 'push-sequences':
+    runScript('push-sequences.js', commandArgs);
+    break;
   case 'status':
     runScript('status-all.js', commandArgs);
     break;
@@ -123,6 +135,12 @@ switch (command) {
     break;
   case 'status-settings':
     runScript('status-settings.js', commandArgs);
+    break;
+  case 'status-segments':
+    runScript('status-segments.js', commandArgs);
+    break;
+  case 'status-sequences':
+    runScript('status-sequences.js', commandArgs);
     break;
   case 'watch':
     runScript('watch.js');

@@ -9,7 +9,7 @@ import fs from "fs/promises";
 import path from "path";
 import axios from "axios";
 import { leadCMSUrl, leadCMSApiKey } from "./leadcms-helpers.js";
-import { setCMSConfig, isContentSupported, isMediaSupported, isCommentsSupported, isEmailTemplatesSupported, isSettingsSupported } from "../lib/cms-config-types.js";
+import { setCMSConfig, isContentSupported, isMediaSupported, isCommentsSupported, isEmailTemplatesSupported, isSettingsSupported, isSegmentsSupported, isSequencesSupported } from "../lib/cms-config-types.js";
 import { getConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
 import { syncTokenPath, metadataMapPath } from "../lib/remote-context.js";
@@ -35,6 +35,8 @@ async function fetchAndCacheCMSConfig(baseUrl?: string): Promise<{
   comments: boolean;
   emailTemplates: boolean;
   settings: boolean;
+  segments: boolean;
+  sequences: boolean;
 }> {
   try {
     const effectiveUrl = baseUrl || leadCMSUrl;
@@ -51,6 +53,8 @@ async function fetchAndCacheCMSConfig(baseUrl?: string): Promise<{
         comments: isCommentsSupported(),
         emailTemplates: isEmailTemplatesSupported() && hasApiKey,
         settings: isSettingsSupported() && hasApiKey,
+        segments: isSegmentsSupported() && hasApiKey,
+        sequences: isSequencesSupported() && hasApiKey,
       };
 
       logger.info(`✅ CMS Configuration received`);
@@ -59,6 +63,8 @@ async function fetchAndCacheCMSConfig(baseUrl?: string): Promise<{
       logger.info(`   - Comments: ${support.comments ? '✓' : '✗'}`);
       logger.info(`   - Email Templates: ${support.emailTemplates ? '✓' : '✗'}${isEmailTemplatesSupported() && !hasApiKey ? ' (requires auth)' : ''}`);
       logger.info(`   - Settings: ${support.settings ? '✓' : '✗'}${isSettingsSupported() && !hasApiKey ? ' (requires auth)' : ''}`);
+      logger.info(`   - Segments: ${support.segments ? '✓' : '✗'}${isSegmentsSupported() && !hasApiKey ? ' (requires auth)' : ''}`);
+      logger.info(`   - Sequences: ${support.sequences ? '✓' : '✗'}${isSequencesSupported() && !hasApiKey ? ' (requires auth)' : ''}`);
       logger.info('');
 
       return support;
@@ -68,7 +74,7 @@ async function fetchAndCacheCMSConfig(baseUrl?: string): Promise<{
     console.warn(`⚠️  Assuming all entities are supported (backward compatibility)\n`);
   }
 
-  return { content: false, media: false, comments: false, emailTemplates: false, settings: false };
+  return { content: false, media: false, comments: false, emailTemplates: false, settings: false, segments: false, sequences: false };
 }
 
 /**
@@ -195,6 +201,46 @@ async function resetSettingsState(): Promise<void> {
 }
 
 /**
+ * Reset segments directory and its sync tokens.
+ */
+async function resetSegmentsState(remoteCtx?: RemoteContext): Promise<void> {
+  const config = getConfig();
+  const segmentsDir = path.resolve(config.segmentsDir || ".leadcms/segments");
+
+  try {
+    await fs.rm(segmentsDir, { recursive: true, force: true });
+    logger.verbose(`   ✓ Cleared segments directory: ${segmentsDir}`);
+  } catch { /* directory may not exist */ }
+
+  if (remoteCtx) {
+    try {
+      await fs.unlink(syncTokenPath(remoteCtx, 'segments'));
+      logger.verbose(`   ✓ Removed per-remote segments sync token (${remoteCtx.name})`);
+    } catch { /* not found — ok */ }
+  }
+}
+
+/**
+ * Reset sequences directory and its sync tokens.
+ */
+async function resetSequencesState(remoteCtx?: RemoteContext): Promise<void> {
+  const config = getConfig();
+  const sequencesDir = path.resolve(config.sequencesDir || ".leadcms/sequences");
+
+  try {
+    await fs.rm(sequencesDir, { recursive: true, force: true });
+    logger.verbose(`   ✓ Cleared sequences directory: ${sequencesDir}`);
+  } catch { /* directory may not exist */ }
+
+  if (remoteCtx) {
+    try {
+      await fs.unlink(syncTokenPath(remoteCtx, 'sequences'));
+      logger.verbose(`   ✓ Removed per-remote sequences sync token (${remoteCtx.name})`);
+    } catch { /* not found — ok */ }
+  }
+}
+
+/**
  * Delete all local content, media, comments, and sync tokens.
  * Used by --reset to do a clean pull from scratch.
  * When remoteCtx is provided, also clears per-remote state (sync tokens and metadata).
@@ -207,6 +253,8 @@ async function resetLocalState(remoteCtx?: RemoteContext): Promise<void> {
   await resetCommentsState(remoteCtx);
   await resetEmailTemplatesState(remoteCtx);
   await resetSettingsState();
+  await resetSegmentsState(remoteCtx);
+  await resetSequencesState(remoteCtx);
 
   // Clear per-remote metadata
   if (remoteCtx) {
@@ -243,9 +291,9 @@ async function main(options: PullAllOptions = {}): Promise<void> {
   }
 
   // Check which entities are supported
-  const { content, media, comments, emailTemplates, settings } = await fetchAndCacheCMSConfig(effectiveUrl);
+  const { content, media, comments, emailTemplates, settings, segments, sequences } = await fetchAndCacheCMSConfig(effectiveUrl);
 
-  if (!content && !media && !comments && !emailTemplates && !settings) {
+  if (!content && !media && !comments && !emailTemplates && !settings && !segments && !sequences) {
     console.log(`⏭️  No supported entities found - nothing to sync`);
     return;
   }
@@ -289,6 +337,18 @@ async function main(options: PullAllOptions = {}): Promise<void> {
     pullPromises.push(pullLeadCMSEmailTemplates(remoteCtx));
   }
 
+  if (segments) {
+    console.log(`🔖 Pulling segments...`);
+    const { pullLeadCMSSegments } = await import('./pull-segments.js');
+    pullPromises.push(pullLeadCMSSegments(remoteCtx));
+  }
+
+  if (sequences) {
+    console.log(`🔗 Pulling sequences...`);
+    const { pullLeadCMSSequences } = await import('./pull-sequences.js');
+    pullPromises.push(pullLeadCMSSequences(remoteCtx));
+  }
+
   // Wait for all pulls to complete
   try {
     await Promise.all(pullPromises);
@@ -303,7 +363,7 @@ async function main(options: PullAllOptions = {}): Promise<void> {
 export { main as pullAll };
 
 // Export reset functions for individual pull commands and testing
-export { resetLocalState, resetContentState, resetMediaState, resetCommentsState, resetEmailTemplatesState, resetSettingsState };
+export { resetLocalState, resetContentState, resetMediaState, resetCommentsState, resetEmailTemplatesState, resetSettingsState, resetSegmentsState, resetSequencesState };
 
 // Note: CLI execution moved to src/cli/bin/pull-all.ts
 // This file now only exports the function for programmatic use

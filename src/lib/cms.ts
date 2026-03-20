@@ -71,6 +71,8 @@ export function getLeadCMSConfig(): LeadCMSConfig {
       mediaDir: process.env.LEADCMS_MEDIA_DIR || "public/media",
       emailTemplatesDir: process.env.LEADCMS_EMAIL_TEMPLATES_DIR || ".leadcms/email-templates",
       settingsDir: process.env.LEADCMS_SETTINGS_DIR || ".leadcms/settings",
+      segmentsDir: process.env.LEADCMS_SEGMENTS_DIR || ".leadcms/segments",
+      sequencesDir: process.env.LEADCMS_SEQUENCES_DIR || ".leadcms/sequences",
       enableDrafts: process.env.LEADCMS_ENABLE_DRAFTS === "true",
     };
   }

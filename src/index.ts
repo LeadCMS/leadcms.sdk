@@ -27,6 +27,33 @@ export {
   isMediaSettingKey,
 } from './lib/settings-types.js';
 
+// Automation types (segments, sequences)
+export type {
+  SegmentDetailsDto,
+  SegmentCreateDto,
+  SegmentUpdateDto,
+  SegmentSyncResponse,
+  SegmentDefinition,
+  SegmentRule,
+  RuleGroup,
+  SequenceDetailsDto,
+  SequenceCreateDto,
+  SequenceUpdateDto,
+  SequenceSyncResponse,
+  SequenceStepDetailsDto,
+  SequenceStepCreateDto,
+  SequenceStepTiming,
+  SequenceStepDelay,
+  SequenceEnrollmentConfig,
+  LocalSequenceDto,
+  LocalSequenceStepDto,
+  LocalSequenceEnrollmentConfig,
+  LocalAutomationFile,
+  AutomationEntityType,
+  Utms,
+} from './lib/automation-types.js';
+export { toLocalSequence, toRemoteSequencePayload } from './lib/automation-types.js';
+
 // Content merge utilities for three-way merge support
 export { threeWayMerge, threeWayMergeJson, isLocallyModified } from './lib/content-merge.js';
 export type { MergeResult } from './lib/content-merge.js';
