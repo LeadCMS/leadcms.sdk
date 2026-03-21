@@ -16,7 +16,6 @@ import type {
     SequenceDetailsDto,
     SequenceCreateDto,
     LocalSequenceDto,
-    LocalAutomationFile,
     SegmentNameIdMap,
     EmailTemplateNameIdMap,
     SegmentIdNameMap,
@@ -73,8 +72,9 @@ async function readLocalSequences(): Promise<LocalSequenceFile[]> {
         const fullPath = path.join(SEQUENCES_DIR, entry.name);
         try {
             const raw = JSON.parse(await fs.readFile(fullPath, "utf8"));
+            // Support both flat format and legacy _entityType wrapper
             const sequence: LocalSequenceDto | undefined =
-                raw?._entityType === "sequence" ? raw.data : undefined;
+                raw?._entityType === "sequence" ? raw.data : (raw?.name ? raw : undefined);
             if (sequence) {
                 results.push({ filePath: fullPath, sequence });
             }
@@ -202,11 +202,7 @@ async function updateLocalFileAfterPush(
 
     try {
         const localDto = toLocalSequence(response, segmentIdNameMap, templateIdNameMap);
-        const file: LocalAutomationFile<LocalSequenceDto> = {
-            _entityType: "sequence",
-            data: localDto,
-        };
-        await fs.writeFile(filePath, JSON.stringify(file, null, 2) + "\n", "utf8");
+        await fs.writeFile(filePath, JSON.stringify(localDto, null, 2) + "\n", "utf8");
         logger.verbose(`[PUSH] Updated local file: ${filePath}`);
     } catch (e: any) {
         logger.verbose(`[PUSH] Failed to update local file ${filePath}: ${e.message}`);

@@ -18,13 +18,24 @@ export type {
 export {
   TRACKED_SETTING_KEYS,
   AI_SITEPROFILE_PREFIX,
+  LEADCAPTURE_TELEGRAM_PREFIX,
   CONTENT_SETTING_PREFIX,
   MEDIA_SETTING_PREFIX,
+  SETTING_FILE_EXTENSIONS,
   aiSiteProfileKeyToFileName,
   fileNameToAiSiteProfileKey,
   isAiSiteProfileKey,
+  leadCaptureTelegramKeyToFileName,
+  fileNameToLeadCaptureTelegramKey,
+  isLeadCaptureTelegramKey,
+  isFileSettingKey,
+  isMarkdownSettingKey,
   isContentSettingKey,
   isMediaSettingKey,
+  getSettingFileExtension,
+  settingKeyToRelativePath,
+  relativePathToSettingKey,
+  getFileSettingTopLevelDirs,
 } from './lib/settings-types.js';
 
 // Automation types (segments, sequences)

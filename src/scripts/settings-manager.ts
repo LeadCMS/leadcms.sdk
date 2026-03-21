@@ -2,10 +2,11 @@
  * LeadCMS Settings Management
  *
  * Handles fetching, saving, reading, comparing, and pushing CMS settings.
- * Settings are stored locally as:
- * - ai-siteprofile/*.md  (one file per AI.SiteProfile.* key)
- * - content.json         (all Content.* keys grouped)
- * - media.json           (all Media.* keys grouped)
+ * File-based settings are stored as nested folders derived from the key:
+ * - ai/site-profile/topic.md     (AI.SiteProfile.Topic)
+ * - lead-capture/telegram/message-template.txt  (LeadCapture.Telegram.MessageTemplate)
+ * - content.json                 (all Content.* keys grouped)
+ * - media.json                   (all Media.* keys grouped)
  *
  * Language-specific settings go into locale subdirectories.
  */
@@ -25,16 +26,12 @@ import {
   TRACKED_SETTING_KEYS,
   CONTENT_SETTING_PREFIX,
   MEDIA_SETTING_PREFIX,
-  aiSiteProfileKeyToFileName,
-  fileNameToAiSiteProfileKey,
-  isAiSiteProfileKey,
+  isFileSettingKey,
   isContentSettingKey,
   isMediaSettingKey,
+  settingKeyToRelativePath,
+  getFileSettingTopLevelDirs,
 } from "../lib/settings-types.js";
-
-// ── Constants ────────────────────────────────────────────────────────────────
-
-const AI_SITEPROFILE_FOLDER = "ai-siteprofile";
 
 // ── Export remote settings ───────────────────────────────────────────────────
 
@@ -128,48 +125,35 @@ async function saveSettingsForLanguage(
   reconcile: boolean,
 ): Promise<void> {
   // Group by category
-  const aiSettings = settings.filter((s) => isAiSiteProfileKey(s.key));
+  const fileSettings = settings.filter((s) => isFileSettingKey(s.key));
   const contentSettings = settings.filter((s) => isContentSettingKey(s.key));
   const mediaSettings = settings.filter((s) => isMediaSettingKey(s.key));
 
-  // Save AI SiteProfile as individual .md files
-  if (aiSettings.length > 0 || reconcile) {
-    const aiDir = path.join(baseDir, AI_SITEPROFILE_FOLDER);
+  // Save file-based settings as individual files in nested folders
+  if (fileSettings.length > 0 || reconcile) {
+    const savedKeys = new Set<string>();
 
-    if (aiSettings.length > 0) {
-      await fs.mkdir(aiDir, { recursive: true });
-
-      for (const setting of aiSettings) {
-        const fileName = aiSiteProfileKeyToFileName(setting.key) + ".md";
-        const filePath = path.join(aiDir, fileName);
-        await fs.writeFile(filePath, setting.value || "", "utf8");
-        logger.verbose(`[LeadCMS] Saved ${setting.key} → ${filePath}`);
-      }
+    for (const setting of fileSettings) {
+      const relPath = settingKeyToRelativePath(setting.key);
+      const filePath = path.join(baseDir, relPath);
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.writeFile(filePath, setting.value || "", "utf8");
+      logger.verbose(`[LeadCMS] Saved ${setting.key} → ${filePath}`);
+      savedKeys.add(setting.key);
     }
 
     if (reconcile) {
-      const keepFiles = new Set(aiSettings.map((s) => aiSiteProfileKeyToFileName(s.key) + ".md"));
-      const expectedTrackedFiles = TRACKED_SETTING_KEYS
-        .filter((key) => isAiSiteProfileKey(key))
-        .map((key) => aiSiteProfileKeyToFileName(key) + ".md");
-
-      for (const fileName of expectedTrackedFiles) {
-        if (keepFiles.has(fileName)) continue;
-        const filePath = path.join(aiDir, fileName);
+      for (const key of TRACKED_SETTING_KEYS) {
+        if (!isFileSettingKey(key)) continue;
+        if (savedKeys.has(key)) continue;
+        const relPath = settingKeyToRelativePath(key);
+        const filePath = path.join(baseDir, relPath);
         try {
           await fs.rm(filePath, { force: true });
         } catch {
           // ignore missing files
         }
-      }
-
-      try {
-        const remaining = await fs.readdir(aiDir);
-        if (remaining.length === 0) {
-          await fs.rm(aiDir, { recursive: true, force: true });
-        }
-      } catch {
-        // ignore when directory does not exist
+        await removeEmptyParentDirs(path.dirname(filePath), baseDir);
       }
     }
   }
@@ -229,6 +213,26 @@ async function saveSettingsForLanguage(
   }
 }
 
+/**
+ * Remove empty parent directories up to (but not including) stopAt.
+ */
+async function removeEmptyParentDirs(dir: string, stopAt: string): Promise<void> {
+  let current = dir;
+  while (current !== stopAt && current.startsWith(stopAt + path.sep)) {
+    try {
+      const entries = await fs.readdir(current);
+      if (entries.length === 0) {
+        await fs.rm(current, { recursive: true, force: true });
+        current = path.dirname(current);
+      } else {
+        break;
+      }
+    } catch {
+      break;
+    }
+  }
+}
+
 async function reconcileMissingLanguages(
   settingsDir: string,
   byLanguage: Map<string, SettingDetailsDto[]>,
@@ -238,12 +242,14 @@ async function reconcileMissingLanguages(
     await saveSettingsForLanguage([], settingsDir, true);
   }
 
+  const settingDirs = getFileSettingTopLevelDirs();
+
   try {
     const entries = await fs.readdir(settingsDir, { withFileTypes: true });
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      if (entry.name === AI_SITEPROFILE_FOLDER) continue;
+      if (settingDirs.has(entry.name)) continue;
       if (!/^[a-z]{2}(-[a-zA-Z]{2,})?$/.test(entry.name)) continue;
       if (byLanguage.has(entry.name)) continue;
 
@@ -282,11 +288,12 @@ export async function readLocalSettings(
   results.push(...defaultSettings);
 
   // Scan for locale subdirectories
+  const settingDirs = getFileSettingTopLevelDirs();
   const entries = await fs.readdir(settingsDir, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    // Skip the ai-siteprofile folder (it's not a language folder)
-    if (entry.name === AI_SITEPROFILE_FOLDER) continue;
+    // Skip directories used by file-based settings
+    if (settingDirs.has(entry.name)) continue;
     // Check if it looks like a locale directory
     if (/^[a-z]{2}(-[a-zA-Z]{2,})?$/.test(entry.name)) {
       const langDir = path.join(settingsDir, entry.name);
@@ -307,23 +314,17 @@ async function readLocalSettingsForDir(
 ): Promise<LocalSettingValue[]> {
   const results: LocalSettingValue[] = [];
 
-  // Read AI SiteProfile .md files
-  const aiDir = path.join(dir, AI_SITEPROFILE_FOLDER);
-  try {
-    const aiFiles = await fs.readdir(aiDir);
-    for (const file of aiFiles) {
-      if (!file.endsWith(".md")) continue;
-      const baseName = file.slice(0, -3); // strip .md
-      const key = fileNameToAiSiteProfileKey(baseName);
-      if (!key) {
-        logger.verbose(`[LeadCMS] Unknown ai-siteprofile file: ${file}, skipping`);
-        continue;
-      }
-      const content = await fs.readFile(path.join(aiDir, file), "utf8");
+  // Read file-based settings by checking expected paths
+  for (const key of TRACKED_SETTING_KEYS) {
+    if (!isFileSettingKey(key)) continue;
+    const relPath = settingKeyToRelativePath(key);
+    const filePath = path.join(dir, relPath);
+    try {
+      const content = await fs.readFile(filePath, "utf8");
       results.push({ key, value: content, language });
+    } catch {
+      // File doesn't exist
     }
-  } catch {
-    // ai-siteprofile directory doesn't exist
   }
 
   // Read content.json

@@ -95,6 +95,7 @@ export function formatEmailTemplateForApi(local: EmailTemplateLocalData): Record
     name: metadata.name,
     subject: metadata.subject,
     bodyTemplate: local.body || '',
+    category: metadata.category,
     fromEmail: metadata.fromEmail,
     fromName: metadata.fromName,
     language: metadata.language,

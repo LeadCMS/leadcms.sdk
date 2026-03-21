@@ -20,7 +20,6 @@ import { logger } from "../lib/logger.js";
 import type {
   SequenceDetailsDto,
   SequenceSyncResponse,
-  LocalAutomationFile,
   LocalSequenceDto,
   SegmentIdNameMap,
   EmailTemplateIdNameMap,
@@ -87,6 +86,7 @@ async function pullSequenceSync(syncToken?: string): Promise<SequenceSyncResult>
   while (true) {
     const url = new URL("/api/sequences/sync", leadCMSUrl);
     url.searchParams.set("filter[limit]", "100");
+    url.searchParams.set("include", "Steps");
     url.searchParams.set("syncToken", token);
     if (syncToken) {
       url.searchParams.set("includeBase", "true");
@@ -137,6 +137,7 @@ async function buildSequenceIdIndex(dir: string): Promise<Map<string, string>> {
     const fullPath = path.join(dir, entry.name);
     try {
       const content = JSON.parse(await fs.readFile(fullPath, "utf8"));
+      // Support both flat format and legacy _entityType wrapper
       const id = content?._entityType === "sequence" ? content?.data?.id : content?.id;
       if (id != null) {
         index.set(String(id), fullPath);
@@ -222,13 +223,9 @@ export async function pullLeadCMSSequences(remoteCtx?: RemoteContext): Promise<v
 
     // Transform to local shape
     const localDto = toLocalSequence(sequence, segmentMap, templateMap);
-    const local: LocalAutomationFile<LocalSequenceDto> = {
-      _entityType: "sequence",
-      data: localDto,
-    };
 
     const filePath = getSequenceFilePath(sequence);
-    const content = JSON.stringify(local, null, 2) + "\n";
+    const content = JSON.stringify(localDto, null, 2) + "\n";
     await fs.mkdir(path.dirname(filePath), { recursive: true });
 
     const existed = idStr ? idIndex.has(idStr) : false;

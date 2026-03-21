@@ -13,7 +13,7 @@ import {
 } from "./settings-manager.js";
 import { colorConsole, statusColors, diffColors } from "../lib/console-colors.js";
 import type { SettingsStatusResult } from "../lib/settings-types.js";
-import { AI_SITEPROFILE_PREFIX } from "../lib/settings-types.js";
+import { isMarkdownSettingKey } from "../lib/settings-types.js";
 import * as Diff from "diff";
 
 export interface PushSettingsOptions {
@@ -245,11 +245,11 @@ export function formatSettingValue(key: string, value: string | null | undefined
   if (!value && value !== "") return "(not set)";
   if (value === "") return "(empty)";
 
-  if (!key.startsWith(AI_SITEPROFILE_PREFIX)) {
+  if (!isMarkdownSettingKey(key)) {
     return truncateValue(value);
   }
 
-  // AI.SiteProfile: summarise like a text file
+  // Markdown setting: summarise like a text file
   const lines = value.split(/\r?\n/);
   const lineCount = lines.length;
   // Pick the first non-empty, non-heading line as a preview
@@ -264,7 +264,7 @@ export function formatSettingValue(key: string, value: string | null | undefined
 }
 
 /**
- * Format a diff description for a modified AI.SiteProfile setting.
+ * Format a diff description for a modified markdown setting.
  * Returns e.g. "3 lines → 47 lines" or the normal "old" → "new" for short values.
  */
 export function formatSettingDiff(
@@ -272,7 +272,7 @@ export function formatSettingDiff(
   remoteValue: string | null | undefined,
   localValue: string | null | undefined,
 ): string {
-  if (!key.startsWith(AI_SITEPROFILE_PREFIX)) {
+  if (!isMarkdownSettingKey(key)) {
     return `"${truncateValue(remoteValue || '')}" → "${truncateValue(localValue || '')}"`;
   }
 
@@ -286,8 +286,8 @@ export function formatSettingDiff(
 }
 
 /**
- * Render a colored line-by-line diff for an AI.SiteProfile setting.
- * For non-AI settings this is a no-op (returns false).
+ * Render a colored line-by-line diff for a markdown setting.
+ * For non-markdown settings this is a no-op (returns false).
  *
  * @param indent  Leading whitespace for each printed line
  * @returns true if a diff was rendered, false if skipped
@@ -298,7 +298,7 @@ export function renderSettingDiffPreview(
   localValue: string | null | undefined,
   indent: string = "        ",
 ): boolean {
-  if (!key.startsWith(AI_SITEPROFILE_PREFIX)) return false;
+  if (!isMarkdownSettingKey(key)) return false;
 
   const oldText = remoteValue || "";
   const newText = localValue || "";

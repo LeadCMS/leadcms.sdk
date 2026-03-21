@@ -5,11 +5,22 @@
 import {
   TRACKED_SETTING_KEYS,
   AI_SITEPROFILE_PREFIX,
+  LEADCAPTURE_TELEGRAM_PREFIX,
+  SETTING_FILE_EXTENSIONS,
   aiSiteProfileKeyToFileName,
   fileNameToAiSiteProfileKey,
   isAiSiteProfileKey,
+  leadCaptureTelegramKeyToFileName,
+  fileNameToLeadCaptureTelegramKey,
+  isLeadCaptureTelegramKey,
+  isMarkdownSettingKey,
+  isFileSettingKey,
   isContentSettingKey,
   isMediaSettingKey,
+  getSettingFileExtension,
+  settingKeyToRelativePath,
+  relativePathToSettingKey,
+  getFileSettingTopLevelDirs,
 } from '../src/lib/settings-types';
 
 import {
@@ -68,8 +79,12 @@ describe('settings-types', () => {
       expect(TRACKED_SETTING_KEYS).toContain('Media.Quality');
     });
 
-    it('has exactly 19 tracked keys', () => {
-      expect(TRACKED_SETTING_KEYS).toHaveLength(19);
+    it('contains all expected LeadCapture.Telegram keys', () => {
+      expect(TRACKED_SETTING_KEYS).toContain('LeadCapture.Telegram.MessageTemplate');
+    });
+
+    it('has exactly 20 tracked keys', () => {
+      expect(TRACKED_SETTING_KEYS).toHaveLength(20);
     });
   });
 
@@ -181,6 +196,166 @@ describe('settings-types', () => {
 
     it('returns false for non-Media keys', () => {
       expect(isMediaSettingKey('Content.MinTitleLength')).toBe(false);
+    });
+  });
+
+  describe('leadCaptureTelegramKeyToFileName', () => {
+    it('converts MessageTemplate to kebab-case', () => {
+      expect(leadCaptureTelegramKeyToFileName('LeadCapture.Telegram.MessageTemplate')).toBe('message-template');
+    });
+  });
+
+  describe('fileNameToLeadCaptureTelegramKey', () => {
+    it('maps message-template back to key', () => {
+      expect(fileNameToLeadCaptureTelegramKey('message-template')).toBe('LeadCapture.Telegram.MessageTemplate');
+    });
+
+    it('returns undefined for unknown file name', () => {
+      expect(fileNameToLeadCaptureTelegramKey('unknown-file')).toBeUndefined();
+    });
+
+    it('round-trips all LeadCapture.Telegram keys', () => {
+      for (const key of TRACKED_SETTING_KEYS) {
+        if (key.startsWith(LEADCAPTURE_TELEGRAM_PREFIX)) {
+          const fileName = leadCaptureTelegramKeyToFileName(key);
+          const roundTripped = fileNameToLeadCaptureTelegramKey(fileName);
+          expect(roundTripped).toBe(key);
+        }
+      }
+    });
+  });
+
+  describe('isLeadCaptureTelegramKey', () => {
+    it('returns true for tracked LeadCapture.Telegram keys', () => {
+      expect(isLeadCaptureTelegramKey('LeadCapture.Telegram.MessageTemplate')).toBe(true);
+    });
+
+    it('returns false for untracked LeadCapture.Telegram keys', () => {
+      expect(isLeadCaptureTelegramKey('LeadCapture.Telegram.Unknown')).toBe(false);
+    });
+
+    it('returns false for non-LeadCapture keys', () => {
+      expect(isLeadCaptureTelegramKey('Content.MinTitleLength')).toBe(false);
+    });
+  });
+
+  describe('isMarkdownSettingKey (deprecated alias)', () => {
+    it('returns true for AI.SiteProfile keys', () => {
+      expect(isMarkdownSettingKey('AI.SiteProfile.Topic')).toBe(true);
+    });
+
+    it('returns true for LeadCapture.Telegram keys', () => {
+      expect(isMarkdownSettingKey('LeadCapture.Telegram.MessageTemplate')).toBe(true);
+    });
+
+    it('returns false for Content keys', () => {
+      expect(isMarkdownSettingKey('Content.MinTitleLength')).toBe(false);
+    });
+
+    it('returns false for Media keys', () => {
+      expect(isMarkdownSettingKey('Media.Quality')).toBe(false);
+    });
+  });
+
+  describe('isFileSettingKey', () => {
+    it('returns true for AI.SiteProfile keys', () => {
+      expect(isFileSettingKey('AI.SiteProfile.Topic')).toBe(true);
+    });
+
+    it('returns true for LeadCapture.Telegram keys', () => {
+      expect(isFileSettingKey('LeadCapture.Telegram.MessageTemplate')).toBe(true);
+    });
+
+    it('returns false for Content keys', () => {
+      expect(isFileSettingKey('Content.MinTitleLength')).toBe(false);
+    });
+
+    it('returns false for Media keys', () => {
+      expect(isFileSettingKey('Media.Quality')).toBe(false);
+    });
+  });
+
+  describe('getSettingFileExtension', () => {
+    it('returns .md for AI.SiteProfile keys', () => {
+      expect(getSettingFileExtension('AI.SiteProfile.Topic')).toBe('.md');
+    });
+
+    it('returns .txt for LeadCapture.Telegram.MessageTemplate', () => {
+      expect(getSettingFileExtension('LeadCapture.Telegram.MessageTemplate')).toBe('.txt');
+    });
+
+    it('returns .md as default for unmapped keys', () => {
+      expect(getSettingFileExtension('Some.Unknown.Key')).toBe('.md');
+    });
+  });
+
+  describe('settingKeyToRelativePath', () => {
+    it('converts AI.SiteProfile.Topic to ai/site-profile/topic.md', () => {
+      expect(settingKeyToRelativePath('AI.SiteProfile.Topic')).toBe('ai/site-profile/topic.md');
+    });
+
+    it('converts AI.SiteProfile.BlogCover.Instructions to nested path', () => {
+      expect(settingKeyToRelativePath('AI.SiteProfile.BlogCover.Instructions')).toBe('ai/site-profile/blog-cover/instructions.md');
+    });
+
+    it('converts AI.SiteProfile.BrandVoice to ai/site-profile/brand-voice.md', () => {
+      expect(settingKeyToRelativePath('AI.SiteProfile.BrandVoice')).toBe('ai/site-profile/brand-voice.md');
+    });
+
+    it('converts AI.SiteProfile.EmailTemplate.Instructions to nested path', () => {
+      expect(settingKeyToRelativePath('AI.SiteProfile.EmailTemplate.Instructions')).toBe('ai/site-profile/email-template/instructions.md');
+    });
+
+    it('converts LeadCapture.Telegram.MessageTemplate to .txt file', () => {
+      expect(settingKeyToRelativePath('LeadCapture.Telegram.MessageTemplate')).toBe('lead-capture/telegram/message-template.txt');
+    });
+
+    it('round-trips all file-based tracked keys', () => {
+      for (const key of TRACKED_SETTING_KEYS) {
+        if (!isFileSettingKey(key)) continue;
+        const relPath = settingKeyToRelativePath(key);
+        const roundTripped = relativePathToSettingKey(relPath);
+        expect(roundTripped).toBe(key);
+      }
+    });
+  });
+
+  describe('relativePathToSettingKey', () => {
+    it('resolves ai/site-profile/topic.md to AI.SiteProfile.Topic', () => {
+      expect(relativePathToSettingKey('ai/site-profile/topic.md')).toBe('AI.SiteProfile.Topic');
+    });
+
+    it('resolves lead-capture/telegram/message-template.txt to LeadCapture.Telegram.MessageTemplate', () => {
+      expect(relativePathToSettingKey('lead-capture/telegram/message-template.txt')).toBe('LeadCapture.Telegram.MessageTemplate');
+    });
+
+    it('returns undefined for unknown path', () => {
+      expect(relativePathToSettingKey('unknown/path/file.md')).toBeUndefined();
+    });
+  });
+
+  describe('getFileSettingTopLevelDirs', () => {
+    it('returns the correct top-level directories', () => {
+      const dirs = getFileSettingTopLevelDirs();
+      expect(dirs.has('ai')).toBe(true);
+      expect(dirs.has('lead-capture')).toBe(true);
+      expect(dirs.size).toBe(2);
+    });
+
+    it('does not include content or media dirs', () => {
+      const dirs = getFileSettingTopLevelDirs();
+      expect(dirs.has('content')).toBe(false);
+      expect(dirs.has('media')).toBe(false);
+    });
+  });
+
+  describe('SETTING_FILE_EXTENSIONS', () => {
+    it('defines .txt for LeadCapture.Telegram.MessageTemplate', () => {
+      expect(SETTING_FILE_EXTENSIONS['LeadCapture.Telegram.MessageTemplate']).toBe('.txt');
+    });
+
+    it('does not define overrides for AI.SiteProfile keys', () => {
+      expect(SETTING_FILE_EXTENSIONS['AI.SiteProfile.Topic']).toBeUndefined();
     });
   });
 });
@@ -306,6 +481,10 @@ describe('settings-manager', () => {
       const audience = localSettings.find(s => s.key === 'AI.SiteProfile.Audience');
       expect(audience).toBeDefined();
       expect(audience!.value).toBe('Developers and engineers');
+
+      // Verify file is at the correct nested path
+      const topicContent = await fs.readFile(path.join(tmpDir, 'ai', 'site-profile', 'topic.md'), 'utf8');
+      expect(topicContent).toBe('Technology Blog');
     });
 
     it('saves and reads Content settings as content.json', async () => {
@@ -363,11 +542,11 @@ describe('settings-manager', () => {
       await saveSettingsLocally(settings, tmpDir, 'en');
 
       // Default language files
-      const defaultTopic = await fs.readFile(path.join(tmpDir, 'ai-siteprofile', 'topic.md'), 'utf8');
+      const defaultTopic = await fs.readFile(path.join(tmpDir, 'ai', 'site-profile', 'topic.md'), 'utf8');
       expect(defaultTopic).toBe('Topic - Generic');
 
       // Russian language files
-      const ruTopic = await fs.readFile(path.join(tmpDir, 'ru-RU', 'ai-siteprofile', 'topic.md'), 'utf8');
+      const ruTopic = await fs.readFile(path.join(tmpDir, 'ru-RU', 'ai', 'site-profile', 'topic.md'), 'utf8');
       expect(ruTopic).toBe('Topic - RU');
 
       const ruMedia = JSON.parse(await fs.readFile(path.join(tmpDir, 'ru-RU', 'media.json'), 'utf8'));
@@ -405,8 +584,8 @@ describe('settings-manager', () => {
       expect(localSettings).toHaveLength(0);
     });
 
-    it('skips unknown .md files in ai-siteprofile folder', async () => {
-      const aiDir = path.join(tmpDir, 'ai-siteprofile');
+    it('skips unknown files in ai/site-profile folder', async () => {
+      const aiDir = path.join(tmpDir, 'ai', 'site-profile');
       await fs.mkdir(aiDir, { recursive: true });
       await fs.writeFile(path.join(aiDir, 'unknown-file.md'), 'content', 'utf8');
 
@@ -414,27 +593,75 @@ describe('settings-manager', () => {
       expect(localSettings).toHaveLength(0);
     });
 
-    it('does not create md files for null/empty values', async () => {
-      // filterTrackedSettings already handles this, but let's confirm empty arrays
-      const settings: any[] = [];
+    it('saves and reads LeadCapture.Telegram settings as .txt files', async () => {
+      const settings = [
+        { id: 1, key: 'LeadCapture.Telegram.MessageTemplate', value: '# Welcome\nHello {{name}}!', language: null, createdAt: '2024-01-01T00:00:00Z' },
+      ];
+
       await saveSettingsLocally(settings, tmpDir, 'en');
 
-      // The directory should still not exist
-      try {
-        await fs.access(path.join(tmpDir, 'ai-siteprofile'));
-        fail('Should not have created ai-siteprofile directory');
-      } catch {
-        // Expected
-      }
+      // Verify file is created as .txt in the correct nested directory
+      const content = await fs.readFile(path.join(tmpDir, 'lead-capture', 'telegram', 'message-template.txt'), 'utf8');
+      expect(content).toBe('# Welcome\nHello {{name}}!');
+
+      // Verify round-trip
+      const localSettings = await readLocalSettings(tmpDir, 'en');
+      const telegram = localSettings.find(s => s.key === 'LeadCapture.Telegram.MessageTemplate');
+      expect(telegram).toBeDefined();
+      expect(telegram!.value).toBe('# Welcome\nHello {{name}}!');
+      expect(telegram!.language).toBeNull();
     });
 
-    it('reconciles removed AI.SiteProfile files and deletes empty ai-siteprofile folder', async () => {
+    it('saves LeadCapture.Telegram settings alongside AI.SiteProfile settings', async () => {
+      const settings = [
+        { id: 1, key: 'AI.SiteProfile.Topic', value: 'Technology', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        { id: 2, key: 'LeadCapture.Telegram.MessageTemplate', value: 'Hello!', language: null, createdAt: '2024-01-01T00:00:00Z' },
+      ];
+
+      await saveSettingsLocally(settings, tmpDir, 'en');
+      const localSettings = await readLocalSettings(tmpDir, 'en');
+
+      expect(localSettings).toHaveLength(2);
+      expect(localSettings.find(s => s.key === 'AI.SiteProfile.Topic')!.value).toBe('Technology');
+      expect(localSettings.find(s => s.key === 'LeadCapture.Telegram.MessageTemplate')!.value).toBe('Hello!');
+    });
+
+    it('handles language-specific LeadCapture.Telegram settings', async () => {
+      const settings = [
+        { id: 1, key: 'LeadCapture.Telegram.MessageTemplate', value: 'Hello!', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        { id: 2, key: 'LeadCapture.Telegram.MessageTemplate', value: 'Привет!', language: 'ru-RU', createdAt: '2024-01-01T00:00:00Z' },
+      ];
+
+      await saveSettingsLocally(settings, tmpDir, 'en');
+
+      const defaultContent = await fs.readFile(path.join(tmpDir, 'lead-capture', 'telegram', 'message-template.txt'), 'utf8');
+      expect(defaultContent).toBe('Hello!');
+
+      const ruContent = await fs.readFile(path.join(tmpDir, 'ru-RU', 'lead-capture', 'telegram', 'message-template.txt'), 'utf8');
+      expect(ruContent).toBe('Привет!');
+
+      const localSettings = await readLocalSettings(tmpDir, 'en');
+      expect(localSettings).toHaveLength(2);
+      const ruSetting = localSettings.find(s => s.key === 'LeadCapture.Telegram.MessageTemplate' && s.language === 'ru-RU');
+      expect(ruSetting!.value).toBe('Привет!');
+    });
+
+    it('skips unknown files in lead-capture/telegram folder', async () => {
+      const telegramDir = path.join(tmpDir, 'lead-capture', 'telegram');
+      await fs.mkdir(telegramDir, { recursive: true });
+      await fs.writeFile(path.join(telegramDir, 'unknown-file.txt'), 'content', 'utf8');
+
+      const localSettings = await readLocalSettings(tmpDir, 'en');
+      expect(localSettings).toHaveLength(0);
+    });
+
+    it('reconciles removed LeadCapture.Telegram files and deletes empty folders', async () => {
       const initial = [
-        { id: 1, key: 'AI.SiteProfile.Topic', value: 'Initial topic', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        { id: 1, key: 'LeadCapture.Telegram.MessageTemplate', value: 'Hello!', language: null, createdAt: '2024-01-01T00:00:00Z' },
       ];
 
       await saveSettingsLocally(initial, tmpDir, 'en');
-      await fs.access(path.join(tmpDir, 'ai-siteprofile', 'topic.md'));
+      await fs.access(path.join(tmpDir, 'lead-capture', 'telegram', 'message-template.txt'));
 
       const next = [
         { id: 2, key: 'Content.MinTitleLength', value: '9', language: null, createdAt: '2024-01-01T00:00:00Z' },
@@ -442,8 +669,40 @@ describe('settings-manager', () => {
 
       await saveSettingsLocally(next, tmpDir, 'en');
 
-      await expect(fs.access(path.join(tmpDir, 'ai-siteprofile', 'topic.md'))).rejects.toThrow();
-      await expect(fs.access(path.join(tmpDir, 'ai-siteprofile'))).rejects.toThrow();
+      await expect(fs.access(path.join(tmpDir, 'lead-capture', 'telegram', 'message-template.txt'))).rejects.toThrow();
+      await expect(fs.access(path.join(tmpDir, 'lead-capture'))).rejects.toThrow();
+    });
+
+    it('does not create files for null/empty values', async () => {
+      // filterTrackedSettings already handles this, but let's confirm empty arrays
+      const settings: any[] = [];
+      await saveSettingsLocally(settings, tmpDir, 'en');
+
+      // The directory should still not exist
+      try {
+        await fs.access(path.join(tmpDir, 'ai'));
+        fail('Should not have created ai directory');
+      } catch {
+        // Expected
+      }
+    });
+
+    it('reconciles removed AI.SiteProfile files and deletes empty folders', async () => {
+      const initial = [
+        { id: 1, key: 'AI.SiteProfile.Topic', value: 'Initial topic', language: null, createdAt: '2024-01-01T00:00:00Z' },
+      ];
+
+      await saveSettingsLocally(initial, tmpDir, 'en');
+      await fs.access(path.join(tmpDir, 'ai', 'site-profile', 'topic.md'));
+
+      const next = [
+        { id: 2, key: 'Content.MinTitleLength', value: '9', language: null, createdAt: '2024-01-01T00:00:00Z' },
+      ];
+
+      await saveSettingsLocally(next, tmpDir, 'en');
+
+      await expect(fs.access(path.join(tmpDir, 'ai', 'site-profile', 'topic.md'))).rejects.toThrow();
+      await expect(fs.access(path.join(tmpDir, 'ai'))).rejects.toThrow();
     });
 
     it('reconciles removed JSON setting categories by deleting empty content/media json files', async () => {
@@ -464,7 +723,7 @@ describe('settings-manager', () => {
 
       await expect(fs.access(path.join(tmpDir, 'content.json'))).rejects.toThrow();
       await expect(fs.access(path.join(tmpDir, 'media.json'))).rejects.toThrow();
-      await fs.access(path.join(tmpDir, 'ai-siteprofile', 'topic.md'));
+      await fs.access(path.join(tmpDir, 'ai', 'site-profile', 'topic.md'));
     });
 
     it('reconciles to empty local state when remote tracked settings become empty', async () => {
@@ -882,6 +1141,18 @@ describe('formatSettingValue', () => {
     expect(result).toContain('...');
     expect(result).toContain('(2 lines)');
   });
+
+  it('summarises LeadCapture.Telegram single-line value', () => {
+    const result = formatSettingValue('LeadCapture.Telegram.MessageTemplate', 'Hello {{name}}!');
+    expect(result).toBe('Hello {{name}}!');
+  });
+
+  it('summarises LeadCapture.Telegram multi-line value with line count', () => {
+    const multiLine = '# Welcome\nHello {{name}}!\nWe are glad to see you.';
+    const result = formatSettingValue('LeadCapture.Telegram.MessageTemplate', multiLine);
+    expect(result).toContain('(3 lines)');
+    expect(result).toContain('Hello {{name}}!');
+  });
 });
 
 describe('formatSettingDiff', () => {
@@ -907,6 +1178,13 @@ describe('formatSettingDiff', () => {
   it('handles single line AI.SiteProfile diff', () => {
     const result = formatSettingDiff('AI.SiteProfile.Topic', 'Old topic', 'New topic');
     expect(result).toBe('content changed (1 line)');
+  });
+
+  it('shows line count change for LeadCapture.Telegram settings', () => {
+    const remote = 'Hello!';
+    const local = 'Hello!\nWelcome to our service.\nEnjoy!';
+    const result = formatSettingDiff('LeadCapture.Telegram.MessageTemplate', remote, local);
+    expect(result).toBe('1 line → 3 lines');
   });
 });
 
@@ -956,6 +1234,15 @@ describe('renderSettingDiffPreview', () => {
       'AI.SiteProfile.Topic',
       '# My Topic\nSome content here',
       null,
+    );
+    expect(result).toBe(true);
+  });
+
+  it('returns true for LeadCapture.Telegram settings', () => {
+    const result = renderSettingDiffPreview(
+      'LeadCapture.Telegram.MessageTemplate',
+      'Old template',
+      'New template',
     );
     expect(result).toBe(true);
   });

@@ -91,6 +91,41 @@ emailGroupId: 12
     expect(payload.emailGroupId).toBe(9);
   });
 
+  it('includes category field in API payload', () => {
+    const local = {
+      metadata: {
+        name: 'PlainTemplate',
+        subject: 'Subject',
+        fromEmail: 'team@example.com',
+        fromName: 'Team',
+        language: 'en',
+        category: 'PlainText',
+        emailGroupId: 1,
+      },
+      body: '<p>Hello</p>',
+    };
+
+    const payload = formatEmailTemplateForApi(local);
+    expect(payload.category).toBe('PlainText');
+  });
+
+  it('omits category when not set in metadata', () => {
+    const local = {
+      metadata: {
+        name: 'Welcome',
+        subject: 'Hello',
+        fromEmail: 'team@example.com',
+        fromName: 'Team',
+        language: 'en',
+        emailGroupId: 9,
+      },
+      body: '<p>Hi</p>',
+    };
+
+    const payload = formatEmailTemplateForApi(local);
+    expect(payload.category).toBeUndefined();
+  });
+
   it('does not send groupName to the API', () => {
     const local = {
       metadata: {
