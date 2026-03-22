@@ -916,7 +916,7 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
     for (const op of sortOperations([...operations.create])) {
       const typeLabel = (op.local.type || 'unknown').padEnd(12);
       const localeLabel = `[${op.local.locale || 'unknown'}]`.padEnd(6);
-      colorConsole.log(`        ${statusColors.created('new file:')}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)}`);
+      colorConsole.log(`        ${statusColors.created('new:     ')}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)}`);
     }
 
     // Modified content

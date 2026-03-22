@@ -1365,8 +1365,11 @@ class LeadCMSDataService {
         throw new Error('LeadCMS URL is not configured.');
       }
 
+      const url = new URL(`${this.baseURL}/api/sequences`);
+      url.searchParams.set('filter[include]', 'steps');
+
       const response: AxiosResponse<SequenceDetailsDto[]> = await axios.get(
-        `${this.baseURL}/api/sequences`,
+        url.toString(),
         { headers: this.getApiHeaders() }
       );
 

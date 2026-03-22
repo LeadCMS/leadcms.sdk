@@ -68,7 +68,7 @@ function renderContentSection(ops: ContentOperations): number {
 
   const changeCount = creates.length + updates.length + renames.length + typeChanges.length + conflicts.length + deletes.length;
 
-  for (const op of creates) renderContentLine(op, 'new file: ', statusColors.created);
+  for (const op of creates) renderContentLine(op, 'new:      ', statusColors.created);
   for (const op of updates) renderContentLine(op, 'modified: ', statusColors.modified);
   for (const op of renames) {
     const typeLabel = (op.local.type || 'unknown').padEnd(12);
@@ -103,7 +103,7 @@ function renderMediaSection(result: MediaStatusResult): number {
 
   for (const op of creates) {
     const sizeKB = (op.local!.size / 1024).toFixed(2);
-    colorConsole.log(`        ${statusColors.created('new file: ')}   ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)} ${colorConsole.gray(`(${sizeKB}KB)`)}`);
+    colorConsole.log(`        ${statusColors.created('new:      ')}   ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)} ${colorConsole.gray(`(${sizeKB}KB)`)}`);
   }
   for (const op of updates) {
     const sizeKB = (op.local!.size / 1024).toFixed(2);
@@ -132,7 +132,7 @@ function renderCommentSection(operations: CommentOperation[]): number {
   for (const op of creates) {
     const comment = op.local?.comment;
     const label = `${comment?.commentableType || 'Unknown'}#${comment?.commentableId || '?'} [${comment?.language || defaultLanguage}]`;
-    colorConsole.log(`        ${statusColors.created('new file: ')}   ${label} ${colorConsole.highlight(comment?.body?.slice(0, 48) || 'New comment')}`);
+    colorConsole.log(`        ${statusColors.created('new:      ')}   ${label} ${colorConsole.highlight(comment?.body?.slice(0, 48) || 'New comment')}`);
   }
   for (const op of updates) {
     const comment = op.local?.comment || op.remote;
@@ -170,7 +170,7 @@ function renderEmailTemplateSection(operations: EmailTemplateOperation[]): numbe
     const groupLabel = (op.local?.groupFolder || 'ungrouped').padEnd(12);
     const localeLabel = `[${op.local?.locale || defaultLanguage}]`.padEnd(6);
     const nameLabel = op.local?.metadata?.name || 'unknown';
-    colorConsole.log(`        ${statusColors.created('new file: ')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)}`);
+    colorConsole.log(`        ${statusColors.created('new:      ')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)}`);
   }
   for (const op of updates) {
     const groupLabel = (op.local?.groupFolder || 'ungrouped').padEnd(12);
@@ -209,7 +209,7 @@ function renderSegmentSection(operations: SegmentOperation[]): number {
 
   for (const op of creates) {
     const nameLabel = op.local?.name || 'unknown';
-    colorConsole.log(`        ${statusColors.created('new file: ')}   ${colorConsole.highlight(nameLabel)}`);
+    colorConsole.log(`        ${statusColors.created('new:      ')}   ${colorConsole.highlight(nameLabel)}`);
   }
   for (const op of updates) {
     const nameLabel = op.local?.name || op.remote?.name || 'unknown';
@@ -243,7 +243,7 @@ function renderSequenceSection(operations: SequenceOperation[]): number {
 
   for (const op of creates) {
     const nameLabel = op.local?.name || 'unknown';
-    colorConsole.log(`        ${statusColors.created('new file: ')}   ${colorConsole.highlight(nameLabel)}`);
+    colorConsole.log(`        ${statusColors.created('new:      ')}   ${colorConsole.highlight(nameLabel)}`);
   }
   for (const op of updates) {
     const nameLabel = op.local?.name || op.remote?.name || 'unknown';

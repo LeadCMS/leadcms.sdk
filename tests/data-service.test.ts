@@ -595,6 +595,31 @@ describe('LeadCMS Data Service', () => {
     });
   });
 
+  describe('Sequence API', () => {
+    beforeEach(() => {
+      process.env.LEADCMS_USE_MOCK = 'false';
+      process.env.NODE_ENV = 'development';
+      process.env.LEADCMS_URL = 'https://api.example.com';
+      process.env.LEADCMS_API_KEY = 'test-api-key';
+    });
+
+    it('should include filter[include]=steps when fetching sequences', async () => {
+      const mockSequences = [
+        { id: 1, name: 'Onboarding', steps: [{ id: 10, name: 'Step 1' }] },
+      ];
+      mockedAxios.get.mockResolvedValue({ data: mockSequences });
+
+      const service = new LeadCMSDataService();
+      const result = await service.getAllSequences();
+
+      expect(result).toEqual(mockSequences);
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        expect.stringContaining('filter%5Binclude%5D=steps'),
+        expect.any(Object)
+      );
+    });
+  });
+
   describe('Email Template API Key Guards', () => {
     beforeEach(() => {
       process.env.LEADCMS_URL = 'https://api.example.com';

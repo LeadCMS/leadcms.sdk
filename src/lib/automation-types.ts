@@ -211,14 +211,12 @@ export interface LocalSequenceEnrollmentConfig {
  */
 export interface LocalSequenceStepDto {
   id?: number;
-  sequenceId?: number;
   emailTemplateName: string;
-  position: number;
   name: string;
   type?: "Email";
   timing: SequenceStepTiming;
   createdAt?: string;
-  updatedAt?: string | null;
+  updatedAt?: string;
 }
 
 /**
@@ -230,7 +228,7 @@ export interface LocalSequenceStepDto {
 export interface LocalSequenceDto {
   id?: number;
   name: string;
-  description?: string | null;
+  description?: string;
   language: string;
   stopOnReply?: boolean;
   useContactTimeZone?: boolean;
@@ -240,7 +238,7 @@ export interface LocalSequenceDto {
   steps?: LocalSequenceStepDto[];
   status?: "Draft" | "Active" | "Paused" | "Archived";
   createdAt?: string;
-  updatedAt?: string | null;
+  updatedAt?: string;
 }
 
 // ── Transformation helpers ─────────────────────────────────────────────
@@ -255,6 +253,40 @@ export type EmailTemplateIdNameMap = Map<number, string>;
 export type EmailTemplateNameIdMap = Map<string, number>;
 
 /**
+ * Recursively strip null values and empty arrays from an object
+ * to keep local files clean and compact.
+ */
+export function stripNullsAndEmptyArrays<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item =>
+      typeof item === 'object' && item !== null ? stripNullsAndEmptyArrays(item) : item
+    ) as unknown as T;
+  }
+  if (typeof obj === 'object') {
+    const result: Record<string, any> = {};
+    for (const [key, value] of Object.entries(obj as any)) {
+      if (value === null || value === undefined) continue;
+      if (Array.isArray(value) && value.length === 0) continue;
+      result[key] = typeof value === 'object' ? stripNullsAndEmptyArrays(value) : value;
+    }
+    return result as T;
+  }
+  return obj;
+}
+
+/**
+ * Strip null/undefined fields from timing to keep local files clean.
+ */
+function stripNullTimingFields(timing: SequenceStepTiming): SequenceStepTiming {
+  const result: SequenceStepTiming = {};
+  if (timing.delay != null) result.delay = timing.delay;
+  if (timing.sendAt != null) result.sendAt = timing.sendAt;
+  if (timing.allowedWeekDays != null) result.allowedWeekDays = timing.allowedWeekDays;
+  return result;
+}
+
+/**
  * Convert a remote SequenceDetailsDto to its local representation.
  * Replaces segment IDs with names and emailTemplateId with emailTemplateName.
  */
@@ -266,15 +298,20 @@ export function toLocalSequence(
   const local: LocalSequenceDto = {
     id: remote.id,
     name: remote.name,
-    description: remote.description,
     language: remote.language,
     stopOnReply: remote.stopOnReply,
     useContactTimeZone: remote.useContactTimeZone,
     timeZone: remote.timeZone,
     status: remote.status,
     createdAt: remote.createdAt,
-    updatedAt: remote.updatedAt,
   };
+
+  if (remote.description != null) {
+    local.description = remote.description;
+  }
+  if (remote.updatedAt != null) {
+    local.updatedAt = remote.updatedAt;
+  }
 
   if (remote.enrollment) {
     local.enrollment = {
@@ -294,19 +331,22 @@ export function toLocalSequence(
   }
 
   if (remote.steps) {
-    local.steps = remote.steps.map((step) => ({
-      id: step.id,
-      sequenceId: step.sequenceId,
-      emailTemplateName:
-        templateMap.get(step.emailTemplateId) ??
-        `unknown-template-${step.emailTemplateId}`,
-      position: step.position,
-      name: step.name,
-      type: step.type,
-      timing: step.timing,
-      createdAt: step.createdAt,
-      updatedAt: step.updatedAt,
-    }));
+    local.steps = remote.steps.map((step) => {
+      const localStep: LocalSequenceStepDto = {
+        id: step.id,
+        emailTemplateName:
+          templateMap.get(step.emailTemplateId) ??
+          `unknown-template-${step.emailTemplateId}`,
+        name: step.name,
+        type: step.type,
+        timing: stripNullTimingFields(step.timing),
+        createdAt: step.createdAt,
+      };
+      if (step.updatedAt != null) {
+        localStep.updatedAt = step.updatedAt;
+      }
+      return localStep;
+    });
   }
 
   return local;
@@ -359,7 +399,7 @@ export function toRemoteSequencePayload(
   }
 
   if (local.steps) {
-    payload.steps = local.steps.map((step) => {
+    payload.steps = local.steps.map((step, index) => {
       const templateId = templateMap.get(step.emailTemplateName);
       if (templateId === undefined)
         throw new Error(
@@ -369,7 +409,7 @@ export function toRemoteSequencePayload(
         id: step.id,
         emailTemplateId: templateId,
         name: step.name,
-        position: step.position,
+        position: index + 1,
         type: step.type,
         timing: step.timing,
       };

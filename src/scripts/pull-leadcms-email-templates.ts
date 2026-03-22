@@ -18,6 +18,7 @@ import { leadCMSDataService } from "../lib/data-service.js";
 import { syncTokenPath, type RemoteContext } from "../lib/remote-context.js";
 import type { MetadataMap } from "../lib/remote-context.js";
 import { getConfig } from "../lib/config.js";
+import { slugify } from "../lib/slugify.js";
 import { logger } from "../lib/logger.js";
 
 interface EmailTemplateSyncResponse {
@@ -141,18 +142,12 @@ async function pullEmailTemplateSync(syncToken?: string): Promise<EmailTemplateS
   };
 }
 
-function slugifySegment(value: string): string {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+
 
 function getGroupFolderName(template: EmailTemplateRemoteData): string {
   const groupName = template.emailGroup?.name;
   if (groupName) {
-    const slug = slugifySegment(groupName);
+    const slug = slugify(groupName);
     return slug || groupName;
   }
 
@@ -161,7 +156,7 @@ function getGroupFolderName(template: EmailTemplateRemoteData): string {
 
 function getTemplateFileName(template: EmailTemplateRemoteData): string {
   const name = template.name || "template";
-  const slug = slugifySegment(name);
+  const slug = slugify(name);
   if (slug) {
     return slug;
   }

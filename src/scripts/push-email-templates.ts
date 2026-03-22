@@ -74,13 +74,7 @@ interface EmailTemplateOperation {
   reason?: string;
 }
 
-function slugifySegment(value: string): string {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+
 
 async function isLocaleDirectory(dirPath: string, parentDir: string): Promise<boolean> {
   if (parentDir !== EMAIL_TEMPLATES_DIR) {
@@ -791,7 +785,7 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
     const groupLabel = (op.local?.groupFolder || 'ungrouped').padEnd(12);
     const localeLabel = `[${op.local?.locale || defaultLanguage}]`.padEnd(6);
     const nameLabel = op.local?.metadata?.name || 'unknown';
-    colorConsole.log(`        ${statusColors.created('new file:')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)}`);
+    colorConsole.log(`        ${statusColors.created('new:     ')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)}`);
     await printDiffPreview(op);
   }
 

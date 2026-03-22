@@ -26,6 +26,9 @@ importers:
       node-diff3:
         specifier: ^3.2.0
         version: 3.2.0
+      transliteration:
+        specifier: ^2.6.1
+        version: 2.6.1
     devDependencies:
       '@types/diff':
         specifier: ^7.0.2
@@ -1314,6 +1317,11 @@ packages:
 
   touch@3.1.1:
     resolution: {integrity: sha512-r0eojU4bI8MnHr8c5bNo7lJDdI2qXlWWJk6a9EAFG7vbhTjElYhBVS3/miuE0uOuoLdb8Mc/rVfsmm6eo5o9GA==}
+    hasBin: true
+
+  transliteration@2.6.1:
+    resolution: {integrity: sha512-hJ9BhrQAOnNTbpOr1MxsNjZISkn7ppvF5TKUeFmTE1mG4ZPD/XVxF0L0LUoIUCWmQyxH0gJpVtfYLAWf298U9w==}
+    engines: {node: '>=20.0.0'}
     hasBin: true
 
   tree-kill@1.2.2:
@@ -2968,6 +2976,8 @@ snapshots:
       is-number: 7.0.0
 
   touch@3.1.1: {}
+
+  transliteration@2.6.1: {}
 
   tree-kill@1.2.2: {}
 

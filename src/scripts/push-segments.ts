@@ -15,8 +15,8 @@ import type {
     SegmentDetailsDto,
     SegmentCreateDto,
     SegmentUpdateDto,
-    LocalAutomationFile,
 } from "../lib/automation-types.js";
+import { stripNullsAndEmptyArrays } from "../lib/automation-types.js";
 
 // ── Interfaces ──────────────────────────────────────────────────────────
 
@@ -67,8 +67,9 @@ async function readLocalSegments(): Promise<LocalSegmentFile[]> {
         const fullPath = path.join(SEGMENTS_DIR, entry.name);
         try {
             const raw = JSON.parse(await fs.readFile(fullPath, "utf8"));
+            // Support both flat format and legacy _entityType wrapper
             const segment: SegmentDetailsDto | undefined =
-                raw?._entityType === "segment" ? raw.data : undefined;
+                raw?._entityType === "segment" ? raw.data : (raw?.name ? raw : undefined);
             if (segment) {
                 results.push({ filePath: fullPath, segment });
             }
@@ -129,7 +130,9 @@ function toUpdatePayload(seg: SegmentDetailsDto): SegmentUpdateDto {
 function hasSegmentChanges(local: SegmentDetailsDto, remote: SegmentDetailsDto): boolean {
     if (local.name !== remote.name) return true;
     if ((local.description ?? null) !== (remote.description ?? null)) return true;
-    if (JSON.stringify(local.definition ?? null) !== JSON.stringify(remote.definition ?? null)) return true;
+    const localDef = JSON.stringify(stripNullsAndEmptyArrays(local.definition) ?? null);
+    const remoteDef = JSON.stringify(stripNullsAndEmptyArrays(remote.definition) ?? null);
+    if (localDef !== remoteDef) return true;
     return false;
 }
 
@@ -160,11 +163,8 @@ async function updateLocalFileAfterPush(
 
     try {
         const { contactCount, createdById, updatedById, createdByIp, createdByUserAgent, updatedByIp, updatedByUserAgent, contactIds, ...rest } = response;
-        const local: LocalAutomationFile<SegmentDetailsDto> = {
-            _entityType: "segment",
-            data: rest,
-        };
-        await fs.writeFile(filePath, JSON.stringify(local, null, 2) + "\n", "utf8");
+        const cleaned = stripNullsAndEmptyArrays(rest);
+        await fs.writeFile(filePath, JSON.stringify(cleaned, null, 2) + "\n", "utf8");
         logger.verbose(`[PUSH] Updated local file: ${filePath}`);
     } catch (e: any) {
         logger.verbose(`[PUSH] Failed to update local file ${filePath}: ${e.message}`);

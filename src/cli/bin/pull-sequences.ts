@@ -12,17 +12,18 @@ import { parseRemoteFlag } from './remote-flag.js';
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
 const remoteContext = parseRemoteFlag(args);
+const reset = args.includes('--reset');
 
 await resolveIdentity();
 
 const spinner = startSpinner('Pulling sequences from LeadCMS…');
-pullLeadCMSSequences(remoteContext)
-    .then(() => {
-        spinner.stop();
-        process.exit(0);
-    })
-    .catch((error: any) => {
-        spinner.fail('Sequence pull failed');
-        console.error(error.message);
-        process.exit(1);
-    });
+pullLeadCMSSequences({ reset, remoteContext })
+  .then(() => {
+    spinner.stop();
+    process.exit(0);
+  })
+  .catch((error: any) => {
+    spinner.fail('Sequence pull failed');
+    console.error(error.message);
+    process.exit(1);
+  });

@@ -16,6 +16,7 @@ import {
 import { leadCMSDataService } from "../lib/data-service.js";
 import { syncTokenPath, type RemoteContext } from "../lib/remote-context.js";
 import type { MetadataMap } from "../lib/remote-context.js";
+import { resetSequencesState } from "./pull-all.js";
 import { logger } from "../lib/logger.js";
 import type {
   SequenceDetailsDto,
@@ -25,20 +26,13 @@ import type {
   EmailTemplateIdNameMap,
 } from "../lib/automation-types.js";
 import { toLocalSequence } from "../lib/automation-types.js";
+import { slugify } from "../lib/slugify.js";
 
 interface SequenceSyncResult {
   items: SequenceDetailsDto[];
   deleted: number[];
   baseItems: Record<string, SequenceDetailsDto>;
   nextSyncToken: string;
-}
-
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }
 
 async function readFileOrUndefined(filePath: string): Promise<string | undefined> {
@@ -86,7 +80,7 @@ async function pullSequenceSync(syncToken?: string): Promise<SequenceSyncResult>
   while (true) {
     const url = new URL("/api/sequences/sync", leadCMSUrl);
     url.searchParams.set("filter[limit]", "100");
-    url.searchParams.set("include", "Steps");
+    url.searchParams.set("filter[include]", "steps");
     url.searchParams.set("syncToken", token);
     if (syncToken) {
       url.searchParams.set("includeBase", "true");
@@ -173,7 +167,30 @@ async function buildLookupMaps(): Promise<{ segmentMap: SegmentIdNameMap; templa
   return { segmentMap, templateMap };
 }
 
-export async function pullLeadCMSSequences(remoteCtx?: RemoteContext): Promise<void> {
+interface PullSequencesOptions {
+  /** When true, delete all local sequence files and sync token before pulling. */
+  reset?: boolean;
+  /** Optional remote context for multi-remote sync token isolation. */
+  remoteContext?: RemoteContext;
+}
+
+export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOptions | RemoteContext): Promise<void> {
+  // Support both old signature (RemoteContext) and new options object
+  let reset: boolean | undefined;
+  let remoteCtx: RemoteContext | undefined;
+  if (optionsOrRemoteCtx && 'name' in optionsOrRemoteCtx && 'url' in optionsOrRemoteCtx) {
+    remoteCtx = optionsOrRemoteCtx;
+  } else if (optionsOrRemoteCtx) {
+    const opts = optionsOrRemoteCtx as PullSequencesOptions;
+    reset = opts.reset;
+    remoteCtx = opts.remoteContext;
+  }
+
+  if (reset) {
+    console.log(`🔄 Resetting sequences state...\n`);
+    await resetSequencesState(remoteCtx);
+  }
+
   const lastSyncToken = await readSyncToken(remoteCtx);
   const { items, deleted, nextSyncToken } = await pullSequenceSync(lastSyncToken);
 

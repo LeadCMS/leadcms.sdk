@@ -14,13 +14,14 @@ import {
 } from "./leadcms-helpers.js";
 import { syncTokenPath, type RemoteContext } from "../lib/remote-context.js";
 import type { MetadataMap } from "../lib/remote-context.js";
-import { getConfig } from "../lib/config.js";
+import { resetSegmentsState } from "./pull-all.js";
 import { logger } from "../lib/logger.js";
+import { slugify } from "../lib/slugify.js";
 import type {
   SegmentDetailsDto,
   SegmentSyncResponse,
-  LocalAutomationFile,
 } from "../lib/automation-types.js";
+import { stripNullsAndEmptyArrays } from "../lib/automation-types.js";
 
 interface SegmentSyncResult {
   items: SegmentDetailsDto[];
@@ -29,13 +30,7 @@ interface SegmentSyncResult {
   nextSyncToken: string;
 }
 
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+
 
 async function readFileOrUndefined(filePath: string): Promise<string | undefined> {
   try {
@@ -150,19 +145,39 @@ function getSegmentFilePath(segment: SegmentDetailsDto): string {
 /** Strip runtime-only fields from a segment DTO for local persistence. */
 function toLocalSegment(segment: SegmentDetailsDto): SegmentDetailsDto {
   const { contactCount, createdById, updatedById, createdByIp, createdByUserAgent, updatedByIp, updatedByUserAgent, contactIds, ...rest } = segment;
-  return rest;
+  return stripNullsAndEmptyArrays(rest);
 }
 
 function saveSegmentFile(segment: SegmentDetailsDto): { filePath: string; content: string } {
   const filePath = getSegmentFilePath(segment);
-  const local: LocalAutomationFile<SegmentDetailsDto> = {
-    _entityType: "segment",
-    data: toLocalSegment(segment),
-  };
+  const local = toLocalSegment(segment);
   return { filePath, content: JSON.stringify(local, null, 2) + "\n" };
 }
 
-export async function pullLeadCMSSegments(remoteCtx?: RemoteContext): Promise<void> {
+interface PullSegmentsOptions {
+  /** When true, delete all local segment files and sync token before pulling. */
+  reset?: boolean;
+  /** Optional remote context for multi-remote sync token isolation. */
+  remoteContext?: RemoteContext;
+}
+
+export async function pullLeadCMSSegments(optionsOrRemoteCtx?: PullSegmentsOptions | RemoteContext): Promise<void> {
+  // Support both old signature (RemoteContext) and new options object
+  let reset: boolean | undefined;
+  let remoteCtx: RemoteContext | undefined;
+  if (optionsOrRemoteCtx && 'name' in optionsOrRemoteCtx && 'url' in optionsOrRemoteCtx) {
+    remoteCtx = optionsOrRemoteCtx;
+  } else if (optionsOrRemoteCtx) {
+    const opts = optionsOrRemoteCtx as PullSegmentsOptions;
+    reset = opts.reset;
+    remoteCtx = opts.remoteContext;
+  }
+
+  if (reset) {
+    console.log(`🔄 Resetting segments state...\n`);
+    await resetSegmentsState(remoteCtx);
+  }
+
   const lastSyncToken = await readSyncToken(remoteCtx);
   const { items, deleted, nextSyncToken } = await pullSegmentSync(lastSyncToken);
 
@@ -243,4 +258,4 @@ export async function pullLeadCMSSegments(remoteCtx?: RemoteContext): Promise<vo
   }
 }
 
-export { pullSegmentSync, buildSegmentIdIndex, getSegmentFilePath, toLocalSegment };
+export { pullSegmentSync, buildSegmentIdIndex, getSegmentFilePath, toLocalSegment, saveSegmentFile };
