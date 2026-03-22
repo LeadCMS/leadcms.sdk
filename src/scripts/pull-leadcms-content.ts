@@ -400,11 +400,19 @@ async function main(options: PullContentOptions = {}): Promise<void> {
 
   // Load defaultRemote's maps so frontmatter always reflects the default
   // remote's ids and timestamps, even when pulling from another remote.
+  // Derive defaultRemote stateDir from the current remote's stateDir (sibling
+  // directory) so it works regardless of process.cwd().
   let defaultMetadataMap: import('../lib/remote-context.js').MetadataMap | undefined;
   if (remoteCtx && !remoteCtx.isDefault && rcModule) {
     const cfg = getConfig();
     if (cfg.defaultRemote) {
-      const defaultCtx = rcModule.resolveRemote(cfg.defaultRemote, cfg);
+      const defaultStateDir = path.join(path.dirname(remoteCtx.stateDir), cfg.defaultRemote);
+      const defaultCtx: import('../lib/remote-context.js').RemoteContext = {
+        name: cfg.defaultRemote,
+        url: cfg.remotes?.[cfg.defaultRemote]?.url || '',
+        isDefault: true,
+        stateDir: defaultStateDir,
+      };
       defaultMetadataMap = await rcModule.readMetadataMap(defaultCtx);
     }
   }
