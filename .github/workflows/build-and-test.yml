@@ -2,9 +2,9 @@ name: Build & Test
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 permissions:
   contents: read
@@ -24,19 +24,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
+          cache: "pnpm"
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run build
         run: |
           echo "Building project..."
-          npm run build
+          pnpm run build
           if [ ! -f dist/cli/index.js ]; then
             echo "❌ Build completed but CLI file was not created!"
             ls -R dist/ || echo "dist/ directory doesn't exist"
@@ -57,7 +62,7 @@ jobs:
           echo "✅ CLI file verified and executable"
 
       - name: Run tests with coverage
-        run: npm run test:coverage
+        run: pnpm run test:coverage
 
       - name: Upload test results
         uses: dorny/test-reporter@v1
@@ -108,7 +113,7 @@ jobs:
 
       - name: Test package contents
         run: |
-          npm pack --dry-run
+          pnpm pack --dry-run
           echo "Verifying package structure..."
 
           # Check essential files exist
@@ -149,17 +154,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "pnpm"
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Check TypeScript
-        run: npx tsc --noEmit
+        run: pnpm tsc --noEmit
 
       - name: Verify package.json
         run: |
@@ -183,20 +193,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "pnpm"
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run build
-        run: npm run build
+        run: pnpm run build
 
       - name: Generate coverage
-        run: npm run test:coverage
+        run: pnpm run test:coverage
 
       - name: Coverage comment
         uses: romeovs/lcov-reporter-action@v0.3.1

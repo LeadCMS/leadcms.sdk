@@ -42,8 +42,8 @@ echo -e "${BLUE}📦 Current version: ${CURRENT_VERSION}${NC}"
 
 # Build and test
 echo -e "${BLUE}🔨 Building and testing...${NC}"
-npm run build
-npm test
+pnpm run build
+pnpm test
 
 # Bump version
 echo -e "${BLUE}📈 Bumping version (${VERSION_TYPE})...${NC}"
@@ -52,7 +52,7 @@ echo -e "${GREEN}📦 New version: ${NEW_VERSION}${NC}"
 
 # Update git
 echo -e "${BLUE}📝 Committing changes...${NC}"
-git add package.json package-lock.json
+git add package.json pnpm-lock.yaml
 git commit -m "$COMMIT_MESSAGE $NEW_VERSION"
 
 # Create and push tag

@@ -16,19 +16,19 @@
     "leadcms": "dist/cli/index.js"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=8.0.0"
+    "node": ">=18.0.0"
   },
+  "packageManager": "pnpm@10.28.2",
   "scripts": {
-    "build": "npm run clean && npm run compile",
+    "build": "pnpm run clean && pnpm run compile",
     "compile": "tsc && cp -r src/templates dist/ && chmod +x dist/cli/index.js dist/cli/bin/*.js",
     "clean": "rm -rf dist",
-    "dev": "npm run build && tsc --watch",
+    "dev": "pnpm run build && tsc --watch",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:cli": "npm run build && node dist/cli/index.js --help > /dev/null && echo '✅ CLI tests passed'",
-    "prepublishOnly": "npm run build",
+    "test:cli": "pnpm run build && node dist/cli/index.js --help > /dev/null && echo '✅ CLI tests passed'",
+    "prepublishOnly": "pnpm run build",
     "leadcms:pull": "node dist/scripts/pull-leadcms-content.js",
     "leadcms:push": "node dist/scripts/push-leadcms-content.js",
     "leadcms:status": "node dist/scripts/status-leadcms-content.js",

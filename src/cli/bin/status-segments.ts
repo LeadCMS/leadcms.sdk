@@ -15,11 +15,12 @@ initVerboseFromArgs(args);
 const remoteContext = parseRemoteFlag(args);
 
 const showDelete = args.includes('--delete');
+const showDetailedPreview = args.includes('--preview');
 
 await resolveIdentity();
 
 const spinner = startSpinner('Checking segment status…');
-statusSegments({ showDelete, remoteContext })
+statusSegments({ showDelete, showDetailedPreview, remoteContext })
     .then(() => spinner.stop())
     .catch((error: any) => {
         spinner.fail('Failed to check segment status');

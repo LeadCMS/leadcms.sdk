@@ -6,9 +6,10 @@
 import "dotenv/config";
 import fs from "fs/promises";
 import path from "path";
+import * as Diff from "diff";
 import { SEGMENTS_DIR } from "./leadcms-helpers.js";
 import { leadCMSDataService } from "../lib/data-service.js";
-import { colorConsole, statusColors } from "../lib/console-colors.js";
+import { colorConsole, statusColors, diffColors } from "../lib/console-colors.js";
 import { logger } from "../lib/logger.js";
 import type { RemoteContext, MetadataMap } from "../lib/remote-context.js";
 import type {
@@ -29,6 +30,7 @@ interface PushOptions {
 
 interface StatusOptions {
     showDelete?: boolean;
+    showDetailedPreview?: boolean;
     remoteContext?: RemoteContext;
 }
 
@@ -233,6 +235,62 @@ export async function buildSegmentStatus(options: StatusOptions = {}): Promise<S
     };
 }
 
+function printSegmentDiffPreview(op: SegmentOperation): void {
+    if (op.type !== "update" && op.type !== "conflict") return;
+    if (!op.local || !op.remote) return;
+
+    try {
+        const stripForDiff = (seg: SegmentDetailsDto) => {
+            const { id, createdAt, updatedAt, contactCount, createdById, updatedById, createdByIp, createdByUserAgent, updatedByIp, updatedByUserAgent, contactIds, ...rest } = seg as any;
+            return stripNullsAndEmptyArrays(rest);
+        };
+
+        const localJson = JSON.stringify(stripForDiff(op.local), null, 2);
+        const remoteJson = JSON.stringify(stripForDiff(op.remote), null, 2);
+
+        const diff = Diff.diffLines(remoteJson, localJson);
+        let addedLines = 0;
+        let removedLines = 0;
+
+        colorConsole.info("          Content diff preview:");
+        let previewLines = 0;
+        const maxPreviewLines = 10;
+
+        for (const part of diff) {
+            const lines = part.value.split("\n").filter((line: string) => line.trim() !== "");
+
+            if (part.added) {
+                addedLines += lines.length;
+                if (previewLines < maxPreviewLines) {
+                    for (const line of lines.slice(0, Math.min(lines.length, maxPreviewLines - previewLines))) {
+                        colorConsole.log(`          ${diffColors.added(`+ ${line}`)}`);
+                        previewLines++;
+                    }
+                }
+            } else if (part.removed) {
+                removedLines += lines.length;
+                if (previewLines < maxPreviewLines) {
+                    for (const line of lines.slice(0, Math.min(lines.length, maxPreviewLines - previewLines))) {
+                        colorConsole.log(`          ${diffColors.removed(`- ${line}`)}`);
+                        previewLines++;
+                    }
+                }
+            }
+
+            if (previewLines >= maxPreviewLines) break;
+        }
+
+        if (previewLines >= maxPreviewLines && (addedLines + removedLines > previewLines)) {
+            colorConsole.gray(`          ... (${addedLines + removedLines - previewLines} more changes)`);
+        }
+
+        colorConsole.log(`          ${colorConsole.green(`+${addedLines}`)} / ${colorConsole.red(`-${removedLines}`)} lines`);
+        colorConsole.log("");
+    } catch (error: any) {
+        logger.verbose(`[DIFF] Failed to generate diff for segment ${op.local?.name}: ${error.message}`);
+    }
+}
+
 export async function statusSegments(options: StatusOptions = {}): Promise<void> {
     if (!leadCMSDataService.isApiKeyConfigured()) {
         console.log("\n📊 LeadCMS Segment Status");
@@ -270,6 +328,10 @@ export async function statusSegments(options: StatusOptions = {}): Promise<void>
             case "delete":
                 colorConsole.log(`   ${statusColors.conflict("deleted:  ")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`);
                 break;
+        }
+
+        if (options.showDetailedPreview) {
+            printSegmentDiffPreview(op);
         }
     }
 
