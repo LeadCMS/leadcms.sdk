@@ -97,7 +97,6 @@ export interface SequenceStepCreateDto {
   id?: number | null;
   emailTemplateId: number;
   name: string;
-  position?: number | null;
   type?: "Email";
   timing: SequenceStepTiming;
 }
@@ -106,7 +105,6 @@ export interface SequenceStepDetailsDto {
   id: number;
   sequenceId: number;
   emailTemplateId: number;
-  position: number;
   name: string;
   type: "Email";
   timing: SequenceStepTiming;
@@ -236,7 +234,6 @@ export interface LocalSequenceDto {
   enrollment?: LocalSequenceEnrollmentConfig;
   utmParameters?: Utms;
   steps?: LocalSequenceStepDto[];
-  status?: "Draft" | "Active" | "Paused" | "Archived";
   createdAt?: string;
   updatedAt?: string;
 }
@@ -302,7 +299,6 @@ export function toLocalSequence(
     stopOnReply: remote.stopOnReply,
     useContactTimeZone: remote.useContactTimeZone,
     timeZone: remote.timeZone,
-    status: remote.status,
     createdAt: remote.createdAt,
   };
 
@@ -333,18 +329,13 @@ export function toLocalSequence(
   if (remote.steps) {
     local.steps = remote.steps.map((step) => {
       const localStep: LocalSequenceStepDto = {
-        id: step.id,
         emailTemplateName:
           templateMap.get(step.emailTemplateId) ??
           `unknown-template-${step.emailTemplateId}`,
         name: step.name,
         type: step.type,
         timing: stripNullTimingFields(step.timing),
-        createdAt: step.createdAt,
       };
-      if (step.updatedAt != null) {
-        localStep.updatedAt = step.updatedAt;
-      }
       return localStep;
     });
   }
@@ -406,10 +397,8 @@ export function toRemoteSequencePayload(
           `Unknown email template name: "${step.emailTemplateName}"`,
         );
       return {
-        id: step.id,
         emailTemplateId: templateId,
         name: step.name,
-        position: index + 1,
         type: step.type,
         timing: step.timing,
       };

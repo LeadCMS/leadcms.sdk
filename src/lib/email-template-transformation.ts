@@ -50,7 +50,7 @@ export function parseEmailTemplateFileContent(fileContent: string): EmailTemplat
  * Build HTML file content with YAML frontmatter embedded in a leading comment.
  */
 export function buildEmailTemplateFileContent(metadata: Record<string, any>, body: string): string {
-  const filteredMetadata = filterNullValues(metadata);
+  const filteredMetadata = filterEmptyArrays(filterNullValues(metadata));
   const yamlBlock = matter.stringify('', filteredMetadata).trim();
   const commentBlock = `<!--\n${yamlBlock}\n-->`;
 
@@ -119,6 +119,17 @@ function filterNullValues(obj: Record<string, any>): Record<string, any> {
     if (value !== null && value !== undefined) {
       filtered[key] = value;
     }
+  }
+  return filtered;
+}
+
+function filterEmptyArrays(obj: Record<string, any>): Record<string, any> {
+  const filtered: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (Array.isArray(value) && value.length === 0) {
+      continue;
+    }
+    filtered[key] = value;
   }
   return filtered;
 }

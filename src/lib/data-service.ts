@@ -36,6 +36,31 @@ function formatApiValidationErrors(errorResponse: any): string {
 }
 
 /**
+ * Extracts a readable API error message from common backend error shapes.
+ */
+function formatApiErrorTitle(errorResponse: any): string {
+  const data = errorResponse?.data;
+
+  if (typeof data?.title === 'string' && data.title.trim()) {
+    return data.title.trim();
+  }
+
+  if (typeof data?.detail === 'string' && data.detail.trim()) {
+    return data.detail.trim();
+  }
+
+  if (typeof data?.message === 'string' && data.message.trim()) {
+    return data.message.trim();
+  }
+
+  if (Array.isArray(data?.errors) && data.errors.length > 0) {
+    return String(data.errors[0]);
+  }
+
+  return 'Unknown validation error';
+}
+
+/**
  * Formats authentication errors with helpful guidance
  */
 function formatAuthenticationError(error: any): Error {
@@ -884,11 +909,18 @@ class LeadCMSDataService {
         throw formatAuthenticationError(error);
       }
 
-      if (error.response?.status === 422 && error.response?.data?.errors) {
-        const validationMessage = formatApiValidationErrors(error.response);
-        const enhancedError = new Error(`Validation failed${validationMessage}`);
+      if (error.response?.status === 422) {
+        const hasValidationMap = Boolean(error.response?.data?.errors);
+        const validationMessage = hasValidationMap
+          ? formatApiValidationErrors(error.response)
+          : formatApiErrorTitle(error.response);
+        const enhancedError = hasValidationMap
+          ? new Error(`Validation failed${validationMessage}`)
+          : new Error(`Validation failed: ${validationMessage}`);
         (enhancedError as any).status = 422;
-        (enhancedError as any).validationErrors = error.response.data.errors;
+        if (hasValidationMap) {
+          (enhancedError as any).validationErrors = error.response.data.errors;
+        }
         throw enhancedError;
       }
 
@@ -939,11 +971,18 @@ class LeadCMSDataService {
         throw formatAuthenticationError(error);
       }
 
-      if (error.response?.status === 422 && error.response?.data?.errors) {
-        const validationMessage = formatApiValidationErrors(error.response);
-        const enhancedError = new Error(`Validation failed${validationMessage}`);
+      if (error.response?.status === 422) {
+        const hasValidationMap = Boolean(error.response?.data?.errors);
+        const validationMessage = hasValidationMap
+          ? formatApiValidationErrors(error.response)
+          : formatApiErrorTitle(error.response);
+        const enhancedError = hasValidationMap
+          ? new Error(`Validation failed${validationMessage}`)
+          : new Error(`Validation failed: ${validationMessage}`);
         (enhancedError as any).status = 422;
-        (enhancedError as any).validationErrors = error.response.data.errors;
+        if (hasValidationMap) {
+          (enhancedError as any).validationErrors = error.response.data.errors;
+        }
         throw enhancedError;
       }
 
@@ -1403,7 +1442,6 @@ class LeadCMSDataService {
           ...s,
           id: s.id ?? i + 1,
           sequenceId: 0,
-          position: s.position ?? i,
           type: s.type ?? 'Email' as const,
         })),
       };
@@ -1465,7 +1503,6 @@ class LeadCMSDataService {
           ...s,
           id: s.id ?? ('id' in s ? (s as any).id : i + 1),
           sequenceId: id,
-          position: s.position ?? ('position' in s ? (s as any).position : i),
           type: s.type ?? 'Email' as const,
         })),
       };

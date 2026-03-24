@@ -2,7 +2,7 @@
   "openapi": "3.0.1",
   "info": {
     "title": "LeadCMS API",
-    "version": "1.5.0.0"
+    "version": "1.5.6.0"
   },
   "paths": {
     "/api/accounts/{id}/comments": {
@@ -22217,418 +22217,6 @@
         }
       }
     },
-    "/api/sequences/{sequenceId}/steps": {
-      "get": {
-        "tags": [
-          "SequenceSteps"
-        ],
-        "parameters": [
-          {
-            "name": "sequenceId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SequenceStepDetailsDto"
-                  }
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SequenceStepDetailsDto"
-                  }
-                }
-              },
-              "text/csv": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SequenceStepDetailsDto"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "SequenceSteps"
-        ],
-        "parameters": [
-          {
-            "name": "sequenceId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SequenceStepCreateDto"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SequenceStepCreateDto"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/SequenceStepCreateDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SequenceStepDetailsDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SequenceStepDetailsDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "422": {
-            "description": "Client Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/sequences/{sequenceId}/steps/{stepId}": {
-      "get": {
-        "tags": [
-          "SequenceSteps"
-        ],
-        "parameters": [
-          {
-            "name": "sequenceId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "stepId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SequenceStepDetailsDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SequenceStepDetailsDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "SequenceSteps"
-        ],
-        "parameters": [
-          {
-            "name": "sequenceId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "stepId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SequenceStepUpdateDto"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SequenceStepUpdateDto"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/SequenceStepUpdateDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SequenceStepDetailsDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SequenceStepDetailsDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "422": {
-            "description": "Client Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "SequenceSteps"
-        ],
-        "parameters": [
-          {
-            "name": "sequenceId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "stepId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "422": {
-            "description": "Client Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/sequences/{sequenceId}/steps/reorder": {
-      "post": {
-        "tags": [
-          "SequenceSteps"
-        ],
-        "parameters": [
-          {
-            "name": "sequenceId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SequenceStepReorderDto"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SequenceStepReorderDto"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/SequenceStepReorderDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SequenceStepDetailsDto"
-                  }
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SequenceStepDetailsDto"
-                  }
-                }
-              },
-              "text/csv": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SequenceStepDetailsDto"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "422": {
-            "description": "Client Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/settings": {
       "post": {
         "tags": [
@@ -34167,6 +33755,17 @@
             "nullable": true,
             "example": "string"
           },
+          "attachments": {
+            "title": "Attachments",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "string1",
+              "string2"
+            ]
+          },
           "emailGroupId": {
             "title": "Email Group Id",
             "type": "integer",
@@ -34248,6 +33847,17 @@
             "type": "string",
             "nullable": true,
             "example": "string"
+          },
+          "attachments": {
+            "title": "Attachments",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "string1",
+              "string2"
+            ]
           },
           "emailGroupId": {
             "title": "Email Group Id",
@@ -34382,6 +33992,18 @@
             "type": "string",
             "nullable": true,
             "example": "string"
+          },
+          "attachments": {
+            "title": "Attachments",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "example": [
+              "string1",
+              "string2"
+            ]
           },
           "emailGroupId": {
             "title": "Email Group Id",
@@ -34744,6 +34366,18 @@
             "type": "string",
             "nullable": true,
             "example": "string"
+          },
+          "attachments": {
+            "title": "Attachments",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "example": [
+              "string1",
+              "string2"
+            ]
           },
           "emailGroupId": {
             "title": "Email Group Id",
@@ -38176,13 +37810,6 @@
             "type": "string",
             "example": "string"
           },
-          "position": {
-            "title": "Position",
-            "type": "integer",
-            "format": "int32",
-            "nullable": true,
-            "example": 1
-          },
           "type": {
             "title": "Type",
             "enum": [
@@ -38231,12 +37858,6 @@
           },
           "emailTemplateId": {
             "title": "Email Template Id",
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "position": {
-            "title": "Position",
             "type": "integer",
             "format": "int32",
             "example": 1
@@ -38299,23 +37920,6 @@
         },
         "additionalProperties": false
       },
-      "SequenceStepReorderDto": {
-        "required": [
-          "stepIds"
-        ],
-        "type": "object",
-        "properties": {
-          "stepIds": {
-            "title": "Step Ids",
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        },
-        "additionalProperties": false
-      },
       "SequenceStepTiming": {
         "type": "object",
         "properties": {
@@ -38339,28 +37943,6 @@
               "string1",
               "string2"
             ]
-          }
-        },
-        "additionalProperties": false
-      },
-      "SequenceStepUpdateDto": {
-        "type": "object",
-        "properties": {
-          "emailTemplateId": {
-            "title": "Email Template Id",
-            "type": "integer",
-            "format": "int32",
-            "nullable": true,
-            "example": 1
-          },
-          "name": {
-            "title": "Name",
-            "type": "string",
-            "nullable": true,
-            "example": "string"
-          },
-          "timing": {
-            "$ref": "#/components/schemas/SequenceStepTiming"
           }
         },
         "additionalProperties": false

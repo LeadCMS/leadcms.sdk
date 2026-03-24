@@ -74,6 +74,14 @@ interface EmailTemplateOperation {
   reason?: string;
 }
 
+function combineOperationReasons(...reasons: Array<string | undefined>): string | undefined {
+  const definedReasons = reasons.filter((reason): reason is string => Boolean(reason));
+  if (definedReasons.length === 0) {
+    return undefined;
+  }
+  return definedReasons.join('; ');
+}
+
 
 
 async function isLocaleDirectory(dirPath: string, parentDir: string): Promise<boolean> {
@@ -530,17 +538,14 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
 
   for (const local of localTemplates) {
     const resolvedGroupId = resolveEmailGroupId(local, groupIndex);
+    let pendingGroupCreationReason: string | undefined;
+
     if (resolvedGroupId != null) {
       local.metadata.emailGroupId = resolvedGroupId;
     } else {
       const groupName = getEffectiveGroupName(local);
       if (groupName) {
-        operations.push({
-          type: 'conflict',
-          local,
-          reason: `Email group '${groupName}' not found remotely (will be created on push)`,
-        });
-        continue;
+        pendingGroupCreationReason = `Email group '${groupName}' will be created on push`;
       }
     }
 
@@ -552,7 +557,12 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
     }));
 
     const requiredFields = ['name', 'subject', 'fromEmail', 'fromName', 'language', 'emailGroupId'];
-    const missingFields = requiredFields.filter(field => payload[field] === undefined || payload[field] === null || payload[field] === '');
+    const missingFields = requiredFields.filter(field => {
+      if (field === 'emailGroupId' && pendingGroupCreationReason) {
+        return false;
+      }
+      return payload[field] === undefined || payload[field] === null || payload[field] === '';
+    });
     if (missingFields.length > 0) {
       operations.push({
         type: 'conflict',
@@ -563,7 +573,7 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
     }
 
     if (!match) {
-      operations.push({ type: 'create', local });
+      operations.push({ type: 'create', local, reason: pendingGroupCreationReason });
       continue;
     }
 
@@ -590,7 +600,12 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
         continue;
       } else if (mergeAttempt.canMerge && !mergeAttempt.hasConflicts) {
         // Auto-merge would succeed — show as update
-        operations.push({ type: 'update', local, remote: match, reason: 'auto-merged' });
+        operations.push({
+          type: 'update',
+          local,
+          remote: match,
+          reason: combineOperationReasons('auto-merged', pendingGroupCreationReason),
+        });
       } else if (mergeAttempt.canMerge && mergeAttempt.hasConflicts) {
         operations.push({
           type: 'conflict',
@@ -611,7 +626,7 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
 
     const hasChanges = await hasTemplateChanges(local, match);
     if (hasChanges) {
-      operations.push({ type: 'update', local, remote: match });
+      operations.push({ type: 'update', local, remote: match, reason: pendingGroupCreationReason });
     }
   }
 
@@ -785,7 +800,8 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
     const groupLabel = (op.local?.groupFolder || 'ungrouped').padEnd(12);
     const localeLabel = `[${op.local?.locale || defaultLanguage}]`.padEnd(6);
     const nameLabel = op.local?.metadata?.name || 'unknown';
-    colorConsole.log(`        ${statusColors.created('new:     ')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)}`);
+    const reason = op.reason ? ` ${colorConsole.gray(`(${op.reason})`)}` : '';
+    colorConsole.log(`        ${statusColors.created('new:     ')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)}${reason}`);
     await printDiffPreview(op);
   }
 
@@ -794,8 +810,9 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
     const localeLabel = `[${op.local?.locale || defaultLanguage}]`.padEnd(6);
     const nameLabel = op.local?.metadata?.name || op.remote?.name || 'unknown';
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
-    const mergeHint = op.reason === 'auto-merged' ? colorConsole.gray('(auto-merged) ') : '';
-    colorConsole.log(`        ${statusColors.modified('modified:')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${mergeHint}${colorConsole.gray(idLabel)}`);
+    const mergeHint = op.reason?.includes('auto-merged') ? colorConsole.gray('(auto-merged) ') : '';
+    const note = op.reason && !op.reason.includes('auto-merged') ? ` ${colorConsole.gray(`(${op.reason})`)}` : '';
+    colorConsole.log(`        ${statusColors.modified('modified:')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${mergeHint}${colorConsole.gray(idLabel)}${note}`);
     await printDiffPreview(op);
   }
 

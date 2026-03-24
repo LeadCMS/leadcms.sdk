@@ -16,6 +16,7 @@ import {
 import { leadCMSDataService } from "../lib/data-service.js";
 import { syncTokenPath, type RemoteContext } from "../lib/remote-context.js";
 import type { MetadataMap } from "../lib/remote-context.js";
+import { getConfig } from "../lib/config.js";
 import { resetSequencesState } from "./pull-all.js";
 import { logger } from "../lib/logger.js";
 import type {
@@ -200,6 +201,23 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
     metadataMap = await rcModule.readMetadataMap(remoteCtx);
   }
 
+  // Load defaultRemote's maps so local files always reflect the default
+  // remote's ids and timestamps, even when pulling from another remote.
+  let defaultMetadataMap: MetadataMap | undefined;
+  if (remoteCtx && !remoteCtx.isDefault && rcModule) {
+    const cfg = getConfig();
+    if (cfg.defaultRemote) {
+      const defaultStateDir = path.join(path.dirname(remoteCtx.stateDir), cfg.defaultRemote);
+      const defaultCtx: import("../lib/remote-context.js").RemoteContext = {
+        name: cfg.defaultRemote,
+        url: cfg.remotes?.[cfg.defaultRemote]?.url || '',
+        isDefault: true,
+        stateDir: defaultStateDir,
+      };
+      defaultMetadataMap = await rcModule.readMetadataMap(defaultCtx);
+    }
+  }
+
   const idIndex = (items.length > 0 || deleted.length > 0)
     ? await buildSequenceIdIndex(SEQUENCES_DIR)
     : new Map<string, string>();
@@ -218,11 +236,18 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
 
   for (const sequence of items) {
     const idStr = sequence.id != null ? String(sequence.id) : undefined;
+    const stepCount = sequence.steps?.length ?? 0;
+
+    logger.verbose(`[PULL] Sequence "${sequence.name}" (${sequence.language}, id:${sequence.id ?? '?'}) — ${stepCount} step(s)`);
+    if (stepCount > 0) {
+      logger.verbose(`[PULL]   Step order: ${sequence.steps!.map(s => `${s.name} (id:${s.id})`).join(' → ')}`);
+    }
 
     // Update per-remote metadata
     if (remoteCtx && rcModule && metadataMap && sequence.id != null) {
-      rcModule.setSequenceRemoteId(metadataMap, sequence.name, sequence.id);
-      rcModule.setMetadataForSequence(metadataMap, sequence.name, {
+      const lang = sequence.language || 'en';
+      rcModule.setSequenceRemoteId(metadataMap, lang, sequence.name, sequence.id);
+      rcModule.setMetadataForSequence(metadataMap, lang, sequence.name, {
         id: sequence.id,
         createdAt: sequence.createdAt,
         updatedAt: sequence.updatedAt ?? undefined,
@@ -241,9 +266,31 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
     // Transform to local shape
     const localDto = toLocalSequence(sequence, segmentMap, templateMap);
 
+    // For non-default remotes, replace server-generated fields with the
+    // defaultRemote's values so local files always reflect prod ids/dates.
+    // The current remote's values are already stored in its per-remote maps.
+    let localToSave = localDto;
+    if (remoteCtx && !remoteCtx.isDefault) {
+      const { id: _id, createdAt: _ca, updatedAt: _ua, ...rest } = localDto;
+      const lang = sequence.language || 'en';
+      const name = sequence.name;
+      const defaultMeta = defaultMetadataMap?.sequences?.[lang]?.[name];
+      localToSave = {
+        ...(defaultMeta?.id != null ? { id: Number(defaultMeta.id) } : {}),
+        ...(defaultMeta?.createdAt ? { createdAt: defaultMeta.createdAt } : {}),
+        ...(defaultMeta?.updatedAt ? { updatedAt: defaultMeta.updatedAt } : {}),
+        ...rest,
+      } as LocalSequenceDto;
+    }
+
     const filePath = getSequenceFilePath(sequence);
-    const content = JSON.stringify(localDto, null, 2) + "\n";
+    const content = JSON.stringify(localToSave, null, 2) + "\n";
     await fs.mkdir(path.dirname(filePath), { recursive: true });
+
+    if (localToSave.steps?.length) {
+      logger.verbose(`[PULL]   Saved step order: ${localToSave.steps.map(s => s.name).join(' → ')}`);
+    }
+    logger.verbose(`[PULL]   → ${filePath}`);
 
     const existed = idStr ? idIndex.has(idStr) : false;
     await fs.writeFile(filePath, content, "utf8");

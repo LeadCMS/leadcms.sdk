@@ -23,7 +23,6 @@ function makeRemoteStep(overrides: Partial<SequenceStepDetailsDto> = {}): Sequen
     id: 5,
     sequenceId: 2,
     emailTemplateId: 10,
-    position: 1,
     name: 'Step 1',
     type: 'Email',
     timing: {
@@ -104,12 +103,6 @@ describe('toLocalSequence', () => {
     expect(local.steps![0]).not.toHaveProperty('sequenceId');
   });
 
-  it('should not include position in steps', () => {
-    const remote = makeRemoteSequence();
-    const local = toLocalSequence(remote, emptySegmentMap, idToName);
-    expect(local.steps![0]).not.toHaveProperty('position');
-  });
-
   it('should strip sendAt from timing when null', () => {
     const remote = makeRemoteSequence({
       steps: [makeRemoteStep({ timing: { delay: { value: 1, unit: 'days' }, sendAt: null, allowedWeekDays: null } })],
@@ -143,12 +136,37 @@ describe('toLocalSequence', () => {
     expect(local.steps![0]).not.toHaveProperty('updatedAt');
   });
 
-  it('should include updatedAt in steps when non-null', () => {
+  it('should omit updatedAt from steps (backend metadata is stripped)', () => {
     const remote = makeRemoteSequence({
       steps: [makeRemoteStep({ updatedAt: '2026-03-22T10:00:00Z' })],
     });
     const local = toLocalSequence(remote, emptySegmentMap, idToName);
-    expect(local.steps![0].updatedAt).toBe('2026-03-22T10:00:00Z');
+    expect(local.steps![0]).not.toHaveProperty('updatedAt');
+  });
+
+  it('should preserve natural step order from the API response', () => {
+    const idToNameLocal: EmailTemplateIdNameMap = new Map([
+      [20, 'tpl-1'], [21, 'tpl-2'], [22, 'tpl-3'], [23, 'tpl-4'], [24, 'tpl-5'],
+    ]);
+
+    // API returns steps in a specific order — IDs are NOT sequential because
+    // steps can be reordered (moved up/down) independently of creation order.
+    const remote = makeRemoteSequence({
+      steps: [
+        makeRemoteStep({ id: 20, emailTemplateId: 24, name: 'Step 5' }),
+        makeRemoteStep({ id: 16, emailTemplateId: 21, name: 'Step 2' }),
+        makeRemoteStep({ id: 17, emailTemplateId: 22, name: 'Step 3' }),
+        makeRemoteStep({ id: 15, emailTemplateId: 20, name: 'Step 1' }),
+        makeRemoteStep({ id: 19, emailTemplateId: 23, name: 'Step 4' }),
+      ],
+    });
+
+    const local = toLocalSequence(remote, emptySegmentMap, idToNameLocal);
+
+    // Must preserve exact API array order — no sorting by id or anything else
+    expect(local.steps!.map(s => s.name)).toEqual([
+      'Step 5', 'Step 2', 'Step 3', 'Step 1', 'Step 4',
+    ]);
   });
 
   it('should produce the expected clean shape for the example input', () => {
@@ -178,19 +196,19 @@ describe('toLocalSequence', () => {
       },
       steps: [
         {
-          id: 5, sequenceId: 2, emailTemplateId: 10, position: 1,
+          id: 5, sequenceId: 2, emailTemplateId: 10,
           name: 'Step 1', type: 'Email',
           timing: { delay: { value: 0, unit: 'days' }, sendAt: null, allowedWeekDays: null },
           createdAt: '2026-03-21T18:41:02Z', updatedAt: '2026-03-21T18:41:02Z',
         },
         {
-          id: 6, sequenceId: 2, emailTemplateId: 20, position: 2,
+          id: 6, sequenceId: 2, emailTemplateId: 20,
           name: 'Step 2', type: 'Email',
           timing: { delay: { value: 1, unit: 'days' }, sendAt: null, allowedWeekDays: null },
           createdAt: '2026-03-21T18:41:02Z', updatedAt: null,
         },
         {
-          id: 7, sequenceId: 2, emailTemplateId: 30, position: 3,
+          id: 7, sequenceId: 2, emailTemplateId: 30,
           name: 'Step 3', type: 'Email',
           timing: { delay: { value: 1, unit: 'days' }, sendAt: null, allowedWeekDays: null },
           createdAt: '2026-03-21T18:41:02Z', updatedAt: null,
@@ -204,11 +222,12 @@ describe('toLocalSequence', () => {
     expect(local).not.toHaveProperty('description');
     // No updatedAt at sequence level (was null)
     expect(local).not.toHaveProperty('updatedAt');
+    // Status is server-controlled — not saved locally
+    expect(local).not.toHaveProperty('status');
 
-    // Steps should not have sequenceId or position
+    // Steps should not have sequenceId
     for (const step of local.steps!) {
       expect(step).not.toHaveProperty('sequenceId');
-      expect(step).not.toHaveProperty('position');
     }
 
     // Steps should not have null timing fields
@@ -217,11 +236,17 @@ describe('toLocalSequence', () => {
       expect(step.timing).not.toHaveProperty('allowedWeekDays');
     }
 
-    // Step 1 has non-null updatedAt
-    expect(local.steps![0].updatedAt).toBe('2026-03-21T18:41:02Z');
-    // Steps 2 and 3 had null updatedAt — should be omitted
+    // Step 1 has non-null updatedAt but step metadata is stripped
+    expect(local.steps![0]).not.toHaveProperty('updatedAt');
+    // Steps 2 and 3 had null updatedAt — should also be omitted
     expect(local.steps![1]).not.toHaveProperty('updatedAt');
     expect(local.steps![2]).not.toHaveProperty('updatedAt');
+
+    // Step-level id and createdAt should also be stripped (remote-specific)
+    for (const step of local.steps!) {
+      expect(step).not.toHaveProperty('id');
+      expect(step).not.toHaveProperty('createdAt');
+    }
   });
 });
 
@@ -231,7 +256,7 @@ describe('toRemoteSequencePayload', () => {
   const { nameToId } = makeTemplateMaps();
   const { nameToId: segNameToId } = makeSegmentMaps();
 
-  it('should derive position from array index (1-based)', () => {
+  it('should preserve step order from local array', () => {
     const local: LocalSequenceDto = {
       name: 'Test Sequence',
       language: 'en',
@@ -244,9 +269,8 @@ describe('toRemoteSequencePayload', () => {
 
     const payload = toRemoteSequencePayload(local, segNameToId, nameToId);
 
-    expect(payload.steps![0].position).toBe(1);
-    expect(payload.steps![1].position).toBe(2);
-    expect(payload.steps![2].position).toBe(3);
+    expect(payload.steps!.map(s => s.name)).toEqual(['First', 'Second', 'Third']);
+    expect(payload.steps![0]).not.toHaveProperty('position');
   });
 
   it('should pass through timing fields as-is (including null-stripped version)', () => {

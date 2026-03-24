@@ -73,6 +73,34 @@ emailGroupId: 12
     expect(output).not.toContain('emailGroupId');
   });
 
+  it('omits empty attachments from serialized frontmatter', () => {
+    const remote = {
+      id: 5,
+      name: 'Welcome',
+      subject: 'Hello',
+      attachments: [],
+      bodyTemplate: '<body>Hi</body>',
+    };
+
+    const output = transformEmailTemplateRemoteToLocalFormat(remote);
+    expect(output).not.toContain('attachments:');
+  });
+
+  it('includes attachments in serialized frontmatter when present', () => {
+    const remote = {
+      id: 5,
+      name: 'Welcome',
+      subject: 'Hello',
+      attachments: ['media/email/file-1.pdf', 'media/email/file-2.pdf'],
+      bodyTemplate: '<body>Hi</body>',
+    };
+
+    const output = transformEmailTemplateRemoteToLocalFormat(remote);
+    expect(output).toContain('attachments:');
+    expect(output).toContain('- media/email/file-1.pdf');
+    expect(output).toContain('- media/email/file-2.pdf');
+  });
+
   it('formats local template for API with media path replacement', () => {
     const local = {
       metadata: {

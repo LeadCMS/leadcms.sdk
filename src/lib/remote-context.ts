@@ -350,7 +350,7 @@ export interface MetadataMap {
   emailTemplates?: Record<string, Record<string, MetadataEntry>>;
   comments?: Record<string, Record<string, MetadataEntry>>;
   segments?: Record<string, MetadataEntry>;
-  sequences?: Record<string, MetadataEntry>;
+  sequences?: Record<string, Record<string, MetadataEntry>>;
 }
 
 /** Read the metadata-map for a remote. Returns empty map if file doesn't exist. */
@@ -363,9 +363,12 @@ export async function readMetadataMap(ctx: RemoteContext): Promise<MetadataMap> 
     if (!parsed.comments) parsed.comments = {};
     if (!parsed.segments) parsed.segments = {};
     if (!parsed.sequences) parsed.sequences = {};
+    // Migrate old flat sequences format to nested (language → name)
+    migrateSequencesFormat(parsed);
     deduplicateSectionOnRead(parsed.content);
     deduplicateSectionOnRead(parsed.emailTemplates);
     deduplicateSectionOnRead(parsed.comments);
+    deduplicateSectionOnRead(parsed.sequences!);
     return parsed;
   } catch {
     return { content: {}, emailTemplates: {}, comments: {}, segments: {}, sequences: {} };
@@ -392,7 +395,7 @@ export async function writeMetadataMap(
       ? { segments: sortFlatMap(map.segments) }
       : {}),
     ...(map.sequences && Object.keys(map.sequences).length > 0
-      ? { sequences: sortFlatMap(map.sequences) }
+      ? { sequences: sortNestedMap(map.sequences) }
       : {}),
   };
   await fs.writeFile(
@@ -580,41 +583,87 @@ export function setMetadataForSegment(
 
 // ── Sequence helpers ──────────────────────────────────────────────────
 
-/** Look up the remote ID for a sequence by name. */
+/** Look up the remote ID for a sequence by language + name. */
 export function lookupSequenceRemoteId(
   map: MetadataMap,
+  language: string,
   name: string,
 ): number | string | undefined {
-  return map.sequences?.[name]?.id;
+  return map.sequences?.[language]?.[name]?.id;
 }
 
-/** Set the remote ID for a sequence (keyed by name). */
+/** Set the remote ID for a sequence (keyed by language + name).
+ *  Enforces uniqueness: if another key already maps to the same ID,
+ *  that stale mapping is removed so only one key owns each ID.
+ */
 export function setSequenceRemoteId(
   map: MetadataMap,
+  language: string,
   name: string,
   id: number | string,
 ): void {
   if (!map.sequences) map.sequences = {};
-  deduplicateFlatSection(map.sequences, name, id);
-  const current = map.sequences[name] || {};
-  map.sequences[name] = { ...current, id };
+  deduplicateSection(map.sequences, language, name, id);
+  if (!map.sequences[language]) map.sequences[language] = {};
+  const current = map.sequences[language][name] || {};
+  map.sequences[language][name] = { ...current, id };
 }
 
 /** Get metadata for a sequence from the map. */
 export function getMetadataForSequence(
   map: MetadataMap,
+  language: string,
   name: string,
 ): MetadataEntry | undefined {
-  return map.sequences?.[name];
+  return map.sequences?.[language]?.[name];
 }
 
 /** Set metadata for a sequence in the map. */
 export function setMetadataForSequence(
   map: MetadataMap,
+  language: string,
   name: string,
   entry: MetadataEntry,
 ): void {
   if (!map.sequences) map.sequences = {};
-  const current = map.sequences[name] || {};
-  map.sequences[name] = { ...current, ...stripNulls(entry) };
+  if (!map.sequences[language]) map.sequences[language] = {};
+  const current = map.sequences[language][name] || {};
+  map.sequences[language][name] = { ...current, ...stripNulls(entry) };
+}
+
+/**
+ * Migrate old flat sequences format (Record<string, MetadataEntry>)
+ * to nested format (Record<string, Record<string, MetadataEntry>>).
+ * Old format had sequence names directly as keys; new format nests under language.
+ * Unknown-language entries are placed under "_migrated" until next pull.
+ */
+function migrateSequencesFormat(parsed: MetadataMap): void {
+  if (!parsed.sequences || typeof parsed.sequences !== 'object') return;
+  // Check if any first-level value is a MetadataEntry (has 'id' directly)
+  const entries = Object.entries(parsed.sequences);
+  const needsMigration = entries.some(
+    ([, val]) => val != null && typeof val === 'object' && 'id' in val && !isNestedRecord(val),
+  );
+  if (!needsMigration) return;
+
+  const migrated: Record<string, Record<string, MetadataEntry>> = {};
+  for (const [key, val] of entries) {
+    if (val != null && typeof val === 'object' && 'id' in val && !isNestedRecord(val)) {
+      // Old flat entry — move under "_migrated" language bucket
+      if (!migrated['_migrated']) migrated['_migrated'] = {};
+      migrated['_migrated'][key] = val as MetadataEntry;
+    } else {
+      // Already nested entry — keep as-is
+      migrated[key] = val as Record<string, MetadataEntry>;
+    }
+  }
+  parsed.sequences = migrated;
+}
+
+/** Check if a value looks like a nested record (has sub-objects, not a MetadataEntry). */
+function isNestedRecord(val: any): boolean {
+  if (typeof val !== 'object' || val === null) return false;
+  // MetadataEntry has id/createdAt/updatedAt string/number fields
+  // Nested record has sub-objects as values
+  return Object.values(val).some(v => typeof v === 'object' && v !== null);
 }
