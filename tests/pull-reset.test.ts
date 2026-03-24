@@ -291,6 +291,98 @@ describe('resetCommentsState', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════════
+//  Entity-specific reset: metadata section cleanup
+// ════════════════════════════════════════════════════════════════════════
+
+describe('resetContentState with remoteCtx clears content metadata', () => {
+  const stateDir = path.join(tmpRoot, '.leadcms', 'remotes', 'default');
+  const metadataPath = path.join(stateDir, 'metadata.json');
+
+  const remoteCtx = {
+    name: 'default',
+    url: 'https://test.leadcms.com',
+    apiKey: 'test-key',
+    isDefault: true,
+    stateDir,
+  };
+
+  it('should clear content section from metadata.json while preserving other sections', async () => {
+    await fsPromises.mkdir(stateDir, { recursive: true });
+    await fsPromises.writeFile(metadataPath, JSON.stringify({
+      content: { en: { 'old-article': { id: 1, createdAt: '2026-01-01T00:00:00Z' } } },
+      segments: { 'my-segment': { id: 10, createdAt: '2026-01-01T00:00:00Z' } },
+      sequences: { en: { 'my-sequence': { id: 20, createdAt: '2026-01-01T00:00:00Z' } } },
+    }));
+
+    await resetContentState(remoteCtx);
+
+    const metadata = JSON.parse(await fsPromises.readFile(metadataPath, 'utf8'));
+    expect(metadata.content).toEqual({});
+    expect(metadata.segments).toEqual({ 'my-segment': { id: 10, createdAt: '2026-01-01T00:00:00Z' } });
+    expect(metadata.sequences).toEqual({ en: { 'my-sequence': { id: 20, createdAt: '2026-01-01T00:00:00Z' } } });
+  });
+});
+
+describe('resetCommentsState with remoteCtx clears comments metadata', () => {
+  const stateDir = path.join(tmpRoot, '.leadcms', 'remotes', 'default');
+  const metadataPath = path.join(stateDir, 'metadata.json');
+
+  const remoteCtx = {
+    name: 'default',
+    url: 'https://test.leadcms.com',
+    apiKey: 'test-key',
+    isDefault: true,
+    stateDir,
+  };
+
+  it('should clear comments section from metadata.json while preserving other sections', async () => {
+    await fsPromises.mkdir(stateDir, { recursive: true });
+    await fsPromises.writeFile(metadataPath, JSON.stringify({
+      content: { en: { 'my-article': { id: 1, createdAt: '2026-01-01T00:00:00Z' } } },
+      comments: { en: { 'key1': { id: 5, createdAt: '2026-01-01T00:00:00Z' } } },
+      sequences: { en: { 'my-sequence': { id: 20, createdAt: '2026-01-01T00:00:00Z' } } },
+    }));
+
+    await resetCommentsState(remoteCtx);
+
+    const metadata = JSON.parse(await fsPromises.readFile(metadataPath, 'utf8'));
+    expect(metadata.comments).toBeUndefined();
+    expect(metadata.content).toEqual({ en: { 'my-article': { id: 1, createdAt: '2026-01-01T00:00:00Z' } } });
+    expect(metadata.sequences).toEqual({ en: { 'my-sequence': { id: 20, createdAt: '2026-01-01T00:00:00Z' } } });
+  });
+});
+
+describe('resetEmailTemplatesState with remoteCtx clears email templates metadata', () => {
+  const stateDir = path.join(tmpRoot, '.leadcms', 'remotes', 'default');
+  const metadataPath = path.join(stateDir, 'metadata.json');
+
+  const remoteCtx = {
+    name: 'default',
+    url: 'https://test.leadcms.com',
+    apiKey: 'test-key',
+    isDefault: true,
+    stateDir,
+  };
+
+  it('should clear emailTemplates section from metadata.json while preserving other sections', async () => {
+    await fsPromises.mkdir(stateDir, { recursive: true });
+    await fsPromises.writeFile(metadataPath, JSON.stringify({
+      content: { en: { 'my-article': { id: 1, createdAt: '2026-01-01T00:00:00Z' } } },
+      emailTemplates: { en: { 'welcome': { id: 3, createdAt: '2026-01-01T00:00:00Z' } } },
+      segments: { 'my-segment': { id: 10, createdAt: '2026-01-01T00:00:00Z' } },
+    }));
+
+    const { resetEmailTemplatesState } = await import('../src/scripts/pull-all');
+    await resetEmailTemplatesState(remoteCtx);
+
+    const metadata = JSON.parse(await fsPromises.readFile(metadataPath, 'utf8'));
+    expect(metadata.emailTemplates).toBeUndefined();
+    expect(metadata.content).toEqual({ en: { 'my-article': { id: 1, createdAt: '2026-01-01T00:00:00Z' } } });
+    expect(metadata.segments).toEqual({ 'my-segment': { id: 10, createdAt: '2026-01-01T00:00:00Z' } });
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
 //  pull --reset integration tests
 // ════════════════════════════════════════════════════════════════════════
 

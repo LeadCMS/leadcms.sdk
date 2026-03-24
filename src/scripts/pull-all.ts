@@ -12,7 +12,7 @@ import { leadCMSUrl, leadCMSApiKey } from "./leadcms-helpers.js";
 import { setCMSConfig, isContentSupported, isMediaSupported, isCommentsSupported, isEmailTemplatesSupported, isSettingsSupported, isSegmentsSupported, isSequencesSupported } from "../lib/cms-config-types.js";
 import { getConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
-import { syncTokenPath, metadataMapPath } from "../lib/remote-context.js";
+import { syncTokenPath, metadataMapPath, readMetadataMap, writeMetadataMap } from "../lib/remote-context.js";
 import type { RemoteContext } from "../lib/remote-context.js";
 
 interface PullAllOptions {
@@ -103,6 +103,14 @@ async function resetContentState(remoteCtx?: RemoteContext): Promise<void> {
       await fs.unlink(syncTokenPath(remoteCtx, 'content'));
       logger.verbose(`   ✓ Removed per-remote content sync token (${remoteCtx.name})`);
     } catch { /* not found — ok */ }
+
+    // Clear content metadata section
+    try {
+      const map = await readMetadataMap(remoteCtx);
+      map.content = {};
+      await writeMetadataMap(remoteCtx, map);
+      logger.verbose(`   ✓ Cleared content metadata (${remoteCtx.name})`);
+    } catch { /* metadata file may not exist */ }
   }
 }
 
@@ -136,6 +144,7 @@ async function resetMediaState(remoteCtx?: RemoteContext): Promise<void> {
   }
 }
 
+
 /**
  * Reset comments directory and its sync tokens.
  * Deletes comment files, the sync token inside commentsDir, and any legacy sync tokens.
@@ -162,6 +171,14 @@ async function resetCommentsState(remoteCtx?: RemoteContext): Promise<void> {
       await fs.unlink(syncTokenPath(remoteCtx, 'comments'));
       logger.verbose(`   ✓ Removed per-remote comments sync token (${remoteCtx.name})`);
     } catch { /* not found — ok */ }
+
+    // Clear comments metadata section
+    try {
+      const map = await readMetadataMap(remoteCtx);
+      map.comments = {};
+      await writeMetadataMap(remoteCtx, map);
+      logger.verbose(`   ✓ Cleared comments metadata (${remoteCtx.name})`);
+    } catch { /* metadata file may not exist */ }
   }
 }
 
@@ -184,6 +201,14 @@ async function resetEmailTemplatesState(remoteCtx?: RemoteContext): Promise<void
       await fs.unlink(syncTokenPath(remoteCtx, 'email-templates'));
       logger.verbose(`   ✓ Removed per-remote email-templates sync token (${remoteCtx.name})`);
     } catch { /* not found — ok */ }
+
+    // Clear email templates metadata section
+    try {
+      const map = await readMetadataMap(remoteCtx);
+      map.emailTemplates = {};
+      await writeMetadataMap(remoteCtx, map);
+      logger.verbose(`   ✓ Cleared email templates metadata (${remoteCtx.name})`);
+    } catch { /* metadata file may not exist */ }
   }
 }
 
@@ -217,6 +242,14 @@ async function resetSegmentsState(remoteCtx?: RemoteContext): Promise<void> {
       await fs.unlink(syncTokenPath(remoteCtx, 'segments'));
       logger.verbose(`   ✓ Removed per-remote segments sync token (${remoteCtx.name})`);
     } catch { /* not found — ok */ }
+
+    // Clear segments metadata section
+    try {
+      const map = await readMetadataMap(remoteCtx);
+      map.segments = {};
+      await writeMetadataMap(remoteCtx, map);
+      logger.verbose(`   ✓ Cleared segments metadata (${remoteCtx.name})`);
+    } catch { /* metadata file may not exist */ }
   }
 }
 
@@ -237,6 +270,14 @@ async function resetSequencesState(remoteCtx?: RemoteContext): Promise<void> {
       await fs.unlink(syncTokenPath(remoteCtx, 'sequences'));
       logger.verbose(`   ✓ Removed per-remote sequences sync token (${remoteCtx.name})`);
     } catch { /* not found — ok */ }
+
+    // Clear sequences metadata section
+    try {
+      const map = await readMetadataMap(remoteCtx);
+      map.sequences = {};
+      await writeMetadataMap(remoteCtx, map);
+      logger.verbose(`   ✓ Cleared sequences metadata (${remoteCtx.name})`);
+    } catch { /* metadata file may not exist */ }
   }
 }
 
