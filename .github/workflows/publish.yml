@@ -47,8 +47,13 @@ jobs:
 
       - name: Create package info
         run: |
-          echo "## 📦 Published Package" >> $GITHUB_STEP_SUMMARY
-          echo "- **Package:** $(node -p \"require('./package.json').name\")" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version:** $(node -p \"require('./package.json').version\")" >> $GITHUB_STEP_SUMMARY
-          echo "- **Registry:** https://www.npmjs.com/package/$(node -p \"require('./package.json').name\")" >> $GITHUB_STEP_SUMMARY
-          echo "- **Install:** \`pnpm add $(node -p \"require('./package.json').name\")\`" >> $GITHUB_STEP_SUMMARY
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+
+          {
+            echo "## 📦 Published Package"
+            echo "- **Package:** ${PACKAGE_NAME}"
+            echo "- **Version:** ${PACKAGE_VERSION}"
+            echo "- **Registry:** https://www.npmjs.com/package/${PACKAGE_NAME}"
+            echo '- **Install:** `pnpm add '"${PACKAGE_NAME}"'`'
+          } >> "$GITHUB_STEP_SUMMARY"
