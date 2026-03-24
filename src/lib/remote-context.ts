@@ -68,7 +68,7 @@ export function resolveRemote(
     return {
       name: "default",
       url: (cfg.url || "").replace(/\/+$/, ""),
-      apiKey: cfg.apiKey ?? resolveApiKeyFromEnv("default", true),
+      apiKey: cfg.apiKey ?? resolveApiKeyFromEnv("default"),
       isDefault: true,
       stateDir: path.resolve(REMOTES_BASE_DIR, "default"),
     };
@@ -104,7 +104,7 @@ export function resolveRemote(
   return {
     name,
     url: (remote.url || "").replace(/\/+$/, ""),
-    apiKey: resolveApiKeyFromEnv(name, isDefault),
+    apiKey: resolveApiKeyFromEnv(name),
     isDefault,
     stateDir: path.resolve(REMOTES_BASE_DIR, name),
   };
@@ -147,24 +147,19 @@ function resolveRemoteByUrl(cfg: LeadCMSConfig): string | undefined {
  *
  * Resolution order:
  * 1. `LEADCMS_REMOTE_{NAME}_API_KEY` (remote-specific)
- * 2. `LEADCMS_API_KEY` (generic fallback, only for the default remote)
+ * 2. `LEADCMS_API_KEY` (generic fallback for any remote)
  *
  * NOTE: NEXT_PUBLIC_* prefixed keys are intentionally NOT checked here.
  * API keys must never be exposed to the browser via NEXT_PUBLIC_.
  */
 function resolveApiKeyFromEnv(
   remoteName: string,
-  isDefault: boolean,
 ): string | undefined {
   const envName = remoteName.toUpperCase().replace(/-/g, "_");
   const remoteSpecific = process.env[`LEADCMS_REMOTE_${envName}_API_KEY`];
   if (remoteSpecific) return remoteSpecific;
 
-  if (isDefault) {
-    return process.env.LEADCMS_API_KEY;
-  }
-
-  return undefined;
+  return process.env.LEADCMS_API_KEY;
 }
 
 // ── Path helpers ──────────────────────────────────────────────────────

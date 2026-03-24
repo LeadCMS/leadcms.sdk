@@ -156,13 +156,13 @@ describe('remote-context', () => {
       expect(ctx.apiKey).toBe('dev-secret-key');
     });
 
-    it('does NOT fall back to LEADCMS_API_KEY for non-default remotes', () => {
+    it('falls back to LEADCMS_API_KEY for non-default remotes when no remote-specific key exists', () => {
       process.env.LEADCMS_API_KEY = 'generic-key';
       delete process.env.LEADCMS_REMOTE_DEVELOP_API_KEY;
       const config = makeMultiRemoteConfig();
       const ctx = resolveRemote('develop', config);
 
-      expect(ctx.apiKey).toBeUndefined();
+      expect(ctx.apiKey).toBe('generic-key');
     });
 
     it('falls back to LEADCMS_API_KEY for the default remote', () => {
