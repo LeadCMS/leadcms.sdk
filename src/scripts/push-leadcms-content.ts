@@ -21,6 +21,7 @@ import { formatContentForAPI } from '../lib/content-api-formatting.js';
 import { colorConsole, statusColors, diffColors } from '../lib/console-colors.js';
 import { logger } from '../lib/logger.js';
 import type { RemoteContext, MetadataMap } from '../lib/remote-context.js';
+import { hasMergeConflictMarkers } from '../lib/merge-conflict-detector.js';
 
 // Extended interfaces for local operations
 interface LocalContentItem extends BaseContentItem {
@@ -62,6 +63,7 @@ export interface PushOptions {
   dryRun?: boolean;       // Show API calls without executing them
   allowDelete?: boolean;  // Allow deletion of remote content not present locally
   showDelete?: boolean;   // Show deletion operations in status output
+  allowConflictMarkers?: boolean; // Allow pushing content with unresolved merge conflict markers
   /** Remote context for multi-remote support. When provided, API calls target this remote. */
   remoteContext?: import("../lib/remote-context.js").RemoteContext;
 }
@@ -260,6 +262,25 @@ async function parseContentFile(filePath: string, locale: string, baseContentDir
     body,
     isLocal: true
   };
+}
+
+/**
+ * Check local content files for unresolved merge conflict markers.
+ * Returns the list of items that contain conflicts.
+ */
+async function validateMergeConflicts(localContent: LocalContentItem[]): Promise<LocalContentItem[]> {
+  const conflicted: LocalContentItem[] = [];
+  for (const item of localContent) {
+    try {
+      const raw = await fs.readFile(item.filePath, 'utf-8');
+      if (hasMergeConflictMarkers(raw)) {
+        conflicted.push(item);
+      }
+    } catch {
+      // If we can't read the file, skip conflict check — other validation will catch it
+    }
+  }
+  return conflicted;
 }
 
 /**
@@ -1110,7 +1131,7 @@ async function showDryRunOperations(operations: ContentOperations): Promise<void
  * Main function for push command
  */
 async function pushMain(options: PushOptions = {}): Promise<void> {
-  const { statusOnly = false, targetId, targetSlug, statusFilter, showDetailedPreview = false, dryRun = false, allowDelete = false, showDelete = false, remoteContext: remoteCtx } = options;
+  const { statusOnly = false, targetId, targetSlug, statusFilter, showDetailedPreview = false, dryRun = false, allowDelete = false, showDelete = false, allowConflictMarkers = false, remoteContext: remoteCtx } = options;
 
   let force = options.force ?? false;
 
@@ -1146,6 +1167,30 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     if (localContent.length === 0) {
       console.log('📂 No local content found. Nothing to sync.');
       return;
+    }
+
+    // Validate content for unresolved merge conflict markers
+    if (!allowConflictMarkers) {
+      const conflictFiles = await validateMergeConflicts(localContent);
+      if (conflictFiles.length > 0) {
+        for (const item of conflictFiles) {
+          colorConsole.error(`❌ Merge conflict markers detected: ${colorConsole.highlight(item.filePath)}`);
+        }
+        colorConsole.error(`\n⚠️  ${conflictFiles.length} file(s) skipped due to unresolved merge conflicts.`);
+        colorConsole.error('   Resolve the conflicts or use --allow-conflict-markers to override.\n');
+        // Remove conflicted files from the push set
+        const conflictPaths = new Set(conflictFiles.map(f => f.filePath));
+        const originalCount = localContent.length;
+        const cleaned = localContent.filter(c => !conflictPaths.has(c.filePath));
+        // Replace contents in-place so downstream code sees the filtered list
+        localContent.length = 0;
+        localContent.push(...cleaned);
+        if (localContent.length === 0) {
+          console.log('📂 No pushable content remaining after merge-conflict filtering.');
+          return;
+        }
+        logger.verbose(`[PUSH] Filtered out ${originalCount - localContent.length} file(s) with merge conflicts`);
+      }
     }
 
     // Fetch remote content types for content transformation
@@ -1551,6 +1596,9 @@ export { isYes };
 export { normalizeFormat };
 export { fetchRemoteContent };
 export { displayDetailedDiff };
+export { validateMergeConflicts };
+// Re-export merge conflict detector for testing
+export { hasMergeConflictMarkers } from '../lib/merge-conflict-detector.js';
 // Re-export formatContentForAPI from utility module for testing
 export { formatContentForAPI } from '../lib/content-api-formatting.js';
 // Re-export the new comparison function for consistency
