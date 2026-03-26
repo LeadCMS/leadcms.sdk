@@ -238,6 +238,25 @@ export interface LocalSequenceDto {
   updatedAt?: string;
 }
 
+export function orderLocalSequenceFields(sequence: LocalSequenceDto): LocalSequenceDto {
+  return {
+    ...(sequence.id != null ? { id: sequence.id } : {}),
+    ...(sequence.createdAt != null ? { createdAt: sequence.createdAt } : {}),
+    ...(sequence.updatedAt != null ? { updatedAt: sequence.updatedAt } : {}),
+    name: sequence.name,
+    language: sequence.language,
+    ...(sequence.stopOnReply !== undefined ? { stopOnReply: sequence.stopOnReply } : {}),
+    ...(sequence.useContactTimeZone !== undefined
+      ? { useContactTimeZone: sequence.useContactTimeZone }
+      : {}),
+    ...(sequence.timeZone !== undefined ? { timeZone: sequence.timeZone } : {}),
+    ...(sequence.description != null ? { description: sequence.description } : {}),
+    ...(sequence.enrollment != null ? { enrollment: sequence.enrollment } : {}),
+    ...(sequence.utmParameters != null ? { utmParameters: sequence.utmParameters } : {}),
+    ...(sequence.steps != null ? { steps: sequence.steps } : {}),
+  };
+}
+
 // ── Transformation helpers ─────────────────────────────────────────────
 
 /** Map of segment ID → name, used for pull transformations. */
@@ -340,7 +359,7 @@ export function toLocalSequence(
     });
   }
 
-  return local;
+  return orderLocalSequenceFields(local);
 }
 
 /**

@@ -97,6 +97,28 @@ describe('toLocalSequence', () => {
     expect(local.updatedAt).toBe('2026-03-22T10:00:00Z');
   });
 
+  it('should keep id, createdAt, updatedAt at the top-level in stable order', () => {
+    const remote = makeRemoteSequence({
+      description: 'A real description',
+      updatedAt: '2026-03-22T10:00:00Z',
+    });
+
+    const local = toLocalSequence(remote, emptySegmentMap, idToName);
+
+    expect(Object.keys(local)).toEqual([
+      'id',
+      'createdAt',
+      'updatedAt',
+      'name',
+      'language',
+      'stopOnReply',
+      'useContactTimeZone',
+      'timeZone',
+      'description',
+      'steps',
+    ]);
+  });
+
   it('should not include sequenceId in steps', () => {
     const remote = makeRemoteSequence();
     const local = toLocalSequence(remote, emptySegmentMap, idToName);

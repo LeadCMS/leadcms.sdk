@@ -26,7 +26,7 @@ import type {
   SegmentIdNameMap,
   EmailTemplateIdNameMap,
 } from "../lib/automation-types.js";
-import { toLocalSequence } from "../lib/automation-types.js";
+import { orderLocalSequenceFields, toLocalSequence } from "../lib/automation-types.js";
 import { slugify } from "../lib/slugify.js";
 
 interface SequenceSyncResult {
@@ -275,12 +275,12 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
       const lang = sequence.language || 'en';
       const name = sequence.name;
       const defaultMeta = defaultMetadataMap?.sequences?.[lang]?.[name];
-      localToSave = {
+      localToSave = orderLocalSequenceFields({
         ...(defaultMeta?.id != null ? { id: Number(defaultMeta.id) } : {}),
         ...(defaultMeta?.createdAt ? { createdAt: defaultMeta.createdAt } : {}),
         ...(defaultMeta?.updatedAt ? { updatedAt: defaultMeta.updatedAt } : {}),
         ...rest,
-      } as LocalSequenceDto;
+      } as LocalSequenceDto);
     }
 
     const filePath = getSequenceFilePath(sequence);

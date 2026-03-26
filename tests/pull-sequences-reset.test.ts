@@ -154,6 +154,14 @@ describe('pullLeadCMSSequences with reset', () => {
     // Sync token should be the fresh one, not the stale one
     const token = await fsPromises.readFile(syncTokenPath, 'utf8');
     expect(token).toBe('fresh-token');
+
+    const savedSequence = await fsPromises.readFile(
+      path.join(sequencesDir, 'fresh-sequence.json'),
+      'utf8',
+    );
+    expect(savedSequence).toContain(
+      '{\n  "id": 1,\n  "createdAt": "2026-03-01T00:00:00Z",\n  "name": "Fresh Sequence"',
+    );
   });
 
   it('should NOT clear state when reset is false/absent', async () => {
