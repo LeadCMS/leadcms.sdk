@@ -72,6 +72,10 @@ export type { MergeResult } from './lib/content-merge.js';
 // Export only public comment tree types (functions are exported from cms.js)
 export type { CommentTreeNode, CommentTreeOptions, CommentStatistics, CommentSortOrder } from './lib/comment-utils.js';
 
+// SEO metadata types and utilities
+export type { FrontmatterSeo, SeoMetadataDto, SeoDefaultSources } from './lib/seo-utils.js';
+export { computeSeoDefaults, apiSeoToFrontmatter, frontmatterSeoToApi, DEFAULT_ROBOTS } from './lib/seo-utils.js';
+
 // LeadCMS SDK - Framework-agnostic content management
 //
 // Core functions for accessing LeadCMS content:

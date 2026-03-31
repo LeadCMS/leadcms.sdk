@@ -92,6 +92,7 @@ interface ContentType {
   uid: string;
   format: string;
   name: string;
+  supportsSEO?: boolean;
 }
 
 export interface UserIdentity {

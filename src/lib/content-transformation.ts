@@ -8,6 +8,7 @@ import matter from 'gray-matter';
 import fs from 'fs/promises';
 import path from 'path';
 import { getConfig } from './config.js';
+import { apiSeoToFrontmatter, type SeoMetadataDto, type SeoDefaultSources } from './seo-utils.js';
 
 export interface RemoteContentData {
   id?: number | string;
@@ -125,6 +126,9 @@ function transformToMDXFormatForComparison(remote: RemoteContentData, localConte
   // The timestamp check in matchContent already prevents false positives from
   // server-side field additions (remote newer → conflict, not comparison).
 
+  // Convert API SEO metadata to frontmatter format, stripping default values
+  processSeoForFrontmatter(mergedFrontmatter);
+
   // Filter out null and undefined values to prevent them from appearing in frontmatter
   const filteredFrontmatter = filterNullValues(mergedFrontmatter);
 
@@ -179,6 +183,9 @@ function transformToJSONFormatForComparison(remote: RemoteContentData, localCont
     }
   }
 
+  // Convert API SEO metadata to frontmatter format, stripping default values
+  processSeoForFrontmatter(merged);
+
   // Filter out null and undefined values to prevent them from appearing in JSON
   const filteredMerged = filterNullValues(merged);
 
@@ -213,6 +220,9 @@ function transformToMDXFormat(remote: RemoteContentData): string {
   // Only exclude truly internal fields, not user content fields like timestamps
   const systemFields = ['body', 'isLocal'];
   systemFields.forEach(field => delete mergedFrontmatter[field]);
+
+  // Convert API SEO metadata to frontmatter format, stripping default values
+  processSeoForFrontmatter(mergedFrontmatter);
 
   // Filter out null and undefined values to prevent them from appearing in frontmatter
   const filteredFrontmatter = filterNullValues(mergedFrontmatter);
@@ -256,6 +266,9 @@ function transformToJSONFormat(remote: RemoteContentData): string {
       merged[k] = replaceApiMediaPaths(v);
     }
   }
+
+  // Convert API SEO metadata to frontmatter format, stripping default values
+  processSeoForFrontmatter(merged);
 
   // Filter out null and undefined values to prevent them from appearing in JSON
   const filteredMerged = filterNullValues(merged);
@@ -341,6 +354,31 @@ export function hasContentDifferences(content1: string, content2: string): boole
  */
 export function stripTimestampMetadata(content: string): string {
   return content.replace(/^\s*"?(id|createdAt|updatedAt)"?\s*:.*$/gm, '').replace(/\n{3,}/g, '\n\n');
+}
+
+/**
+ * Process SEO metadata in a frontmatter object.
+ * Converts the API SeoMetadataDto to human-friendly frontmatter format,
+ * stripping values that match computed defaults from content fields.
+ * Mutates the object: replaces or removes the `seo` key.
+ */
+function processSeoForFrontmatter(frontmatter: Record<string, any>): void {
+  const apiSeo: SeoMetadataDto | null | undefined = frontmatter.seo;
+  // Always remove the raw API seo object; we'll re-add the cleaned version if needed
+  delete frontmatter.seo;
+
+  if (!apiSeo || typeof apiSeo !== 'object') return;
+
+  const sources: SeoDefaultSources = {
+    title: frontmatter.title,
+    description: frontmatter.description,
+    coverImageUrl: frontmatter.coverImageUrl,
+  };
+
+  const fmSeo = apiSeoToFrontmatter(apiSeo, sources);
+  if (fmSeo) {
+    frontmatter.seo = fmSeo;
+  }
 }
 
 /**

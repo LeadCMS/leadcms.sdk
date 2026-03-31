@@ -10,6 +10,7 @@ import type { RemoteContext } from "../lib/remote-context.js";
 interface ContentType {
   uid: string;
   format: string;
+  supportsSEO?: boolean;
 }
 
 interface ContentItem {

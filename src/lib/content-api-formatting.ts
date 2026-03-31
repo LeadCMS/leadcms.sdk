@@ -4,6 +4,7 @@
 
 import matter from 'gray-matter';
 import { replaceLocalMediaPaths } from './content-transformation.js';
+import { frontmatterSeoToApi, type FrontmatterSeo, type SeoDefaultSources } from './seo-utils.js';
 
 // Standard API fields that should be sent as top-level properties
 // Based on the actual LeadCMS API schema
@@ -12,7 +13,8 @@ const STANDARD_API_FIELDS = new Set([
   'createdAt', 'updatedAt', 'publishedAt',
   'description', 'coverImageUrl', 'coverImageAlt',
   'author', 'category', 'tags', 'allowComments',
-  'source', 'translationKey', 'translations'
+  'source', 'translationKey', 'translations',
+  'seo'
 ]);
 
 /**
@@ -86,6 +88,21 @@ export function formatContentForAPI(localContent: any) {
   delete contentData.id;
   delete contentData.createdAt;
   delete contentData.updatedAt;
+
+  // Convert frontmatter SEO format to API SeoMetadataDto format
+  if (contentData.seo && typeof contentData.seo === 'object') {
+    const sources: SeoDefaultSources = {
+      title: contentData.title,
+      description: contentData.description,
+      coverImageUrl: contentData.coverImageUrl,
+    };
+    const apiSeo = frontmatterSeoToApi(contentData.seo as FrontmatterSeo, sources);
+    if (apiSeo) {
+      contentData.seo = apiSeo;
+    } else {
+      delete contentData.seo;
+    }
+  }
 
   // Apply backward URL transformation: convert /media/ paths back to /api/media/ for API
   return replaceLocalMediaPaths(contentData);

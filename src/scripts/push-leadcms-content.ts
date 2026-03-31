@@ -559,6 +559,7 @@ interface ContentTypeDefaults {
   format: 'MDX' | 'JSON';
   supportsCoverImage: boolean;
   supportsComments: boolean;
+  supportsSEO: boolean;
 }
 
 /**
@@ -589,7 +590,13 @@ function analyzeContentTypeFromFiles(localContent: LocalContentItem[], typeName:
     supportsComments = filesOfType.some(c => c.metadata?.allowComments === true);
   }
 
-  return { format, supportsCoverImage, supportsComments };
+  // Check if any file has SEO metadata in frontmatter
+  const supportsSEO = filesOfType.some(c => {
+    const seo = c.metadata?.seo;
+    return seo && typeof seo === 'object' && Object.keys(seo).length > 0;
+  });
+
+  return { format, supportsCoverImage, supportsComments, supportsSEO };
 }
 
 /**
@@ -627,7 +634,8 @@ async function validateContentTypes(
           name: type.charAt(0).toUpperCase() + type.slice(1),
           format: defaults.format,
           supportsCoverImage: defaults.supportsCoverImage,
-          supportsComments: defaults.supportsComments
+          supportsComments: defaults.supportsComments,
+          supportsSEO: defaults.supportsSEO
         };
         colorConsole.log(JSON.stringify(sampleContentTypeData, null, 2));
         colorConsole.success(`✅ Would create content type: ${colorConsole.highlight(type)}`);
@@ -685,11 +693,12 @@ async function createContentTypeInteractive(typeName: string, localContent: Loca
   const defaults = analyzeContentTypeFromFiles(localContent, typeName);
 
   colorConsole.progress(`\n📝 Creating content type: ${colorConsole.highlight(typeName)}`);
-  colorConsole.info(`   Auto-detected defaults: format=${defaults.format}, coverImage=${defaults.supportsCoverImage ? 'yes' : 'no'}, comments=${defaults.supportsComments ? 'yes' : 'no'}`);
+  colorConsole.info(`   Auto-detected defaults: format=${defaults.format}, coverImage=${defaults.supportsCoverImage ? 'yes' : 'no'}, comments=${defaults.supportsComments ? 'yes' : 'no'}, seo=${defaults.supportsSEO ? 'yes' : 'no'}`);
 
   const formatDefault = defaults.format;
   const coverDefaultLabel = defaults.supportsCoverImage ? 'y' : 'n';
   const commentsDefaultLabel = defaults.supportsComments ? 'y' : 'n';
+  const seoDefaultLabel = defaults.supportsSEO ? 'y' : 'n';
 
   const formatInput = await question(`What format should '${colorConsole.highlight(typeName)}' use? (MDX/JSON) [${formatDefault}]: `);
   const format = normalizeFormat(formatInput, formatDefault);
@@ -700,12 +709,16 @@ async function createContentTypeInteractive(typeName: string, localContent: Loca
   const commentsInput = await question(`Should '${colorConsole.highlight(typeName)}' support comments? (y/n) [${commentsDefaultLabel}]: `);
   const supportsComments = commentsInput.trim() === '' ? defaults.supportsComments : isYes(commentsInput);
 
+  const seoInput = await question(`Should '${colorConsole.highlight(typeName)}' support SEO metadata? (y/n) [${seoDefaultLabel}]: `);
+  const supportsSEO = seoInput.trim() === '' ? defaults.supportsSEO : isYes(seoInput);
+
   const contentTypeData = {
     uid: typeName,
     name: typeName.charAt(0).toUpperCase() + typeName.slice(1),
     format,
     supportsCoverImage,
-    supportsComments
+    supportsComments,
+    supportsSEO
   };
 
   if (dryRun) {
