@@ -97,7 +97,8 @@ async function pushAll() {
       dryRun,
       force,
       scopeUid,
-      allowDelete
+      allowDelete,
+      remoteContext,
     });
 
     console.log('\n🔖 Pushing segments...');

@@ -380,6 +380,15 @@ class LeadCMSDataService {
     logger.verbose(`[DATA SERVICE] Configured for remote: ${this.baseURL}`);
   }
 
+  /**
+   * Return the currently configured base URL.
+   * Triggers lazy initialization if not yet initialized.
+   */
+  getBaseUrl(): string | undefined {
+    this._initialize();
+    return this.baseURL;
+  }
+
   private initializeMockData(): void {
     const scenario = MOCK_SCENARIOS[this.mockScenario];
     if (!scenario) {

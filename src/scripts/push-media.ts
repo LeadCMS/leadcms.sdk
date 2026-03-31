@@ -8,6 +8,7 @@ import { leadCMSDataService, MediaItem } from '../lib/data-service.js';
 import { loadConfig, LeadCMSConfig } from '../lib/config.js';
 import { success, error, warn, info } from '../lib/console-colors.js';
 import { logger } from '../lib/logger.js';
+import type { RemoteContext } from '../lib/remote-context.js';
 
 /**
  * Represents a local media file with metadata
@@ -125,8 +126,7 @@ function getDefaultDependencies(): Required<MediaDependencies> {
       });
     },
     downloadMediaFile: async (location: string) => {
-      const config = loadConfig();
-      const baseUrl = (config.url || '').replace(/\/$/, '');
+      const baseUrl = (leadCMSDataService.getBaseUrl() || '').replace(/\/$/, '');
       const fullUrl = location.startsWith('http') ? location : `${baseUrl}${location}`;
       const res = await axios.get(fullUrl, { responseType: 'arraybuffer' });
       return Buffer.from(res.data);
@@ -743,6 +743,8 @@ export interface PushMediaOptions {
   allowDelete?: boolean;
   /** Custom media directory path (absolute). If not provided, uses config.mediaDir */
   mediaDir?: string;
+  /** Remote context for multi-remote support. When provided, API calls target this remote. */
+  remoteContext?: RemoteContext;
 }
 
 /**
@@ -757,6 +759,12 @@ export async function pushMedia(
   if (!leadCMSDataService.isApiKeyConfigured()) {
     console.log('⏭️  Media push requires authentication — no API key configured, skipping');
     return { operations: [], executed: { successful: 0, failed: 0, skipped: 0 }, errors: [] };
+  }
+
+  // Configure data service for the target remote (multi-remote support)
+  if (options.remoteContext) {
+    leadCMSDataService.configureForRemote(options.remoteContext.url, options.remoteContext.apiKey);
+    logger.verbose(`[PUSH] Using remote "${options.remoteContext.name}" (${options.remoteContext.url})`);
   }
 
   const defaults = getDefaultDependencies();

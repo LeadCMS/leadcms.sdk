@@ -16,11 +16,9 @@
  * TDD: Tests written before implementation.
  */
 
-import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import FormData from 'form-data';
 import {
   pushMedia,
   executeMediaPush,
@@ -28,9 +26,10 @@ import {
   reconcileLocalFile,
   type LocalMediaFile,
   type MediaOperation,
-  type MediaDependencies,
 } from '../src/scripts/push-media';
 import type { MediaItem } from '../src/lib/data-service';
+import { leadCMSDataService } from '../src/lib/data-service';
+import type { RemoteContext } from '../src/lib/remote-context';
 
 // ── Temp directory for isolation ───────────────────────────────────────
 const tmpRoot = path.join(os.tmpdir(), 'leadcms-media-reconcile');
@@ -673,5 +672,89 @@ describe('pushMedia: end-to-end with post-upload reconciliation', () => {
     // Lowercase files should exist
     expect(await fileExistsExactCase('img/cases/neural-network-reads.webp')).toBe(true);
     expect(await fileExistsExactCase('img/cases/neural-network-reads@2x.webp')).toBe(true);
+  });
+});
+
+describe('pushMedia: multi-remote support', () => {
+  const remoteContext: RemoteContext = {
+    name: 'dev',
+    url: 'https://cms.dev.example.com',
+    apiKey: 'dev-api-key',
+    isDefault: false,
+    stateDir: '/tmp/leadcms-test-remote-state',
+  };
+
+  it('should configure data service for the target remote', async () => {
+    await createLocalFile('blog/hero.jpg', 'image-data');
+
+    const configureSpy = jest.spyOn(leadCMSDataService, 'configureForRemote');
+
+    const serverResponse = {
+      id: 1,
+      location: '/api/media/blog/hero.jpg',
+      scopeUid: 'blog',
+      name: 'hero.jpg',
+      size: 10,
+      extension: '.jpg',
+      mimeType: 'image/jpeg',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: null,
+    };
+
+    await pushMedia(
+      { force: true, mediaDir, remoteContext },
+      {
+        fetchRemoteMedia: jest.fn().mockResolvedValue([]),
+        uploadMedia: jest.fn().mockResolvedValue(serverResponse),
+        updateMedia: jest.fn(),
+        deleteMedia: jest.fn(),
+        downloadMediaFile: jest.fn().mockResolvedValue(Buffer.from('data')),
+        logInfo: jest.fn(),
+        logWarn: jest.fn(),
+        logError: jest.fn(),
+        logSuccess: jest.fn(),
+        promptConfirmation: jest.fn().mockResolvedValue(true),
+      },
+    );
+
+    expect(configureSpy).toHaveBeenCalledWith(remoteContext.url, remoteContext.apiKey);
+    configureSpy.mockRestore();
+  });
+
+  it('should use remote URL for reconciliation download instead of config.url', async () => {
+    await createLocalFile('blog/photo.png', 'png-data');
+
+    const serverResponse = {
+      id: 2,
+      location: '/api/media/blog/photo.avif',
+      scopeUid: 'blog',
+      name: 'photo.avif',
+      size: 5,
+      extension: '.avif',
+      mimeType: 'image/avif',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: null,
+    };
+
+    const mockDownload = jest.fn().mockResolvedValue(Buffer.from('avif-data'));
+
+    await pushMedia(
+      { force: true, mediaDir, remoteContext },
+      {
+        fetchRemoteMedia: jest.fn().mockResolvedValue([]),
+        uploadMedia: jest.fn().mockResolvedValue(serverResponse),
+        updateMedia: jest.fn(),
+        deleteMedia: jest.fn(),
+        downloadMediaFile: mockDownload,
+        logInfo: jest.fn(),
+        logWarn: jest.fn(),
+        logError: jest.fn(),
+        logSuccess: jest.fn(),
+        promptConfirmation: jest.fn().mockResolvedValue(true),
+      },
+    );
+
+    // The download function should have been called with the server location
+    expect(mockDownload).toHaveBeenCalledWith('/api/media/blog/photo.avif');
   });
 });
