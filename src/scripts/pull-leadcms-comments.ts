@@ -392,7 +392,7 @@ async function searchAndDeleteInTypeDirectory(
     if (filtered.length < originalLength) {
       // Found and removed the comment
       await saveCommentsForEntity(commentableType, commentableId, language, filtered);
-      logger.verbose(`Deleted comment ${commentId} from ${commentableType}/${commentableId} (${language})`);
+      console.log(`   🗑️  Comment #${commentId} from ${commentableType}/${commentableId} (${language}) (deleted on remote)`);
       return; // Comment found and deleted, we're done
     }
   }

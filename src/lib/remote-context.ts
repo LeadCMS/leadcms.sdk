@@ -304,6 +304,86 @@ export function setRemoteId(
   map.content[language][slug] = { ...current, id };
 }
 
+/**
+ * Reverse-lookup: find the content entry (language + slug) that owns a given
+ * remote ID.  Returns undefined when the ID is not tracked in the map.
+ */
+/**
+ * Generic reverse-lookup: given an ID, find which key owns it in a nested
+ * metadata section (language → key → entry).
+ * Used by content (slug), emailTemplates (name), sequences (name).
+ */
+export function findInNestedMetadataSection(
+  section: Record<string, Record<string, MetadataEntry>> | undefined,
+  id: number | string,
+): { language: string; key: string } | undefined {
+  if (!section) return undefined;
+  const idStr = String(id);
+  for (const [lang, entries] of Object.entries(section)) {
+    for (const [key, entry] of Object.entries(entries)) {
+      if (entry.id != null && String(entry.id) === idStr) {
+        return { language: lang, key };
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Generic reverse-lookup: given an ID, find which key owns it in a flat
+ * metadata section (key → entry).
+ * Used by segments.
+ */
+export function findInFlatMetadataSection(
+  section: Record<string, MetadataEntry> | undefined,
+  id: number | string,
+): { key: string } | undefined {
+  if (!section) return undefined;
+  const idStr = String(id);
+  for (const [key, entry] of Object.entries(section)) {
+    if (entry.id != null && String(entry.id) === idStr) {
+      return { key };
+    }
+  }
+  return undefined;
+}
+
+/** Reverse-lookup: find the content slug + language that owns a remote ID. */
+export function findContentByRemoteId(
+  map: MetadataMap,
+  id: number | string,
+): { language: string; slug: string } | undefined {
+  const result = findInNestedMetadataSection(map.content, id);
+  return result ? { language: result.language, slug: result.key } : undefined;
+}
+
+/** Reverse-lookup: find the email template name + language that owns a remote ID. */
+export function findEmailTemplateByRemoteId(
+  map: MetadataMap,
+  id: number | string,
+): { language: string; name: string } | undefined {
+  const result = findInNestedMetadataSection(map.emailTemplates, id);
+  return result ? { language: result.language, name: result.key } : undefined;
+}
+
+/** Reverse-lookup: find the segment name that owns a remote ID. */
+export function findSegmentByRemoteId(
+  map: MetadataMap,
+  id: number | string,
+): { name: string } | undefined {
+  const result = findInFlatMetadataSection(map.segments, id);
+  return result ? { name: result.key } : undefined;
+}
+
+/** Reverse-lookup: find the sequence name + language that owns a remote ID. */
+export function findSequenceByRemoteId(
+  map: MetadataMap,
+  id: number | string,
+): { language: string; name: string } | undefined {
+  const result = findInNestedMetadataSection(map.sequences, id);
+  return result ? { language: result.language, name: result.key } : undefined;
+}
+
 /** Look up the remote ID for an email template. */
 export function lookupEmailTemplateRemoteId(
   map: MetadataMap,

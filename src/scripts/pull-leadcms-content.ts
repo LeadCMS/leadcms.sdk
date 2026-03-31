@@ -295,6 +295,32 @@ async function deleteContentFilesById(index: ContentIdIndex, idStr: string): Pro
 }
 
 /**
+ * Delete content files for a given slug and language by computing the expected
+ * file paths. Tries both .mdx and .json extensions since the content type may
+ * have changed. Used for non-default remotes where frontmatter IDs belong to
+ * the default remote and cannot be used for indexed lookups.
+ */
+async function deleteContentFilesBySlug(
+  contentDir: string,
+  slug: string,
+  language: string,
+  cfgDefaultLanguage: string,
+): Promise<void> {
+  const dir = language === cfgDefaultLanguage ? contentDir : path.join(contentDir, language);
+  for (const ext of ['.mdx', '.json']) {
+    const filePath = path.join(dir, `${slug}${ext}`);
+    try {
+      await fs.unlink(filePath);
+      logger.verbose(`Deleted: ${filePath}`);
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') {
+        console.warn(`Warning: Could not delete ${filePath}:`, err.message);
+      }
+    }
+  }
+}
+
+/**
  * Recursively search for content files with a given ID and delete them.
  * Used during sync to remove locally-cached content that was deleted remotely.
  *
@@ -423,6 +449,14 @@ async function main(options: PullContentOptions = {}): Promise<void> {
     if (content && typeof content === "object") {
       const idStr = content.id != null ? String(content.id) : undefined;
 
+      // For non-default remotes, look up the old slug *before* updating
+      // metadata so we can clean up old files on slug/type/language changes.
+      // setRemoteId deduplicates (removes the old entry), so we must read first.
+      let oldContentEntry: { language: string; slug: string } | undefined;
+      if (remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap && content.id != null) {
+        oldContentEntry = rcModule.findContentByRemoteId(metadataMap, content.id);
+      }
+
       // Update per-remote metadata with this content item's data
       if (remoteCtx && rcModule && metadataMap && content.slug && content.language) {
         if (content.id != null) {
@@ -475,7 +509,28 @@ async function main(options: PullContentOptions = {}): Promise<void> {
       // changes — the old file at the previous path is cleaned up before the
       // new version is written at the (potentially different) new path.
       if (idStr != null) {
-        await deleteContentFilesById(contentIdIndex, idStr);
+        if (remoteCtx && !remoteCtx.isDefault && oldContentEntry) {
+          // Non-default remote: delete by slug/language from this remote's
+          // metadata.  Frontmatter IDs belong to the default remote and must
+          // not be used for indexed lookups.
+          const oldSlugChanged = oldContentEntry.slug !== content.slug;
+          const oldLangChanged = oldContentEntry.language !== (content.language || defaultLanguage);
+          if (oldSlugChanged || oldLangChanged) {
+            console.log(`   🗑️  Removing old content file: ${oldContentEntry.language}/${oldContentEntry.slug} (renamed to ${content.language || defaultLanguage}/${content.slug})`);
+          }
+          await deleteContentFilesBySlug(
+            CONTENT_DIR,
+            oldContentEntry.slug,
+            oldContentEntry.language,
+            getConfig().defaultLanguage,
+          );
+        } else if (!remoteCtx || remoteCtx.isDefault) {
+          const oldPaths = contentIdIndex.get(idStr);
+          if (oldPaths && oldPaths.length > 0 && !oldPaths.some(p => p === expectedPath)) {
+            console.log(`   🗑️  Removing old content file: ${oldPaths.map(p => path.relative(CONTENT_DIR, p)).join(', ')} (slug, type, or language changed)`);
+          }
+          await deleteContentFilesById(contentIdIndex, idStr);
+        }
       }
 
       // Try three-way merge if we have a base version and local file exists
@@ -544,18 +599,41 @@ async function main(options: PullContentOptions = {}): Promise<void> {
     if (conflictCount > 0) console.log(`   ⚠️  Conflicts (need manual resolution): ${conflictCount}`);
   }
 
-  // Persist per-remote metadata after processing all content items
-  if (remoteCtx && rcModule && metadataMap && items.length > 0) {
-    await rcModule.writeMetadataMap(remoteCtx, metadataMap);
-    logger.verbose(`[PULL] Updated metadata-map for remote "${remoteCtx.name}"`);
-  }
-
   // Remove deleted content files from all language directories
   if (deleted.length > 0) {
     console.log(`🗑️  Removing deleted content files (${deleted.length})...`);
   }
   for (const id of deleted) {
-    await deleteContentFilesById(contentIdIndex, String(id));
+    if (remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap) {
+      // Non-default remote: resolve the slug via this remote's metadata so
+      // we never accidentally delete a file whose frontmatter ID happens to
+      // match a different remote's ID.
+      const entry = rcModule.findContentByRemoteId(metadataMap, id);
+      if (entry) {
+        console.log(`   🗑️  ${entry.language}/${entry.slug} (deleted on remote)`);
+        await deleteContentFilesBySlug(CONTENT_DIR, entry.slug, entry.language, getConfig().defaultLanguage);
+        // Clean up the metadata entry for this deleted content
+        if (metadataMap.content[entry.language]) {
+          delete metadataMap.content[entry.language][entry.slug];
+          if (Object.keys(metadataMap.content[entry.language]).length === 0) {
+            delete metadataMap.content[entry.language];
+          }
+        }
+      }
+      // If not found in metadata, skip — this ID was never synced to this remote locally
+    } else {
+      const paths = contentIdIndex.get(String(id));
+      if (paths && paths.length > 0) {
+        console.log(`   🗑️  ${paths.map(p => path.relative(CONTENT_DIR, p)).join(', ')} (deleted on remote)`);
+      }
+      await deleteContentFilesById(contentIdIndex, String(id));
+    }
+  }
+
+  // Persist per-remote metadata after processing content items and/or deletions
+  if (remoteCtx && rcModule && metadataMap && (items.length > 0 || deleted.length > 0)) {
+    await rcModule.writeMetadataMap(remoteCtx, metadataMap);
+    logger.verbose(`[PULL] Updated metadata-map for remote "${remoteCtx.name}"`);
   }
 
   if (items.length === 0 && deleted.length === 0) {
@@ -584,7 +662,7 @@ export { main as pullLeadCMSContent };
 
 // Export internal functions for testing
 export { findAndDeleteContentFile };
-export { buildContentIdIndex, deleteContentFilesById, extractContentId };
+export { buildContentIdIndex, deleteContentFilesById, deleteContentFilesBySlug, extractContentId };
 
 // Note: CLI execution moved to CLI entry points
 // This file now only exports the function for programmatic use

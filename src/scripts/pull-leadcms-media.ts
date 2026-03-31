@@ -272,7 +272,7 @@ async function main(options: PullMediaOptions = {}): Promise<void> {
       const fullPath = path.join(MEDIA_DIR, relPath);
       try {
         await fs.unlink(fullPath);
-        logger.verbose(`Deleted media: ${fullPath}`);
+        console.log(`   🗑️  ${relPath} (deleted on remote)`);
         removedCount++;
       } catch (err: any) {
         if (err.code !== 'ENOENT') {

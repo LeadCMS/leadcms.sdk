@@ -243,6 +243,12 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
       logger.verbose(`[PULL]   Step order: ${sequence.steps!.map(s => `${s.name} (id:${s.id})`).join(' → ')}`);
     }
 
+    // Capture old entry BEFORE updating metadata so we can detect renames
+    // using the correct remote's IDs (not the default remote's file IDs).
+    const oldEntry = (remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap && idStr)
+      ? rcModule.findSequenceByRemoteId(metadataMap, idStr)
+      : undefined;
+
     // Update per-remote metadata
     if (remoteCtx && rcModule && metadataMap && sequence.id != null) {
       const lang = sequence.language || 'en';
@@ -255,10 +261,23 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
     }
 
     // Remove old file if ID maps to a different path (e.g. rename)
-    if (idStr && idIndex.has(idStr)) {
+    if (remoteCtx && !remoteCtx.isDefault) {
+      // Non-default remote: use metadata-based lookup to avoid
+      // matching against the default remote's IDs in local files.
+      if (oldEntry) {
+        const oldSlug = slugify(oldEntry.name) || `sequence-${idStr}`;
+        const oldPath = path.join(SEQUENCES_DIR, `${oldSlug}.json`);
+        const newPath = getSequenceFilePath(sequence);
+        if (oldPath !== newPath) {
+          console.log(`   🗑️  ${path.basename(oldPath)} → ${path.basename(newPath)} (renamed)`);
+          try { await fs.unlink(oldPath); } catch { /* ignore */ }
+        }
+      }
+    } else if (idStr && idIndex.has(idStr)) {
       const oldPath = idIndex.get(idStr)!;
       const newPath = getSequenceFilePath(sequence);
       if (oldPath !== newPath) {
+        console.log(`   🗑️  ${path.basename(oldPath)} → ${path.basename(newPath)} (renamed)`);
         try { await fs.unlink(oldPath); } catch { /* ignore */ }
       }
     }
@@ -292,7 +311,9 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
     }
     logger.verbose(`[PULL]   → ${filePath}`);
 
-    const existed = idStr ? idIndex.has(idStr) : false;
+    const existed = (remoteCtx && !remoteCtx.isDefault)
+      ? !!oldEntry
+      : (idStr ? idIndex.has(idStr) : false);
     await fs.writeFile(filePath, content, "utf8");
 
     if (existed) {
@@ -304,14 +325,30 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
 
   // Handle deletions
   for (const id of deleted) {
-    const filePath = idIndex.get(String(id));
-    if (filePath) {
-      try { await fs.unlink(filePath); } catch { /* ignore */ }
+    if (remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap) {
+      // Non-default remote: resolve ID → name via metadata.
+      const entry = rcModule.findSequenceByRemoteId(metadataMap, id);
+      if (entry) {
+        const slug = slugify(entry.name) || `sequence-${id}`;
+        const filePath = path.join(SEQUENCES_DIR, `${slug}.json`);
+        console.log(`   🗑️  ${path.basename(filePath)} (deleted on remote)`);
+        try { await fs.unlink(filePath); } catch { /* ignore */ }
+        // Clean up metadata entry
+        if (metadataMap.sequences?.[entry.language]?.[entry.name]) {
+          delete metadataMap.sequences[entry.language][entry.name];
+        }
+      }
+    } else {
+      const filePath = idIndex.get(String(id));
+      if (filePath) {
+        console.log(`   🗑️  ${path.basename(filePath)} (deleted on remote)`);
+        try { await fs.unlink(filePath); } catch { /* ignore */ }
+      }
     }
   }
 
   // Persist metadata
-  if (remoteCtx && rcModule && metadataMap && items.length > 0) {
+  if (remoteCtx && rcModule && metadataMap && (items.length > 0 || deleted.length > 0)) {
     await rcModule.writeMetadataMap(remoteCtx, metadataMap);
     logger.verbose(`[PULL] Updated metadata-map for remote "${remoteCtx.name}"`);
   }
