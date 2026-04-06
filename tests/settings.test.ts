@@ -16,6 +16,7 @@ import {
   isMarkdownSettingKey,
   isFileSettingKey,
   isContentSettingKey,
+  isGeneralSettingKey,
   isMediaSettingKey,
   getSettingFileExtension,
   settingKeyToRelativePath,
@@ -83,8 +84,14 @@ describe('settings-types', () => {
       expect(TRACKED_SETTING_KEYS).toContain('LeadCapture.Telegram.MessageTemplate');
     });
 
-    it('has exactly 20 tracked keys', () => {
-      expect(TRACKED_SETTING_KEYS).toHaveLength(20);
+    it('contains all expected General keys', () => {
+      expect(TRACKED_SETTING_KEYS).toContain('General.PrivacyUrl');
+      expect(TRACKED_SETTING_KEYS).toContain('General.SiteUrl');
+      expect(TRACKED_SETTING_KEYS).toContain('General.UnsubscribeUrl');
+    });
+
+    it('has exactly 23 tracked keys', () => {
+      expect(TRACKED_SETTING_KEYS).toHaveLength(23);
     });
   });
 
@@ -196,6 +203,23 @@ describe('settings-types', () => {
 
     it('returns false for non-Media keys', () => {
       expect(isMediaSettingKey('Content.MinTitleLength')).toBe(false);
+    });
+  });
+
+  describe('isGeneralSettingKey', () => {
+    it('returns true for tracked General keys', () => {
+      expect(isGeneralSettingKey('General.PrivacyUrl')).toBe(true);
+      expect(isGeneralSettingKey('General.SiteUrl')).toBe(true);
+      expect(isGeneralSettingKey('General.UnsubscribeUrl')).toBe(true);
+    });
+
+    it('returns false for untracked General keys', () => {
+      expect(isGeneralSettingKey('General.SomeUnknown')).toBe(false);
+    });
+
+    it('returns false for non-General keys', () => {
+      expect(isGeneralSettingKey('Content.MinTitleLength')).toBe(false);
+      expect(isGeneralSettingKey('Media.Quality')).toBe(false);
     });
   });
 
@@ -529,6 +553,29 @@ describe('settings-manager', () => {
       expect(localSettings).toHaveLength(3);
       expect(localSettings.find(s => s.key === 'Media.Quality')!.value).toBe('99');
       expect(localSettings.find(s => s.key === 'Media.Max.FileSize')!.value).toBe('1020');
+    });
+
+    it('saves and reads General settings as general.json', async () => {
+      const settings = [
+        { id: 1, key: 'General.PrivacyUrl', value: 'https://example.com/privacy', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        { id: 2, key: 'General.SiteUrl', value: 'https://example.com', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        { id: 3, key: 'General.UnsubscribeUrl', value: 'https://example.com/unsubscribe', language: null, createdAt: '2024-01-01T00:00:00Z' },
+      ];
+
+      await saveSettingsLocally(settings, tmpDir, 'en');
+
+      const generalJson = JSON.parse(await fs.readFile(path.join(tmpDir, 'general.json'), 'utf8'));
+      expect(generalJson).toEqual({
+        PrivacyUrl: 'https://example.com/privacy',
+        SiteUrl: 'https://example.com',
+        UnsubscribeUrl: 'https://example.com/unsubscribe',
+      });
+
+      const localSettings = await readLocalSettings(tmpDir, 'en');
+      expect(localSettings).toHaveLength(3);
+      expect(localSettings.find(s => s.key === 'General.PrivacyUrl')!.value).toBe('https://example.com/privacy');
+      expect(localSettings.find(s => s.key === 'General.SiteUrl')!.value).toBe('https://example.com');
+      expect(localSettings.find(s => s.key === 'General.UnsubscribeUrl')!.value).toBe('https://example.com/unsubscribe');
     });
 
     it('handles language-specific settings in locale subdirectories', async () => {

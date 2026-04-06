@@ -63,6 +63,9 @@ export const TRACKED_SETTING_KEYS: readonly string[] = [
   'Content.MaxTitleLength',
   'Content.MinDescriptionLength',
   'Content.MinTitleLength',
+  'General.PrivacyUrl',
+  'General.SiteUrl',
+  'General.UnsubscribeUrl',
   'Media.Cover.Dimensions',
   'Media.EnableCoverResize',
   'Media.EnableOptimisation',
@@ -81,6 +84,11 @@ export const AI_SITEPROFILE_PREFIX = 'AI.SiteProfile.';
  * Keys that are stored as individual files under lead-capture/telegram/
  */
 export const LEADCAPTURE_TELEGRAM_PREFIX = 'LeadCapture.Telegram.';
+
+/**
+ * Keys that are grouped into general.json
+ */
+export const GENERAL_SETTING_PREFIX = 'General.';
 
 /**
  * Keys that are grouped into content.json
@@ -243,6 +251,13 @@ export function isFileSettingKey(key: string): boolean {
  */
 export function isMarkdownSettingKey(key: string): boolean {
   return isFileSettingKey(key);
+}
+
+/**
+ * Check if a setting key is a tracked General setting
+ */
+export function isGeneralSettingKey(key: string): boolean {
+  return key.startsWith(GENERAL_SETTING_PREFIX) && TRACKED_SETTING_KEYS.includes(key);
 }
 
 /**

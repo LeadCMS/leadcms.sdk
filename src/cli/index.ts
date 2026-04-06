@@ -143,7 +143,7 @@ switch (command) {
     runScript('status-sequences.js', commandArgs);
     break;
   case 'watch':
-    runScript('watch.js');
+    runScript('watch.js', commandArgs);
     break;
   case 'generate-env':
     runScript('generate-env.js');

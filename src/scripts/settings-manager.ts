@@ -25,9 +25,11 @@ import {
   type SettingPushOperation,
   TRACKED_SETTING_KEYS,
   CONTENT_SETTING_PREFIX,
+  GENERAL_SETTING_PREFIX,
   MEDIA_SETTING_PREFIX,
   isFileSettingKey,
   isContentSettingKey,
+  isGeneralSettingKey,
   isMediaSettingKey,
   settingKeyToRelativePath,
   getFileSettingTopLevelDirs,
@@ -127,6 +129,7 @@ async function saveSettingsForLanguage(
   // Group by category
   const fileSettings = settings.filter((s) => isFileSettingKey(s.key));
   const contentSettings = settings.filter((s) => isContentSettingKey(s.key));
+  const generalSettings = settings.filter((s) => isGeneralSettingKey(s.key));
   const mediaSettings = settings.filter((s) => isMediaSettingKey(s.key));
 
   // Save file-based settings as individual files in nested folders
@@ -171,6 +174,27 @@ async function saveSettingsForLanguage(
     if (Object.keys(contentObj).length > 0) {
       await fs.writeFile(filePath, JSON.stringify(contentObj, null, 2) + "\n", "utf8");
       logger.verbose(`[LeadCMS] Saved content settings → ${filePath}`);
+    } else if (reconcile) {
+      try {
+        await fs.rm(filePath, { force: true });
+      } catch {
+        // ignore missing files
+      }
+    }
+  }
+
+  // Save General settings as general.json
+  if (generalSettings.length > 0 || reconcile) {
+    await fs.mkdir(baseDir, { recursive: true });
+    const generalObj: Record<string, string> = {};
+    for (const s of generalSettings) {
+      const shortKey = s.key.slice(GENERAL_SETTING_PREFIX.length);
+      generalObj[shortKey] = s.value || "";
+    }
+    const filePath = path.join(baseDir, "general.json");
+    if (Object.keys(generalObj).length > 0) {
+      await fs.writeFile(filePath, JSON.stringify(generalObj, null, 2) + "\n", "utf8");
+      logger.verbose(`[LeadCMS] Saved general settings → ${filePath}`);
     } else if (reconcile) {
       try {
         await fs.rm(filePath, { force: true });
@@ -340,6 +364,21 @@ async function readLocalSettingsForDir(
     }
   } catch {
     // content.json doesn't exist
+  }
+
+  // Read general.json
+  try {
+    const generalPath = path.join(dir, "general.json");
+    const generalRaw = await fs.readFile(generalPath, "utf8");
+    const generalObj = JSON.parse(generalRaw) as Record<string, string>;
+    for (const [shortKey, value] of Object.entries(generalObj)) {
+      const fullKey = GENERAL_SETTING_PREFIX + shortKey;
+      if (TRACKED_SETTING_KEYS.includes(fullKey)) {
+        results.push({ key: fullKey, value, language });
+      }
+    }
+  } catch {
+    // general.json doesn't exist
   }
 
   // Read media.json
