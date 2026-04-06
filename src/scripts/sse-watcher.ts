@@ -282,7 +282,7 @@ async function startSSEWatcher(remoteCtx?: RemoteContext): Promise<void> {
         try {
           contentData = typeof data.data === "string" ? JSON.parse(data.data) : data.data;
           const { body: _body, ...contentSummary } = contentData;
-          const bodyPreview = _body ? `${_body.substring(0, 100)}${_body.length > 100 ? '...' : ''}` : 'empty';
+          const bodyPreview = _body ? `${_body.substring(0, 100).replace(/\n/g, '\\n')}${_body.length > 100 ? '...' : ''}` : 'empty';
           logger.verbose(`[SSE] Draft content (body ${_body ? `${_body.length} chars` : 'empty'}: ${bodyPreview}):`, JSON.stringify(contentSummary, null, 2));
         } catch (e: any) {
           logger.verbose("[SSE] Failed to parse draft content data:", e.message);
