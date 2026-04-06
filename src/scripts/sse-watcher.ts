@@ -272,17 +272,18 @@ async function startSSEWatcher(remoteCtx?: RemoteContext): Promise<void> {
   });
 
   es.addEventListener("draft-updated", (event) => {
-    logger.verbose(`[SSE] Received 'draft-updated' event:`, event.data);
     try {
       const data: DraftEventData = JSON.parse(event.data);
-      logger.verbose(`[SSE] Draft updated data:`, JSON.stringify(data, null, 2));
+      logger.verbose(`[SSE] Draft updated - entity: ${data.entityType}, operation: ${data.operation}, user: ${data.createdById}`);
 
       if (data.createdById && data.data) {
         logger.verbose(`[SSE] Processing draft update for user: ${data.createdById}`);
         let contentData: any;
         try {
           contentData = typeof data.data === "string" ? JSON.parse(data.data) : data.data;
-          logger.verbose(`[SSE] Draft content data:`, JSON.stringify(contentData, null, 2));
+          const { body: _body, ...contentSummary } = contentData;
+          const bodyPreview = _body ? `${_body.substring(0, 100)}${_body.length > 100 ? '...' : ''}` : 'empty';
+          logger.verbose(`[SSE] Draft content (body ${_body ? `${_body.length} chars` : 'empty'}: ${bodyPreview}):`, JSON.stringify(contentSummary, null, 2));
         } catch (e: any) {
           logger.verbose("[SSE] Failed to parse draft content data:", e.message);
           logger.verbose("[SSE] Raw data:", data.data);
