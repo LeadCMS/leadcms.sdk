@@ -24,14 +24,14 @@ interface PullMediaOptions {
  * This is a placeholder for future dedicated media sync
  */
 async function main(options: PullMediaOptions = {}): Promise<void> {
-  const { reset } = options;
+  const { reset, remoteContext } = options;
 
   console.log(`\n🖼️  LeadCMS Pull Media\n`);
 
   // Handle --reset flag: clear media before pulling
   if (reset) {
     console.log(`🔄 Resetting media state...\n`);
-    await resetMediaState();
+    await resetMediaState(remoteContext);
   }
 
   // Check if media is supported
