@@ -109,52 +109,6 @@ async function triggerContentPull(): Promise<void> {
   schedulePull();
 }
 
-// ── Media-only pull (for draft updates) ─────────────────────────────
-// Draft content is already delivered inline via SSE, so we only need to
-// pull media that may have been uploaded alongside the draft edit.
-let mediaPullInProgress = false;
-let mediaPullQueued = false;
-let mediaDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-function scheduleMediaPull(): void {
-  if (mediaDebounceTimer) {
-    clearTimeout(mediaDebounceTimer);
-  }
-  mediaDebounceTimer = setTimeout(() => {
-    mediaDebounceTimer = null;
-    executeMediaPull();
-  }, DEBOUNCE_MS);
-}
-
-async function executeMediaPull(): Promise<void> {
-  if (mediaPullInProgress) {
-    mediaPullQueued = true;
-    logger.verbose("[SSE] Media pull already in progress — queued another");
-    return;
-  }
-
-  mediaPullInProgress = true;
-  try {
-    logger.verbose("[SSE] Starting media-only pull (draft update)...");
-    await pullLeadCMSMedia({ remoteContext: activeRemoteCtx });
-    logger.verbose("[SSE] Media-only pull completed successfully");
-  } catch (error: any) {
-    logger.verbose("[SSE] Media pull failed:", error.message);
-  } finally {
-    mediaPullInProgress = false;
-
-    if (mediaPullQueued) {
-      mediaPullQueued = false;
-      logger.verbose("[SSE] Processing queued media pull...");
-      executeMediaPull();
-    }
-  }
-}
-
-function triggerMediaPull(): void {
-  scheduleMediaPull();
-}
-
 function buildSSEUrl(remoteCtx?: RemoteContext): string {
   const effectiveUrl = remoteCtx?.url || leadCMSUrl;
   logger.verbose(`[SSE URL] Building SSE URL with base: ${effectiveUrl}`);
@@ -296,15 +250,24 @@ async function startSSEWatcher(remoteCtx?: RemoteContext): Promise<void> {
           contentType = typeMap[contentData.type];
         }
 
-        logger.verbose(`[SSE] Draft updated - triggering media-only pull`);
-        triggerMediaPull();
+        logger.verbose(`[SSE] Draft updated - pulling media before saving draft`);
 
         if (contentType === "MDX" || contentType === "JSON") {
           if (contentData && typeof contentData === "object") {
             const previewSlug = `${contentData.slug}-${data.createdById}`;
-            logger.verbose(`[SSE] Saving draft content file for preview: ${previewSlug}`);
+            const hasMediaRefs = JSON.stringify(contentData).includes('/api/media/');
             (async () => {
               try {
+                // Pull media first so new images are on disk before the
+                // draft file triggers a framework re-render.
+                if (hasMediaRefs) {
+                  logger.verbose(`[SSE] Draft references media — pulling media before saving`);
+                  await pullLeadCMSMedia({ remoteContext: activeRemoteCtx });
+                  logger.verbose(`[SSE] Media pull complete`);
+                } else {
+                  logger.verbose(`[SSE] Draft has no media references — skipping media pull`);
+                }
+                logger.verbose(`[SSE] Saving draft content file for preview: ${previewSlug}`);
                 await saveContentFile({
                   content: contentData,
                   typeMap,
