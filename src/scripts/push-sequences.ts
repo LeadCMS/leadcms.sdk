@@ -89,18 +89,24 @@ function formatSequenceApiError(error: any): string {
   return error?.message || "Unknown error";
 }
 
-async function readLocalSequences(): Promise<LocalSequenceFile[]> {
+async function readLocalSequences(dir?: string): Promise<LocalSequenceFile[]> {
   const results: LocalSequenceFile[] = [];
+  const scanDir = dir || SEQUENCES_DIR;
   let entries;
   try {
-    entries = await fs.readdir(SEQUENCES_DIR, { withFileTypes: true });
+    entries = await fs.readdir(scanDir, { withFileTypes: true });
   } catch {
     return results;
   }
 
   for (const entry of entries) {
+    const fullPath = path.join(scanDir, entry.name);
+    if (entry.isDirectory()) {
+      // Recurse into language subdirectories
+      results.push(...(await readLocalSequences(fullPath)));
+      continue;
+    }
     if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
-    const fullPath = path.join(SEQUENCES_DIR, entry.name);
     try {
       const raw = JSON.parse(await fs.readFile(fullPath, "utf8"));
       // Support both flat format and legacy _entityType wrapper

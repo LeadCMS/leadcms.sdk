@@ -117,7 +117,7 @@ async function pullSequenceSync(syncToken?: string): Promise<SequenceSyncResult>
   return { items: allItems, deleted: allDeleted, baseItems: allBaseItems, nextSyncToken };
 }
 
-/** Build a map of sequence ID → file path from existing local files. */
+/** Build a map of sequence ID → file path from existing local files (recursive). */
 async function buildSequenceIdIndex(dir: string): Promise<Map<string, string>> {
   const index = new Map<string, string>();
   let entries;
@@ -128,8 +128,16 @@ async function buildSequenceIdIndex(dir: string): Promise<Map<string, string>> {
   }
 
   for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
     const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      // Recurse into language subdirectories
+      const subIndex = await buildSequenceIdIndex(fullPath);
+      for (const [id, filePath] of subIndex) {
+        index.set(id, filePath);
+      }
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
     try {
       const content = JSON.parse(await fs.readFile(fullPath, "utf8"));
       // Support both flat format and legacy _entityType wrapper
@@ -145,7 +153,10 @@ async function buildSequenceIdIndex(dir: string): Promise<Map<string, string>> {
 
 function getSequenceFilePath(sequence: SequenceDetailsDto | LocalSequenceDto): string {
   const slug = slugify(sequence.name) || `sequence-${sequence.id}`;
-  return path.join(SEQUENCES_DIR, `${slug}.json`);
+  const cfg = getConfig();
+  const lang = sequence.language || cfg.defaultLanguage;
+  const dir = lang === cfg.defaultLanguage ? SEQUENCES_DIR : path.join(SEQUENCES_DIR, lang);
+  return path.join(dir, `${slug}.json`);
 }
 
 /** Build segment ID→name and email template ID→name lookup maps. */
@@ -266,7 +277,10 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
       // matching against the default remote's IDs in local files.
       if (oldEntry) {
         const oldSlug = slugify(oldEntry.name) || `sequence-${idStr}`;
-        const oldPath = path.join(SEQUENCES_DIR, `${oldSlug}.json`);
+        const cfg = getConfig();
+        const oldLang = oldEntry.language || cfg.defaultLanguage;
+        const oldDir = oldLang === cfg.defaultLanguage ? SEQUENCES_DIR : path.join(SEQUENCES_DIR, oldLang);
+        const oldPath = path.join(oldDir, `${oldSlug}.json`);
         const newPath = getSequenceFilePath(sequence);
         if (oldPath !== newPath) {
           console.log(`   🗑️  ${path.basename(oldPath)} → ${path.basename(newPath)} (renamed)`);
@@ -330,7 +344,10 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
       const entry = rcModule.findSequenceByRemoteId(metadataMap, id);
       if (entry) {
         const slug = slugify(entry.name) || `sequence-${id}`;
-        const filePath = path.join(SEQUENCES_DIR, `${slug}.json`);
+        const cfg = getConfig();
+        const lang = entry.language || cfg.defaultLanguage;
+        const dir = lang === cfg.defaultLanguage ? SEQUENCES_DIR : path.join(SEQUENCES_DIR, lang);
+        const filePath = path.join(dir, `${slug}.json`);
         console.log(`   🗑️  ${path.basename(filePath)} (deleted on remote)`);
         try { await fs.unlink(filePath); } catch { /* ignore */ }
         // Clean up metadata entry

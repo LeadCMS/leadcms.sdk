@@ -552,6 +552,36 @@ function countPushChanges(operations: ContentOperations, includeConflicts: boole
     (includeConflicts ? operations.conflict.length : 0);
 }
 
+function filterLocalContentByTargetId(
+  localContent: LocalContentItem[],
+  targetId: string,
+  metadataMap?: MetadataMap,
+): LocalContentItem[] {
+  if (!metadataMap) {
+    return localContent.filter(content => content.metadata.id?.toString() === targetId);
+  }
+
+  for (const [language, entries] of Object.entries(metadataMap.content)) {
+    for (const [slug, entry] of Object.entries(entries)) {
+      if (entry.id != null && String(entry.id) === targetId) {
+        return localContent.filter(content =>
+          content.locale === language && content.slug === slug,
+        );
+      }
+    }
+  }
+
+  return [];
+}
+
+function hasLocalContentByTargetId(
+  localContent: LocalContentItem[],
+  targetId: string,
+  metadataMap?: MetadataMap,
+): boolean {
+  return filterLocalContentByTargetId(localContent, targetId, metadataMap).length > 0;
+}
+
 /**
  * Auto-detected defaults for content type creation based on local content files
  */
@@ -1217,14 +1247,25 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
       logger.verbose('[PUSH] Warning: content types response was not an array, proceeding without type map');
     }
 
+    // Load per-remote metadata-map for multi-remote support
+    let metadataMap: MetadataMap | undefined;
+    if (remoteCtx) {
+      const rc = await import('../lib/remote-context.js');
+      metadataMap = await rc.readMetadataMap(remoteCtx);
+    }
+
     // Filter local content if targeting specific content
     let filteredLocalContent = localContent;
     if (isSingleFileMode) {
       filteredLocalContent = localContent.filter(content => {
-        if (targetId && content.metadata.id?.toString() === targetId) return true;
+        if (targetId && !metadataMap && content.metadata.id?.toString() === targetId) return true;
         if (targetSlug && content.slug === targetSlug) return true;
         return false;
       });
+
+      if (targetId) {
+        filteredLocalContent = filterLocalContentByTargetId(localContent, targetId, metadataMap);
+      }
 
       if (filteredLocalContent.length === 0 && targetSlug) {
         // For slug-based filtering, we can fail early since slugs are always local
@@ -1250,13 +1291,6 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     // Fetch remote content for comparison
     const remoteContent = await fetchRemoteContent();
 
-    // Load per-remote metadata-map for multi-remote support
-    let metadataMap: MetadataMap | undefined;
-    if (remoteCtx) {
-      const rc = await import('../lib/remote-context.js');
-      metadataMap = await rc.readMetadataMap(remoteCtx);
-    }
-
     // Match local vs remote content with type mapping for proper content transformation
     // In status mode, enable deletion detection if showDelete is true (for display purposes)
     // In push mode, only detect deletions if allowDelete is true (for execution)
@@ -1278,7 +1312,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
           ? remoteContent.some(r => r.id?.toString() === targetId)
           : false;
         const targetFoundInLocal = targetId
-          ? localContent.some(c => c.metadata.id?.toString() === targetId)
+          ? hasLocalContentByTargetId(localContent, targetId, metadataMap)
           : targetSlug
             ? localContent.some(c => c.slug === targetSlug)
             : false;
@@ -1610,6 +1644,8 @@ export { normalizeFormat };
 export { fetchRemoteContent };
 export { displayDetailedDiff };
 export { validateMergeConflicts };
+export { filterLocalContentByTargetId };
+export { hasLocalContentByTargetId };
 // Re-export merge conflict detector for testing
 export { hasMergeConflictMarkers } from '../lib/merge-conflict-detector.js';
 // Re-export formatContentForAPI from utility module for testing

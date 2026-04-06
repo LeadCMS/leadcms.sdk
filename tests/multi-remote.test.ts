@@ -294,7 +294,11 @@ jest.mock('../src/lib/config.js', () => ({
   loadConfig: jest.fn(() => createTestConfig()),
 }));
 
-import { matchContent } from '../src/scripts/push-leadcms-content';
+import {
+  matchContent,
+  filterLocalContentByTargetId,
+  hasLocalContentByTargetId,
+} from '../src/scripts/push-leadcms-content';
 import { parseRemoteFlag } from '../src/cli/bin/remote-flag';
 import { getConfig } from '../src/lib/config';
 
@@ -382,6 +386,88 @@ describe('matchContent with multi-remote metadata (Phases 3+4)', () => {
       const ops = await (matchContent as any)(local, remote, undefined, false, metadataMap);
       expect(ops.create).toHaveLength(0);
       // Falls back to frontmatter id matching
+    });
+
+    it('resolves target --id local file via remote metadata instead of frontmatter', async () => {
+      const wrongFilePath = path.join(tmpDir, 'wrong-post.mdx');
+      const rightFilePath = path.join(tmpDir, 'right-post.mdx');
+
+      await fs.writeFile(wrongFilePath, matter.stringify('# Wrong', {
+        title: 'Wrong Post',
+        type: 'article',
+        id: 136,
+      }));
+      await fs.writeFile(rightFilePath, matter.stringify('# Right', {
+        title: 'Right Post',
+        type: 'article',
+        id: 999,
+      }));
+
+      const local = [
+        makeLocal({
+          slug: 'wrong-post',
+          filePath: wrongFilePath,
+          metadata: { id: 136, title: 'Wrong Post', type: 'article' },
+        }),
+        makeLocal({
+          slug: 'right-post',
+          filePath: rightFilePath,
+          metadata: { id: 999, title: 'Right Post', type: 'article' },
+        }),
+      ];
+
+      const metadataMap: MetadataMap = {
+        content: {
+          en: {
+            'right-post': { id: 136 },
+          },
+        },
+      };
+
+      const filtered = filterLocalContentByTargetId(local, '136', metadataMap);
+
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].slug).toBe('right-post');
+    });
+
+    it('checks target --id existence against remote metadata instead of frontmatter', async () => {
+      const wrongFilePath = path.join(tmpDir, 'wrong-post.mdx');
+      const rightFilePath = path.join(tmpDir, 'right-post.mdx');
+
+      await fs.writeFile(wrongFilePath, matter.stringify('# Wrong', {
+        title: 'Wrong Post',
+        type: 'article',
+        id: 136,
+      }));
+      await fs.writeFile(rightFilePath, matter.stringify('# Right', {
+        title: 'Right Post',
+        type: 'article',
+        id: 999,
+      }));
+
+      const local = [
+        makeLocal({
+          slug: 'wrong-post',
+          filePath: wrongFilePath,
+          metadata: { id: 136, title: 'Wrong Post', type: 'article' },
+        }),
+        makeLocal({
+          slug: 'right-post',
+          filePath: rightFilePath,
+          metadata: { id: 999, title: 'Right Post', type: 'article' },
+        }),
+      ];
+
+      const metadataMap: MetadataMap = {
+        content: {
+          en: {
+            'right-post': { id: 136 },
+          },
+        },
+      };
+
+      expect(hasLocalContentByTargetId(local, '136', metadataMap)).toBe(true);
+      expect(hasLocalContentByTargetId(local, '999', metadataMap)).toBe(false);
     });
   });
 
