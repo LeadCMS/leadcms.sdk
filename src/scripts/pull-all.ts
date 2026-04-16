@@ -12,7 +12,7 @@ import { leadCMSUrl, leadCMSApiKey } from "./leadcms-helpers.js";
 import { setCMSConfig, isContentSupported, isMediaSupported, isCommentsSupported, isEmailTemplatesSupported, isSettingsSupported, isSegmentsSupported, isSequencesSupported } from "../lib/cms-config-types.js";
 import { getConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
-import { syncTokenPath, metadataMapPath, readMetadataMap, writeMetadataMap } from "../lib/remote-context.js";
+import { syncTokenPath, metadataMapPath, clearMetadataSection } from "../lib/remote-context.js";
 import type { RemoteContext } from "../lib/remote-context.js";
 
 interface PullAllOptions {
@@ -106,9 +106,7 @@ async function resetContentState(remoteCtx?: RemoteContext): Promise<void> {
 
     // Clear content metadata section
     try {
-      const map = await readMetadataMap(remoteCtx);
-      map.content = {};
-      await writeMetadataMap(remoteCtx, map);
+      await clearMetadataSection(remoteCtx, 'content');
       logger.verbose(`   ✓ Cleared content metadata (${remoteCtx.name})`);
     } catch { /* metadata file may not exist */ }
   }
@@ -174,9 +172,7 @@ async function resetCommentsState(remoteCtx?: RemoteContext): Promise<void> {
 
     // Clear comments metadata section
     try {
-      const map = await readMetadataMap(remoteCtx);
-      map.comments = {};
-      await writeMetadataMap(remoteCtx, map);
+      await clearMetadataSection(remoteCtx, 'comments');
       logger.verbose(`   ✓ Cleared comments metadata (${remoteCtx.name})`);
     } catch { /* metadata file may not exist */ }
   }
@@ -204,9 +200,7 @@ async function resetEmailTemplatesState(remoteCtx?: RemoteContext): Promise<void
 
     // Clear email templates metadata section
     try {
-      const map = await readMetadataMap(remoteCtx);
-      map.emailTemplates = {};
-      await writeMetadataMap(remoteCtx, map);
+      await clearMetadataSection(remoteCtx, 'emailTemplates');
       logger.verbose(`   ✓ Cleared email templates metadata (${remoteCtx.name})`);
     } catch { /* metadata file may not exist */ }
   }
@@ -245,9 +239,7 @@ async function resetSegmentsState(remoteCtx?: RemoteContext): Promise<void> {
 
     // Clear segments metadata section
     try {
-      const map = await readMetadataMap(remoteCtx);
-      map.segments = {};
-      await writeMetadataMap(remoteCtx, map);
+      await clearMetadataSection(remoteCtx, 'segments');
       logger.verbose(`   ✓ Cleared segments metadata (${remoteCtx.name})`);
     } catch { /* metadata file may not exist */ }
   }
@@ -273,9 +265,7 @@ async function resetSequencesState(remoteCtx?: RemoteContext): Promise<void> {
 
     // Clear sequences metadata section
     try {
-      const map = await readMetadataMap(remoteCtx);
-      map.sequences = {};
-      await writeMetadataMap(remoteCtx, map);
+      await clearMetadataSection(remoteCtx, 'sequences');
       logger.verbose(`   ✓ Cleared sequences metadata (${remoteCtx.name})`);
     } catch { /* metadata file may not exist */ }
   }
@@ -351,48 +341,46 @@ async function main(options: PullAllOptions = {}): Promise<void> {
     }
   }
 
-  // Import and run pull functions for supported entities
-  const pullPromises: Promise<void>[] = [];
-
-  if (content) {
-    console.log(`📄 Pulling content...`);
-    const { pullLeadCMSContent } = await import('./pull-leadcms-content.js');
-    pullPromises.push(pullLeadCMSContent({ forceOverwrite: force, remoteContext: remoteCtx }));
-  }
-
-  if (media) {
-    console.log(`🖼️  Pulling media...`);
-    const { pullLeadCMSMedia } = await import('./pull-leadcms-media.js');
-    pullPromises.push(pullLeadCMSMedia({ remoteContext: remoteCtx }));
-  }
-
-  if (comments) {
-    console.log(`💬 Pulling comments...`);
-    const { pullLeadCMSComments } = await import('./pull-leadcms-comments.js');
-    pullPromises.push(pullLeadCMSComments(remoteCtx));
-  }
-
-  if (emailTemplates) {
-    console.log(`📧 Pulling email templates...`);
-    const { pullLeadCMSEmailTemplates } = await import('./pull-leadcms-email-templates.js');
-    pullPromises.push(pullLeadCMSEmailTemplates(remoteCtx));
-  }
-
-  if (segments) {
-    console.log(`🔖 Pulling segments...`);
-    const { pullLeadCMSSegments } = await import('./pull-segments.js');
-    pullPromises.push(pullLeadCMSSegments(remoteCtx));
-  }
-
-  if (sequences) {
-    console.log(`🔗 Pulling sequences...`);
-    const { pullLeadCMSSequences } = await import('./pull-sequences.js');
-    pullPromises.push(pullLeadCMSSequences(remoteCtx));
-  }
-
-  // Wait for all pulls to complete
+  // Pull entities that write to metadata.json sequentially to avoid
+  // concurrent read-modify-write races where the last writer clobbers
+  // sections written by earlier-finishing pulls.
   try {
-    await Promise.all(pullPromises);
+    if (content) {
+      console.log(`📄 Pulling content...`);
+      const { pullLeadCMSContent } = await import('./pull-leadcms-content.js');
+      await pullLeadCMSContent({ forceOverwrite: force, remoteContext: remoteCtx });
+    }
+
+    if (media) {
+      console.log(`🖼️  Pulling media...`);
+      const { pullLeadCMSMedia } = await import('./pull-leadcms-media.js');
+      await pullLeadCMSMedia({ remoteContext: remoteCtx });
+    }
+
+    if (comments) {
+      console.log(`💬 Pulling comments...`);
+      const { pullLeadCMSComments } = await import('./pull-leadcms-comments.js');
+      await pullLeadCMSComments(remoteCtx);
+    }
+
+    if (emailTemplates) {
+      console.log(`📧 Pulling email templates...`);
+      const { pullLeadCMSEmailTemplates } = await import('./pull-leadcms-email-templates.js');
+      await pullLeadCMSEmailTemplates(remoteCtx);
+    }
+
+    if (segments) {
+      console.log(`🔖 Pulling segments...`);
+      const { pullLeadCMSSegments } = await import('./pull-segments.js');
+      await pullLeadCMSSegments(remoteCtx);
+    }
+
+    if (sequences) {
+      console.log(`🔗 Pulling sequences...`);
+      const { pullLeadCMSSequences } = await import('./pull-sequences.js');
+      await pullLeadCMSSequences(remoteCtx);
+    }
+
     console.log(`\n✨ Pull completed successfully!\n`);
   } catch (error: any) {
     console.error(`\n❌ Pull failed: ${error.message}\n`);

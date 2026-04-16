@@ -1,13 +1,11 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
+    "module": "CommonJS",
+    "moduleResolution": "node",
     "rootDir": ".",
-    "composite": true,
     "types": ["jest", "node"]
   },
   "include": ["tests/**/*", "src/**/*"],
-  "exclude": [],
-  "references": []
+  "exclude": []
 }

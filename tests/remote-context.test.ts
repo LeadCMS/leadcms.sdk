@@ -29,6 +29,8 @@ function makeConfig(overrides: Partial<LeadCMSConfig> = {}): LeadCMSConfig {
     commentsDir: '.leadcms/comments',
     emailTemplatesDir: '.leadcms/email-templates',
     settingsDir: '.leadcms/settings',
+    segmentsDir: '.leadcms/segments',
+    sequencesDir: '.leadcms/sequences',
     enableDrafts: false,
     ...overrides,
   };

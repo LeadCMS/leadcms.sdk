@@ -132,16 +132,23 @@ export function normalizeContentStatusFilters(statusFilters?: string[]): Content
   return normalized.size > 0 ? Array.from(normalized) : undefined;
 }
 
-// Create readline interface for user prompts
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
+// Lazily-created readline interface for user prompts
+let rl: readline.Interface | null = null;
+
+function getReadlineInterface(): readline.Interface {
+  if (!rl) {
+    rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+  }
+  return rl;
+}
 
 // Promisify readline question
 function question(prompt: string): Promise<string> {
   return new Promise((resolve) => {
-    rl.question(prompt, resolve);
+    getReadlineInterface().question(prompt, resolve);
   });
 }
 
@@ -1383,7 +1390,10 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     console.error(`❌ ${operation} failed:`, error.message);
     process.exit(1);
   } finally {
-    rl.close();
+    if (rl) {
+      rl.close();
+      rl = null;
+    }
   }
 }
 

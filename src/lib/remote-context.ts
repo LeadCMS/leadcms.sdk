@@ -450,6 +450,46 @@ export async function readMetadataMap(ctx: RemoteContext): Promise<MetadataMap> 
   }
 }
 
+/**
+ * Clear a single section of the metadata map on disk.
+ * Reads the file, removes the section, and writes it back.
+ * Used by reset functions to clear one entity type without
+ * affecting other sections.
+ */
+export async function clearMetadataSection(
+  ctx: RemoteContext,
+  section: keyof MetadataMap,
+): Promise<void> {
+  const map = await readMetadataMap(ctx);
+  if (section === 'content') {
+    map.content = {};
+  } else {
+    delete map[section];
+  }
+  // Write directly without merge to ensure the section is actually cleared
+  await fs.mkdir(ctx.stateDir, { recursive: true });
+  const sorted: MetadataMap = {
+    content: sortNestedMap(map.content),
+    ...(map.emailTemplates && Object.keys(map.emailTemplates).length > 0
+      ? { emailTemplates: sortNestedMap(map.emailTemplates) }
+      : {}),
+    ...(map.comments && Object.keys(map.comments).length > 0
+      ? { comments: sortNestedMap(map.comments) }
+      : {}),
+    ...(map.segments && Object.keys(map.segments).length > 0
+      ? { segments: sortFlatMap(map.segments) }
+      : {}),
+    ...(map.sequences && Object.keys(map.sequences).length > 0
+      ? { sequences: sortNestedMap(map.sequences) }
+      : {}),
+  };
+  await fs.writeFile(
+    metadataMapPath(ctx),
+    JSON.stringify(sorted, null, 2),
+    "utf-8",
+  );
+}
+
 /** Write the metadata-map for a remote, creating the directory if needed.
  *  Keys are sorted alphabetically for consistency across regenerations.
  */

@@ -10,6 +10,7 @@ import path from 'path';
 import os from 'os';
 import matter from 'gray-matter';
 import { countPushChanges } from '../src/scripts/push-leadcms-content';
+import { formatContentForAPI } from '../src/lib/content-api-formatting';
 
 describe('LeadCMS Push', () => {
   describe('URL Transformation for Push (Backward Transformation)', () => {
@@ -125,10 +126,6 @@ coverImageUrl: /media/blog/covers/test-article.jpg
 
   describe('Custom Frontmatter Preservation', () => {
     it('should preserve custom attributes in frontmatter within body during push operations', async () => {
-      const { formatContentForAPI } = await import('../src/lib/content-api-formatting.ts');
-      const grayMatter = await import('gray-matter');
-      const matterFn = grayMatter.default;
-
       const mockLocalContentWithCustomAttributes = {
         filePath: '/path/to/content/blog/custom-article.mdx',
         slug: 'blog/custom-article',
@@ -189,7 +186,7 @@ coverImageUrl: /media/blog/covers/test-article.jpg
       expect(apiFormattedContent).not.toHaveProperty('customMetadata');
 
       // Custom attributes preserved in body frontmatter
-      const parsedBody = matterFn(apiFormattedContent.body || '');
+      const parsedBody = matter(apiFormattedContent.body || '');
       expect(parsedBody.data.featured).toBe(true);
       expect(parsedBody.data.customRating).toBe(5);
       expect(parsedBody.data.customTags).toEqual(['test']);
@@ -242,7 +239,6 @@ coverImageUrl: /media/blog/covers/test-article.jpg
 
   describe('formatContentForAPI - File-Based Slug Priority', () => {
     it('should use file-based slug over metadata slug for renamed content', async () => {
-      const { formatContentForAPI } = await import('../src/lib/content-api-formatting.ts');
 
       const mockLocalContent = {
         slug: 'blog-1',       // New slug from file path
@@ -267,7 +263,6 @@ coverImageUrl: /media/blog/covers/test-article.jpg
     });
 
     it('should preserve slug when it matches file-based slug', async () => {
-      const { formatContentForAPI } = await import('../src/lib/content-api-formatting.ts');
 
       const mockLocalContent = {
         slug: 'normal-article',
