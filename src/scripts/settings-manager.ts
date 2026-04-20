@@ -539,11 +539,35 @@ export function buildSettingsPushOperations(
     }
   }
 
+  // Detect remote-only settings that should be deleted
+  const localMap = new Map<string, LocalSettingValue>();
+  for (const ls of localSettings) {
+    const mapKey = `${ls.key}|${ls.language || ""}`;
+    localMap.set(mapKey, ls);
+  }
+
+  for (const rs of remoteSettings) {
+    if (!TRACKED_SETTING_KEYS.includes(rs.key)) continue;
+    const mapKey = `${rs.key}|${rs.language || ""}`;
+    if (localMap.has(mapKey)) continue;
+    if (rs.value === null || rs.value === undefined || rs.value === "") continue;
+
+    operations.push({
+      type: "delete",
+      key: rs.key,
+      language: rs.language || null,
+      localValue: "",
+      remoteValue: rs.value,
+      remoteId: rs.id,
+    });
+  }
+
   return operations;
 }
 
 /**
  * Push local settings to the CMS via /api/settings/import
+ * and delete remote-only settings via DELETE /api/settings/system/{key}
  */
 export async function pushSettingsToRemote(
   operations: SettingPushOperation[],
@@ -552,8 +576,9 @@ export async function pushSettingsToRemote(
   dryRun: boolean = false,
 ): Promise<SettingImportResult | null> {
   const toImport = operations.filter((op) => op.type === "create" || op.type === "update");
+  const toDelete = operations.filter((op) => op.type === "delete");
 
-  if (toImport.length === 0) {
+  if (toImport.length === 0 && toDelete.length === 0) {
     logger.info("[LeadCMS] No settings changes to push.");
     return null;
   }
@@ -564,30 +589,67 @@ export async function pushSettingsToRemote(
       const lang = op.language ? ` [${op.language}]` : "";
       logger.info(`  ${op.type}: ${op.key}${lang} = "${op.localValue}"`);
     }
+    for (const op of toDelete) {
+      const lang = op.language ? ` [${op.language}]` : "";
+      logger.info(`  delete: ${op.key}${lang}`);
+    }
     return null;
   }
 
-  const importPayload: SettingImportDto[] = toImport.map((op) => ({
-    key: op.key,
-    value: op.localValue,
-    language: op.language,
-    source: "leadcms-sdk",
-  }));
+  let result: SettingImportResult = { added: 0, updated: 0, failed: 0, skipped: 0, errors: [] };
 
-  const url = new URL("/api/settings/import", leadCMSUrl);
+  // Import create/update operations
+  if (toImport.length > 0) {
+    const importPayload: SettingImportDto[] = toImport.map((op) => ({
+      key: op.key,
+      value: op.localValue,
+      language: op.language,
+      source: "leadcms-sdk",
+    }));
 
-  logger.verbose(`[LeadCMS] Pushing ${importPayload.length} settings to ${url.toString()}`);
+    const url = new URL("/api/settings/import", leadCMSUrl);
 
-  const res: AxiosResponse<SettingImportResult> = await axios.post(
-    url.toString(),
-    importPayload,
-    {
-      headers: {
-        Authorization: `Bearer ${leadCMSApiKey}`,
-        "Content-Type": "application/json",
+    logger.verbose(`[LeadCMS] Pushing ${importPayload.length} settings to ${url.toString()}`);
+
+    const res: AxiosResponse<SettingImportResult> = await axios.post(
+      url.toString(),
+      importPayload,
+      {
+        headers: {
+          Authorization: `Bearer ${leadCMSApiKey}`,
+          "Content-Type": "application/json",
+        },
       },
-    },
-  );
+    );
 
-  return res.data;
+    result = res.data;
+  }
+
+  // Delete remote-only settings
+  for (const op of toDelete) {
+    try {
+      const deleteUrl = new URL(`/api/settings/system/${encodeURIComponent(op.key)}`, leadCMSUrl);
+      if (op.language) {
+        deleteUrl.searchParams.set("language", op.language);
+      }
+
+      logger.verbose(`[LeadCMS] Deleting setting ${op.key}${op.language ? ` [${op.language}]` : ""}`);
+
+      await axios.delete(deleteUrl.toString(), {
+        headers: {
+          Authorization: `Bearer ${leadCMSApiKey}`,
+        },
+      });
+
+      result.updated++;
+    } catch (err: any) {
+      result.failed++;
+      const lang = op.language ? ` [${op.language}]` : "";
+      const errMsg = err.response?.data?.detail || err.message || "Unknown error";
+      result.errors = result.errors || [];
+      result.errors.push({ key: `${op.key}${lang}`, message: errMsg });
+    }
+  }
+
+  return result;
 }

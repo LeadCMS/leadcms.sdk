@@ -306,7 +306,7 @@ export interface SettingsStatusResult {
  * Operation type for push
  */
 export interface SettingPushOperation {
-  type: 'create' | 'update' | 'unchanged';
+  type: 'create' | 'update' | 'unchanged' | 'delete';
   key: string;
   language: string | null;
   localValue: string;

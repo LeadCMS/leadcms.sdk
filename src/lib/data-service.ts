@@ -93,6 +93,10 @@ interface ContentType {
   format: string;
   name: string;
   supportsSEO?: boolean;
+  supportsComments?: boolean;
+  supportsCoverImage?: boolean;
+  slugPrefix?: string | null;
+  slugPostfix?: string | null;
 }
 
 export interface UserIdentity {
@@ -518,6 +522,72 @@ class LeadCMSDataService {
     } catch (error: any) {
       console.error('[API] Failed to fetch content types:', error.message);
       throw error;
+    }
+  }
+
+  /**
+   * Get all categories for a given language from LeadCMS
+   */
+  async getCategories(language?: string): Promise<string[]> {
+    this._initialize();
+
+    if (this.useMock) {
+      return [];
+    }
+
+    try {
+      logger.verbose('[API] Fetching categories from LeadCMS...');
+
+      if (!this.baseURL) {
+        throw new Error('LeadCMS URL is not configured.');
+      }
+
+      const url = new URL('/api/content/categories', this.baseURL);
+      if (language) {
+        url.searchParams.set('language', language);
+      }
+
+      const response: AxiosResponse = await axios.get(url.toString(), {
+        headers: this.getApiHeaders()
+      });
+
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error: any) {
+      logger.verbose(`[API] Failed to fetch categories: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Get all tags for a given language from LeadCMS
+   */
+  async getTags(language?: string): Promise<string[]> {
+    this._initialize();
+
+    if (this.useMock) {
+      return [];
+    }
+
+    try {
+      logger.verbose('[API] Fetching tags from LeadCMS...');
+
+      if (!this.baseURL) {
+        throw new Error('LeadCMS URL is not configured.');
+      }
+
+      const url = new URL('/api/content/tags', this.baseURL);
+      if (language) {
+        url.searchParams.set('language', language);
+      }
+
+      const response: AxiosResponse = await axios.get(url.toString(), {
+        headers: this.getApiHeaders()
+      });
+
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error: any) {
+      logger.verbose(`[API] Failed to fetch tags: ${error.message}`);
+      return [];
     }
   }
 

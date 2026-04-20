@@ -61,21 +61,12 @@ export async function pushSettings(options: PushSettingsOptions = {}): Promise<v
 
     if (targetName) {
       localSettings = localSettings.filter((s) => s.key === targetName);
-      if (localSettings.length === 0) {
-        console.log(`   ℹ️  Setting "${targetName}" not found locally`);
-        return;
-      }
-    }
-
-    if (localSettings.length === 0) {
-      console.log(`   ℹ️  No local settings to push`);
-      return;
     }
 
     // Fetch remote settings for comparison
     const allRemote = await fetchRemoteSettings(leadCMSUrl, leadCMSApiKey);
 
-    // Build operations
+    // Build operations (includes delete for remote-only settings)
     const operations = buildSettingsPushOperations(localSettings, allRemote);
     const changes = operations.filter((op) => op.type !== "unchanged");
 
@@ -86,20 +77,33 @@ export async function pushSettings(options: PushSettingsOptions = {}): Promise<v
 
     const toPush = selectOperationsForPush(operations, Boolean(force));
 
+    if (toPush.length === 0) {
+      console.log(`   ✅ All settings are in sync, nothing to push`);
+      return;
+    }
+
     if (dryRun) {
       console.log(`   🔍 Dry run - would push ${toPush.length} setting(s):`);
       for (const op of toPush) {
         const lang = op.language ? ` [${op.language}]` : "";
-        console.log(`     ${op.type}: ${op.key}${lang} = "${op.localValue}"`);
+        if (op.type === "delete") {
+          console.log(`     ${op.type}: ${op.key}${lang} (remove from remote)`);
+        } else {
+          console.log(`     ${op.type}: ${op.key}${lang} = "${op.localValue}"`);
+        }
       }
       return;
     }
 
-    // Push via import API
+    // Push via import API and delete remote-only settings
     const result = await pushSettingsToRemote(toPush, leadCMSUrl, leadCMSApiKey, dryRun || false);
 
     if (result) {
-      console.log(`   ✅ Settings push complete: ${result.added} added, ${result.updated} updated, ${result.failed} failed, ${result.skipped} skipped`);
+      const deleted = toPush.filter(op => op.type === "delete").length;
+      const parts = [`${result.added} added`, `${result.updated} updated`];
+      if (deleted > 0) parts.push(`${deleted} deleted`);
+      parts.push(`${result.failed} failed`, `${result.skipped} skipped`);
+      console.log(`   ✅ Settings push complete: ${parts.join(", ")}`);
       if (result.errors && result.errors.length > 0) {
         for (const err of result.errors) {
           console.error(`   ❌ ${err.key || "unknown"}: ${err.message || "Unknown error"}`);

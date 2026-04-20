@@ -988,6 +988,49 @@ describe('settings-manager', () => {
       expect(operations).toHaveLength(1);
       expect(operations[0].key).toBe('Content.MinTitleLength');
     });
+
+    it('returns delete operations for remote-only settings', () => {
+      const local: any[] = [
+        { key: 'Media.Cover.Dimensions', value: '512x350', language: null },
+      ];
+      const remote = [
+        { id: 1, key: 'Media.Cover.Dimensions', value: '512x350', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        { id: 2, key: 'Media.Cover.Dimensions', value: '360x300', language: 'en-US', createdAt: '2024-01-01T00:00:00Z' },
+      ];
+
+      const operations = buildSettingsPushOperations(local, remote);
+      expect(operations).toHaveLength(2);
+
+      const unchangedOp = operations.find(op => op.language === null);
+      expect(unchangedOp!.type).toBe('unchanged');
+
+      const deleteOp = operations.find(op => op.language === 'en-US');
+      expect(deleteOp).toBeDefined();
+      expect(deleteOp!.type).toBe('delete');
+      expect(deleteOp!.key).toBe('Media.Cover.Dimensions');
+      expect(deleteOp!.remoteValue).toBe('360x300');
+      expect(deleteOp!.remoteId).toBe(2);
+    });
+
+    it('does not return delete for remote-only settings with empty values', () => {
+      const local: any[] = [];
+      const remote = [
+        { id: 1, key: 'Content.MinTitleLength', value: '', language: null, createdAt: '2024-01-01T00:00:00Z' },
+      ];
+
+      const operations = buildSettingsPushOperations(local, remote);
+      expect(operations).toHaveLength(0);
+    });
+
+    it('skips non-tracked keys from remote settings in delete operations', () => {
+      const local: any[] = [];
+      const remote = [
+        { id: 1, key: 'Identity.RequireDigit', value: 'true', language: null, createdAt: '2024-01-01T00:00:00Z' },
+      ];
+
+      const operations = buildSettingsPushOperations(local, remote);
+      expect(operations).toHaveLength(0);
+    });
   });
 
   describe('full round-trip test', () => {
@@ -1319,5 +1362,28 @@ describe('selectOperationsForPush', () => {
     expect(selected[0].type).toBe('update');
     expect(selected[0].key).toBe('Content.MinTitleLength');
     expect(selected[1].type).toBe('create');
+  });
+
+  it('includes delete operations when force=false', () => {
+    const ops = [
+      { type: 'unchanged' as const, key: 'Content.MinTitleLength', language: null, localValue: '9', remoteValue: '9', remoteId: 1 },
+      { type: 'delete' as const, key: 'Media.Cover.Dimensions', language: 'en-US', localValue: '', remoteValue: '360x300', remoteId: 2 },
+    ];
+
+    const selected = selectOperationsForPush(ops, false);
+    expect(selected).toHaveLength(1);
+    expect(selected[0].type).toBe('delete');
+    expect(selected[0].key).toBe('Media.Cover.Dimensions');
+  });
+
+  it('includes delete operations when force=true', () => {
+    const ops = [
+      { type: 'unchanged' as const, key: 'Content.MinTitleLength', language: null, localValue: '9', remoteValue: '9', remoteId: 1 },
+      { type: 'delete' as const, key: 'Media.Cover.Dimensions', language: 'en-US', localValue: '', remoteValue: '360x300', remoteId: 2 },
+    ];
+
+    const selected = selectOperationsForPush(ops, true);
+    expect(selected).toHaveLength(2);
+    expect(selected.find(op => op.type === 'delete')).toBeDefined();
   });
 });

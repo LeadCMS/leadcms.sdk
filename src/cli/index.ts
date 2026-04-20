@@ -162,6 +162,9 @@ switch (command) {
   case 'templates':
     generateDockerTemplates();
     break;
+  case 'add-content':
+    runScript('add-content.js', commandArgs);
+    break;
   default:
     console.log(`
 LeadCMS SDK CLI v${getVersion()}
@@ -172,6 +175,7 @@ Usage:
   leadcms login          - Authenticate and save API token to .env file
   leadcms remote         - Manage named remotes (list/add/remove/show/set-default/reset)
   leadcms docker         - Generate Docker deployment templates
+  leadcms add-content [slug] - Create a new content file locally via interactive wizard
 
   Remote commands:
   leadcms remote list                    - List configured remotes
