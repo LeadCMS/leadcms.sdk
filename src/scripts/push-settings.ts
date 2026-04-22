@@ -23,6 +23,8 @@ export interface PushSettingsOptions {
   dryRun?: boolean;
   /** Force push even if unchanged */
   force?: boolean;
+  /** Suppress status display (used by push-all orchestrator). */
+  quiet?: boolean;
 }
 
 export function selectOperationsForPush(
@@ -46,14 +48,14 @@ export function selectOperationsForPush(
  * Push local settings to LeadCMS.
  */
 export async function pushSettings(options: PushSettingsOptions = {}): Promise<void> {
-  const { targetName, dryRun, force } = options;
+  const { targetName, dryRun, force, quiet } = options;
 
   if (!leadCMSApiKey) {
-    console.log("⏭️  Skipping settings push (no API key configured)");
+    if (!quiet) console.log("⏭️  Skipping settings push (no API key configured)");
     return;
   }
 
-  console.log(`⚙️  Pushing settings to LeadCMS...`);
+  if (!quiet) console.log(`⚙️  Pushing settings to LeadCMS...`);
 
   try {
     // Read local settings
@@ -71,14 +73,14 @@ export async function pushSettings(options: PushSettingsOptions = {}): Promise<v
     const changes = operations.filter((op) => op.type !== "unchanged");
 
     if (changes.length === 0 && !force) {
-      console.log(`   ✅ All settings are in sync, nothing to push`);
+      if (!quiet) console.log(`   ✅ All settings are in sync, nothing to push`);
       return;
     }
 
     const toPush = selectOperationsForPush(operations, Boolean(force));
 
     if (toPush.length === 0) {
-      console.log(`   ✅ All settings are in sync, nothing to push`);
+      if (!quiet) console.log(`   ✅ All settings are in sync, nothing to push`);
       return;
     }
 

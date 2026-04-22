@@ -64,6 +64,8 @@ export interface PushOptions {
   allowDelete?: boolean;  // Allow deletion of remote content not present locally
   showDelete?: boolean;   // Show deletion operations in status output
   allowConflictMarkers?: boolean; // Allow pushing content with unresolved merge conflict markers
+  /** Suppress status display and confirmation prompt (used by push-all orchestrator). */
+  quiet?: boolean;
   /** Remote context for multi-remote support. When provided, API calls target this remote. */
   remoteContext?: import("../lib/remote-context.js").RemoteContext;
 }
@@ -506,10 +508,17 @@ async function matchContent(
     // Build a set of IDs from the remote-specific id-map (or frontmatter for single-remote)
     const localIds = new Set<number | string>();
     if (metadataMap) {
-      // Multi-remote: use the target remote's metadata values
-      for (const slugMap of Object.values(metadataMap.content)) {
-        for (const entry of Object.values(slugMap)) {
-          if (entry.id != null) localIds.add(entry.id);
+      // Multi-remote: only include IDs for content that still has a local file.
+      // Stale metadata entries (files deleted locally) must NOT suppress deletion detection.
+      const localContentKeys = new Set<string>();
+      for (const local of localContent) {
+        localContentKeys.add(`${local.locale}:${local.slug}`);
+      }
+      for (const [locale, slugMap] of Object.entries(metadataMap.content)) {
+        for (const [slug, entry] of Object.entries(slugMap)) {
+          if (entry.id != null && localContentKeys.has(`${locale}:${slug}`)) {
+            localIds.add(entry.id);
+          }
         }
       }
     } else {
@@ -551,12 +560,13 @@ async function matchContent(
   return operations;
 }
 
-function countPushChanges(operations: ContentOperations, includeConflicts: boolean = false): number {
+function countPushChanges(operations: ContentOperations, includeConflicts: boolean = false, includeDeletes: boolean = false): number {
   return operations.create.length +
     operations.update.length +
     operations.rename.length +
     operations.typeChange.length +
-    (includeConflicts ? operations.conflict.length : 0);
+    (includeConflicts ? operations.conflict.length : 0) +
+    (includeDeletes ? operations.delete.length : 0);
 }
 
 function filterLocalContentByTargetId(
@@ -928,7 +938,8 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
   colorConsole.log('');
 
   // Summary line like git
-  const totalChanges = operations.create.length + operations.update.length + operations.rename.length + operations.typeChange.length + operations.conflict.length;
+  const deleteCount = showDelete ? operations.delete.length : 0;
+  const totalChanges = operations.create.length + operations.update.length + operations.rename.length + operations.typeChange.length + operations.conflict.length + deleteCount;
   if (totalChanges === 0) {
     if (isSingleFile) {
       colorConsole.success('✅ File is in sync with remote content!');
@@ -1181,7 +1192,7 @@ async function showDryRunOperations(operations: ContentOperations): Promise<void
  * Main function for push command
  */
 async function pushMain(options: PushOptions = {}): Promise<void> {
-  const { statusOnly = false, targetId, targetSlug, statusFilter, showDetailedPreview = false, dryRun = false, allowDelete = false, showDelete = false, allowConflictMarkers = false, remoteContext: remoteCtx } = options;
+  const { statusOnly = false, targetId, targetSlug, statusFilter, showDetailedPreview = false, dryRun = false, allowDelete = false, showDelete = false, allowConflictMarkers = false, quiet = false, remoteContext: remoteCtx } = options;
 
   let force = options.force ?? false;
 
@@ -1311,7 +1322,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
 
     // Check if we found the target content
     if (isSingleFileMode) {
-      const totalChanges = countPushChanges(finalOperations, true);
+      const totalChanges = countPushChanges(finalOperations, true, showDelete || allowDelete);
 
       if (totalChanges === 0) {
         // Check if the target content exists but is in sync
@@ -1333,8 +1344,10 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
       }
     }
 
-    // Display status
-    await displayStatus(finalOperations, statusOnly, isSingleFileMode, showDetailedPreview, remoteTypeMap, statusOnly ? showDelete : true, remoteCtx?.name);
+    // Display status (skip in quiet mode — push-all handles unified display)
+    if (!quiet) {
+      await displayStatus(finalOperations, statusOnly, isSingleFileMode, showDetailedPreview, remoteTypeMap, statusOnly ? showDelete : true, remoteCtx?.name);
+    }
 
     // If status only, we're done
     if (statusOnly) {
@@ -1353,36 +1366,42 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
       return;
     }
 
-    const totalChanges = countPushChanges(finalOperations, force);
+    const totalChanges = countPushChanges(finalOperations, force, allowDelete);
     if (totalChanges === 0) {
-      if (isSingleFileMode) {
-        console.log('✅ File is already in sync.');
-      } else {
-        console.log('✅ Nothing to sync.');
+      if (!quiet) {
+        if (isSingleFileMode) {
+          console.log('✅ File is already in sync.');
+        } else {
+          console.log('✅ Nothing to sync.');
+        }
       }
       return;
     }
 
-    // Confirm changes
-    const itemDescription = isSingleFileMode ? 'file change' : 'changes';
-    const confirmMsg = `\nProceed with syncing ${totalChanges} ${itemDescription} to LeadCMS? (y/N): `;
-    const confirmation = await question(confirmMsg);
+    // Confirm changes (skip in quiet mode — push-all handles unified confirmation)
+    if (!quiet) {
+      const itemDescription = isSingleFileMode ? 'file change' : 'changes';
+      const confirmMsg = `\nProceed with syncing ${totalChanges} ${itemDescription} to LeadCMS? (y/N): `;
+      const confirmation = await question(confirmMsg);
 
-    if (confirmation.toLowerCase() !== 'y' && confirmation.toLowerCase() !== 'yes') {
-      console.log('🚫 Push cancelled.');
-      return;
+      if (confirmation.toLowerCase() !== 'y' && confirmation.toLowerCase() !== 'yes') {
+        console.log('🚫 Push cancelled.');
+        return;
+      }
     }
 
     // Execute the sync
     const results = await executePush(finalOperations, { force, remoteCtx });
 
-    // Display final message based on results
-    if (results.failed === 0) {
-      colorConsole.success('\n🎉 Content push completed successfully!');
-    } else if (results.successful > 0) {
-      colorConsole.warn(`\n⚠️  Content push completed with errors: ${results.successful} successful, ${results.failed} failed`);
-    } else {
-      colorConsole.error('\n❌ Content push failed - no changes were synced');
+    // Display final message based on results (skip in quiet mode)
+    if (!quiet) {
+      if (results.failed === 0) {
+        colorConsole.success('\n🎉 Content push completed successfully!');
+      } else if (results.successful > 0) {
+        colorConsole.warn(`\n⚠️  Content push completed with errors: ${results.successful} successful, ${results.failed} failed`);
+      } else {
+        colorConsole.error('\n❌ Content push failed - no changes were synced');
+      }
     }
 
   } catch (error: any) {

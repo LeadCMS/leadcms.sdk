@@ -743,6 +743,8 @@ export interface PushMediaOptions {
   allowDelete?: boolean;
   /** Custom media directory path (absolute). If not provided, uses config.mediaDir */
   mediaDir?: string;
+  /** Suppress status display and confirmation prompt (used by push-all orchestrator). */
+  quiet?: boolean;
   /** Remote context for multi-remote support. When provided, API calls target this remote. */
   remoteContext?: RemoteContext;
 }
@@ -808,8 +810,10 @@ export async function pushMedia(
     // Match and determine operations
     const operations = matchMediaFiles(filteredLocal, filteredRemote, options.allowDelete || false);
 
-    // Display and execute (always show deletes in push mode)
-    displayMediaStatus(operations, options.dryRun, true, deps);
+    // Display status (skip in quiet mode — push-all handles unified display)
+    if (!options.quiet) {
+      displayMediaStatus(operations, options.dryRun, true, deps);
+    }
 
     if (options.dryRun) {
       return {
@@ -829,8 +833,8 @@ export async function pushMedia(
       };
     }
 
-    // Confirm changes unless --force is used
-    if (!options.force) {
+    // Confirm changes unless --force is used or in quiet mode
+    if (!options.force && !options.quiet) {
       const confirmMsg = `\nProceed with applying ${totalOps} change(s) to LeadCMS? (y/N): `;
       const confirmed = await promptConfirmation(confirmMsg);
 

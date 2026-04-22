@@ -1042,4 +1042,131 @@ describe('LeadCMS Status Analysis (Real SDK Logic)', () => {
       expect(ops.create[0].local.type).toBe('home');
     });
   });
+
+  describe('matchContent - Deletion Detection with MetadataMap', () => {
+    it('should detect deletions when local file is removed but metadata entry remains', async () => {
+      // Scenario: remote has content ID 59 and 62, local files for those are deleted,
+      // but the metadata map still has entries for them.
+      // The deletion detection should NOT be fooled by stale metadata entries.
+      const local = [makeLocal({
+        slug: 'existing-article',
+        locale: 'ru-RU',
+        metadata: { type: 'article' },
+      })];
+
+      const remote = [
+        makeRemote({ id: 50, slug: 'existing-article', language: 'ru-RU' }),
+        makeRemote({ id: 59, slug: 'excel-export-sheets', language: 'ru-RU' }),
+        makeRemote({ id: 62, slug: 'excel-recalculate', language: 'ru-RU' }),
+      ];
+
+      // Metadata map still has entries for the deleted content (stale)
+      const metadataMap = {
+        content: {
+          'ru-RU': {
+            'existing-article': { id: 50, updatedAt: '2025-01-01T00:00:00Z' },
+            'excel-export-sheets': { id: 59, updatedAt: '2025-01-01T00:00:00Z' },
+            'excel-recalculate': { id: 62, updatedAt: '2025-01-01T00:00:00Z' },
+          },
+        },
+        emailTemplates: {},
+        comments: {},
+      };
+
+      const ops = await (matchContent as any)(local, remote, undefined, true, metadataMap);
+
+      // Should detect 2 deletions despite metadata entries existing
+      expect(ops.delete).toHaveLength(2);
+      const deletedSlugs = ops.delete.map((op: any) => op.remote?.slug).sort();
+      expect(deletedSlugs).toEqual(['excel-export-sheets', 'excel-recalculate']);
+    });
+
+    it('should not detect deletions for content that still exists locally with metadata', async () => {
+      const local = [
+        makeLocal({ slug: 'article-a', locale: 'en', metadata: { type: 'article' } }),
+        makeLocal({ slug: 'article-b', locale: 'en', metadata: { type: 'article' } }),
+      ];
+
+      const remote = [
+        makeRemote({ id: 1, slug: 'article-a', language: 'en' }),
+        makeRemote({ id: 2, slug: 'article-b', language: 'en' }),
+      ];
+
+      const metadataMap = {
+        content: {
+          en: {
+            'article-a': { id: 1, updatedAt: '2025-01-01T00:00:00Z' },
+            'article-b': { id: 2, updatedAt: '2025-01-01T00:00:00Z' },
+          },
+        },
+        emailTemplates: {},
+        comments: {},
+      };
+
+      const ops = await (matchContent as any)(local, remote, undefined, true, metadataMap);
+
+      expect(ops.delete).toHaveLength(0);
+    });
+
+    it('should detect deletions across multiple locales with stale metadata', async () => {
+      const local = [
+        makeLocal({ slug: 'article-a', locale: 'en', metadata: { type: 'article' } }),
+      ];
+
+      const remote = [
+        makeRemote({ id: 1, slug: 'article-a', language: 'en' }),
+        makeRemote({ id: 2, slug: 'article-a', language: 'ru-RU' }),
+        makeRemote({ id: 3, slug: 'article-b', language: 'en' }),
+      ];
+
+      // Metadata has entries for all three, but only article-a/en exists locally
+      const metadataMap = {
+        content: {
+          en: {
+            'article-a': { id: 1, updatedAt: '2025-01-01T00:00:00Z' },
+            'article-b': { id: 3, updatedAt: '2025-01-01T00:00:00Z' },
+          },
+          'ru-RU': {
+            'article-a': { id: 2, updatedAt: '2025-01-01T00:00:00Z' },
+          },
+        },
+        emailTemplates: {},
+        comments: {},
+      };
+
+      const ops = await (matchContent as any)(local, remote, undefined, true, metadataMap);
+
+      expect(ops.delete).toHaveLength(2);
+      const deletedIds = ops.delete.map((op: any) => op.remote?.id).sort();
+      expect(deletedIds).toEqual([2, 3]);
+    });
+  });
+
+  describe('countPushChanges - Delete Operations', () => {
+    it('should include delete operations in count when includeDeletes is true', () => {
+      const ops = {
+        create: [],
+        update: [],
+        rename: [],
+        typeChange: [],
+        conflict: [],
+        delete: [{ local: {}, remote: {} }, { local: {}, remote: {} }],
+      };
+
+      expect(countPushChanges(ops as any, false, true)).toBe(2);
+    });
+
+    it('should not include delete operations by default', () => {
+      const ops = {
+        create: [{ local: {} }],
+        update: [],
+        rename: [],
+        typeChange: [],
+        conflict: [],
+        delete: [{ local: {}, remote: {} }],
+      };
+
+      expect(countPushChanges(ops as any, false)).toBe(1);
+    });
+  });
 });

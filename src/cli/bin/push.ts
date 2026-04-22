@@ -14,6 +14,7 @@ const remoteContext = parseRemoteFlag(args);
 const statusOnly = args.includes('--status');
 const force = args.includes('--force');
 const dryRun = args.includes('--dry-run');
+const allowDelete = args.includes('--delete');
 const allowConflictMarkers = args.includes('--allow-conflict-markers');
 
 if (!statusOnly && !dryRun) {
@@ -36,7 +37,7 @@ if (slugIndex !== -1 && args[slugIndex + 1]) {
   targetSlug = args[slugIndex + 1];
 }
 
-pushLeadCMSContent({ statusOnly, force, targetId, targetSlug, dryRun, allowConflictMarkers, remoteContext }).catch((error: any) => {
+pushLeadCMSContent({ statusOnly, force, targetId, targetSlug, dryRun, allowDelete, allowConflictMarkers, remoteContext }).catch((error: any) => {
   console.error('Error running LeadCMS push:', error.message);
   process.exit(1);
 });
