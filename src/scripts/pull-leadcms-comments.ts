@@ -227,7 +227,7 @@ function toStoredComment(comment: Comment): StoredComment {
  */
 const STORED_COMMENT_KEY_ORDER: (keyof StoredComment)[] = [
   'id', 'createdAt', 'updatedAt',
-  'parentId', 'authorName', 'body',
+  'parentId', 'authorName', 'authorEmail', 'body',
   'status', 'answerStatus', 'publishedAt',
   'commentableId', 'commentableType',
   'avatarUrl', 'language', 'translationKey',

@@ -155,6 +155,8 @@ interface CommentUpdateItem {
   body?: string;
   authorName?: string;
   language?: string;
+  parentId?: number | null;
+  commentableId?: number | null;
   status?: 'NotApproved' | 'Approved' | 'Spam' | 'Answer';
   answerStatus?: 'Unanswered' | 'Answered' | 'Closed';
   translationKey?: string | null;
@@ -1026,6 +1028,7 @@ class LeadCMSDataService {
       const updatedComment: CommentItem = {
         ...this.mockData.comments[existingIndex],
         ...comment,
+        commentableId: comment.commentableId ?? this.mockData.comments[existingIndex].commentableId,
         updatedAt: new Date().toISOString(),
       };
 
@@ -1986,6 +1989,27 @@ class LeadCMSDataService {
   isApiKeyConfigured(): boolean {
     this._initialize();
     return !!this.apiKey;
+  }
+
+  /**
+   * Fetch the LeadCMS server version from `/api/version`.
+   * Returns `null` if the endpoint is unreachable or in mock mode.
+   * Used for feature-gating SDK behavior on older servers.
+   */
+  async getServerVersion(): Promise<string | null> {
+    this._initialize();
+    if (this.useMock) {
+      // Pretend mock server is always on the latest version so feature checks
+      // don't gate mock-based test scenarios.
+      return '99.99.99';
+    }
+    if (!this.baseURL) return null;
+    try {
+      const { getLeadCMSVersion } = await import('./auth.js');
+      return await getLeadCMSVersion(this.baseURL);
+    } catch {
+      return null;
+    }
   }
 
   /**

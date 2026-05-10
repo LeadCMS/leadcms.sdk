@@ -24,6 +24,7 @@ jest.mock('../src/lib/data-service.js', () => {
     createComment: jest.fn(),
     updateComment: jest.fn(),
     deleteComment: jest.fn(),
+    getServerVersion: jest.fn(() => Promise.resolve('1.5.16-pre')),
   };
 
   return {
@@ -59,6 +60,7 @@ describe('push-comments', () => {
     await fs.mkdir(commentsDir, { recursive: true });
     jest.clearAllMocks();
     dataServiceMock.isApiKeyConfigured.mockReturnValue(true);
+    dataServiceMock.getServerVersion.mockResolvedValue('1.5.16-pre');
     mockedPullCommentSync.mockResolvedValue({ items: [], deleted: [], nextSyncToken: 'sync-1' } as any);
     mockedPullLeadCMSComments.mockResolvedValue(undefined);
   });
@@ -212,6 +214,64 @@ describe('push-comments', () => {
     expect(saved[0].avatarUrl).toBe('https://example.com/avatars/peter.png');
   });
 
+  it('stamps translationKey and clears authorEmail on non-default remote create so the post-push pull can merge without duplicating', async () => {
+    const filePath = await writeCommentFile('ru-RU/content/162.json', [
+      {
+        parentId: 864,
+        authorName: 'Peter Liapin',
+        authorEmail: 'peter@xltools.net',
+        avatarUrl: 'https://www.gravatar.com/avatar/abc?size=48&d=mp',
+        body: 'Здравствуйте, Геннадий!',
+        publishedAt: '2026-01-15T09:00:00Z',
+        commentableId: 162,
+        commentableType: 'Content',
+        language: 'ru-RU',
+      },
+    ]);
+
+    dataServiceMock.createComment.mockResolvedValue({
+      id: 957,
+      parentId: 864,
+      authorName: 'Peter Liapin',
+      body: 'Здравствуйте, Геннадий!',
+      status: 'Approved',
+      createdAt: '2026-01-15T09:00:00Z',
+      updatedAt: '2026-01-15T09:00:00Z',
+      publishedAt: '2026-01-15T09:00:00Z',
+      commentableId: 162,
+      commentableType: 'Content',
+      language: 'ru-RU',
+      translationKey: 'comment_content_162_27b170fc_a4906d49',
+    });
+
+    const metaStateDir = path.join(tmpRoot, '.leadcms', 'remotes', 'loc');
+    await fs.mkdir(metaStateDir, { recursive: true });
+
+    const remoteContext = {
+      name: 'loc',
+      url: 'http://localhost:45437',
+      apiKey: 'loc-key',
+      isDefault: false,
+      stateDir: metaStateDir,
+    };
+
+    await pushComments({ remoteContext: remoteContext as any });
+
+    const saved = JSON.parse(await fs.readFile(filePath, 'utf8'));
+    // Single entry — no duplicate row created by push
+    expect(saved).toHaveLength(1);
+    // translationKey is stamped so the post-push anonymous pull can merge by key
+    expect(saved[0].translationKey).toBe('comment_content_162_27b170fc_a4906d49');
+    // authorEmail MUST be preserved so the same entry can still be CREATE-d on
+    // the default remote later (create requires authorEmail). It's the pull
+    // after the default-remote push that finally strips it.
+    expect(saved[0].authorEmail).toBe('peter@xltools.net');
+    // id/createdAt/updatedAt remain the default remote's responsibility, so not written
+    expect(saved[0]).not.toHaveProperty('id');
+    expect(saved[0]).not.toHaveProperty('createdAt');
+    expect(saved[0]).not.toHaveProperty('updatedAt');
+  });
+
   it('updates matching comments and deletes remote-only comments when delete mode is enabled', async () => {
     await writeCommentFile('content/110.json', [
       {
@@ -288,6 +348,8 @@ describe('push-comments', () => {
       body: 'Locally updated reply',
       authorName: 'Peter Liapin',
       language: 'en',
+      parentId: 864,
+      commentableId: 110,
       status: 'Approved',
       answerStatus: 'Answered',
     });
@@ -357,6 +419,8 @@ describe('push-comments', () => {
       body: 'Local conflicting body',
       authorName: 'Peter Liapin',
       language: 'en',
+      parentId: 864,
+      commentableId: 110,
       status: 'Approved',
     });
     expect(mockedPullLeadCMSComments).toHaveBeenCalledTimes(1);
@@ -486,6 +550,40 @@ describe('push-comments', () => {
     expect(output).toContain('Comment diff preview:');
     expect(output).toContain('answerStatus');
     expect(output).toContain('Local preview body');
+
+    logSpy.mockRestore();
+  });
+
+  it('does not print a duplicate "new" comment reference for create rows in status output', async () => {
+    await writeCommentFile('content/110.json', [
+      {
+        parentId: 864,
+        authorName: 'Peter Liapin',
+        authorEmail: 'peter@xltools.net',
+        body: 'Brand new\n\nlocal reply   with extra   spaces',
+        status: 'Approved',
+        commentableId: 110,
+        commentableType: 'Content',
+        language: 'en',
+      },
+    ]);
+
+    mockedPullCommentSync.mockResolvedValue({
+      items: [],
+      deleted: [],
+      nextSyncToken: 'sync-new-status',
+    } as any);
+
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => { });
+
+    await statusComments();
+
+    const output = logSpy.mock.calls.flat().join('\n');
+    expect(output).toContain('new:');
+    expect(output).toContain('Content #110');
+    expect(output).toContain('"Brand new local reply with extra spaces"');
+    expect(output).not.toContain('comment new');
+    expect(output).not.toContain('Brand new\n\nlocal reply');
 
     logSpy.mockRestore();
   });
@@ -705,5 +803,329 @@ describe('push-comments', () => {
 
     expect(mockedPullLeadCMSComments).toHaveBeenCalledTimes(1);
     expect(mockedPullLeadCMSComments).toHaveBeenCalledWith(remoteContext);
+  });
+
+  it('supports updating parentId for comments', async () => {
+    // Create a local comment that changes the parentId from 100 to 200
+    await writeCommentFile('content/110.json', [
+      {
+        id: 50,
+        parentId: 200, // Different from remote
+        authorName: 'Test Author',
+        authorEmail: 'test@example.com',
+        body: 'Comment body',
+        status: 'Approved',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T12:00:00Z',
+        commentableId: 110,
+        commentableType: 'Content',
+        language: 'en',
+      },
+    ]);
+
+    // Mock remote comment with different parentId
+    mockedPullCommentSync.mockResolvedValue({
+      items: [
+        {
+          id: 50,
+          parentId: 100, // Original parentId
+          authorName: 'Test Author',
+          authorEmail: 'test@example.com',
+          body: 'Comment body',
+          status: 'Approved',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z', // Older than local
+          commentableId: 110,
+          commentableType: 'Content',
+          language: 'en',
+        },
+      ],
+      deleted: [],
+      nextSyncToken: 'sync-parentid-test',
+    } as any);
+
+    dataServiceMock.updateComment.mockResolvedValue({
+      id: 50,
+      parentId: 200,
+      authorName: 'Test Author',
+      authorEmail: 'test@example.com',
+      body: 'Comment body',
+      status: 'Approved',
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T12:00:00Z',
+      commentableId: 110,
+      commentableType: 'Content',
+      language: 'en',
+    });
+
+    await pushComments();
+
+    // Verify that updateComment was called with parentId included
+    expect(dataServiceMock.updateComment).toHaveBeenCalledTimes(1);
+    expect(dataServiceMock.updateComment).toHaveBeenCalledWith(50,
+      expect.objectContaining({
+        parentId: 200
+      })
+    );
+
+    // Verify that the update was performed (not treated as a conflict)
+    const result = await buildCommentStatus();
+    const updates = result.operations.filter(op => op.type === 'update');
+    expect(updates).toHaveLength(1);
+  });
+
+  it('allows pushing updates when local commentableId differs from remote (file relocation scenario)', async () => {
+    // Scenario: user moved a comment's file from content/110.json to content/162.json
+    // (by renaming the file) and also updated parentId to reparent the comment thread.
+    // On LeadCMS >= 1.5.16-pre the API accepts both parentId and commentableId in
+    // the update, so the SDK should push both so the server reparents the comment.
+    await writeCommentFile('content/162.json', [
+      {
+        id: 864,
+        parentId: 900, // Changed locally to new parent comment
+        authorName: 'Test Author',
+        authorEmail: 'test@example.com',
+        body: 'Reparented comment',
+        status: 'Approved',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-02T00:00:00Z',
+        commentableId: 162, // New location (derived from filename)
+        commentableType: 'Content',
+        language: 'ru-RU',
+      },
+    ]);
+
+    mockedPullCommentSync.mockResolvedValue({
+      items: [
+        {
+          id: 864,
+          parentId: 800, // Old parent
+          authorName: 'Test Author',
+          authorEmail: 'test@example.com',
+          body: 'Reparented comment',
+          status: 'Approved',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+          commentableId: 110, // Still at old location on remote
+          commentableType: 'Content',
+          language: 'ru-RU',
+        },
+      ],
+      deleted: [],
+      nextSyncToken: 'sync-reparent',
+    } as any);
+
+    dataServiceMock.updateComment.mockResolvedValue({
+      id: 864,
+      parentId: 900,
+      authorName: 'Test Author',
+      authorEmail: 'test@example.com',
+      body: 'Reparented comment',
+      status: 'Approved',
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-02-01T00:00:00Z',
+      commentableId: 162,
+      commentableType: 'Content',
+      language: 'ru-RU',
+    });
+
+    // buildCommentStatus should treat this as an update, not a conflict
+    const statusResult = await buildCommentStatus();
+    const conflicts = statusResult.operations.filter(op => op.type === 'conflict');
+    const updates = statusResult.operations.filter(op => op.type === 'update');
+    expect(conflicts).toHaveLength(0);
+    expect(updates).toHaveLength(1);
+
+    await pushComments();
+
+    // Payload must include both parentId and commentableId so the server can
+    // reparent the comment (LeadCMS >= 1.5.16-pre).
+    expect(dataServiceMock.updateComment).toHaveBeenCalledTimes(1);
+    const [calledId, payload] = dataServiceMock.updateComment.mock.calls[0];
+    expect(calledId).toBe(864);
+    expect(payload.parentId).toBe(900);
+    expect(payload.commentableId).toBe(162);
+    // commentableType is not part of CommentUpdateDto and must not be sent
+    expect(payload).not.toHaveProperty('commentableType');
+  });
+
+  it('warns and strips parentId/commentableId on older servers that do not support reparenting', async () => {
+    // Older LeadCMS (< 1.5.16-pre) does not accept parentId/commentableId in
+    // update payloads. The SDK must not attempt to send those fields and must
+    // surface a warning so the user knows their reparent change won't sync.
+    dataServiceMock.getServerVersion.mockResolvedValue('1.5.15-pre');
+
+    await writeCommentFile('content/162.json', [
+      {
+        id: 864,
+        parentId: 900,
+        authorName: 'Test Author',
+        authorEmail: 'test@example.com',
+        body: 'Body edited locally',
+        status: 'Approved',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-02T00:00:00Z',
+        commentableId: 162,
+        commentableType: 'Content',
+        language: 'ru-RU',
+      },
+    ]);
+
+    mockedPullCommentSync.mockResolvedValue({
+      items: [
+        {
+          id: 864,
+          parentId: 800,
+          authorName: 'Test Author',
+          authorEmail: 'test@example.com',
+          body: 'Original body',
+          status: 'Approved',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+          commentableId: 110,
+          commentableType: 'Content',
+          language: 'ru-RU',
+        },
+      ],
+      deleted: [],
+      nextSyncToken: 'sync-legacy',
+    } as any);
+
+    dataServiceMock.updateComment.mockResolvedValue({
+      id: 864,
+      parentId: 800,
+      authorName: 'Test Author',
+      authorEmail: 'test@example.com',
+      body: 'Body edited locally',
+      status: 'Approved',
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-02-01T00:00:00Z',
+      commentableId: 110,
+      commentableType: 'Content',
+      language: 'ru-RU',
+    });
+
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: any[]) => { warnings.push(String(args[0])); };
+
+    try {
+      await pushComments();
+    } finally {
+      console.warn = originalWarn;
+    }
+
+    expect(dataServiceMock.updateComment).toHaveBeenCalledTimes(1);
+    const [calledId, payload] = dataServiceMock.updateComment.mock.calls[0];
+    expect(calledId).toBe(864);
+    // Editable fields still pushed
+    expect(payload.body).toBe('Body edited locally');
+    // Reparenting fields stripped on older servers
+    expect(payload).not.toHaveProperty('parentId');
+    expect(payload).not.toHaveProperty('commentableId');
+
+    expect(
+      warnings.some(msg => msg.includes('1.5.16-pre') && msg.includes('864')),
+    ).toBe(true);
+  });
+
+  it('continues processing after a 404 from createComment and reports the failure', async () => {
+    // Two new local comments targeting different content items. The first target
+    // (Content #263) no longer exists on the server so createComment rejects
+    // with a 404 ProblemDetails response. The second comment must still be
+    // created and the overall push must not throw.
+    await writeCommentFile('content/263.json', [
+      {
+        parentId: 823,
+        authorName: 'Peter Liapin',
+        authorEmail: 'peter@xltools.net',
+        body: 'Orphan comment on missing content',
+        status: 'Approved',
+        commentableId: 263,
+        commentableType: 'Content',
+        language: 'en-US',
+      },
+    ]);
+    await writeCommentFile('content/20.json', [
+      {
+        parentId: 819,
+        authorName: 'Peter Liapin',
+        authorEmail: 'peter@xltools.net',
+        body: 'Healthy comment on existing content',
+        status: 'Approved',
+        commentableId: 20,
+        commentableType: 'Content',
+        language: 'en-US',
+      },
+    ]);
+
+    mockedPullCommentSync.mockResolvedValue({
+      items: [], deleted: [], nextSyncToken: 'sync-404',
+    } as any);
+
+    const notFoundError: any = new Error('Request failed with status code 404');
+    notFoundError.response = {
+      status: 404,
+      data: {
+        type: 'https://tools.ietf.org/html/rfc9110#section-15.5.5',
+        title: 'Not Found',
+        status: 404,
+        entityType: 'Content',
+        entityUid: '263',
+      },
+    };
+
+    dataServiceMock.createComment.mockImplementation(async (payload: any) => {
+      if (payload.commentableId === 263) {
+        throw notFoundError;
+      }
+      return {
+        id: 9999,
+        parentId: payload.parentId,
+        authorName: payload.authorName,
+        authorEmail: payload.authorEmail,
+        body: payload.body,
+        status: payload.status,
+        createdAt: '2026-04-23T12:00:00Z',
+        updatedAt: null,
+        commentableId: payload.commentableId,
+        commentableType: payload.commentableType,
+        language: payload.language,
+        translationKey: 'comment_content_20_new',
+      };
+    });
+
+    const warnings: string[] = [];
+    const errors: string[] = [];
+    const originalWarn = console.warn;
+    const originalError = console.error;
+    console.warn = (...args: any[]) => { warnings.push(String(args[0])); };
+    console.error = (...args: any[]) => { errors.push(String(args[0])); };
+
+    try {
+      await expect(pushComments()).resolves.toBeUndefined();
+    } finally {
+      console.warn = originalWarn;
+      console.error = originalError;
+    }
+
+    // Both creates were attempted
+    expect(dataServiceMock.createComment).toHaveBeenCalledTimes(2);
+
+    // 404 target produced a warning mentioning the missing entity
+    expect(
+      warnings.some(msg => msg.includes('Content #263') && msg.includes('404')),
+    ).toBe(true);
+
+    // Summary warning at the end
+    expect(
+      warnings.some(msg => /1 comment operation[s]? failed/i.test(msg)),
+    ).toBe(true);
+
+    // No uncaught errors logged that would indicate a crash
+    expect(errors).toEqual([]);
+
+    // Post-push refresh still ran because at least one create succeeded
+    expect(mockedPullLeadCMSComments).toHaveBeenCalledTimes(1);
   });
 });

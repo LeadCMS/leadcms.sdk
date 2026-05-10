@@ -7,6 +7,7 @@ import * as Diff from 'diff';
 
 import { getConfig } from '../lib/config.js';
 import { leadCMSDataService } from '../lib/data-service.js';
+import { compareVersions } from '../lib/auth.js';
 import { isValidLocaleCode } from '../lib/locale-utils.js';
 import { colorConsole, diffColors, statusColors } from '../lib/console-colors.js';
 import { logger } from '../lib/logger.js';
@@ -79,8 +80,12 @@ function normalizeTags(tags?: string[] | null): string[] {
   return [...(tags || [])].sort((a, b) => a.localeCompare(b));
 }
 
-function normalizeEditableFields(comment: Partial<EditableComment | RemoteCommentItem>, remote?: RemoteCommentItem) {
-  return {
+function normalizeEditableFields(
+  comment: Partial<EditableComment | RemoteCommentItem>,
+  remote?: RemoteCommentItem,
+  canReparent: boolean = true,
+) {
+  const base: Record<string, any> = {
     body: comment.body ?? remote?.body ?? '',
     authorName: comment.authorName ?? remote?.authorName ?? '',
     language: comment.language ?? remote?.language ?? DEFAULT_LANGUAGE,
@@ -90,20 +95,37 @@ function normalizeEditableFields(comment: Partial<EditableComment | RemoteCommen
     tags: normalizeTags(comment.tags ?? remote?.tags),
     publishedAt: comment.publishedAt ?? remote?.publishedAt ?? undefined,
   };
+  // Reparenting fields are only sent/compared when the server supports them
+  // (LeadCMS >= 1.5.16-pre). On older servers, parentId and commentableId are
+  // immutable via the API, so including them in diffs would produce false
+  // updates/conflicts after local file relocations.
+  if (canReparent) {
+    base.parentId = comment.parentId ?? remote?.parentId ?? undefined;
+    base.commentableId = comment.commentableId ?? remote?.commentableId ?? undefined;
+  }
+  return base;
 }
 
-function hasEditableDifferences(local: EditableComment, remote: RemoteCommentItem): boolean {
-  const normalizedLocal = normalizeEditableFields(local, remote);
-  const normalizedRemote = normalizeEditableFields(remote);
+function hasEditableDifferences(
+  local: EditableComment,
+  remote: RemoteCommentItem,
+  canReparent: boolean = true,
+): boolean {
+  const normalizedLocal = normalizeEditableFields(local, remote, canReparent);
+  const normalizedRemote = normalizeEditableFields(remote, undefined, canReparent);
   return JSON.stringify(normalizedLocal) !== JSON.stringify(normalizedRemote);
 }
 
-function hasImmutableDifferences(local: EditableComment, remote: RemoteCommentItem): boolean {
-  return (
-    (local.parentId ?? null) !== (remote.parentId ?? null)
-    || (local.commentableId ?? remote.commentableId) !== remote.commentableId
-    || (local.commentableType ?? remote.commentableType) !== remote.commentableType
-  );
+// Detect whether local comments have parentId/commentableId values that
+// differ from their remote counterpart — used to warn users on older servers
+// that their reparenting changes won't sync.
+function hasReparentingIntent(local: EditableComment, remote: RemoteCommentItem): boolean {
+  const localParent = local.parentId ?? null;
+  const remoteParent = remote.parentId ?? null;
+  if (localParent !== remoteParent) return true;
+  const localCommentable = local.commentableId ?? null;
+  const remoteCommentable = remote.commentableId ?? null;
+  return localCommentable !== remoteCommentable;
 }
 
 function isRemoteNewer(local: EditableComment, remote: RemoteCommentItem, metadataMap?: MetadataMap): boolean {
@@ -229,9 +251,13 @@ function buildCreatePayload(local: LocalCommentItem): CommentCreateItem {
   }) as CommentCreateItem;
 }
 
-function buildUpdatePayload(local: LocalCommentItem, remote: RemoteCommentItem): CommentUpdateItem {
-  const normalized = normalizeEditableFields(local.comment, remote);
-  return filterUndefinedValues({
+function buildUpdatePayload(
+  local: LocalCommentItem,
+  remote: RemoteCommentItem,
+  canReparent: boolean = true,
+): CommentUpdateItem {
+  const normalized = normalizeEditableFields(local.comment, remote, canReparent);
+  const payload: Record<string, any> = {
     body: normalized.body,
     authorName: normalized.authorName,
     language: normalized.language,
@@ -240,7 +266,12 @@ function buildUpdatePayload(local: LocalCommentItem, remote: RemoteCommentItem):
     translationKey: normalized.translationKey,
     tags: normalized.tags.length > 0 ? normalized.tags : local.comment.tags ?? remote.tags,
     publishedAt: normalized.publishedAt,
-  }) as CommentUpdateItem;
+  };
+  if (canReparent) {
+    payload.parentId = normalized.parentId;
+    payload.commentableId = normalized.commentableId;
+  }
+  return filterUndefinedValues(payload) as CommentUpdateItem;
 }
 
 function filterUndefinedValues<T extends Record<string, any>>(value: T): T {
@@ -277,32 +308,50 @@ async function updateLocalFileFromResponse(
     }
   }
 
-  // Only update local file for default remote or single-remote mode
-  if (remoteCtx && !remoteCtx.isDefault) {
-    return;
-  }
+  const isNonDefaultRemote = !!(remoteCtx && !remoteCtx.isDefault);
 
-  Object.assign(local.comment, {
-    ...local.comment,
-    id: remote.id,
-    parentId: remote.parentId ?? null,
-    authorName: remote.authorName,
-    authorEmail: undefined,
-    body: remote.body,
-    status: remote.status,
-    answerStatus: remote.answerStatus,
-    createdAt: remote.createdAt,
-    updatedAt: remote.updatedAt,
-    publishedAt: remote.publishedAt,
-    commentableId: remote.commentableId,
-    commentableType: remote.commentableType,
-    language: remote.language,
-    translationKey: remote.translationKey,
-    contactId: remote.contactId,
-    source: remote.source,
-    tags: remote.tags,
-    avatarUrl: remote.avatarUrl,
-  });
+  if (isNonDefaultRemote) {
+    // On non-default remotes we intentionally do NOT write id/createdAt/updatedAt
+    // into the local file — those fields belong to the default remote. We also
+    // intentionally KEEP authorEmail: the same local entry still needs to be
+    // CREATE-able on the default remote later, and create requires authorEmail.
+    // The anonymous pull that runs after the default-remote push is what
+    // finally strips authorEmail (pull replaces the local entry entirely and
+    // authorEmail is not part of StoredComment).
+    //
+    // We only stamp translationKey (and refresh parentId/authorName/language)
+    // so the post-push anonymous pull can merge by translationKey instead of
+    // creating a duplicate row.
+    Object.assign(local.comment, {
+      ...local.comment,
+      parentId: remote.parentId ?? null,
+      authorName: remote.authorName,
+      language: remote.language,
+      translationKey: remote.translationKey ?? local.comment.translationKey,
+    });
+  } else {
+    Object.assign(local.comment, {
+      ...local.comment,
+      id: remote.id,
+      parentId: remote.parentId ?? null,
+      authorName: remote.authorName,
+      authorEmail: undefined,
+      body: remote.body,
+      status: remote.status,
+      answerStatus: remote.answerStatus,
+      createdAt: remote.createdAt,
+      updatedAt: remote.updatedAt,
+      publishedAt: remote.publishedAt,
+      commentableId: remote.commentableId,
+      commentableType: remote.commentableType,
+      language: remote.language,
+      translationKey: remote.translationKey,
+      contactId: remote.contactId,
+      source: remote.source,
+      tags: remote.tags,
+      avatarUrl: remote.avatarUrl,
+    });
+  }
 
   await saveCommentsForEntity(
     local.comment.commentableType,
@@ -312,12 +361,42 @@ async function updateLocalFileFromResponse(
   );
 }
 
+// Minimum LeadCMS server version that supports updating parentId and
+// commentableId via PATCH /api/comments/{id} (i.e. reparenting comments).
+const REPARENT_MIN_VERSION = '1.5.16-pre';
+
+/**
+ * Check whether the configured LeadCMS server supports reparenting comments
+ * (updating `parentId` and/or `commentableId`). Returns `{ supported, version }`
+ * where `version` is `null` if the version endpoint is unreachable.
+ *
+ * When the version can't be determined, we default to "supported" so pushes
+ * aren't silently crippled on healthy servers; the server itself will reject
+ * the request if it really doesn't support the fields.
+ */
+async function checkReparentingSupport(): Promise<{ supported: boolean; version: string | null }> {
+  let version: string | null = null;
+  try {
+    version = await leadCMSDataService.getServerVersion();
+  } catch {
+    version = null;
+  }
+  if (!version) return { supported: true, version: null };
+  return {
+    supported: compareVersions(version, REPARENT_MIN_VERSION) >= 0,
+    version,
+  };
+}
+
 export async function buildCommentStatus(options: CommentStatusOptions = {}): Promise<CommentStatusResult> {
   const { showDelete, targetId, remoteContext: remoteCtx } = options;
   const localFiles = await readLocalCommentFiles();
   const localComments = flattenLocalComments(localFiles);
   const remoteComments = await fetchRemoteComments();
   const remoteById = new Map(remoteComments.map(comment => [comment.id, comment]));
+
+  // Feature-gate reparenting (parentId/commentableId updates) on server version.
+  const { supported: canReparent, version: serverVersion } = await checkReparentingSupport();
 
   // Build translationKey-based lookup for remote comments
   const remoteByKey = new Map<string, RemoteCommentItem>();
@@ -380,17 +459,7 @@ export async function buildCommentStatus(options: CommentStatusOptions = {}): Pr
       continue;
     }
 
-    if (hasImmutableDifferences(local.comment, remote)) {
-      operations.push({
-        type: 'conflict',
-        local,
-        remote,
-        reason: 'Cannot change parent or target entity of an existing comment',
-      });
-      continue;
-    }
-
-    if (hasEditableDifferences(local.comment, remote)) {
+    if (hasEditableDifferences(local.comment, remote, canReparent)) {
       if (isRemoteNewer(local.comment, remote, metadataMap)) {
         operations.push({
           type: 'conflict',
@@ -401,6 +470,19 @@ export async function buildCommentStatus(options: CommentStatusOptions = {}): Pr
       } else {
         operations.push({ type: 'update', local, remote });
       }
+    }
+
+    // On older servers, detect local parentId/commentableId edits that will
+    // not sync so the user isn't left wondering why their reparenting is
+    // silently dropped.
+    if (!canReparent && hasReparentingIntent(local.comment, remote)) {
+      const commentableType = local.comment.commentableType ?? 'Content';
+      const separator = commentableType === 'Content' ? ' #' : '#';
+      const label = `${commentableType}${separator}${local.comment.commentableId} comment ${remote.id}`;
+      const versionSuffix = serverVersion ? ` (server ${serverVersion})` : '';
+      console.warn(
+        `⚠️  Skipping parentId/commentableId change for ${label}: LeadCMS ${REPARENT_MIN_VERSION} or later required to reparent comments${versionSuffix}.`,
+      );
     }
   }
 
@@ -429,10 +511,118 @@ export async function buildCommentStatus(options: CommentStatusOptions = {}): Pr
   };
 }
 
+/**
+ * Build a best-effort `Content` id -> slug map for the given comment
+ * operations. Tries local content files first (no network), then falls back
+ * to the remote data service for any still-unresolved ids. Any failure in
+ * either source is silently ignored — slug display is a nicety, not a hard
+ * requirement — and the label falls back to the numeric id.
+ */
+async function buildContentSlugMap(operations: CommentOperation[]): Promise<Map<number, string>> {
+  const slugById = new Map<number, string>();
+
+  const contentIds = new Set<number>();
+  for (const op of operations) {
+    const type = op.local?.comment.commentableType ?? op.remote?.commentableType;
+    if (type !== 'Content') continue;
+    const id = op.local?.comment.commentableId ?? op.remote?.commentableId;
+    if (typeof id === 'number' && Number.isFinite(id)) {
+      contentIds.add(id);
+    }
+  }
+  if (contentIds.size === 0) return slugById;
+
+  // 1. Local content (fast, offline)
+  try {
+    const { readLocalContent } = await import('./push-leadcms-content.js');
+    const localContent = await readLocalContent();
+    for (const item of localContent) {
+      const rawId = (item as any).id;
+      const numericId = typeof rawId === 'number' ? rawId : Number(rawId);
+      if (Number.isFinite(numericId) && item.slug && !slugById.has(numericId)) {
+        slugById.set(numericId, item.slug);
+      }
+    }
+  } catch {
+    // Local content is best-effort; fall through to remote lookup.
+  }
+
+  // 2. Remote lookup for any ids still unresolved
+  const missing = [...contentIds].filter(id => !slugById.has(id));
+  if (missing.length === 0) return slugById;
+
+  try {
+    for (const id of missing) {
+      const content = await leadCMSDataService.getContentById(id);
+      if (content?.slug) {
+        slugById.set(id, content.slug);
+      }
+    }
+  } catch {
+    // Remote lookup failures are non-fatal.
+  }
+
+  return slugById;
+}
+
+/**
+ * Extract a concise, human-readable message from a failed comment API call.
+ * Highlights 404 "entity not found" responses (returned by the server when
+ * the targeted commentableType/commentableId pair doesn't exist) so the user
+ * can see why the comment couldn't be saved without having to read raw
+ * axios error objects.
+ */
+function formatCommentApiError(error: any): { message: string; isNotFound: boolean } {
+  const status: number | undefined = error?.response?.status ?? error?.status;
+  const data: any = error?.response?.data;
+  const isNotFound = status === 404;
+
+  if (isNotFound && data && typeof data === 'object') {
+    const { entityType, entityUid, title, detail } = data;
+    if (entityType && entityUid != null) {
+      return {
+        message: `404 Not Found — ${entityType}#${entityUid} does not exist on the server`,
+        isNotFound,
+      };
+    }
+    if (title || detail) {
+      return { message: `404 Not Found — ${detail || title}`, isNotFound };
+    }
+  }
+
+  if (status && data && typeof data === 'object') {
+    const detail = data.detail || data.title;
+    if (detail) return { message: `${status} ${detail}`, isNotFound };
+  }
+
+  const msg = error?.message || String(error);
+  return { message: status ? `${status} ${msg}` : msg, isNotFound };
+}
+
 export async function statusComments(options: CommentStatusOptions = {}): Promise<void> {
   const { showDetailedPreview, targetId } = options;
   const result = await buildCommentStatus(options);
   const operations = result.operations;
+
+  // Build a best-effort map of Content id -> slug so the status output can
+  // show "Content #<slug> comment N" instead of the opaque numeric id.
+  const contentSlugById = await buildContentSlugMap(operations);
+
+  function formatCommentableLabel(type: string, id: number | string): string {
+    if (type === 'Content' && typeof id === 'number') {
+      const slug = contentSlugById.get(id);
+      if (slug) return `${type} #${id} (${slug})`;
+    }
+    const separator = type === 'Content' ? ' #' : '#';
+    return `${type}${separator}${id}`;
+  }
+
+  function formatInlineCommentPreview(body: string | undefined, maxLength = 48): string {
+    const normalized = (body || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+    if (normalized.length <= maxLength) return normalized;
+    return `${normalized.slice(0, maxLength - 3).trimEnd()}...`;
+  }
 
   function printCommentPreview(op: CommentOperation): void {
     if (!showDetailedPreview && !targetId) return;
@@ -518,8 +708,10 @@ export async function statusComments(options: CommentStatusOptions = {}): Promis
     const locale = local?.language ?? remote?.language ?? DEFAULT_LANGUAGE;
     const commentableType = local?.commentableType ?? remote?.commentableType ?? 'Unknown';
     const commentableId = local?.commentableId ?? remote?.commentableId ?? 'unknown';
-
-    const line = `${commentableType}#${commentableId} [${locale}] comment ${commentId}`;
+    const commentRef = op.type === 'create' ? '' : ` comment ${commentId}`;
+    const createPreview = op.type === 'create' ? formatInlineCommentPreview(local?.body) : '';
+    const previewSuffix = createPreview ? ` - ${JSON.stringify(createPreview)}` : '';
+    const line = `${formatCommentableLabel(commentableType, commentableId)} [${locale}]${commentRef}${previewSuffix}`;
 
     switch (op.type) {
       case 'create':
@@ -636,7 +828,34 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
 
   const { force, dryRun, allowDelete, targetId, remoteContext: remoteCtx } = options;
   const status = await buildCommentStatus({ showDelete: allowDelete, targetId, remoteContext: remoteCtx });
+  const { supported: canReparent } = await checkReparentingSupport();
   let didMutate = false;
+  let failureCount = 0;
+
+  // Resolve Content id -> slug for user-facing messages (best-effort, offline-first).
+  const contentSlugById = await buildContentSlugMap(status.operations);
+  const formatCommentable = (type: string | undefined, id: number | string | null | undefined): string => {
+    const t = type ?? 'Unknown';
+    const separator = t === 'Content' ? ' #' : '#';
+    if (id == null) return `${t}${separator}unknown`;
+    if (t === 'Content' && typeof id === 'number') {
+      const slug = contentSlugById.get(id);
+      if (slug) return `${t} #${id} (${slug})`;
+    }
+    return `${t}${separator}${id}`;
+  };
+
+  // Count operations that actually result in an API call so we can emit
+  // `[n/total]` progress prefixes similar to `push-media`.
+  const totalOps = status.operations.reduce((count, op) => {
+    if (op.type === 'create') return count + 1;
+    if (op.type === 'update') return count + 1;
+    if (op.type === 'conflict' && force && op.local) return count + 1;
+    if (op.type === 'delete' && allowDelete) return count + 1;
+    return count;
+  }, 0);
+  let completedOps = 0;
+  const progress = () => `[${completedOps}/${totalOps}]`;
 
   // Resolve author emails for new comments before processing
   const createOps = status.operations.filter(op => op.type === 'create' && op.local);
@@ -676,29 +895,59 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
         continue;
       }
 
+      completedOps++;
+      const target = formatCommentable(payload.commentableType, payload.commentableId);
+
       if (dryRun) {
-        console.log(`🟡 [DRY RUN] Create comment in ${payload.commentableType}#${payload.commentableId}`);
+        console.log(`${progress()} 🟡 [DRY RUN] Create comment in ${target}`);
         continue;
       }
 
-      const created = await leadCMSDataService.createComment(payload);
-      console.log(`✅ Created comment ${created.id} in ${created.commentableType}#${created.commentableId}`);
-      await updateLocalFileFromResponse(operation.local, created, remoteCtx);
-      didMutate = true;
+      try {
+        const created = await leadCMSDataService.createComment(payload);
+        const createdTarget = formatCommentable(created.commentableType, created.commentableId);
+        console.log(`${progress()} ✅ Created comment ${created.id} in ${createdTarget}`);
+        await updateLocalFileFromResponse(operation.local, created, remoteCtx);
+        didMutate = true;
+      } catch (error: any) {
+        const { message, isNotFound } = formatCommentApiError(error);
+        if (isNotFound) {
+          console.warn(`${progress()} ⚠️  Skipped creating comment in ${target}: ${message}. The comment will be retried on the next push once the target exists.`);
+        } else {
+          console.error(`${progress()} ❌ Failed to create comment in ${target}: ${message}`);
+        }
+        failureCount++;
+      }
       continue;
     }
 
     if (operation.type === 'update' && operation.local && operation.remote) {
-      const payload = buildUpdatePayload(operation.local, operation.remote);
+      const payload = buildUpdatePayload(operation.local, operation.remote, canReparent);
+      completedOps++;
+      const target = formatCommentable(
+        operation.local.comment.commentableType ?? operation.remote.commentableType,
+        operation.local.comment.commentableId ?? operation.remote.commentableId,
+      );
+
       if (dryRun) {
-        console.log(`🟡 [DRY RUN] Update comment ${operation.remote.id}`);
+        console.log(`${progress()} 🟡 [DRY RUN] Update comment ${operation.remote.id} in ${target}`);
         continue;
       }
 
-      const updated = await leadCMSDataService.updateComment(operation.remote.id, payload);
-      console.log(`✅ Updated comment ${updated.id}`);
-      await updateLocalFileFromResponse(operation.local, updated, remoteCtx);
-      didMutate = true;
+      try {
+        const updated = await leadCMSDataService.updateComment(operation.remote.id, payload);
+        console.log(`${progress()} ✅ Updated comment ${updated.id} in ${target}`);
+        await updateLocalFileFromResponse(operation.local, updated, remoteCtx);
+        didMutate = true;
+      } catch (error: any) {
+        const { message, isNotFound } = formatCommentApiError(error);
+        if (isNotFound) {
+          console.warn(`${progress()} ⚠️  Skipped updating comment ${operation.remote.id} in ${target}: ${message}.`);
+        } else {
+          console.error(`${progress()} ❌ Failed to update comment ${operation.remote.id} in ${target}: ${message}`);
+        }
+        failureCount++;
+      }
       continue;
     }
 
@@ -722,39 +971,68 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
       }
 
       const remote = operation.remote;
-      if (!remote || hasImmutableDifferences(operation.local.comment, remote)) {
-        console.warn(`⚠️  Cannot force-push immutable changes for comment ${remoteId}`);
+      if (!remote) {
+        console.warn(`⚠️  Cannot force-push comment ${remoteId}: remote not found`);
         continue;
       }
 
-      const payload = buildUpdatePayload(operation.local, remote);
+      const payload = buildUpdatePayload(operation.local, remote, canReparent);
+      completedOps++;
+      const target = formatCommentable(
+        operation.local.comment.commentableType ?? remote.commentableType,
+        operation.local.comment.commentableId ?? remote.commentableId,
+      );
+
       if (dryRun) {
-        console.log(`🟡 [DRY RUN] Force update comment ${remoteId}`);
+        console.log(`${progress()} 🟡 [DRY RUN] Force update comment ${remoteId} in ${target}`);
         continue;
       }
 
-      const updated = await leadCMSDataService.updateComment(remoteId, payload);
-      console.log(`✅ Force-updated comment ${updated.id}`);
-      await updateLocalFileFromResponse(operation.local, updated, remoteCtx);
-      didMutate = true;
+      try {
+        const updated = await leadCMSDataService.updateComment(remoteId, payload);
+        console.log(`${progress()} ✅ Force-updated comment ${updated.id} in ${target}`);
+        await updateLocalFileFromResponse(operation.local, updated, remoteCtx);
+        didMutate = true;
+      } catch (error: any) {
+        const { message, isNotFound } = formatCommentApiError(error);
+        if (isNotFound) {
+          console.warn(`${progress()} ⚠️  Skipped force-updating comment ${remoteId} in ${target}: ${message}.`);
+        } else {
+          console.error(`${progress()} ❌ Failed to force-update comment ${remoteId} in ${target}: ${message}`);
+        }
+        failureCount++;
+      }
       continue;
     }
 
     if (operation.type === 'delete' && allowDelete && operation.remote) {
+      completedOps++;
+      const target = formatCommentable(operation.remote.commentableType, operation.remote.commentableId);
+
       if (dryRun) {
-        console.log(`🟡 [DRY RUN] Delete remote comment ${operation.remote.id}`);
+        console.log(`${progress()} 🟡 [DRY RUN] Delete remote comment ${operation.remote.id} in ${target}`);
         continue;
       }
 
-      await leadCMSDataService.deleteComment(operation.remote.id);
-      console.log(`✅ Deleted remote comment ${operation.remote.id}`);
-      didMutate = true;
+      try {
+        await leadCMSDataService.deleteComment(operation.remote.id);
+        console.log(`${progress()} ✅ Deleted remote comment ${operation.remote.id} in ${target}`);
+        didMutate = true;
+      } catch (error: any) {
+        const { message } = formatCommentApiError(error);
+        console.error(`${progress()} ❌ Failed to delete comment ${operation.remote.id} in ${target}: ${message}`);
+        failureCount++;
+      }
     }
   }
 
   if (!dryRun && didMutate) {
     console.log('🔄 Refreshing local comments anonymously...');
     await pullLeadCMSComments(remoteCtx);
+  }
+
+  if (failureCount > 0) {
+    console.warn(`⚠️  ${failureCount} comment ${failureCount === 1 ? 'operation' : 'operations'} failed (see messages above). Other comments were processed successfully.`);
   }
 }
 
