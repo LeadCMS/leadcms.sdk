@@ -45,7 +45,7 @@ export interface PushRedirectsOptions {
 }
 
 export interface RedirectOperation {
-  type: "create" | "update" | "delete" | "skip";
+  type: "create" | "update" | "delete" | "skip" | "remote-deleted";
   local?: LocalRedirect;
   remote?: RedirectDetailsDto;
   reason?: string;
@@ -138,15 +138,30 @@ function remotePayloadKey(r: RedirectDetailsDto): string {
 
 // ── Plan operations ────────────────────────────────────────────────────
 
+async function readRedirectIdMap(
+  remoteCtx?: RemoteContext
+): Promise<Record<string, number>> {
+  try {
+    const rc = await import("../lib/remote-context.js");
+    const ctx = remoteCtx ?? rc.resolveRemote();
+    const map = await rc.readMetadataMap(ctx);
+    return map.redirects ?? {};
+  } catch {
+    return {};
+  }
+}
+
 function planOperations(
   locals: LocalRedirect[],
   remotes: RedirectDetailsDto[],
-  allowDelete: boolean
+  allowDelete: boolean,
+  idMap?: Record<string, number>
 ): RedirectOperation[] {
   const ops: RedirectOperation[] = [];
   const remoteByKey = new Map<string, RedirectDetailsDto>(
     remotes.map((r) => [redirectSurrogateKey(r), r])
   );
+  const remoteIds = new Set(remotes.map((r) => r.id));
   const localKeys = new Set<string>();
 
   for (const local of locals) {
@@ -159,6 +174,8 @@ function planOperations(
       } else {
         ops.push({ type: "skip", local, remote, reason: "no changes" });
       }
+    } else if (idMap && idMap[key] !== undefined && !remoteIds.has(idMap[key])) {
+      ops.push({ type: "remote-deleted", local });
     } else {
       ops.push({ type: "create", local });
     }
@@ -300,7 +317,8 @@ export async function buildRedirectStatus(
   }
   const locals = await readLocalRedirects();
   const remotes = await leadCMSDataService.getAllRedirects();
-  const ops = planOperations(locals, remotes, showDelete);
+  const idMap = await readRedirectIdMap(remoteContext);
+  const ops = planOperations(locals, remotes, showDelete, idMap);
   return {
     operations: ops.filter((o) => o.type !== "skip"),
     totalLocal: locals.length,
@@ -342,6 +360,11 @@ export async function statusRedirects(
       case "delete":
         colorConsole.log(
           `   ${statusColors.conflict("deleted:  ")} ${colorConsole.highlight(label)} ${idLabel}`
+        );
+        break;
+      case "remote-deleted":
+        colorConsole.log(
+          `   ${statusColors.conflict("to delete:")} ${colorConsole.highlight(label)}`
         );
         break;
     }

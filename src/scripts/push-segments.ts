@@ -35,7 +35,7 @@ interface StatusOptions {
 }
 
 export interface SegmentOperation {
-  type: "create" | "update" | "delete" | "conflict";
+  type: "create" | "update" | "delete" | "conflict" | "remote-deleted";
   local?: SegmentDetailsDto;
   remote?: SegmentDetailsDto;
   filePath?: string;
@@ -210,7 +210,12 @@ export async function buildSegmentStatus(
     const match = getRemoteMatch(segment, remoteSegments, metadataMap);
 
     if (!match) {
-      operations.push({ type: "create", local: segment, filePath });
+      const remoteIds = new Set(remoteSegments.map((s) => s.id).filter((id): id is number => id != null));
+      if (segment.id != null && !remoteIds.has(segment.id as number)) {
+        operations.push({ type: "remote-deleted", local: segment, filePath });
+      } else {
+        operations.push({ type: "create", local: segment, filePath });
+      }
       continue;
     }
 
@@ -376,6 +381,11 @@ export async function statusSegments(options: StatusOptions = {}): Promise<void>
       case "delete":
         colorConsole.log(
           `   ${statusColors.conflict("deleted:  ")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+        );
+        break;
+      case "remote-deleted":
+        colorConsole.log(
+          `   ${statusColors.conflict("to delete:")} ${colorConsole.highlight(nameLabel)}`
         );
         break;
     }

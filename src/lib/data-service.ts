@@ -1822,28 +1822,26 @@ class LeadCMSDataService {
     }
 
     const allRedirects: RedirectDetailsDto[] = [];
-    let syncToken = "";
     const limit = 100;
+    let skip = 0;
 
     while (true) {
       try {
-        const url = new URL(`${this.baseURL}/api/redirects/sync`);
+        const url = new URL(`${this.baseURL}/api/redirects`);
+        url.searchParams.set("filter[skip]", String(skip));
         url.searchParams.set("filter[limit]", String(limit));
-        if (syncToken) url.searchParams.set("syncToken", syncToken);
 
-        logger.verbose(`[API] Fetching redirects (syncToken=${syncToken || "(none)"})`);
+        logger.verbose(`[API] Fetching redirects (skip=${skip}, limit=${limit})`);
 
-        const res: AxiosResponse<{ items?: RedirectDetailsDto[]; deleted?: number[] }> =
-          await axios.get(url.toString(), { headers: this.getApiHeaders() });
+        const res: AxiosResponse<RedirectDetailsDto[]> = await axios.get(url.toString(), {
+          headers: this.getApiHeaders(),
+        });
 
-        if (res.status === 204) break;
-
-        const batch: RedirectDetailsDto[] = Array.isArray(res.data?.items) ? res.data.items : [];
+        const batch: RedirectDetailsDto[] = Array.isArray(res.data) ? res.data : [];
         allRedirects.push(...batch);
 
-        const nextToken: string = res.headers["x-next-sync-token"] || "";
-        if (!nextToken || nextToken === syncToken || batch.length < limit) break;
-        syncToken = nextToken;
+        if (batch.length < limit) break;
+        skip += batch.length;
       } catch (_error: unknown) {
         const error = _error as ApiAxiosError;
         if (error.response?.status === 401) {

@@ -610,6 +610,87 @@ describe("LeadCMS Data Service", () => {
     });
   });
 
+  describe("Redirect API", () => {
+    beforeEach(() => {
+      process.env.LEADCMS_USE_MOCK = "false";
+      process.env.NODE_ENV = "development";
+      process.env.LEADCMS_URL = "https://api.example.com";
+      process.env.LEADCMS_API_KEY = "test-api-key";
+    });
+
+    it("should return empty array without API key", async () => {
+      delete process.env.LEADCMS_API_KEY;
+      const service = new LeadCMSDataService();
+
+      const result = await service.getAllRedirects();
+
+      expect(result).toEqual([]);
+      expect(mockedAxios.get).not.toHaveBeenCalled();
+    });
+
+    it("should fetch first page with filter[skip]=0 and filter[limit]", async () => {
+      const page: object[] = [{ id: 1 }, { id: 2 }];
+      mockedAxios.get.mockResolvedValueOnce({ data: page });
+
+      const service = new LeadCMSDataService();
+      const result = await service.getAllRedirects();
+
+      expect(result).toEqual(page);
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        expect.stringContaining("filter%5Bskip%5D=0"),
+        expect.any(Object)
+      );
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        expect.stringContaining("filter%5Blimit%5D="),
+        expect.any(Object)
+      );
+    });
+
+    it("should paginate through multiple pages until a partial page", async () => {
+      const page1 = Array.from({ length: 100 }, (_, i) => ({ id: i + 1 }));
+      const page2 = [{ id: 101 }, { id: 102 }];
+      mockedAxios.get
+        .mockResolvedValueOnce({ data: page1 })
+        .mockResolvedValueOnce({ data: page2 });
+
+      const service = new LeadCMSDataService();
+      const result = await service.getAllRedirects();
+
+      expect(result).toHaveLength(102);
+      expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+      // Second call should use skip=100
+      expect(mockedAxios.get).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining("filter%5Bskip%5D=100"),
+        expect.any(Object)
+      );
+    });
+
+    it("should stop after a single full page if no second page data", async () => {
+      const page1 = Array.from({ length: 100 }, (_, i) => ({ id: i + 1 }));
+      mockedAxios.get
+        .mockResolvedValueOnce({ data: page1 })
+        .mockResolvedValueOnce({ data: [] });
+
+      const service = new LeadCMSDataService();
+      const result = await service.getAllRedirects();
+
+      expect(result).toHaveLength(100);
+      expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+    });
+
+    it("should throw on 401 with a formatted auth error", async () => {
+      mockedAxios.get.mockRejectedValueOnce({
+        response: { status: 401, data: {} },
+        message: "Unauthorized",
+      });
+
+      const service = new LeadCMSDataService();
+      await expect(service.getAllRedirects()).rejects.toThrow();
+      expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("Sequence API", () => {
     beforeEach(() => {
       process.env.LEADCMS_USE_MOCK = "false";

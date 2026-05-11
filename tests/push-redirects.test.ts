@@ -32,6 +32,8 @@ const mockCreateRedirect = jest.fn();
 const mockUpdateRedirect = jest.fn();
 const mockDeleteRedirect = jest.fn();
 const mockConfigureForRemote = jest.fn();
+const mockReadMetadataMap = jest.fn();
+const mockResolveRemote = jest.fn();
 
 jest.mock("../src/lib/data-service.js", () => ({
   leadCMSDataService: {
@@ -46,6 +48,13 @@ jest.mock("../src/lib/data-service.js", () => ({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     configureForRemote: (...args: any[]) => mockConfigureForRemote(...args),
   },
+}));
+
+jest.mock("../src/lib/remote-context.js", () => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  resolveRemote: (...args: any[]) => mockResolveRemote(...args),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  readMetadataMap: (...args: any[]) => mockReadMetadataMap(...args),
 }));
 
 import type { LocalRedirectsFile, RedirectDetailsDto } from "../src/lib/automation-types";
@@ -319,6 +328,14 @@ describe("buildRedirectStatus", () => {
     mockCreateRedirect.mockReset();
     mockUpdateRedirect.mockReset();
     mockDeleteRedirect.mockReset();
+    mockReadMetadataMap.mockResolvedValue({});
+    mockResolveRemote.mockReturnValue({
+      name: "default",
+      url: "https://test.leadcms.com",
+      apiKey: "test-key",
+      isDefault: true,
+      stateDir: "/tmp/test-state",
+    });
   });
 
   afterEach(async () => {
@@ -433,5 +450,61 @@ describe("buildRedirectStatus", () => {
     const result = await buildRedirectStatus();
 
     expect(result.totalLocal).toBe(3);
+  });
+
+  it("reports remote-deleted for a previously-synced redirect deleted on remote", async () => {
+    // Simulate a redirect that was previously pulled (ID known in metadata)
+    // but is no longer in the remote list (deleted on CMS side)
+    const local = makeLocal({ fromPath: "/old-news", toUrl: "https://example.com" });
+    await writeLocalRedirects(tmpDir, [local]);
+
+    // Remote no longer has this redirect
+    mockGetAllRedirects.mockResolvedValueOnce([]);
+
+    // Metadata map records this redirect was previously synced with remote ID 12
+    mockReadMetadataMap.mockResolvedValueOnce({
+      redirects: { "path:/old-news": 12 },
+    });
+
+    const result = await buildRedirectStatus();
+
+    expect(result.operations).toHaveLength(1);
+    expect(result.operations[0].type).toBe("remote-deleted");
+    expect(result.operations[0].local?.fromPath).toBe("/old-news");
+  });
+
+  it("reports create (not remote-deleted) when local redirect has no metadata entry", async () => {
+    // A locally-created redirect that was never pushed/pulled — no entry in idMap
+    const local = makeLocal({ fromPath: "/brand-new", toUrl: "https://example.com" });
+    await writeLocalRedirects(tmpDir, [local]);
+
+    mockGetAllRedirects.mockResolvedValueOnce([]);
+    // No redirects in the metadata map
+    mockReadMetadataMap.mockResolvedValueOnce({});
+
+    const result = await buildRedirectStatus();
+
+    expect(result.operations).toHaveLength(1);
+    expect(result.operations[0].type).toBe("create");
+  });
+
+  it("reports create (not remote-deleted) when local redirect ID still exists on remote", async () => {
+    // The redirect was synced before, but still exists on remote with a different payload
+    // → should show as update, not remote-deleted
+    const local = makeLocal({ fromPath: "/existing", toUrl: "https://new.com" });
+    await writeLocalRedirects(tmpDir, [local]);
+
+    // Remote still has this redirect (same key) → it's a match, not remote-deleted
+    mockGetAllRedirects.mockResolvedValueOnce([
+      makeRemote({ id: 5, fromPath: "/existing", toUrl: "https://old.com" }),
+    ]);
+    mockReadMetadataMap.mockResolvedValueOnce({
+      redirects: { "path:/existing": 5 },
+    });
+
+    const result = await buildRedirectStatus();
+
+    expect(result.operations).toHaveLength(1);
+    expect(result.operations[0].type).toBe("update");
   });
 });

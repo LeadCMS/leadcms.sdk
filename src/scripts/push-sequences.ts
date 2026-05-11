@@ -40,7 +40,7 @@ interface StatusOptions {
 }
 
 export interface SequenceOperation {
-  type: "create" | "update" | "delete" | "conflict";
+  type: "create" | "update" | "delete" | "conflict" | "remote-deleted";
   local?: LocalSequenceDto;
   remote?: SequenceDetailsDto;
   filePath?: string;
@@ -277,7 +277,12 @@ export async function buildSequenceStatus(
     const match = getRemoteMatch(sequence, remoteSequences, metadataMap);
 
     if (!match) {
-      operations.push({ type: "create", local: sequence, filePath });
+      const remoteIds = new Set(remoteSequences.map((s) => s.id).filter((id): id is number => id != null));
+      if (sequence.id != null && !remoteIds.has(sequence.id as number)) {
+        operations.push({ type: "remote-deleted", local: sequence, filePath });
+      } else {
+        operations.push({ type: "create", local: sequence, filePath });
+      }
       continue;
     }
 
@@ -448,6 +453,11 @@ export async function statusSequences(options: StatusOptions = {}): Promise<void
       case "delete":
         colorConsole.log(
           `   ${statusColors.conflict("deleted:  ")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+        );
+        break;
+      case "remote-deleted":
+        colorConsole.log(
+          `   ${statusColors.conflict("to delete:")} ${colorConsole.highlight(nameLabel)}`
         );
         break;
     }
