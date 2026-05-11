@@ -3,21 +3,43 @@
  * Handles API calls vs mock data internally using dependency injection pattern
  */
 
-import axios, { AxiosResponse } from 'axios';
-import { logger } from './logger.js';
-import type { Comment as CommentItem } from './comment-types.js';
+import axios, { AxiosError, AxiosResponse } from "axios";
+import { logger } from "./logger.js";
+import type { Comment as CommentItem } from "./comment-types.js";
 import type {
-  SegmentDetailsDto, SegmentCreateDto, SegmentUpdateDto,
-  SequenceDetailsDto, SequenceCreateDto, SequenceUpdateDto,
-  RedirectDetailsDto, RedirectCreateDto, RedirectUpdateDto,
-} from './automation-types.js';
+  SegmentDetailsDto,
+  SegmentCreateDto,
+  SegmentUpdateDto,
+  SequenceDetailsDto,
+  SequenceCreateDto,
+  RedirectDetailsDto,
+  RedirectCreateDto,
+  RedirectUpdateDto,
+} from "./automation-types.js";
+
+interface ApiError extends Error {
+  status?: number;
+  validationErrors?: unknown;
+  originalError?: unknown;
+}
+
+interface ApiErrorResponseBody {
+  errors?: Record<string, string[]>;
+  title?: string;
+  detail?: string;
+  message?: string;
+}
+
+type ApiAxiosError = AxiosError<ApiErrorResponseBody>;
 
 /**
  * Formats API validation errors in a user-friendly way
  */
-function formatApiValidationErrors(errorResponse: any): string {
+function formatApiValidationErrors(
+  errorResponse: AxiosResponse<ApiErrorResponseBody> | undefined
+): string {
   if (!errorResponse?.data?.errors) {
-    return 'Unknown validation error';
+    return "Unknown validation error";
   }
 
   const errors = errorResponse.data.errors;
@@ -32,25 +54,27 @@ function formatApiValidationErrors(errorResponse: any): string {
   }
 
   return errorMessages.length > 0
-    ? `\nValidation errors:\n${errorMessages.join('\n')}`
-    : 'Validation failed';
+    ? `\nValidation errors:\n${errorMessages.join("\n")}`
+    : "Validation failed";
 }
 
 /**
  * Extracts a readable API error message from common backend error shapes.
  */
-function formatApiErrorTitle(errorResponse: any): string {
+function formatApiErrorTitle(
+  errorResponse: AxiosResponse<ApiErrorResponseBody> | undefined
+): string {
   const data = errorResponse?.data;
 
-  if (typeof data?.title === 'string' && data.title.trim()) {
+  if (typeof data?.title === "string" && data.title.trim()) {
     return data.title.trim();
   }
 
-  if (typeof data?.detail === 'string' && data.detail.trim()) {
+  if (typeof data?.detail === "string" && data.detail.trim()) {
     return data.detail.trim();
   }
 
-  if (typeof data?.message === 'string' && data.message.trim()) {
+  if (typeof data?.message === "string" && data.message.trim()) {
     return data.message.trim();
   }
 
@@ -58,24 +82,24 @@ function formatApiErrorTitle(errorResponse: any): string {
     return String(data.errors[0]);
   }
 
-  return 'Unknown validation error';
+  return "Unknown validation error";
 }
 
 /**
  * Formats authentication errors with helpful guidance
  */
-function formatAuthenticationError(error: any): Error {
+function formatAuthenticationError(error: unknown): Error {
   const enhancedError = new Error(
-    'Authentication failed: Invalid or missing API key\n' +
-    '\n💡 To fix this:\n' +
-    '   • Verify your LEADCMS_API_KEY in .env file is correct\n' +
-    '   • Or run: leadcms login\n' +
-    '   • Check that your API key has not expired'
+    "Authentication failed: Invalid or missing API key\n" +
+      "\n💡 To fix this:\n" +
+      "   • Verify your LEADCMS_API_KEY in .env file is correct\n" +
+      "   • Or run: leadcms login\n" +
+      "   • Check that your API key has not expired"
   );
-  (enhancedError as any).status = 401;
-  (enhancedError as any).originalError = error;
+  (enhancedError as ApiError).status = 401;
+  (enhancedError as ApiError).originalError = error;
   return enhancedError;
-}// Type definitions
+} // Type definitions
 interface ContentItem {
   id?: number;
   slug: string;
@@ -86,7 +110,7 @@ interface ContentItem {
   createdAt?: string;
   body?: string;
   language?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface ContentType {
@@ -120,8 +144,8 @@ interface EmailTemplateItem {
   emailGroupId?: number | null;
   createdAt?: string;
   updatedAt?: string | null;
-  emailGroup?: Record<string, any> | null;
-  [key: string]: any;
+  emailGroup?: Record<string, unknown> | null;
+  [key: string]: unknown;
 }
 
 interface EmailGroupItem {
@@ -131,7 +155,7 @@ interface EmailGroupItem {
   translationKey?: string | null;
   createdAt?: string;
   updatedAt?: string | null;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface CommentCreateItem {
@@ -147,8 +171,8 @@ interface CommentCreateItem {
   tags?: string[] | null;
   commentableId?: number | null;
   commentableUid?: string | null;
-  status?: 'NotApproved' | 'Approved' | 'Spam' | 'Answer';
-  answerStatus?: 'Unanswered' | 'Answered' | 'Closed';
+  status?: "NotApproved" | "Approved" | "Spam" | "Answer";
+  answerStatus?: "Unanswered" | "Answered" | "Closed";
   publishedAt?: string | null;
 }
 
@@ -158,8 +182,8 @@ interface CommentUpdateItem {
   language?: string;
   parentId?: number | null;
   commentableId?: number | null;
-  status?: 'NotApproved' | 'Approved' | 'Spam' | 'Answer';
-  answerStatus?: 'Unanswered' | 'Answered' | 'Closed';
+  status?: "NotApproved" | "Approved" | "Spam" | "Answer";
+  answerStatus?: "Unanswered" | "Answered" | "Closed";
   translationKey?: string | null;
   tags?: string[] | null;
   publishedAt?: string | null;
@@ -205,124 +229,122 @@ interface MockData {
   scenario: string;
 }
 
-
-
 interface ApiHeaders {
-  'Authorization': string;
-  'Content-Type': string;
+  Authorization: string;
+  "Content-Type": string;
   [key: string]: string;
 }
 
 // Import mock scenarios inline to avoid TypeScript issues
 const MOCK_SCENARIOS: Record<string, MockScenario> = {
   allNew: {
-    name: 'All Content New',
-    description: 'Local content that doesn\'t exist remotely',
+    name: "All Content New",
+    description: "Local content that doesn't exist remotely",
     remoteContent: [],
-    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' },
-    remoteMedia: []
+    contentTypes: { article: "MDX", page: "JSON", blog: "MDX" },
+    remoteMedia: [],
   },
   noChanges: {
-    name: 'No Changes',
-    description: 'All content is in sync',
+    name: "No Changes",
+    description: "All content is in sync",
     remoteContent: [
       {
         id: 1,
-        slug: 'existing-article',
-        type: 'article',
-        title: 'Existing Article',
-        publishedAt: '2024-10-29T10:00:00Z',
-        updatedAt: '2024-10-29T10:00:00Z',
-        body: 'This article exists both locally and remotely.'
-      }
+        slug: "existing-article",
+        type: "article",
+        title: "Existing Article",
+        publishedAt: "2024-10-29T10:00:00Z",
+        updatedAt: "2024-10-29T10:00:00Z",
+        body: "This article exists both locally and remotely.",
+      },
     ],
-    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' },
+    contentTypes: { article: "MDX", page: "JSON", blog: "MDX" },
     remoteMedia: [
       {
         id: 1,
-        location: '/api/media/blog/hero.jpg',
-        scopeUid: 'blog',
-        name: 'hero.jpg',
+        location: "/api/media/blog/hero.jpg",
+        scopeUid: "blog",
+        name: "hero.jpg",
         description: null,
         size: 245760,
-        extension: '.jpg',
-        mimeType: 'image/jpeg',
-        createdAt: '2024-10-29T10:00:00Z',
-        updatedAt: null
-      }
-    ]
+        extension: ".jpg",
+        mimeType: "image/jpeg",
+        createdAt: "2024-10-29T10:00:00Z",
+        updatedAt: null,
+      },
+    ],
   },
   hasConflicts: {
-    name: 'Has Conflicts',
-    description: 'Remote content is newer than local',
+    name: "Has Conflicts",
+    description: "Remote content is newer than local",
     remoteContent: [
       {
         id: 1,
-        slug: 'conflicted-post',
-        type: 'blog',
-        title: 'Conflicted Post',
-        publishedAt: '2024-10-29T10:00:00Z',
-        updatedAt: '2024-10-29T12:00:00Z',
-        body: 'This is the remote version that was updated after the local version.'
-      }
+        slug: "conflicted-post",
+        type: "blog",
+        title: "Conflicted Post",
+        publishedAt: "2024-10-29T10:00:00Z",
+        updatedAt: "2024-10-29T12:00:00Z",
+        body: "This is the remote version that was updated after the local version.",
+      },
     ],
-    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' },
-    remoteMedia: []
+    contentTypes: { article: "MDX", page: "JSON", blog: "MDX" },
+    remoteMedia: [],
   },
   hasUpdates: {
-    name: 'Has Updates',
-    description: 'Local content is newer than remote',
+    name: "Has Updates",
+    description: "Local content is newer than remote",
     remoteContent: [
       {
         id: 1,
-        slug: 'updated-post',
-        type: 'blog',
-        title: 'Updated Post',
-        publishedAt: '2024-10-29T10:00:00Z',
-        updatedAt: '2024-10-29T10:00:00Z',
-        body: 'This is the original content.'
-      }
+        slug: "updated-post",
+        type: "blog",
+        title: "Updated Post",
+        publishedAt: "2024-10-29T10:00:00Z",
+        updatedAt: "2024-10-29T10:00:00Z",
+        body: "This is the original content.",
+      },
     ],
-    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' },
-    remoteMedia: []
+    contentTypes: { article: "MDX", page: "JSON", blog: "MDX" },
+    remoteMedia: [],
   },
   mixedOperations: {
-    name: 'Mixed Operations',
-    description: 'Mix of new, updated, and conflicted content',
+    name: "Mixed Operations",
+    description: "Mix of new, updated, and conflicted content",
     remoteContent: [
       {
         id: 1,
-        slug: 'existing-post',
-        type: 'blog',
-        title: 'Existing Post',
-        publishedAt: '2024-10-29T09:00:00Z',
-        updatedAt: '2024-10-29T09:00:00Z',
-        body: 'Original post content.'
-      }
+        slug: "existing-post",
+        type: "blog",
+        title: "Existing Post",
+        publishedAt: "2024-10-29T09:00:00Z",
+        updatedAt: "2024-10-29T09:00:00Z",
+        body: "Original post content.",
+      },
     ],
-    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' },
+    contentTypes: { article: "MDX", page: "JSON", blog: "MDX" },
     remoteMedia: [
       {
         id: 1,
-        location: '/api/media/privacy-policy/bg-image.avif',
-        scopeUid: 'privacy-policy',
-        name: 'bg-image.avif',
+        location: "/api/media/privacy-policy/bg-image.avif",
+        scopeUid: "privacy-policy",
+        name: "bg-image.avif",
         description: null,
         size: 780720,
-        extension: '.avif',
-        mimeType: 'image/avif',
-        createdAt: '2025-06-16T06:57:41.017481Z',
-        updatedAt: '2025-06-16T06:59:09.014782Z'
-      }
-    ]
+        extension: ".avif",
+        mimeType: "image/avif",
+        createdAt: "2025-06-16T06:57:41.017481Z",
+        updatedAt: "2025-06-16T06:59:09.014782Z",
+      },
+    ],
   },
   missingContentTypes: {
-    name: 'Missing Content Types',
-    description: 'Content with unknown content types',
+    name: "Missing Content Types",
+    description: "Content with unknown content types",
     remoteContent: [],
-    contentTypes: { article: 'MDX', page: 'JSON', blog: 'MDX' },
-    remoteMedia: []
-  }
+    contentTypes: { article: "MDX", page: "JSON", blog: "MDX" },
+    remoteMedia: [],
+  },
 };
 
 /**
@@ -330,12 +352,12 @@ const MOCK_SCENARIOS: Record<string, MockScenario> = {
  */
 function shouldUseMock(): boolean {
   // Use mock in test environment
-  if (process.env.NODE_ENV === 'test') {
+  if (process.env.NODE_ENV === "test") {
     return true;
   }
 
   // Use mock only if explicitly requested
-  if (process.env.LEADCMS_USE_MOCK === 'true') {
+  if (process.env.LEADCMS_USE_MOCK === "true") {
     return true;
   }
 
@@ -348,7 +370,7 @@ function shouldUseMock(): boolean {
 class LeadCMSDataService {
   private initialized = false;
   private useMock = false;
-  private mockScenario = 'allNew';
+  private mockScenario = "allNew";
   private baseURL?: string;
   private apiKey?: string;
   private currentScenario?: MockScenario;
@@ -361,9 +383,11 @@ class LeadCMSDataService {
     if (this.initialized) return;
 
     this.useMock = shouldUseMock();
-    this.mockScenario = process.env.LEADCMS_MOCK_SCENARIO || 'allNew';
+    this.mockScenario = process.env.LEADCMS_MOCK_SCENARIO || "allNew";
     // Use same fallback logic as helpers: LEADCMS_URL or NEXT_PUBLIC_LEADCMS_URL
-    this.baseURL = (process.env.LEADCMS_URL || process.env.NEXT_PUBLIC_LEADCMS_URL || '').replace(/\/+$/, '') || undefined;
+    this.baseURL =
+      (process.env.LEADCMS_URL || process.env.NEXT_PUBLIC_LEADCMS_URL || "").replace(/\/+$/, "") ||
+      undefined;
     this.apiKey = process.env.LEADCMS_API_KEY;
 
     // Initialize mock data if needed
@@ -384,7 +408,7 @@ class LeadCMSDataService {
    */
   configureForRemote(url: string, apiKey?: string): void {
     this._initialize();
-    this.baseURL = url.replace(/\/+$/, '') || undefined;
+    this.baseURL = url.replace(/\/+$/, "") || undefined;
     this.apiKey = apiKey;
     logger.verbose(`[DATA SERVICE] Configured for remote: ${this.baseURL}`);
   }
@@ -416,7 +440,7 @@ class LeadCMSDataService {
       segments: JSON.parse(JSON.stringify(scenario.segments || [])),
       sequences: JSON.parse(JSON.stringify(scenario.sequences || [])),
       redirects: JSON.parse(JSON.stringify(scenario.redirects || [])),
-      scenario: scenario.name
+      scenario: scenario.name,
     };
   }
 
@@ -425,8 +449,8 @@ class LeadCMSDataService {
    */
   private getApiHeaders(): ApiHeaders {
     const headers: ApiHeaders = {
-      'Authorization': `Bearer ${this.apiKey}`,
-      'Content-Type': 'application/json'
+      Authorization: `Bearer ${this.apiKey}`,
+      "Content-Type": "application/json",
     };
 
     return headers;
@@ -439,53 +463,58 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      logger.verbose('[MOCK] Returning mock content data');
+      logger.verbose("[MOCK] Returning mock content data");
       // Simulate network delay
       return [...this.mockData.remoteContent];
     }
 
     try {
-      logger.verbose('[API] Fetching content from LeadCMS...');
+      logger.verbose("[API] Fetching content from LeadCMS...");
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured. Please set LEADCMS_URL or NEXT_PUBLIC_LEADCMS_URL in your .env file.');
+        throw new Error(
+          "LeadCMS URL is not configured. Please set LEADCMS_URL or NEXT_PUBLIC_LEADCMS_URL in your .env file."
+        );
       }
 
       const fullUrl = `${this.baseURL}/api/content/sync`;
 
       const response: AxiosResponse = await axios.get(fullUrl, {
-        headers: this.getApiHeaders()
+        headers: this.getApiHeaders(),
       });
 
       // Ensure we always return an array
       if (response.status === 204) {
-        logger.verbose('[API DEBUG] Status 204 - No Content');
+        logger.verbose("[API DEBUG] Status 204 - No Content");
         return [];
       }
 
       const data = response.data;
       if (!data) {
-        logger.verbose('[API DEBUG] No content data returned from API (data is falsy)');
+        logger.verbose("[API DEBUG] No content data returned from API (data is falsy)");
         return [];
       }
 
       // Check if response has 'items' property (API wrapper format)
       let items: ContentItem[];
       if (data.items && Array.isArray(data.items)) {
-        logger.verbose(`[API] Found items array in response wrapper with ${data.items.length} items`);
+        logger.verbose(
+          `[API] Found items array in response wrapper with ${data.items.length} items`
+        );
         items = data.items;
       } else if (Array.isArray(data)) {
         logger.verbose(`[API] Response data is direct array with ${data.length} items`);
         items = data;
       } else {
-        console.warn('[API] API returned unexpected data format:', typeof data, data);
+        console.warn("[API] API returned unexpected data format:", typeof data, data);
         return [];
       }
 
       logger.verbose(`[API DEBUG] Successfully parsed ${items.length} content items`);
       return items;
-    } catch (error: any) {
-      console.error('[API] Failed to fetch content:', error.message);
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
+      console.error("[API] Failed to fetch content:", error.message);
       throw error;
     }
   }
@@ -497,23 +526,25 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      logger.verbose('[MOCK] Returning mock content types');
+      logger.verbose("[MOCK] Returning mock content types");
       return Object.entries(this.mockData.contentTypes).map(([uid, format]) => ({
         uid,
         format,
-        name: uid.charAt(0).toUpperCase() + uid.slice(1)
+        name: uid.charAt(0).toUpperCase() + uid.slice(1),
       }));
     }
 
     try {
-      logger.verbose('[API] Fetching content types from LeadCMS...');
+      logger.verbose("[API] Fetching content types from LeadCMS...");
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured. Please set LEADCMS_URL or NEXT_PUBLIC_LEADCMS_URL in your .env file.');
+        throw new Error(
+          "LeadCMS URL is not configured. Please set LEADCMS_URL or NEXT_PUBLIC_LEADCMS_URL in your .env file."
+        );
       }
 
       const response: AxiosResponse = await axios.get(`${this.baseURL}/api/content-types`, {
-        headers: this.getApiHeaders()
+        headers: this.getApiHeaders(),
       });
 
       const data = response.data;
@@ -523,10 +554,11 @@ class LeadCMSDataService {
         return data;
       }
 
-      logger.verbose('[API] Content types response is not an array, returning empty array');
+      logger.verbose("[API] Content types response is not an array, returning empty array");
       return [];
-    } catch (error: any) {
-      console.error('[API] Failed to fetch content types:', error.message);
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
+      console.error("[API] Failed to fetch content types:", error.message);
       throw error;
     }
   }
@@ -542,23 +574,24 @@ class LeadCMSDataService {
     }
 
     try {
-      logger.verbose('[API] Fetching categories from LeadCMS...');
+      logger.verbose("[API] Fetching categories from LeadCMS...");
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured.');
+        throw new Error("LeadCMS URL is not configured.");
       }
 
-      const url = new URL('/api/content/categories', this.baseURL);
+      const url = new URL("/api/content/categories", this.baseURL);
       if (language) {
-        url.searchParams.set('language', language);
+        url.searchParams.set("language", language);
       }
 
       const response: AxiosResponse = await axios.get(url.toString(), {
-        headers: this.getApiHeaders()
+        headers: this.getApiHeaders(),
       });
 
       return Array.isArray(response.data) ? response.data : [];
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       logger.verbose(`[API] Failed to fetch categories: ${error.message}`);
       return [];
     }
@@ -575,23 +608,24 @@ class LeadCMSDataService {
     }
 
     try {
-      logger.verbose('[API] Fetching tags from LeadCMS...');
+      logger.verbose("[API] Fetching tags from LeadCMS...");
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured.');
+        throw new Error("LeadCMS URL is not configured.");
       }
 
-      const url = new URL('/api/content/tags', this.baseURL);
+      const url = new URL("/api/content/tags", this.baseURL);
       if (language) {
-        url.searchParams.set('language', language);
+        url.searchParams.set("language", language);
       }
 
       const response: AxiosResponse = await axios.get(url.toString(), {
-        headers: this.getApiHeaders()
+        headers: this.getApiHeaders(),
       });
 
       return Array.isArray(response.data) ? response.data : [];
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       logger.verbose(`[API] Failed to fetch tags: ${error.message}`);
       return [];
     }
@@ -605,7 +639,7 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Getting content with ID: ${id}`);
-      const content = this.mockData.remoteContent.find(c => c.id === id);
+      const content = this.mockData.remoteContent.find((c) => c.id === id);
       return content || null;
     }
 
@@ -613,18 +647,19 @@ class LeadCMSDataService {
       logger.verbose(`[API] Fetching content with ID: ${id}`);
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured.');
+        throw new Error("LeadCMS URL is not configured.");
       }
 
       const response: AxiosResponse<ContentItem> = await axios.get(
         `${this.baseURL}/api/content/${id}`,
         {
-          headers: this.getApiHeaders()
+          headers: this.getApiHeaders(),
         }
       );
 
       return response.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 404) {
         logger.verbose(`[API] Content with ID ${id} not found`);
         return null;
@@ -646,8 +681,8 @@ class LeadCMSDataService {
     this._initialize();
 
     const allContent = await this.getAllContent();
-    const content = allContent.find(c =>
-      c.slug === slug && (!language || c.language === language)
+    const content = allContent.find(
+      (c) => c.slug === slug && (!language || c.language === language)
     );
 
     return content || null;
@@ -666,7 +701,7 @@ class LeadCMSDataService {
         ...content,
         id: Math.floor(Math.random() * 1000) + 100,
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       } as ContentItem;
 
       this.mockData.remoteContent.push(newContent);
@@ -675,12 +710,17 @@ class LeadCMSDataService {
 
     try {
       logger.verbose(`[API] Creating content: ${content.title}`);
-      const response: AxiosResponse<ContentItem> = await axios.post(`${this.baseURL}/api/content`, content, {
-        headers: this.getApiHeaders()
-      });
+      const response: AxiosResponse<ContentItem> = await axios.post(
+        `${this.baseURL}/api/content`,
+        content,
+        {
+          headers: this.getApiHeaders(),
+        }
+      );
 
       return response.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       // Handle authentication errors (401)
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
@@ -693,8 +733,8 @@ class LeadCMSDataService {
         // Create a more descriptive error with validation details
         // The error message will be displayed by the caller, so we don't log it here
         const enhancedError = new Error(`Validation failed${validationMessage}`);
-        (enhancedError as any).status = 422;
-        (enhancedError as any).validationErrors = error.response.data.errors;
+        (enhancedError as ApiError).status = 422;
+        (enhancedError as ApiError).validationErrors = error.response.data.errors;
         throw enhancedError;
       }
 
@@ -718,7 +758,7 @@ class LeadCMSDataService {
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Updating content ID ${id}: ${content.title}`);
 
-      const existingIndex = this.mockData.remoteContent.findIndex(c => c.id === id);
+      const existingIndex = this.mockData.remoteContent.findIndex((c) => c.id === id);
       if (existingIndex === -1) {
         throw new Error(`Content with id ${id} not found`);
       }
@@ -726,7 +766,7 @@ class LeadCMSDataService {
       const updatedContent: ContentItem = {
         ...this.mockData.remoteContent[existingIndex],
         ...content,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       };
 
       this.mockData.remoteContent[existingIndex] = updatedContent;
@@ -735,12 +775,17 @@ class LeadCMSDataService {
 
     try {
       logger.verbose(`[API] Updating content ID ${id}: ${content.title}`);
-      const response: AxiosResponse<ContentItem> = await axios.put(`${this.baseURL}/api/content/${id}`, content, {
-        headers: this.getApiHeaders()
-      });
+      const response: AxiosResponse<ContentItem> = await axios.put(
+        `${this.baseURL}/api/content/${id}`,
+        content,
+        {
+          headers: this.getApiHeaders(),
+        }
+      );
 
       return response.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       // Handle authentication errors (401)
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
@@ -753,8 +798,8 @@ class LeadCMSDataService {
         // Create a more descriptive error with validation details
         // The error message will be displayed by the caller, so we don't log it here
         const enhancedError = new Error(`Validation failed${validationMessage}`);
-        (enhancedError as any).status = 422;
-        (enhancedError as any).validationErrors = error.response.data.errors;
+        (enhancedError as ApiError).status = 422;
+        (enhancedError as ApiError).validationErrors = error.response.data.errors;
         throw enhancedError;
       }
 
@@ -779,7 +824,7 @@ class LeadCMSDataService {
       logger.verbose(`[MOCK] Deleting content with ID: ${id}`);
 
       // Remove from mock data
-      const index = this.mockData.remoteContent.findIndex(c => c.id === id);
+      const index = this.mockData.remoteContent.findIndex((c) => c.id === id);
       if (index !== -1) {
         this.mockData.remoteContent.splice(index, 1);
       }
@@ -790,18 +835,16 @@ class LeadCMSDataService {
       logger.verbose(`[API] Deleting content with ID: ${id}`);
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured.');
+        throw new Error("LeadCMS URL is not configured.");
       }
 
-      await axios.delete(
-        `${this.baseURL}/api/content/${id}`,
-        {
-          headers: this.getApiHeaders()
-        }
-      );
+      await axios.delete(`${this.baseURL}/api/content/${id}`, {
+        headers: this.getApiHeaders(),
+      });
 
-      logger.verbose('[API] Content deleted successfully');
-    } catch (error: any) {
+      logger.verbose("[API] Content deleted successfully");
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
@@ -810,12 +853,12 @@ class LeadCMSDataService {
         const enhancedError = new Error(
           `Content validation failed: ${formatApiValidationErrors(error.response)}`
         );
-        (enhancedError as any).status = 422;
-        (enhancedError as any).validationErrors = error.response.data.errors;
+        (enhancedError as ApiError).status = 422;
+        (enhancedError as ApiError).validationErrors = error.response.data.errors;
         throw enhancedError;
       }
 
-      console.error('[API] Failed to delete content:', error.message);
+      console.error("[API] Failed to delete content:", error.message);
       throw error;
     }
   }
@@ -827,20 +870,22 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      logger.verbose('[MOCK] Returning mock email templates');
+      logger.verbose("[MOCK] Returning mock email templates");
       return [...this.mockData.emailTemplates];
     }
 
     if (!this.apiKey) {
-      logger.verbose('[API] Email templates require authentication — no API key configured, skipping');
+      logger.verbose(
+        "[API] Email templates require authentication — no API key configured, skipping"
+      );
       return [];
     }
 
     try {
-      logger.verbose('[API] Fetching email templates from LeadCMS...');
+      logger.verbose("[API] Fetching email templates from LeadCMS...");
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured.');
+        throw new Error("LeadCMS URL is not configured.");
       }
 
       const response: AxiosResponse<EmailTemplateItem[]> = await axios.get(
@@ -849,12 +894,13 @@ class LeadCMSDataService {
       );
 
       return Array.isArray(response.data) ? response.data : [];
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
 
-      console.error('[API] Failed to fetch email templates:', error.message);
+      console.error("[API] Failed to fetch email templates:", error.message);
       throw error;
     }
   }
@@ -866,20 +912,20 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      logger.verbose('[MOCK] Returning mock email groups');
+      logger.verbose("[MOCK] Returning mock email groups");
       return [...this.mockData.emailGroups];
     }
 
     if (!this.apiKey) {
-      logger.verbose('[API] Email groups require authentication — no API key configured, skipping');
+      logger.verbose("[API] Email groups require authentication — no API key configured, skipping");
       return [];
     }
 
     try {
-      logger.verbose('[API] Fetching email groups from LeadCMS...');
+      logger.verbose("[API] Fetching email groups from LeadCMS...");
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured.');
+        throw new Error("LeadCMS URL is not configured.");
       }
 
       const response: AxiosResponse<EmailGroupItem[]> = await axios.get(
@@ -888,12 +934,13 @@ class LeadCMSDataService {
       );
 
       return Array.isArray(response.data) ? response.data : [];
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
 
-      console.error('[API] Failed to fetch email groups:', error.message);
+      console.error("[API] Failed to fetch email groups:", error.message);
       throw error;
     }
   }
@@ -901,7 +948,11 @@ class LeadCMSDataService {
   /**
    * Create a new email group in LeadCMS or mock
    */
-  async createEmailGroup(group: { name: string; language: string; translationKey?: string | null }): Promise<EmailGroupItem> {
+  async createEmailGroup(group: {
+    name: string;
+    language: string;
+    translationKey?: string | null;
+  }): Promise<EmailGroupItem> {
     this._initialize();
 
     if (this.useMock && this.mockData) {
@@ -918,14 +969,16 @@ class LeadCMSDataService {
     }
 
     if (!this.apiKey) {
-      throw new Error('Email group operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Email group operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     try {
       logger.verbose(`[API] Creating email group: ${group.name}`);
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured.');
+        throw new Error("LeadCMS URL is not configured.");
       }
 
       const response: AxiosResponse<EmailGroupItem> = await axios.post(
@@ -935,7 +988,8 @@ class LeadCMSDataService {
       );
 
       return response.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
@@ -956,7 +1010,7 @@ class LeadCMSDataService {
 
       const newComment: CommentItem = {
         id: Math.floor(Math.random() * 1000) + 100,
-        authorName: comment.authorName || '',
+        authorName: comment.authorName || "",
         authorEmail: comment.authorEmail,
         body: comment.body,
         status: comment.status,
@@ -965,7 +1019,7 @@ class LeadCMSDataService {
         updatedAt: new Date().toISOString(),
         commentableId: comment.commentableId || 0,
         commentableType: comment.commentableType,
-        language: comment.language || 'en',
+        language: comment.language || "en",
         parentId: comment.parentId,
         translationKey: comment.translationKey,
         contactId: comment.contactId,
@@ -978,7 +1032,9 @@ class LeadCMSDataService {
     }
 
     if (!this.apiKey) {
-      throw new Error('Comment operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Comment operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     try {
@@ -990,7 +1046,8 @@ class LeadCMSDataService {
       );
 
       return response.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
@@ -1003,14 +1060,14 @@ class LeadCMSDataService {
         const enhancedError = hasValidationMap
           ? new Error(`Validation failed${validationMessage}`)
           : new Error(`Validation failed: ${validationMessage}`);
-        (enhancedError as any).status = 422;
+        (enhancedError as ApiError).status = 422;
         if (hasValidationMap) {
-          (enhancedError as any).validationErrors = error.response.data.errors;
+          (enhancedError as ApiError).validationErrors = error.response.data.errors;
         }
         throw enhancedError;
       }
 
-      console.error('[API] Failed to create comment:', error.message);
+      console.error("[API] Failed to create comment:", error.message);
       throw error;
     }
   }
@@ -1024,7 +1081,7 @@ class LeadCMSDataService {
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Updating comment ID ${id}`);
 
-      const existingIndex = this.mockData.comments.findIndex(c => c.id === id);
+      const existingIndex = this.mockData.comments.findIndex((c) => c.id === id);
       if (existingIndex === -1) {
         throw new Error(`Comment with id ${id} not found`);
       }
@@ -1041,7 +1098,9 @@ class LeadCMSDataService {
     }
 
     if (!this.apiKey) {
-      throw new Error('Comment operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Comment operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     try {
@@ -1053,7 +1112,8 @@ class LeadCMSDataService {
       );
 
       return response.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
@@ -1066,14 +1126,14 @@ class LeadCMSDataService {
         const enhancedError = hasValidationMap
           ? new Error(`Validation failed${validationMessage}`)
           : new Error(`Validation failed: ${validationMessage}`);
-        (enhancedError as any).status = 422;
+        (enhancedError as ApiError).status = 422;
         if (hasValidationMap) {
-          (enhancedError as any).validationErrors = error.response.data.errors;
+          (enhancedError as ApiError).validationErrors = error.response.data.errors;
         }
         throw enhancedError;
       }
 
-      console.error('[API] Failed to update comment:', error.message);
+      console.error("[API] Failed to update comment:", error.message);
       throw error;
     }
   }
@@ -1086,7 +1146,7 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Deleting comment with ID: ${id}`);
-      const index = this.mockData.comments.findIndex(c => c.id === id);
+      const index = this.mockData.comments.findIndex((c) => c.id === id);
       if (index !== -1) {
         this.mockData.comments.splice(index, 1);
       }
@@ -1094,7 +1154,9 @@ class LeadCMSDataService {
     }
 
     if (!this.apiKey) {
-      throw new Error('Comment operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Comment operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     try {
@@ -1103,7 +1165,8 @@ class LeadCMSDataService {
       await axios.delete(`${this.baseURL}/api/comments/${id}`, {
         headers: this.getApiHeaders(),
       });
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
@@ -1112,12 +1175,12 @@ class LeadCMSDataService {
         const enhancedError = new Error(
           `Comment validation failed: ${formatApiValidationErrors(error.response)}`
         );
-        (enhancedError as any).status = 422;
-        (enhancedError as any).validationErrors = error.response.data.errors;
+        (enhancedError as ApiError).status = 422;
+        (enhancedError as ApiError).validationErrors = error.response.data.errors;
         throw enhancedError;
       }
 
-      console.error('[API] Failed to delete comment:', error.message);
+      console.error("[API] Failed to delete comment:", error.message);
       throw error;
     }
   }
@@ -1143,7 +1206,9 @@ class LeadCMSDataService {
     }
 
     if (!this.apiKey) {
-      throw new Error('Email template operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Email template operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     try {
@@ -1155,7 +1220,8 @@ class LeadCMSDataService {
       );
 
       return response.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
@@ -1163,12 +1229,12 @@ class LeadCMSDataService {
       if (error.response?.status === 422 && error.response?.data?.errors) {
         const validationMessage = formatApiValidationErrors(error.response);
         const enhancedError = new Error(`Validation failed${validationMessage}`);
-        (enhancedError as any).status = 422;
-        (enhancedError as any).validationErrors = error.response.data.errors;
+        (enhancedError as ApiError).status = 422;
+        (enhancedError as ApiError).validationErrors = error.response.data.errors;
         throw enhancedError;
       }
 
-      console.error('[API] Failed to create email template:', error.message);
+      console.error("[API] Failed to create email template:", error.message);
       throw error;
     }
   }
@@ -1176,13 +1242,16 @@ class LeadCMSDataService {
   /**
    * Update existing email template in LeadCMS or mock
    */
-  async updateEmailTemplate(id: number, template: Partial<EmailTemplateItem>): Promise<EmailTemplateItem> {
+  async updateEmailTemplate(
+    id: number,
+    template: Partial<EmailTemplateItem>
+  ): Promise<EmailTemplateItem> {
     this._initialize();
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Updating email template ID ${id}: ${template.name}`);
 
-      const existingIndex = this.mockData.emailTemplates.findIndex(t => t.id === id);
+      const existingIndex = this.mockData.emailTemplates.findIndex((t) => t.id === id);
       if (existingIndex === -1) {
         throw new Error(`Email template with id ${id} not found`);
       }
@@ -1198,7 +1267,9 @@ class LeadCMSDataService {
     }
 
     if (!this.apiKey) {
-      throw new Error('Email template operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Email template operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     try {
@@ -1210,7 +1281,8 @@ class LeadCMSDataService {
       );
 
       return response.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
@@ -1218,12 +1290,12 @@ class LeadCMSDataService {
       if (error.response?.status === 422 && error.response?.data?.errors) {
         const validationMessage = formatApiValidationErrors(error.response);
         const enhancedError = new Error(`Validation failed${validationMessage}`);
-        (enhancedError as any).status = 422;
-        (enhancedError as any).validationErrors = error.response.data.errors;
+        (enhancedError as ApiError).status = 422;
+        (enhancedError as ApiError).validationErrors = error.response.data.errors;
         throw enhancedError;
       }
 
-      console.error('[API] Failed to update email template:', error.message);
+      console.error("[API] Failed to update email template:", error.message);
       throw error;
     }
   }
@@ -1237,7 +1309,7 @@ class LeadCMSDataService {
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Deleting email template with ID: ${id}`);
 
-      const index = this.mockData.emailTemplates.findIndex(t => t.id === id);
+      const index = this.mockData.emailTemplates.findIndex((t) => t.id === id);
       if (index !== -1) {
         this.mockData.emailTemplates.splice(index, 1);
       }
@@ -1245,22 +1317,25 @@ class LeadCMSDataService {
     }
 
     if (!this.apiKey) {
-      throw new Error('Email template operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Email template operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     try {
       logger.verbose(`[API] Deleting email template with ID: ${id}`);
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured.');
+        throw new Error("LeadCMS URL is not configured.");
       }
 
       await axios.delete(`${this.baseURL}/api/email-templates/${id}`, {
         headers: this.getApiHeaders(),
       });
 
-      logger.verbose('[API] Email template deleted successfully');
-    } catch (error: any) {
+      logger.verbose("[API] Email template deleted successfully");
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
@@ -1269,12 +1344,12 @@ class LeadCMSDataService {
         const enhancedError = new Error(
           `Email template validation failed: ${formatApiValidationErrors(error.response)}`
         );
-        (enhancedError as any).status = 422;
-        (enhancedError as any).validationErrors = error.response.data.errors;
+        (enhancedError as ApiError).status = 422;
+        (enhancedError as ApiError).validationErrors = error.response.data.errors;
         throw enhancedError;
       }
 
-      console.error('[API] Failed to delete email template:', error.message);
+      console.error("[API] Failed to delete email template:", error.message);
       throw error;
     }
   }
@@ -1288,20 +1363,20 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      logger.verbose('[MOCK] Returning mock segments');
+      logger.verbose("[MOCK] Returning mock segments");
       return [...this.mockData.segments];
     }
 
     if (!this.apiKey) {
-      logger.verbose('[API] Segments require authentication — no API key configured, skipping');
+      logger.verbose("[API] Segments require authentication — no API key configured, skipping");
       return [];
     }
 
     try {
-      logger.verbose('[API] Fetching segments from LeadCMS...');
+      logger.verbose("[API] Fetching segments from LeadCMS...");
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured.');
+        throw new Error("LeadCMS URL is not configured.");
       }
 
       const response: AxiosResponse<SegmentDetailsDto[]> = await axios.get(
@@ -1310,12 +1385,13 @@ class LeadCMSDataService {
       );
 
       return Array.isArray(response.data) ? response.data : [];
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
 
-      console.error('[API] Failed to fetch segments:', error.message);
+      console.error("[API] Failed to fetch segments:", error.message);
       throw error;
     }
   }
@@ -1341,7 +1417,9 @@ class LeadCMSDataService {
     }
 
     if (!this.apiKey) {
-      throw new Error('Segment operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Segment operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     try {
@@ -1353,7 +1431,8 @@ class LeadCMSDataService {
       );
 
       return response.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
@@ -1361,12 +1440,12 @@ class LeadCMSDataService {
       if (error.response?.status === 422 && error.response?.data?.errors) {
         const validationMessage = formatApiValidationErrors(error.response);
         const enhancedError = new Error(`Validation failed${validationMessage}`);
-        (enhancedError as any).status = 422;
-        (enhancedError as any).validationErrors = error.response.data.errors;
+        (enhancedError as ApiError).status = 422;
+        (enhancedError as ApiError).validationErrors = error.response.data.errors;
         throw enhancedError;
       }
 
-      console.error('[API] Failed to create segment:', error.message);
+      console.error("[API] Failed to create segment:", error.message);
       throw error;
     }
   }
@@ -1380,7 +1459,7 @@ class LeadCMSDataService {
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Updating segment ID ${id}: ${segment.name}`);
 
-      const existingIndex = this.mockData.segments.findIndex(s => s.id === id);
+      const existingIndex = this.mockData.segments.findIndex((s) => s.id === id);
       if (existingIndex === -1) {
         throw new Error(`Segment with id ${id} not found`);
       }
@@ -1397,7 +1476,9 @@ class LeadCMSDataService {
     }
 
     if (!this.apiKey) {
-      throw new Error('Segment operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Segment operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     try {
@@ -1409,7 +1490,8 @@ class LeadCMSDataService {
       );
 
       return response.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
@@ -1417,12 +1499,12 @@ class LeadCMSDataService {
       if (error.response?.status === 422 && error.response?.data?.errors) {
         const validationMessage = formatApiValidationErrors(error.response);
         const enhancedError = new Error(`Validation failed${validationMessage}`);
-        (enhancedError as any).status = 422;
-        (enhancedError as any).validationErrors = error.response.data.errors;
+        (enhancedError as ApiError).status = 422;
+        (enhancedError as ApiError).validationErrors = error.response.data.errors;
         throw enhancedError;
       }
 
-      console.error('[API] Failed to update segment:', error.message);
+      console.error("[API] Failed to update segment:", error.message);
       throw error;
     }
   }
@@ -1435,7 +1517,7 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Deleting segment with ID: ${id}`);
-      const index = this.mockData.segments.findIndex(s => s.id === id);
+      const index = this.mockData.segments.findIndex((s) => s.id === id);
       if (index !== -1) {
         this.mockData.segments.splice(index, 1);
       }
@@ -1443,25 +1525,28 @@ class LeadCMSDataService {
     }
 
     if (!this.apiKey) {
-      throw new Error('Segment operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Segment operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     try {
       logger.verbose(`[API] Deleting segment with ID: ${id}`);
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured.');
+        throw new Error("LeadCMS URL is not configured.");
       }
 
       await axios.delete(`${this.baseURL}/api/segments/${id}`, {
         headers: this.getApiHeaders(),
       });
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
 
-      console.error('[API] Failed to delete segment:', error.message);
+      console.error("[API] Failed to delete segment:", error.message);
       throw error;
     }
   }
@@ -1475,37 +1560,37 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      logger.verbose('[MOCK] Returning mock sequences');
+      logger.verbose("[MOCK] Returning mock sequences");
       return [...this.mockData.sequences];
     }
 
     if (!this.apiKey) {
-      logger.verbose('[API] Sequences require authentication — no API key configured, skipping');
+      logger.verbose("[API] Sequences require authentication — no API key configured, skipping");
       return [];
     }
 
     try {
-      logger.verbose('[API] Fetching sequences from LeadCMS...');
+      logger.verbose("[API] Fetching sequences from LeadCMS...");
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured.');
+        throw new Error("LeadCMS URL is not configured.");
       }
 
       const url = new URL(`${this.baseURL}/api/sequences`);
-      url.searchParams.set('filter[include]', 'steps');
+      url.searchParams.set("filter[include]", "steps");
 
-      const response: AxiosResponse<SequenceDetailsDto[]> = await axios.get(
-        url.toString(),
-        { headers: this.getApiHeaders() }
-      );
+      const response: AxiosResponse<SequenceDetailsDto[]> = await axios.get(url.toString(), {
+        headers: this.getApiHeaders(),
+      });
 
       return Array.isArray(response.data) ? response.data : [];
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
 
-      console.error('[API] Failed to fetch sequences:', error.message);
+      console.error("[API] Failed to fetch sequences:", error.message);
       throw error;
     }
   }
@@ -1522,14 +1607,14 @@ class LeadCMSDataService {
       const newSequence: SequenceDetailsDto = {
         ...sequence,
         id: Math.floor(Math.random() * 1000) + 100,
-        status: 'Draft',
+        status: "Draft",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         steps: (sequence.steps ?? []).map((s, i) => ({
           ...s,
           id: s.id ?? i + 1,
           sequenceId: 0,
-          type: s.type ?? 'Email' as const,
+          type: s.type ?? ("Email" as const),
         })),
       };
 
@@ -1538,7 +1623,9 @@ class LeadCMSDataService {
     }
 
     if (!this.apiKey) {
-      throw new Error('Sequence operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Sequence operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     try {
@@ -1550,7 +1637,8 @@ class LeadCMSDataService {
       );
 
       return response.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
@@ -1558,12 +1646,12 @@ class LeadCMSDataService {
       if (error.response?.status === 422 && error.response?.data?.errors) {
         const validationMessage = formatApiValidationErrors(error.response);
         const enhancedError = new Error(`Validation failed${validationMessage}`);
-        (enhancedError as any).status = 422;
-        (enhancedError as any).validationErrors = error.response.data.errors;
+        (enhancedError as ApiError).status = 422;
+        (enhancedError as ApiError).validationErrors = error.response.data.errors;
         throw enhancedError;
       }
 
-      console.error('[API] Failed to create sequence:', error.message);
+      console.error("[API] Failed to create sequence:", error.message);
       throw error;
     }
   }
@@ -1577,7 +1665,7 @@ class LeadCMSDataService {
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Updating sequence ID ${id}: ${sequence.name}`);
 
-      const existingIndex = this.mockData.sequences.findIndex(s => s.id === id);
+      const existingIndex = this.mockData.sequences.findIndex((s) => s.id === id);
       if (existingIndex === -1) {
         throw new Error(`Sequence with id ${id} not found`);
       }
@@ -1586,12 +1674,14 @@ class LeadCMSDataService {
         ...this.mockData.sequences[existingIndex],
         ...sequence,
         updatedAt: new Date().toISOString(),
-        steps: (sequence.steps ?? this.mockData.sequences[existingIndex].steps ?? []).map((s, i) => ({
-          ...s,
-          id: s.id ?? ('id' in s ? (s as any).id : i + 1),
-          sequenceId: id,
-          type: s.type ?? 'Email' as const,
-        })),
+        steps: (sequence.steps ?? this.mockData.sequences[existingIndex].steps ?? []).map(
+          (s, i) => ({
+            ...s,
+            id: s.id ?? ("id" in s ? (s as { id: number }).id : i + 1),
+            sequenceId: id,
+            type: s.type ?? ("Email" as const),
+          })
+        ),
       };
 
       this.mockData.sequences[existingIndex] = updatedSequence;
@@ -1599,7 +1689,9 @@ class LeadCMSDataService {
     }
 
     if (!this.apiKey) {
-      throw new Error('Sequence operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Sequence operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     try {
@@ -1611,7 +1703,8 @@ class LeadCMSDataService {
       );
 
       return response.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
@@ -1619,12 +1712,12 @@ class LeadCMSDataService {
       if (error.response?.status === 422 && error.response?.data?.errors) {
         const validationMessage = formatApiValidationErrors(error.response);
         const enhancedError = new Error(`Validation failed${validationMessage}`);
-        (enhancedError as any).status = 422;
-        (enhancedError as any).validationErrors = error.response.data.errors;
+        (enhancedError as ApiError).status = 422;
+        (enhancedError as ApiError).validationErrors = error.response.data.errors;
         throw enhancedError;
       }
 
-      console.error('[API] Failed to update sequence:', error.message);
+      console.error("[API] Failed to update sequence:", error.message);
       throw error;
     }
   }
@@ -1637,7 +1730,7 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Deleting sequence with ID: ${id}`);
-      const index = this.mockData.sequences.findIndex(s => s.id === id);
+      const index = this.mockData.sequences.findIndex((s) => s.id === id);
       if (index !== -1) {
         this.mockData.sequences.splice(index, 1);
       }
@@ -1645,25 +1738,28 @@ class LeadCMSDataService {
     }
 
     if (!this.apiKey) {
-      throw new Error('Sequence operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Sequence operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     try {
       logger.verbose(`[API] Deleting sequence with ID: ${id}`);
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured.');
+        throw new Error("LeadCMS URL is not configured.");
       }
 
       await axios.delete(`${this.baseURL}/api/sequences/${id}`, {
         headers: this.getApiHeaders(),
       });
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
 
-      console.error('[API] Failed to delete sequence:', error.message);
+      console.error("[API] Failed to delete sequence:", error.message);
       throw error;
     }
   }
@@ -1676,28 +1772,31 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      logger.verbose('[MOCK] Discovering redirects (no-op in mock mode)');
+      logger.verbose("[MOCK] Discovering redirects (no-op in mock mode)");
       return;
     }
 
     if (!this.apiKey) {
-      throw new Error('Redirect operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Redirect operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     if (!this.baseURL) {
-      throw new Error('LeadCMS URL is not configured.');
+      throw new Error("LeadCMS URL is not configured.");
     }
 
     try {
-      logger.verbose('[API] Triggering redirect discovery');
+      logger.verbose("[API] Triggering redirect discovery");
       await axios.post(`${this.baseURL}/api/redirects/discover`, null, {
         headers: this.getApiHeaders(),
       });
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
-      console.error('[API] Failed to trigger redirect discovery:', error.message);
+      console.error("[API] Failed to trigger redirect discovery:", error.message);
       throw error;
     }
   }
@@ -1709,49 +1808,48 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      logger.verbose('[MOCK] Getting all redirects');
+      logger.verbose("[MOCK] Getting all redirects");
       return [...(this.mockData.redirects || [])];
     }
 
     if (!this.apiKey) {
-      logger.verbose('[API] Redirects require authentication — no API key configured, skipping');
+      logger.verbose("[API] Redirects require authentication — no API key configured, skipping");
       return [];
     }
 
     if (!this.baseURL) {
-      throw new Error('LeadCMS URL is not configured.');
+      throw new Error("LeadCMS URL is not configured.");
     }
 
     const allRedirects: RedirectDetailsDto[] = [];
-    let syncToken = '';
+    let syncToken = "";
     const limit = 100;
 
     while (true) {
       try {
         const url = new URL(`${this.baseURL}/api/redirects/sync`);
-        url.searchParams.set('filter[limit]', String(limit));
-        if (syncToken) url.searchParams.set('syncToken', syncToken);
+        url.searchParams.set("filter[limit]", String(limit));
+        if (syncToken) url.searchParams.set("syncToken", syncToken);
 
-        logger.verbose(`[API] Fetching redirects (syncToken=${syncToken || '(none)'})`);
+        logger.verbose(`[API] Fetching redirects (syncToken=${syncToken || "(none)"})`);
 
-        const res: AxiosResponse<{ items?: RedirectDetailsDto[]; deleted?: number[] }> = await axios.get(
-          url.toString(),
-          { headers: this.getApiHeaders() }
-        );
+        const res: AxiosResponse<{ items?: RedirectDetailsDto[]; deleted?: number[] }> =
+          await axios.get(url.toString(), { headers: this.getApiHeaders() });
 
         if (res.status === 204) break;
 
         const batch: RedirectDetailsDto[] = Array.isArray(res.data?.items) ? res.data.items : [];
         allRedirects.push(...batch);
 
-        const nextToken: string = res.headers['x-next-sync-token'] || '';
+        const nextToken: string = res.headers["x-next-sync-token"] || "";
         if (!nextToken || nextToken === syncToken || batch.length < limit) break;
         syncToken = nextToken;
-      } catch (error: any) {
+      } catch (_error: unknown) {
+        const error = _error as ApiAxiosError;
         if (error.response?.status === 401) {
           throw formatAuthenticationError(error);
         }
-        console.error('[API] Failed to fetch redirects:', error.message);
+        console.error("[API] Failed to fetch redirects:", error.message);
         throw error;
       }
     }
@@ -1767,15 +1865,17 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Getting redirect with ID: ${id}`);
-      return this.mockData.redirects?.find(r => r.id === id) ?? null;
+      return this.mockData.redirects?.find((r) => r.id === id) ?? null;
     }
 
     if (!this.apiKey) {
-      throw new Error('Redirect operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Redirect operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     if (!this.baseURL) {
-      throw new Error('LeadCMS URL is not configured.');
+      throw new Error("LeadCMS URL is not configured.");
     }
 
     try {
@@ -1785,12 +1885,13 @@ class LeadCMSDataService {
         { headers: this.getApiHeaders() }
       );
       return res.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 404) return null;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
-      console.error('[API] Failed to get redirect:', error.message);
+      console.error("[API] Failed to get redirect:", error.message);
       throw error;
     }
   }
@@ -1802,7 +1903,7 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      logger.verbose('[MOCK] Creating redirect');
+      logger.verbose("[MOCK] Creating redirect");
       const newId = (this.mockData.redirects?.length ?? 0) + 1;
       const redirect: RedirectDetailsDto = {
         id: newId,
@@ -1830,27 +1931,30 @@ class LeadCMSDataService {
     }
 
     if (!this.apiKey) {
-      throw new Error('Redirect operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Redirect operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     if (!this.baseURL) {
-      throw new Error('LeadCMS URL is not configured.');
+      throw new Error("LeadCMS URL is not configured.");
     }
 
     try {
-      logger.verbose('[API] Creating redirect');
+      logger.verbose("[API] Creating redirect");
       const res: AxiosResponse<RedirectDetailsDto> = await axios.post(
         `${this.baseURL}/api/redirects`,
         dto,
         { headers: this.getApiHeaders() }
       );
       return res.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
       const msg = formatApiValidationErrors(error.response);
-      console.error('[API] Failed to create redirect:', msg);
+      console.error("[API] Failed to create redirect:", msg);
       throw error;
     }
   }
@@ -1863,18 +1967,20 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Updating redirect with ID: ${id}`);
-      const existing = this.mockData.redirects?.find(r => r.id === id);
+      const existing = this.mockData.redirects?.find((r) => r.id === id);
       if (!existing) throw new Error(`Redirect ${id} not found`);
       Object.assign(existing, dto, { updatedAt: new Date().toISOString() });
       return existing;
     }
 
     if (!this.apiKey) {
-      throw new Error('Redirect operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Redirect operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     if (!this.baseURL) {
-      throw new Error('LeadCMS URL is not configured.');
+      throw new Error("LeadCMS URL is not configured.");
     }
 
     try {
@@ -1885,12 +1991,13 @@ class LeadCMSDataService {
         { headers: this.getApiHeaders() }
       );
       return res.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
       const msg = formatApiValidationErrors(error.response);
-      console.error('[API] Failed to update redirect:', msg);
+      console.error("[API] Failed to update redirect:", msg);
       throw error;
     }
   }
@@ -1903,7 +2010,7 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose(`[MOCK] Deleting redirect with ID: ${id}`);
-      const index = this.mockData.redirects?.findIndex(r => r.id === id) ?? -1;
+      const index = this.mockData.redirects?.findIndex((r) => r.id === id) ?? -1;
       if (index !== -1) {
         this.mockData.redirects!.splice(index, 1);
       }
@@ -1911,11 +2018,13 @@ class LeadCMSDataService {
     }
 
     if (!this.apiKey) {
-      throw new Error('Redirect operations require authentication. Please configure LEADCMS_API_KEY.');
+      throw new Error(
+        "Redirect operations require authentication. Please configure LEADCMS_API_KEY."
+      );
     }
 
     if (!this.baseURL) {
-      throw new Error('LeadCMS URL is not configured.');
+      throw new Error("LeadCMS URL is not configured.");
     }
 
     try {
@@ -1923,11 +2032,12 @@ class LeadCMSDataService {
       await axios.delete(`${this.baseURL}/api/redirects/${id}`, {
         headers: this.getApiHeaders(),
       });
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
-      console.error('[API] Failed to delete redirect:', error.message);
+      console.error("[API] Failed to delete redirect:", error.message);
       throw error;
     }
   }
@@ -1945,18 +2055,24 @@ class LeadCMSDataService {
       return {
         uid: contentType.uid,
         format: contentType.format,
-        name: contentType.name || contentType.uid.charAt(0).toUpperCase() + contentType.uid.slice(1)
+        name:
+          contentType.name || contentType.uid.charAt(0).toUpperCase() + contentType.uid.slice(1),
       };
     }
 
     try {
       logger.verbose(`[API] Creating content type: ${contentType.uid}`);
-      const response: AxiosResponse<ContentType> = await axios.post(`${this.baseURL}/api/content-types`, contentType, {
-        headers: this.getApiHeaders()
-      });
+      const response: AxiosResponse<ContentType> = await axios.post(
+        `${this.baseURL}/api/content-types`,
+        contentType,
+        {
+          headers: this.getApiHeaders(),
+        }
+      );
 
       return response.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       console.error(`[API] Failed to create content type:`, error.message);
       throw error;
     }
@@ -1969,33 +2085,32 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      logger.verbose('[MOCK] Returning mock media data');
+      logger.verbose("[MOCK] Returning mock media data");
 
       let media = [...this.mockData.remoteMedia];
       if (scopeUid) {
-        media = media.filter(m => m.scopeUid === scopeUid);
+        media = media.filter((m) => m.scopeUid === scopeUid);
       }
       return media;
     }
 
     try {
-      logger.verbose('[API] Fetching media from LeadCMS using sync API...');
+      logger.verbose("[API] Fetching media from LeadCMS using sync API...");
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured.');
+        throw new Error("LeadCMS URL is not configured.");
       }
 
       const allMedia: MediaItem[] = [];
-      let syncToken = '';
-      let page = 0;
+      let syncToken = "";
 
       // Paginate through all media using sync API
       while (true) {
-        const url = new URL('/api/media/sync', this.baseURL);
-        url.searchParams.set('filter[limit]', '100');
-        url.searchParams.set('syncToken', syncToken);
+        const url = new URL("/api/media/sync", this.baseURL);
+        url.searchParams.set("filter[limit]", "100");
+        url.searchParams.set("syncToken", syncToken);
         if (scopeUid) {
-          url.searchParams.set('query', `scopeUid=${scopeUid}`);
+          url.searchParams.set("query", `scopeUid=${scopeUid}`);
         }
 
         const response = await axios.get(url.toString());
@@ -2009,19 +2124,19 @@ class LeadCMSDataService {
           allMedia.push(...data.items);
         }
 
-        const nextToken = response.headers['x-next-sync-token'] || syncToken;
+        const nextToken = response.headers["x-next-sync-token"] || syncToken;
         if (!nextToken || nextToken === syncToken) {
           break; // No more pages
         }
 
         syncToken = nextToken;
-        page++;
       }
 
       logger.verbose(`[API] Fetched ${allMedia.length} media items`);
       return allMedia;
-    } catch (error: any) {
-      console.error('[API] Failed to fetch media:', error.message);
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
+      console.error("[API] Failed to fetch media:", error.message);
       throw error;
     }
   }
@@ -2029,16 +2144,16 @@ class LeadCMSDataService {
   /**
    * Upload media file to LeadCMS
    */
-  async uploadMedia(formData: any): Promise<MediaItem> {
+  async uploadMedia(formData: FormData): Promise<MediaItem> {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      logger.verbose('[MOCK] Uploading media file');
+      logger.verbose("[MOCK] Uploading media file");
 
       // Extract data from FormData for mock
-      const scopeUid = formData.get('ScopeUid') as string;
-      const fileName = (formData.get('File') as any)?.name || 'mock-file.jpg';
-      const description = formData.get('Description') as string | null;
+      const scopeUid = formData.get("ScopeUid") as string;
+      const fileName = (formData.get("File") as File)?.name || "mock-file.jpg";
+      const description = formData.get("Description") as string | null;
 
       const newMedia: MediaItem = {
         id: this.mockData.remoteMedia.length + 1,
@@ -2047,10 +2162,10 @@ class LeadCMSDataService {
         name: fileName,
         description,
         size: 100000, // Mock size
-        extension: fileName.substring(fileName.lastIndexOf('.')),
-        mimeType: 'image/jpeg',
+        extension: fileName.substring(fileName.lastIndexOf(".")),
+        mimeType: "image/jpeg",
         createdAt: new Date().toISOString(),
-        updatedAt: null
+        updatedAt: null,
       };
 
       this.mockData.remoteMedia.push(newMedia);
@@ -2058,10 +2173,10 @@ class LeadCMSDataService {
     }
 
     try {
-      logger.verbose('[API] Uploading media file...');
+      logger.verbose("[API] Uploading media file...");
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured.');
+        throw new Error("LeadCMS URL is not configured.");
       }
 
       const response: AxiosResponse<MediaItem> = await axios.post(
@@ -2069,15 +2184,16 @@ class LeadCMSDataService {
         formData,
         {
           headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
+            Authorization: `Bearer ${this.apiKey}`,
             // Don't set Content-Type, let axios set it with boundary for multipart
-          }
+          },
         }
       );
 
-      logger.verbose('[API] Media uploaded successfully');
+      logger.verbose("[API] Media uploaded successfully");
       return response.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
@@ -2085,11 +2201,11 @@ class LeadCMSDataService {
       if (error.response?.status === 422) {
         const validationMessage = formatApiValidationErrors(error.response);
         const enhancedError = new Error(`Media validation failed${validationMessage}`);
-        (enhancedError as any).status = 422;
+        (enhancedError as ApiError).status = 422;
         throw enhancedError;
       }
 
-      console.error('[API] Failed to upload media:', error.message);
+      console.error("[API] Failed to upload media:", error.message);
       throw error;
     }
   }
@@ -2097,17 +2213,17 @@ class LeadCMSDataService {
   /**
    * Update existing media file in LeadCMS
    */
-  async updateMedia(formData: any): Promise<MediaItem> {
+  async updateMedia(formData: FormData): Promise<MediaItem> {
     this._initialize();
 
     if (this.useMock && this.mockData) {
-      logger.verbose('[MOCK] Updating media file');
+      logger.verbose("[MOCK] Updating media file");
 
-      const scopeUid = formData.get('ScopeUid') as string;
-      const fileName = formData.get('FileName') as string;
+      const scopeUid = formData.get("ScopeUid") as string;
+      const fileName = formData.get("FileName") as string;
 
       const existingIndex = this.mockData.remoteMedia.findIndex(
-        m => m.scopeUid === scopeUid && m.name === fileName
+        (m) => m.scopeUid === scopeUid && m.name === fileName
       );
 
       if (existingIndex === -1) {
@@ -2116,7 +2232,7 @@ class LeadCMSDataService {
 
       const updatedMedia = {
         ...this.mockData.remoteMedia[existingIndex],
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       };
 
       this.mockData.remoteMedia[existingIndex] = updatedMedia;
@@ -2124,10 +2240,10 @@ class LeadCMSDataService {
     }
 
     try {
-      logger.verbose('[API] Updating media file...');
+      logger.verbose("[API] Updating media file...");
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured.');
+        throw new Error("LeadCMS URL is not configured.");
       }
 
       const response: AxiosResponse<MediaItem> = await axios.patch(
@@ -2135,14 +2251,15 @@ class LeadCMSDataService {
         formData,
         {
           headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-          }
+            Authorization: `Bearer ${this.apiKey}`,
+          },
         }
       );
 
-      logger.verbose('[API] Media updated successfully');
+      logger.verbose("[API] Media updated successfully");
       return response.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
@@ -2150,11 +2267,11 @@ class LeadCMSDataService {
       if (error.response?.status === 422) {
         const validationMessage = formatApiValidationErrors(error.response);
         const enhancedError = new Error(`Media validation failed${validationMessage}`);
-        (enhancedError as any).status = 422;
+        (enhancedError as ApiError).status = 422;
         throw enhancedError;
       }
 
-      console.error('[API] Failed to update media:', error.message);
+      console.error("[API] Failed to update media:", error.message);
       throw error;
     }
   }
@@ -2170,13 +2287,13 @@ class LeadCMSDataService {
 
       // Parse path to extract scopeUid and name
       // Path format: /api/media/scopeUid/filename or scopeUid/filename
-      const cleanPath = pathToFile.replace('/api/media/', '');
-      const lastSlash = cleanPath.lastIndexOf('/');
+      const cleanPath = pathToFile.replace("/api/media/", "");
+      const lastSlash = cleanPath.lastIndexOf("/");
       const scopeUid = cleanPath.substring(0, lastSlash);
       const name = cleanPath.substring(lastSlash + 1);
 
       const index = this.mockData.remoteMedia.findIndex(
-        m => m.scopeUid === scopeUid && m.name === name
+        (m) => m.scopeUid === scopeUid && m.name === name
       );
 
       if (index !== -1) {
@@ -2189,23 +2306,21 @@ class LeadCMSDataService {
       logger.verbose(`[API] Deleting media file: ${pathToFile}`);
 
       if (!this.baseURL) {
-        throw new Error('LeadCMS URL is not configured.');
+        throw new Error("LeadCMS URL is not configured.");
       }
 
-      await axios.delete(
-        `${this.baseURL}/api/media/${pathToFile}`,
-        {
-          headers: this.getApiHeaders()
-        }
-      );
+      await axios.delete(`${this.baseURL}/api/media/${pathToFile}`, {
+        headers: this.getApiHeaders(),
+      });
 
-      logger.verbose('[API] Media deleted successfully');
-    } catch (error: any) {
+      logger.verbose("[API] Media deleted successfully");
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
 
-      console.error('[API] Failed to delete media:', error.message);
+      console.error("[API] Failed to delete media:", error.message);
       throw error;
     }
   }
@@ -2219,30 +2334,31 @@ class LeadCMSDataService {
     this._initialize();
 
     if (this.useMock) {
-      logger.verbose('[MOCK] Returning mock user identity');
+      logger.verbose("[MOCK] Returning mock user identity");
       return {
-        displayName: 'Test User',
-        email: 'test@example.com',
-        userName: 'testuser',
+        displayName: "Test User",
+        email: "test@example.com",
+        userName: "testuser",
       };
     }
 
     if (!this.apiKey) {
-      throw new Error('No API key configured');
+      throw new Error("No API key configured");
     }
 
     if (!this.baseURL) {
-      throw new Error('LeadCMS URL is not configured.');
+      throw new Error("LeadCMS URL is not configured.");
     }
 
     try {
-      logger.verbose('[API] Fetching user identity from /api/users/me...');
+      logger.verbose("[API] Fetching user identity from /api/users/me...");
       const response: AxiosResponse<UserIdentity> = await axios.get(
         `${this.baseURL}/api/users/me`,
         { headers: this.getApiHeaders() }
       );
       return response.data;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ApiAxiosError;
       if (error.response?.status === 401) {
         throw formatAuthenticationError(error);
       }
@@ -2269,11 +2385,11 @@ class LeadCMSDataService {
     if (this.useMock) {
       // Pretend mock server is always on the latest version so feature checks
       // don't gate mock-based test scenarios.
-      return '99.99.99';
+      return "99.99.99";
     }
     if (!this.baseURL) return null;
     try {
-      const { getLeadCMSVersion } = await import('./auth.js');
+      const { getLeadCMSVersion } = await import("./auth.js");
       return await getLeadCMSVersion(this.baseURL);
     } catch {
       return null;
@@ -2303,7 +2419,7 @@ class LeadCMSDataService {
     this._initialize();
 
     if (!this.useMock) {
-      throw new Error('Cannot switch scenario: not in mock mode');
+      throw new Error("Cannot switch scenario: not in mock mode");
     }
 
     const scenario = MOCK_SCENARIOS[scenarioKey];
@@ -2322,12 +2438,12 @@ class LeadCMSDataService {
       segments: JSON.parse(JSON.stringify(scenario.segments || [])),
       sequences: JSON.parse(JSON.stringify(scenario.sequences || [])),
       redirects: JSON.parse(JSON.stringify(scenario.redirects || [])),
-      scenario: scenario.name
+      scenario: scenario.name,
     };
 
     logger.verbose(`[MOCK] Switched to scenario: ${scenario.name}`);
     if (!this.mockData) {
-      throw new Error('Mock data not initialized');
+      throw new Error("Mock data not initialized");
     }
     return this.mockData;
   }
@@ -2352,7 +2468,7 @@ class LeadCMSDataService {
       segments: [...this.mockData.segments],
       sequences: [...this.mockData.sequences],
       redirects: [...(this.mockData.redirects || [])],
-      scenario: this.currentScenario?.name || ''
+      scenario: this.currentScenario?.name || "",
     };
   }
 
@@ -2375,4 +2491,13 @@ export const leadCMSDataService = new LeadCMSDataService();
 export { LeadCMSDataService };
 
 // Export types for use in other modules
-export type { ContentItem, ContentType, MockScenario, MockData, CommentCreateItem, CommentUpdateItem, EmailTemplateItem, EmailGroupItem };
+export type {
+  ContentItem,
+  ContentType,
+  MockScenario,
+  MockData,
+  CommentCreateItem,
+  CommentUpdateItem,
+  EmailTemplateItem,
+  EmailGroupItem,
+};

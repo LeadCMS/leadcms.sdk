@@ -25,9 +25,7 @@ const CONFLICT_END = /^>{7}\s/m;
  * contains one of the markers (e.g. code samples showing a single marker).
  */
 export function hasMergeConflictMarkers(content: string): boolean {
-    return (
-        CONFLICT_START.test(content) &&
-        CONFLICT_SEPARATOR.test(content) &&
-        CONFLICT_END.test(content)
-    );
+  return (
+    CONFLICT_START.test(content) && CONFLICT_SEPARATOR.test(content) && CONFLICT_END.test(content)
+  );
 }

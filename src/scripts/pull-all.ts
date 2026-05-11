@@ -9,7 +9,17 @@ import fs from "fs/promises";
 import path from "path";
 import axios from "axios";
 import { leadCMSUrl, leadCMSApiKey } from "./leadcms-helpers.js";
-import { setCMSConfig, isContentSupported, isMediaSupported, isCommentsSupported, isEmailTemplatesSupported, isSettingsSupported, isSegmentsSupported, isSequencesSupported, isRedirectsSupported } from "../lib/cms-config-types.js";
+import {
+  setCMSConfig,
+  isContentSupported,
+  isMediaSupported,
+  isCommentsSupported,
+  isEmailTemplatesSupported,
+  isSettingsSupported,
+  isSegmentsSupported,
+  isSequencesSupported,
+  isRedirectsSupported,
+} from "../lib/cms-config-types.js";
 import { getConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
 import { syncTokenPath, metadataMapPath, clearMetadataSection } from "../lib/remote-context.js";
@@ -42,7 +52,7 @@ async function fetchAndCacheCMSConfig(baseUrl?: string): Promise<{
   try {
     const effectiveUrl = baseUrl || leadCMSUrl;
     logger.info(`🔍 Checking CMS configuration...`);
-    const configUrl = new URL('/api/config', effectiveUrl).toString();
+    const configUrl = new URL("/api/config", effectiveUrl).toString();
     const response = await axios.get(configUrl, { timeout: 10000 });
 
     if (response.data) {
@@ -60,24 +70,44 @@ async function fetchAndCacheCMSConfig(baseUrl?: string): Promise<{
       };
 
       logger.info(`✅ CMS Configuration received`);
-      logger.info(`   - Content: ${support.content ? '✓' : '✗'}`);
-      logger.info(`   - Media: ${support.media ? '✓' : '✗'}`);
-      logger.info(`   - Comments: ${support.comments ? '✓' : '✗'}`);
-      logger.info(`   - Email Templates: ${support.emailTemplates ? '✓' : '✗'}${isEmailTemplatesSupported() && !hasApiKey ? ' (requires auth)' : ''}`);
-      logger.info(`   - Settings: ${support.settings ? '✓' : '✗'}${isSettingsSupported() && !hasApiKey ? ' (requires auth)' : ''}`);
-      logger.info(`   - Segments: ${support.segments ? '✓' : '✗'}${isSegmentsSupported() && !hasApiKey ? ' (requires auth)' : ''}`);
-      logger.info(`   - Sequences: ${support.sequences ? '✓' : '✗'}${isSequencesSupported() && !hasApiKey ? ' (requires auth)' : ''}`);
-      logger.info(`   - Redirects: ${support.redirects ? '✓' : '✗'}${isRedirectsSupported() && !hasApiKey ? ' (requires auth)' : ''}`);
-      logger.info('');
+      logger.info(`   - Content: ${support.content ? "✓" : "✗"}`);
+      logger.info(`   - Media: ${support.media ? "✓" : "✗"}`);
+      logger.info(`   - Comments: ${support.comments ? "✓" : "✗"}`);
+      logger.info(
+        `   - Email Templates: ${support.emailTemplates ? "✓" : "✗"}${isEmailTemplatesSupported() && !hasApiKey ? " (requires auth)" : ""}`
+      );
+      logger.info(
+        `   - Settings: ${support.settings ? "✓" : "✗"}${isSettingsSupported() && !hasApiKey ? " (requires auth)" : ""}`
+      );
+      logger.info(
+        `   - Segments: ${support.segments ? "✓" : "✗"}${isSegmentsSupported() && !hasApiKey ? " (requires auth)" : ""}`
+      );
+      logger.info(
+        `   - Sequences: ${support.sequences ? "✓" : "✗"}${isSequencesSupported() && !hasApiKey ? " (requires auth)" : ""}`
+      );
+      logger.info(
+        `   - Redirects: ${support.redirects ? "✓" : "✗"}${isRedirectsSupported() && !hasApiKey ? " (requires auth)" : ""}`
+      );
+      logger.info("");
 
       return support;
     }
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as Error;
     console.warn(`⚠️  Could not fetch CMS config: ${error.message}`);
     console.warn(`⚠️  Assuming all entities are supported (backward compatibility)\n`);
   }
 
-  return { content: false, media: false, comments: false, emailTemplates: false, settings: false, segments: false, sequences: false, redirects: false };
+  return {
+    content: false,
+    media: false,
+    comments: false,
+    emailTemplates: false,
+    settings: false,
+    segments: false,
+    sequences: false,
+    redirects: false,
+  };
 }
 
 /**
@@ -92,26 +122,34 @@ async function resetContentState(remoteCtx?: RemoteContext): Promise<void> {
   try {
     await fs.rm(contentDir, { recursive: true, force: true });
     logger.verbose(`   ✓ Cleared content directory: ${contentDir}`);
-  } catch { /* directory may not exist */ }
+  } catch {
+    /* directory may not exist */
+  }
 
   // Clean up legacy content sync token (SDK ≤ 3.2)
   try {
-    await fs.unlink(path.join(path.dirname(contentDir), 'sync-token.txt'));
+    await fs.unlink(path.join(path.dirname(contentDir), "sync-token.txt"));
     logger.verbose(`   ✓ Removed legacy content sync token`);
-  } catch { /* not found — ok */ }
+  } catch {
+    /* not found — ok */
+  }
 
   // Clear per-remote content sync token when remote context is provided
   if (remoteCtx) {
     try {
-      await fs.unlink(syncTokenPath(remoteCtx, 'content'));
+      await fs.unlink(syncTokenPath(remoteCtx, "content"));
       logger.verbose(`   ✓ Removed per-remote content sync token (${remoteCtx.name})`);
-    } catch { /* not found — ok */ }
+    } catch {
+      /* not found — ok */
+    }
 
     // Clear content metadata section
     try {
-      await clearMetadataSection(remoteCtx, 'content');
+      await clearMetadataSection(remoteCtx, "content");
       logger.verbose(`   ✓ Cleared content metadata (${remoteCtx.name})`);
-    } catch { /* metadata file may not exist */ }
+    } catch {
+      /* metadata file may not exist */
+    }
   }
 }
 
@@ -128,23 +166,28 @@ async function resetMediaState(remoteCtx?: RemoteContext): Promise<void> {
   try {
     await fs.rm(mediaDir, { recursive: true, force: true });
     logger.verbose(`   ✓ Cleared media directory: ${mediaDir}`);
-  } catch { /* directory may not exist */ }
+  } catch {
+    /* directory may not exist */
+  }
 
   // Clean up legacy media sync token (SDK ≤ 3.2, stored next to content dir)
   try {
-    await fs.unlink(path.join(path.dirname(contentDir), 'media-sync-token.txt'));
+    await fs.unlink(path.join(path.dirname(contentDir), "media-sync-token.txt"));
     logger.verbose(`   ✓ Removed legacy media sync token`);
-  } catch { /* not found — ok */ }
+  } catch {
+    /* not found — ok */
+  }
 
   // Clear per-remote media sync token
   if (remoteCtx) {
     try {
-      await fs.unlink(syncTokenPath(remoteCtx, 'media'));
+      await fs.unlink(syncTokenPath(remoteCtx, "media"));
       logger.verbose(`   ✓ Removed per-remote media sync token (${remoteCtx.name})`);
-    } catch { /* not found — ok */ }
+    } catch {
+      /* not found — ok */
+    }
   }
 }
-
 
 /**
  * Reset comments directory and its sync tokens.
@@ -158,26 +201,34 @@ async function resetCommentsState(remoteCtx?: RemoteContext): Promise<void> {
   try {
     await fs.rm(commentsDir, { recursive: true, force: true });
     logger.verbose(`   ✓ Cleared comments directory: ${commentsDir}`);
-  } catch { /* directory may not exist */ }
+  } catch {
+    /* directory may not exist */
+  }
 
   // Clean up legacy comment sync token (SDK ≤ 3.2)
   try {
-    await fs.unlink(path.join(path.dirname(commentsDir), 'comment-sync-token.txt'));
+    await fs.unlink(path.join(path.dirname(commentsDir), "comment-sync-token.txt"));
     logger.verbose(`   ✓ Removed legacy comment sync token`);
-  } catch { /* not found — ok */ }
+  } catch {
+    /* not found — ok */
+  }
 
   // Clear per-remote comments sync token
   if (remoteCtx) {
     try {
-      await fs.unlink(syncTokenPath(remoteCtx, 'comments'));
+      await fs.unlink(syncTokenPath(remoteCtx, "comments"));
       logger.verbose(`   ✓ Removed per-remote comments sync token (${remoteCtx.name})`);
-    } catch { /* not found — ok */ }
+    } catch {
+      /* not found — ok */
+    }
 
     // Clear comments metadata section
     try {
-      await clearMetadataSection(remoteCtx, 'comments');
+      await clearMetadataSection(remoteCtx, "comments");
       logger.verbose(`   ✓ Cleared comments metadata (${remoteCtx.name})`);
-    } catch { /* metadata file may not exist */ }
+    } catch {
+      /* metadata file may not exist */
+    }
   }
 }
 
@@ -192,20 +243,26 @@ async function resetEmailTemplatesState(remoteCtx?: RemoteContext): Promise<void
   try {
     await fs.rm(emailTemplatesDir, { recursive: true, force: true });
     logger.verbose(`   ✓ Cleared email templates directory: ${emailTemplatesDir}`);
-  } catch { /* directory may not exist */ }
+  } catch {
+    /* directory may not exist */
+  }
 
   // Clear per-remote email-templates sync token
   if (remoteCtx) {
     try {
-      await fs.unlink(syncTokenPath(remoteCtx, 'email-templates'));
+      await fs.unlink(syncTokenPath(remoteCtx, "email-templates"));
       logger.verbose(`   ✓ Removed per-remote email-templates sync token (${remoteCtx.name})`);
-    } catch { /* not found — ok */ }
+    } catch {
+      /* not found — ok */
+    }
 
     // Clear email templates metadata section
     try {
-      await clearMetadataSection(remoteCtx, 'emailTemplates');
+      await clearMetadataSection(remoteCtx, "emailTemplates");
       logger.verbose(`   ✓ Cleared email templates metadata (${remoteCtx.name})`);
-    } catch { /* metadata file may not exist */ }
+    } catch {
+      /* metadata file may not exist */
+    }
   }
 }
 
@@ -219,7 +276,9 @@ async function resetSettingsState(): Promise<void> {
   try {
     await fs.rm(settingsDir, { recursive: true, force: true });
     logger.verbose(`   ✓ Cleared settings directory: ${settingsDir}`);
-  } catch { /* directory may not exist */ }
+  } catch {
+    /* directory may not exist */
+  }
 }
 
 /**
@@ -232,19 +291,25 @@ async function resetSegmentsState(remoteCtx?: RemoteContext): Promise<void> {
   try {
     await fs.rm(segmentsDir, { recursive: true, force: true });
     logger.verbose(`   ✓ Cleared segments directory: ${segmentsDir}`);
-  } catch { /* directory may not exist */ }
+  } catch {
+    /* directory may not exist */
+  }
 
   if (remoteCtx) {
     try {
-      await fs.unlink(syncTokenPath(remoteCtx, 'segments'));
+      await fs.unlink(syncTokenPath(remoteCtx, "segments"));
       logger.verbose(`   ✓ Removed per-remote segments sync token (${remoteCtx.name})`);
-    } catch { /* not found — ok */ }
+    } catch {
+      /* not found — ok */
+    }
 
     // Clear segments metadata section
     try {
-      await clearMetadataSection(remoteCtx, 'segments');
+      await clearMetadataSection(remoteCtx, "segments");
       logger.verbose(`   ✓ Cleared segments metadata (${remoteCtx.name})`);
-    } catch { /* metadata file may not exist */ }
+    } catch {
+      /* metadata file may not exist */
+    }
   }
 }
 
@@ -258,19 +323,25 @@ async function resetSequencesState(remoteCtx?: RemoteContext): Promise<void> {
   try {
     await fs.rm(sequencesDir, { recursive: true, force: true });
     logger.verbose(`   ✓ Cleared sequences directory: ${sequencesDir}`);
-  } catch { /* directory may not exist */ }
+  } catch {
+    /* directory may not exist */
+  }
 
   if (remoteCtx) {
     try {
-      await fs.unlink(syncTokenPath(remoteCtx, 'sequences'));
+      await fs.unlink(syncTokenPath(remoteCtx, "sequences"));
       logger.verbose(`   ✓ Removed per-remote sequences sync token (${remoteCtx.name})`);
-    } catch { /* not found — ok */ }
+    } catch {
+      /* not found — ok */
+    }
 
     // Clear sequences metadata section
     try {
-      await clearMetadataSection(remoteCtx, 'sequences');
+      await clearMetadataSection(remoteCtx, "sequences");
       logger.verbose(`   ✓ Cleared sequences metadata (${remoteCtx.name})`);
-    } catch { /* metadata file may not exist */ }
+    } catch {
+      /* metadata file may not exist */
+    }
   }
 }
 
@@ -284,17 +355,23 @@ export async function resetRedirectsState(remoteCtx?: RemoteContext): Promise<vo
   try {
     await fs.rm(redirectsDir, { recursive: true, force: true });
     logger.verbose(`   ✓ Cleared redirects directory: ${redirectsDir}`);
-  } catch { /* directory may not exist */ }
+  } catch {
+    /* directory may not exist */
+  }
 
   if (remoteCtx) {
     try {
-      await fs.unlink(syncTokenPath(remoteCtx, 'redirects'));
+      await fs.unlink(syncTokenPath(remoteCtx, "redirects"));
       logger.verbose(`   ✓ Removed per-remote redirects sync token (${remoteCtx.name})`);
-    } catch { /* not found — ok */ }
+    } catch {
+      /* not found — ok */
+    }
     try {
-      await clearMetadataSection(remoteCtx, 'redirects');
+      await clearMetadataSection(remoteCtx, "redirects");
       logger.verbose(`   ✓ Cleared redirects id-map in metadata.json (${remoteCtx.name})`);
-    } catch { /* not found — ok */ }
+    } catch {
+      /* not found — ok */
+    }
   }
 }
 
@@ -320,7 +397,9 @@ async function resetLocalState(remoteCtx?: RemoteContext): Promise<void> {
     try {
       await fs.unlink(metadataMapPath(remoteCtx));
       logger.verbose(`   ✓ Removed per-remote metadata (${remoteCtx.name})`);
-    } catch { /* not found — ok */ }
+    } catch {
+      /* not found — ok */
+    }
   }
 
   console.log(`   ✅ Local state reset complete\n`);
@@ -336,7 +415,7 @@ async function main(options: PullAllOptions = {}): Promise<void> {
   // If pulling specific content by ID or slug, use pull-content logic directly
   if (targetId || targetSlug) {
     console.log(`\n🚀 LeadCMS Pull - Pulling specific content\n`);
-    const { pullContent } = await import('./pull-content.js');
+    const { pullContent } = await import("./pull-content.js");
     await pullContent({ targetId, targetSlug, remoteContext: remoteCtx });
     return;
   }
@@ -350,9 +429,19 @@ async function main(options: PullAllOptions = {}): Promise<void> {
   }
 
   // Check which entities are supported
-  const { content, media, comments, emailTemplates, settings, segments, sequences, redirects } = await fetchAndCacheCMSConfig(effectiveUrl);
+  const { content, media, comments, emailTemplates, settings, segments, sequences, redirects } =
+    await fetchAndCacheCMSConfig(effectiveUrl);
 
-  if (!content && !media && !comments && !emailTemplates && !settings && !segments && !sequences && !redirects) {
+  if (
+    !content &&
+    !media &&
+    !comments &&
+    !emailTemplates &&
+    !settings &&
+    !segments &&
+    !sequences &&
+    !redirects
+  ) {
     console.log(`⏭️  No supported entities found - nothing to sync`);
     return;
   }
@@ -361,9 +450,10 @@ async function main(options: PullAllOptions = {}): Promise<void> {
   if (settings) {
     console.log(`\n⚙️  Pulling settings...`);
     try {
-      const { pullSettings } = await import('./pull-settings.js');
+      const { pullSettings } = await import("./pull-settings.js");
       await pullSettings({ reset: false });
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as Error;
       console.error(`   ❌ Failed to pull settings: ${error.message}`);
       // Continue with other content - settings failure should not block the pull
     }
@@ -375,48 +465,49 @@ async function main(options: PullAllOptions = {}): Promise<void> {
   try {
     if (content) {
       console.log(`📄 Pulling content...`);
-      const { pullLeadCMSContent } = await import('./pull-leadcms-content.js');
+      const { pullLeadCMSContent } = await import("./pull-leadcms-content.js");
       await pullLeadCMSContent({ forceOverwrite: force, remoteContext: remoteCtx });
     }
 
     if (media) {
       console.log(`🖼️  Pulling media...`);
-      const { pullLeadCMSMedia } = await import('./pull-leadcms-media.js');
+      const { pullLeadCMSMedia } = await import("./pull-leadcms-media.js");
       await pullLeadCMSMedia({ remoteContext: remoteCtx });
     }
 
     if (comments) {
       console.log(`💬 Pulling comments...`);
-      const { pullLeadCMSComments } = await import('./pull-leadcms-comments.js');
+      const { pullLeadCMSComments } = await import("./pull-leadcms-comments.js");
       await pullLeadCMSComments(remoteCtx);
     }
 
     if (emailTemplates) {
       console.log(`📧 Pulling email templates...`);
-      const { pullLeadCMSEmailTemplates } = await import('./pull-leadcms-email-templates.js');
+      const { pullLeadCMSEmailTemplates } = await import("./pull-leadcms-email-templates.js");
       await pullLeadCMSEmailTemplates(remoteCtx);
     }
 
     if (segments) {
       console.log(`🔖 Pulling segments...`);
-      const { pullLeadCMSSegments } = await import('./pull-segments.js');
+      const { pullLeadCMSSegments } = await import("./pull-segments.js");
       await pullLeadCMSSegments(remoteCtx);
     }
 
     if (sequences) {
       console.log(`🔗 Pulling sequences...`);
-      const { pullLeadCMSSequences } = await import('./pull-sequences.js');
+      const { pullLeadCMSSequences } = await import("./pull-sequences.js");
       await pullLeadCMSSequences(remoteCtx);
     }
 
     if (redirects) {
       console.log(`↩️  Pulling redirects...`);
-      const { pullLeadCMSRedirects } = await import('./pull-redirects.js');
+      const { pullLeadCMSRedirects } = await import("./pull-redirects.js");
       await pullLeadCMSRedirects(remoteCtx);
     }
 
     console.log(`\n✨ Pull completed successfully!\n`);
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as Error;
     console.error(`\n❌ Pull failed: ${error.message}\n`);
     throw error;
   }
@@ -426,7 +517,16 @@ async function main(options: PullAllOptions = {}): Promise<void> {
 export { main as pullAll };
 
 // Export reset functions for individual pull commands and testing
-export { resetLocalState, resetContentState, resetMediaState, resetCommentsState, resetEmailTemplatesState, resetSettingsState, resetSegmentsState, resetSequencesState };
+export {
+  resetLocalState,
+  resetContentState,
+  resetMediaState,
+  resetCommentsState,
+  resetEmailTemplatesState,
+  resetSettingsState,
+  resetSegmentsState,
+  resetSequencesState,
+};
 
 // Note: CLI execution moved to src/cli/bin/pull-all.ts
 // This file now only exports the function for programmatic use

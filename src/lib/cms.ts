@@ -1,12 +1,24 @@
 import fs from "fs";
 import path from "path";
+import { buildCommentTree } from "./comment-utils.js";
+import type { StoredComment } from "./comment-types.js";
 import matter from "gray-matter";
 import { getConfig, isPreviewMode, type LeadCMSConfig } from "./config.js";
 import { isValidLocaleCode } from "./locale-utils.js";
 
+interface ConfigError extends Error {
+  configName?: string;
+  locale?: string;
+  filePath?: string;
+  originalError?: unknown;
+}
 // Type definitions for configuration objects
-export interface HeaderConfig { [key: string]: any; }
-export interface FooterConfig { [key: string]: any; }
+export interface HeaderConfig {
+  [key: string]: unknown;
+}
+export interface FooterConfig {
+  [key: string]: unknown;
+}
 
 // Default language - internal fallback only when configuration is not available
 const DEFAULT_LANGUAGE = "en";
@@ -18,6 +30,7 @@ interface ContentCache<T> {
   filePath: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const contentCache = new Map<string, ContentCache<any>>();
 const CONTENT_CACHE_TTL = 30000; // 30 seconds cache TTL for content files
 
@@ -35,9 +48,8 @@ export function isContentDraft(content: CMSContent): boolean {
     return true;
   }
 
-  const publishedDate = content.publishedAt instanceof Date
-    ? content.publishedAt
-    : new Date(content.publishedAt);
+  const publishedDate =
+    content.publishedAt instanceof Date ? content.publishedAt : new Date(content.publishedAt);
 
   const publishedTime = publishedDate.getTime();
 
@@ -60,12 +72,15 @@ export function isContentDraft(content: CMSContent): boolean {
 export function getLeadCMSConfig(): LeadCMSConfig {
   try {
     return getConfig();
-  } catch (error) {
+  } catch {
     // If config loading fails, return minimal config with environment fallbacks
     return {
       url: process.env.LEADCMS_URL || process.env.NEXT_PUBLIC_LEADCMS_URL || "",
       apiKey: process.env.LEADCMS_API_KEY || "",
-      defaultLanguage: process.env.LEADCMS_DEFAULT_LANGUAGE || process.env.NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE || DEFAULT_LANGUAGE,
+      defaultLanguage:
+        process.env.LEADCMS_DEFAULT_LANGUAGE ||
+        process.env.NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE ||
+        DEFAULT_LANGUAGE,
       contentDir: process.env.LEADCMS_CONTENT_DIR || ".leadcms/content",
       commentsDir: process.env.LEADCMS_COMMENTS_DIR || ".leadcms/comments",
       mediaDir: process.env.LEADCMS_MEDIA_DIR || "public/media",
@@ -96,7 +111,7 @@ export interface CMSContent {
   publishedAt?: Date | string;
   draft?: boolean; // Added to support draft content filtering
 
-  [key: string]: any;
+  [key: string]: unknown;
   body: string;
 }
 
@@ -220,7 +235,7 @@ export function getAllContentSlugsForLocale(
   const contentDir = config.contentDir;
 
   if (!contentDir) {
-    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
+    console.warn("[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.");
     return [];
   }
   // Use the existing implementation with appropriate draft settings
@@ -278,7 +293,7 @@ export function getAllContentForLocale(
   const contentDir = config.contentDir;
 
   if (!contentDir) {
-    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
+    console.warn("[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.");
     return [];
   }
 
@@ -314,7 +329,10 @@ export function getAllContentForLocale(
           content.slug = slug;
         } else {
           // Fall back to base content but keep preview slug for URL consistency
-          const baseSlug = slug.replace(new RegExp(`-${extractedUserUid.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i'), '');
+          const baseSlug = slug.replace(
+            new RegExp(`-${extractedUserUid.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")}$`, "i"),
+            ""
+          );
           content = getCMSContentBySlugFromDir(baseSlug, localeContentDir);
           if (content) {
             // For preview URLs, maintain the preview slug (the original slug parameter)
@@ -370,7 +388,7 @@ function applyDraftFiltering(
 
     // Also filter based on publishedAt if contentDir is available
     if (contentDir) {
-      filteredSlugs = filteredSlugs.filter(slug => {
+      filteredSlugs = filteredSlugs.filter((slug) => {
         const localeContentDir = getContentDirForLocale(contentDir, locale);
         const content = getCMSContentBySlugFromDir(slug, localeContentDir);
         return content && !isContentDraft(content);
@@ -400,7 +418,7 @@ function filterOutDraftSlugs(slugs: string[]): string[] {
   // Example: some-slug-550e8400-e29b-41d4-a716-446655440000
   const draftSlugPattern = /-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-  return slugs.filter(slug => {
+  return slugs.filter((slug) => {
     const isDraft = draftSlugPattern.test(slug);
     return !isDraft;
   });
@@ -422,7 +440,7 @@ function getBaseContentWithUserDraftOverrides(slugs: string[], draftUserUid: str
 
   let publishedBaseSlugs: string[] = baseSlugs;
   if (contentDir) {
-    publishedBaseSlugs = baseSlugs.filter(slug => {
+    publishedBaseSlugs = baseSlugs.filter((slug) => {
       const localeContentDir = getContentDirForLocale(contentDir, undefined); // Use default locale logic
       const content = getCMSContentBySlugFromDir(slug, localeContentDir);
       return content && !isContentDraft(content);
@@ -432,11 +450,14 @@ function getBaseContentWithUserDraftOverrides(slugs: string[], draftUserUid: str
   const result: string[] = [...publishedBaseSlugs]; // Start with only published base slugs
 
   // Find user-specific drafts (drafts that belong to this user)
-  const userDraftPattern = new RegExp(`-${draftUserUid.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
-  const userDrafts = slugs.filter(slug => userDraftPattern.test(slug));
+  const userDraftPattern = new RegExp(
+    `-${draftUserUid.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")}$`,
+    "i"
+  );
+  const userDrafts = slugs.filter((slug) => userDraftPattern.test(slug));
 
   for (const userDraft of userDrafts) {
-    const baseSlug = userDraft.replace(userDraftPattern, '');
+    const baseSlug = userDraft.replace(userDraftPattern, "");
     // Add base slug for user-specific drafts (whether they have a base version or not)
     if (!result.includes(baseSlug)) {
       result.push(baseSlug);
@@ -562,7 +583,7 @@ export function getCMSContentBySlugForLocale(
   const shouldIncludeDrafts = isPreviewMode();
 
   if (!contentDir) {
-    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
+    console.warn("[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.");
     return null;
   }
 
@@ -571,8 +592,11 @@ export function getCMSContentBySlugForLocale(
 
   if (extractedUserUid) {
     // User-specific slug detected - extract base slug
-    const guidPattern = new RegExp(`-${extractedUserUid.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
-    const baseSlug = slug.replace(guidPattern, '');
+    const guidPattern = new RegExp(
+      `-${extractedUserUid.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")}$`,
+      "i"
+    );
+    const baseSlug = slug.replace(guidPattern, "");
 
     // User-specific slugs with valid GUIDs should always work (for preview URLs)
 
@@ -635,7 +659,7 @@ export function getContentTranslations(
   const contentDir = config.contentDir;
 
   if (!contentDir) {
-    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
+    console.warn("[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.");
     return [];
   }
 
@@ -682,12 +706,18 @@ export function getAllContentRoutes(
   const defaultLanguage = config.defaultLanguage;
 
   if (!contentDir) {
-    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
+    console.warn("[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.");
     return [];
   }
 
   const languages = getAvailableLanguagesFromDir(contentDir);
-  const allRoutes: { locale: string; slug: string; slugParts: string[]; isDefaultLocale: boolean; path: string }[] = [];
+  const allRoutes: {
+    locale: string;
+    slug: string;
+    slugParts: string[];
+    isDefaultLocale: boolean;
+    path: string;
+  }[] = [];
 
   for (const locale of languages) {
     const slugs = getAllContentSlugsForLocale(locale, contentTypes, userUid);
@@ -702,7 +732,7 @@ export function getAllContentRoutes(
         slug,
         slugParts,
         isDefaultLocale,
-        path
+        path,
       });
     }
   }
@@ -743,9 +773,10 @@ function getAllContentSlugsFromDir(contentDir: string, contentTypes?: readonly s
     let entries;
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as NodeJS.ErrnoException;
       // If directory doesn't exist or can't be read, return empty array
-      if (error.code === 'ENOENT' || error.code === 'EACCES') {
+      if (error.code === "ENOENT" || error.code === "EACCES") {
         return [];
       }
       throw error;
@@ -810,7 +841,7 @@ function getCMSContentBySlugFromDir(slug: string, contentDir: string): CMSConten
       const { data, content } = matter(file);
 
       // Convert publishedAt string to Date if present
-      if (data.publishedAt && typeof data.publishedAt === 'string') {
+      if (data.publishedAt && typeof data.publishedAt === "string") {
         data.publishedAt = new Date(data.publishedAt);
       }
 
@@ -819,7 +850,8 @@ function getCMSContentBySlugFromDir(slug: string, contentDir: string): CMSConten
         slug,
         body: content,
       } as CMSContent;
-    } catch (mdxError: any) {
+    } catch (_mdxError: unknown) {
+      const mdxError = _mdxError as NodeJS.ErrnoException;
       // If MDX doesn't exist or can't be read, try JSON
       if (mdxError.code !== "ENOENT") {
         // If it's not a "file not found" error, rethrow
@@ -833,7 +865,7 @@ function getCMSContentBySlugFromDir(slug: string, contentDir: string): CMSConten
       const data = JSON.parse(file);
 
       // Convert publishedAt string to Date if present
-      if (data.publishedAt && typeof data.publishedAt === 'string') {
+      if (data.publishedAt && typeof data.publishedAt === "string") {
         data.publishedAt = new Date(data.publishedAt);
       }
 
@@ -841,7 +873,8 @@ function getCMSContentBySlugFromDir(slug: string, contentDir: string): CMSConten
         ...data,
         slug,
       } as CMSContent;
-    } catch (jsonError: any) {
+    } catch (_jsonError: unknown) {
+      const jsonError = _jsonError as NodeJS.ErrnoException;
       // If JSON doesn't exist or can't be read, return null
       if (jsonError.code === "ENOENT") {
         return null;
@@ -944,7 +977,6 @@ function loadConfigWithDraftSupport<T>(
 ): T | null {
   try {
     const localeContentDir = getContentDirForLocale(contentDir, locale);
-    let targetPath: string;
     let cacheKey: string;
 
     // If userUid is provided, try draft version first
@@ -956,7 +988,7 @@ function loadConfigWithDraftSupport<T>(
       const cached = contentCache.get(cacheKey);
       const now = Date.now();
 
-      if (cached && (now - cached.timestamp) < CONTENT_CACHE_TTL) {
+      if (cached && now - cached.timestamp < CONTENT_CACHE_TTL) {
         return cached.content;
       }
 
@@ -983,7 +1015,7 @@ function loadConfigWithDraftSupport<T>(
     const cached = contentCache.get(cacheKey);
     const now = Date.now();
 
-    if (cached && (now - cached.timestamp) < CONTENT_CACHE_TTL) {
+    if (cached && now - cached.timestamp < CONTENT_CACHE_TTL) {
       return cached.content;
     }
 
@@ -996,11 +1028,13 @@ function loadConfigWithDraftSupport<T>(
       });
 
       // Provide detailed error information about what's missing
-      const error = new Error(`Missing configuration file: '${configName}' for locale '${locale}' at path: ${configPath}`);
-      error.name = 'MissingConfigurationFile';
-      (error as any).configName = configName;
-      (error as any).locale = locale;
-      (error as any).filePath = configPath;
+      const error = new Error(
+        `Missing configuration file: '${configName}' for locale '${locale}' at path: ${configPath}`
+      );
+      error.name = "MissingConfigurationFile";
+      (error as ConfigError).configName = configName;
+      (error as ConfigError).locale = locale;
+      (error as ConfigError).filePath = configPath;
 
       throw error;
     }
@@ -1018,24 +1052,28 @@ function loadConfigWithDraftSupport<T>(
     return parsed;
   } catch (error) {
     // If it's our custom MissingConfigurationFile error, provide more context
-    if (error instanceof Error && error.name === 'MissingConfigurationFile') {
+    if (error instanceof Error && error.name === "MissingConfigurationFile") {
       console.error(`[LeadCMS] ${error.message}`);
       // Re-throw with more context for debugging
-      const detailedError = new Error(`Missing configuration files - configName: '${configName}', locale: '${locale}', expected path: ${path.join(getContentDirForLocale(contentDir, locale), `${configName}.json`)}`);
-      detailedError.name = 'MissingConfigurationFile';
-      (detailedError as any).configName = configName;
-      (detailedError as any).locale = locale;
-      (detailedError as any).originalError = error;
+      const detailedError = new Error(
+        `Missing configuration files - configName: '${configName}', locale: '${locale}', expected path: ${path.join(getContentDirForLocale(contentDir, locale), `${configName}.json`)}`
+      );
+      detailedError.name = "MissingConfigurationFile";
+      (detailedError as ConfigError).configName = configName;
+      (detailedError as ConfigError).locale = locale;
+      (detailedError as ConfigError).originalError = error;
       throw detailedError;
     }
 
     // For other errors (JSON parsing, file system, etc.)
     console.error(`[LeadCMS] Error loading ${configName} config for locale ${locale}:`, error);
-    const wrappedError = new Error(`Failed to load configuration '${configName}' for locale '${locale}': ${error instanceof Error ? error.message : String(error)}`);
-    wrappedError.name = 'ConfigurationLoadError';
-    (wrappedError as any).configName = configName;
-    (wrappedError as any).locale = locale;
-    (wrappedError as any).originalError = error;
+    const wrappedError = new Error(
+      `Failed to load configuration '${configName}' for locale '${locale}': ${error instanceof Error ? error.message : String(error)}`
+    );
+    wrappedError.name = "ConfigurationLoadError";
+    (wrappedError as ConfigError).configName = configName;
+    (wrappedError as ConfigError).locale = locale;
+    (wrappedError as ConfigError).originalError = error;
     throw wrappedError;
   }
 }
@@ -1058,11 +1096,13 @@ export function loadContentConfig<T>(
   const contentDir = config.contentDir;
 
   if (!actualLocale) {
-    throw new Error('[LeadCMS] No default language configured. Please set up your LeadCMS configuration with a defaultLanguage.');
+    throw new Error(
+      "[LeadCMS] No default language configured. Please set up your LeadCMS configuration with a defaultLanguage."
+    );
   }
 
   if (!contentDir) {
-    console.warn('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
+    console.warn("[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.");
     return null;
   }
 
@@ -1070,10 +1110,12 @@ export function loadContentConfig<T>(
     return loadConfigWithDraftSupport<T>(contentDir, actualLocale, configName, userUid);
   } catch (error) {
     // Handle missing configuration files gracefully
-    if (error instanceof Error && error.name === 'MissingConfigurationFile') {
+    if (error instanceof Error && error.name === "MissingConfigurationFile") {
       // In debug mode, provide helpful message for any missing config
-      if (process.env.LEADCMS_DEBUG === 'true' || process.env.NODE_ENV === 'development') {
-        console.warn(`[LeadCMS] Configuration '${configName}' not found for locale '${actualLocale}'. If you don't use this config, you can ignore this warning.`);
+      if (process.env.LEADCMS_DEBUG === "true" || process.env.NODE_ENV === "development") {
+        console.warn(
+          `[LeadCMS] Configuration '${configName}' not found for locale '${actualLocale}'. If you don't use this config, you can ignore this warning.`
+        );
       }
       return null;
     }
@@ -1090,7 +1132,7 @@ export function loadContentConfig<T>(
  */
 export function getHeaderConfig(locale?: string, userUid?: string | null): HeaderConfig | null {
   // For backward compatibility, always respect userUid parameter when explicitly provided
-  return loadContentConfig<HeaderConfig>('header', locale, userUid);
+  return loadContentConfig<HeaderConfig>("header", locale, userUid);
 }
 
 /**
@@ -1100,7 +1142,7 @@ export function getHeaderConfig(locale?: string, userUid?: string | null): Heade
  */
 export function getFooterConfig(locale?: string, userUid?: string | null): FooterConfig | null {
   // For backward compatibility, always respect userUid parameter when explicitly provided
-  return loadContentConfig<FooterConfig>('footer', locale, userUid);
+  return loadContentConfig<FooterConfig>("footer", locale, userUid);
 }
 
 /**
@@ -1114,7 +1156,9 @@ export function getLocaleFromPath(pathname: string): string {
   const defaultLanguage = config.defaultLanguage;
 
   if (!defaultLanguage) {
-    throw new Error('[LeadCMS] No default language configured. Please set up your LeadCMS configuration with a defaultLanguage.');
+    throw new Error(
+      "[LeadCMS] No default language configured. Please set up your LeadCMS configuration with a defaultLanguage."
+    );
   }
 
   const segments = pathname.split("/").filter(Boolean);
@@ -1159,7 +1203,9 @@ export function makeLocaleAwareLink(href: string, currentLocale: string): string
   const defaultLanguage = config.defaultLanguage;
 
   if (!defaultLanguage) {
-    throw new Error('[LeadCMS] No default language configured. Please set up your LeadCMS configuration with a defaultLanguage.');
+    throw new Error(
+      "[LeadCMS] No default language configured. Please set up your LeadCMS configuration with a defaultLanguage."
+    );
   }
 
   // If it's the default language, don't add prefix
@@ -1195,11 +1241,15 @@ export function loadContentConfigStrict<T>(
   const contentDir = config.contentDir;
 
   if (!actualLocale) {
-    throw new Error('[LeadCMS] No default language configured. Please set up your LeadCMS configuration with a defaultLanguage.');
+    throw new Error(
+      "[LeadCMS] No default language configured. Please set up your LeadCMS configuration with a defaultLanguage."
+    );
   }
 
   if (!contentDir) {
-    throw new Error('[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration.');
+    throw new Error(
+      "[LeadCMS] No contentDir configured. Please set up your LeadCMS configuration."
+    );
   }
 
   // This will throw detailed errors with configName, locale, and path information
@@ -1243,10 +1293,19 @@ function getCommentFilePath(
  * @param language - Language code (optional, uses default language if not provided)
  * @returns Array of comments for the entity, or empty array if none found
  */
-export function getComments(commentableType: string, commentableId: number, language?: string): any[] {
+export function getComments(
+  commentableType: string,
+  commentableId: number,
+  language?: string
+): StoredComment[] {
   try {
     const config = getLeadCMSConfig();
-    const filePath = getCommentFilePath(config.commentsDir, commentableType, commentableId, language);
+    const filePath = getCommentFilePath(
+      config.commentsDir,
+      commentableType,
+      commentableId,
+      language
+    );
 
     if (!fs.existsSync(filePath)) {
       return [];
@@ -1254,7 +1313,7 @@ export function getComments(commentableType: string, commentableId: number, lang
 
     const content = fs.readFileSync(filePath, "utf8");
     return JSON.parse(content);
-  } catch (error) {
+  } catch {
     // Return empty array on any error (file not found, parse error, etc.)
     return [];
   }
@@ -1305,7 +1364,10 @@ function resolveContentCommentableId(
  * @param language - Language code (optional, uses default language if not provided)
  * @returns Array of comments for the content, or empty array if none found
  */
-export function getCommentsForContent(contentIdentifier: number | string, language?: string): any[] {
+export function getCommentsForContent(
+  contentIdentifier: number | string,
+  language?: string
+): StoredComment[] {
   const contentId = resolveContentCommentableId(contentIdentifier, language);
 
   if (contentId === null) {
@@ -1324,7 +1386,11 @@ export function getCommentsForContent(contentIdentifier: number | string, langua
  * @returns Array of comments for the entity
  * @throws {Error} If comments file cannot be read or parsed
  */
-export function getCommentsStrict(commentableType: string, commentableId: number, language?: string): any[] {
+export function getCommentsStrict(
+  commentableType: string,
+  commentableId: number,
+  language?: string
+): StoredComment[] {
   const config = getLeadCMSConfig();
   const filePath = getCommentFilePath(config.commentsDir, commentableType, commentableId, language);
 
@@ -1337,7 +1403,8 @@ export function getCommentsStrict(commentableType: string, commentableId: number
   try {
     const content = fs.readFileSync(filePath, "utf8");
     return JSON.parse(content);
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as NodeJS.ErrnoException;
     throw new Error(
       `[LeadCMS] Failed to read or parse comments file for ${commentableType}/${commentableId}: ${error.message}`
     );
@@ -1352,7 +1419,10 @@ export function getCommentsStrict(commentableType: string, commentableId: number
  * @returns Array of comments for the content
  * @throws {Error} If comments file cannot be read or parsed
  */
-export function getCommentsForContentStrict(contentIdentifier: number | string, language?: string): any[] {
+export function getCommentsForContentStrict(
+  contentIdentifier: number | string,
+  language?: string
+): StoredComment[] {
   const contentId = resolveContentCommentableId(contentIdentifier, language, true);
 
   if (contentId === null) {
@@ -1374,10 +1444,9 @@ export function getCommentsTree(
   commentableType: string,
   commentableId: number,
   language?: string,
-  options?: import('./comment-utils.js').CommentTreeOptions
-): import('./comment-utils.js').CommentTreeNode[] {
+  options?: import("./comment-utils.js").CommentTreeOptions
+): import("./comment-utils.js").CommentTreeNode[] {
   const comments = getComments(commentableType, commentableId, language);
-  const { buildCommentTree } = require('./comment-utils.js');
   return buildCommentTree(comments, options);
 }
 
@@ -1391,8 +1460,8 @@ export function getCommentsTree(
 export function getCommentsTreeForContent(
   contentIdentifier: number | string,
   language?: string,
-  options?: import('./comment-utils.js').CommentTreeOptions
-): import('./comment-utils.js').CommentTreeNode[] {
+  options?: import("./comment-utils.js").CommentTreeOptions
+): import("./comment-utils.js").CommentTreeNode[] {
   const contentId = resolveContentCommentableId(contentIdentifier, language);
 
   if (contentId === null) {
@@ -1404,6 +1473,3 @@ export function getCommentsTreeForContent(
 
 // Export preview mode detection function
 export { isPreviewMode } from "./config.js";
-
-
-

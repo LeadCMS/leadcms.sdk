@@ -11,11 +11,11 @@
  *   leadcms remote reset <name>      - Reset sync tokens and metadata for a remote
  */
 
-import fs from 'fs';
-import path from 'path';
-import { listRemotes, resolveRemote, metadataMapPath, type RemoteContext } from '../../lib/remote-context.js';
-import { getConfig, loadConfig } from '../../lib/config.js';
-import { initVerboseFromArgs } from '../../lib/logger.js';
+import fs from "fs";
+import path from "path";
+import { listRemotes, resolveRemote, metadataMapPath } from "../../lib/remote-context.js";
+import { getConfig } from "../../lib/config.js";
+import { initVerboseFromArgs } from "../../lib/logger.js";
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
@@ -23,24 +23,24 @@ initVerboseFromArgs(args);
 const subcommand = args[0];
 
 switch (subcommand) {
-  case 'list':
-  case 'ls':
+  case "list":
+  case "ls":
     listRemotesCommand();
     break;
-  case 'add':
+  case "add":
     addRemoteCommand(args.slice(1));
     break;
-  case 'remove':
-  case 'rm':
+  case "remove":
+  case "rm":
     removeRemoteCommand(args.slice(1));
     break;
-  case 'show':
+  case "show":
     showRemoteCommand(args.slice(1));
     break;
-  case 'set-default':
+  case "set-default":
     setDefaultCommand(args.slice(1));
     break;
-  case 'reset':
+  case "reset":
     resetRemoteCommand(args.slice(1));
     break;
   default:
@@ -79,24 +79,26 @@ function listRemotesCommand(): void {
     const defaultName = config.defaultRemote;
 
     if (remotes.length === 0) {
-      console.log('No remotes configured.');
+      console.log("No remotes configured.");
       return;
     }
 
-    const labels = remotes.map(remote => {
-      const isDefault = remote.name === defaultName || (remotes.length === 1 && remote.name === 'default');
-      return `${remote.name}${isDefault ? ' (default)' : ''}`;
+    const labels = remotes.map((remote) => {
+      const isDefault =
+        remote.name === defaultName || (remotes.length === 1 && remote.name === "default");
+      return `${remote.name}${isDefault ? " (default)" : ""}`;
     });
     const labelWidth = labels.reduce((max, label) => Math.max(max, label.length), 0) + 2;
 
-    console.log('');
+    console.log("");
     remotes.forEach((remote, index) => {
-      const label = labels[index].padEnd(labelWidth, ' ');
+      const label = labels[index].padEnd(labelWidth, " ");
       console.log(`  ${label}${remote.url}`);
     });
-    console.log('');
-  } catch (error: any) {
-    console.error(`❌ ${error.message}`);
+    console.log("");
+  } catch (_error: unknown) {
+    const error = _error as Error;
+    console.error(`❌ ${(error as Error).message}`);
     process.exit(1);
   }
 }
@@ -106,12 +108,14 @@ function addRemoteCommand(subArgs: string[]): void {
   const url = subArgs[1];
 
   if (!name || !url) {
-    console.error('❌ Usage: leadcms remote add <name> <url>');
+    console.error("❌ Usage: leadcms remote add <name> <url>");
     process.exit(1);
   }
 
   if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) {
-    console.error('❌ Remote name must be lowercase alphanumeric with hyphens (e.g. "production", "dev-server").');
+    console.error(
+      '❌ Remote name must be lowercase alphanumeric with hyphens (e.g. "production", "dev-server").'
+    );
     process.exit(1);
   }
 
@@ -128,7 +132,7 @@ function addRemoteCommand(subArgs: string[]): void {
     process.exit(1);
   }
 
-  const rawConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  const rawConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
 
   if (!rawConfig.remotes) {
     rawConfig.remotes = {};
@@ -139,7 +143,7 @@ function addRemoteCommand(subArgs: string[]): void {
     process.exit(1);
   }
 
-  rawConfig.remotes[name] = { url: url.replace(/\/+$/, '') };
+  rawConfig.remotes[name] = { url: url.replace(/\/+$/, "") };
 
   // If this is the first remote, set it as default
   if (Object.keys(rawConfig.remotes).length === 1 && !rawConfig.defaultRemote) {
@@ -150,23 +154,23 @@ function addRemoteCommand(subArgs: string[]): void {
     console.log(`✅ Added remote "${name}" → ${url}`);
   }
 
-  fs.writeFileSync(configPath, JSON.stringify(rawConfig, null, 2) + '\n', 'utf-8');
+  fs.writeFileSync(configPath, JSON.stringify(rawConfig, null, 2) + "\n", "utf-8");
 }
 
 function removeRemoteCommand(subArgs: string[]): void {
   const name = subArgs[0];
   if (!name) {
-    console.error('❌ Usage: leadcms remote remove <name>');
+    console.error("❌ Usage: leadcms remote remove <name>");
     process.exit(1);
   }
 
   const configPath = findConfigPath();
   if (!configPath) {
-    console.error('❌ No leadcms.config.json found.');
+    console.error("❌ No leadcms.config.json found.");
     process.exit(1);
   }
 
-  const rawConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  const rawConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
 
   if (!rawConfig.remotes || !rawConfig.remotes[name]) {
     console.error(`❌ Remote "${name}" is not configured.`);
@@ -190,34 +194,33 @@ function removeRemoteCommand(subArgs: string[]): void {
     delete rawConfig.defaultRemote;
   }
 
-  fs.writeFileSync(configPath, JSON.stringify(rawConfig, null, 2) + '\n', 'utf-8');
+  fs.writeFileSync(configPath, JSON.stringify(rawConfig, null, 2) + "\n", "utf-8");
   console.log(`✅ Removed remote "${name}".`);
 }
 
 function showRemoteCommand(subArgs: string[]): void {
   const name = subArgs[0];
   if (!name) {
-    console.error('❌ Usage: leadcms remote show <name>');
+    console.error("❌ Usage: leadcms remote show <name>");
     process.exit(1);
   }
 
   try {
     const ctx = resolveRemote(name);
-    const config = getConfig();
 
-    console.log('');
+    console.log("");
     console.log(`  Remote:   ${ctx.name}`);
     console.log(`  URL:      ${ctx.url}`);
-    console.log(`  Default:  ${ctx.isDefault ? 'yes' : 'no'}`);
-    console.log(`  API key:  ${ctx.apiKey ? ctx.apiKey.substring(0, 8) + '...' : 'not set'}`);
+    console.log(`  Default:  ${ctx.isDefault ? "yes" : "no"}`);
+    console.log(`  API key:  ${ctx.apiKey ? ctx.apiKey.substring(0, 8) + "..." : "not set"}`);
     console.log(`  State:    ${ctx.stateDir}`);
 
     // Show sync token timestamps
-    const syncTokenTypes = ['content', 'media', 'comments', 'email-templates'] as const;
+    const syncTokenTypes = ["content", "media", "comments", "email-templates"] as const;
     for (const entity of syncTokenTypes) {
       const tokenPath = path.join(ctx.stateDir, `${entity}-sync-token`);
       try {
-        const token = fs.readFileSync(tokenPath, 'utf-8').trim();
+        const token = fs.readFileSync(tokenPath, "utf-8").trim();
         console.log(`  ${entity.charAt(0).toUpperCase() + entity.slice(1)} sync:  ${token}`);
       } catch {
         // No sync token for this entity
@@ -226,10 +229,19 @@ function showRemoteCommand(subArgs: string[]): void {
 
     // Show metadata-map counts
     try {
-      const metaData = JSON.parse(fs.readFileSync(metadataMapPath(ctx), 'utf-8'));
-      const contentCount = Object.values(metaData.content || {}).reduce((sum: number, section: any) => sum + Object.keys(section || {}).length, 0);
-      const templateCount = Object.values(metaData.emailTemplates || {}).reduce((sum: number, section: any) => sum + Object.keys(section || {}).length, 0);
-      const commentCount = Object.values(metaData.comments || {}).reduce((sum: number, section: any) => sum + Object.keys(section || {}).length, 0);
+      const metaData = JSON.parse(fs.readFileSync(metadataMapPath(ctx), "utf-8"));
+      const contentCount = Object.values(metaData.content || {}).reduce(
+        (sum: number, section: unknown) => sum + Object.keys(section || {}).length,
+        0
+      );
+      const templateCount = Object.values(metaData.emailTemplates || {}).reduce(
+        (sum: number, section: unknown) => sum + Object.keys(section || {}).length,
+        0
+      );
+      const commentCount = Object.values(metaData.comments || {}).reduce(
+        (sum: number, section: unknown) => sum + Object.keys(section || {}).length,
+        0
+      );
       console.log(`  Content entries:      ${contentCount}`);
       console.log(`  Email templates:      ${templateCount}`);
       console.log(`  Comment entries:      ${commentCount}`);
@@ -237,15 +249,16 @@ function showRemoteCommand(subArgs: string[]): void {
       // No metadata-map
     }
 
-    console.log('');
+    console.log("");
 
     if (!ctx.apiKey) {
-      const envName = name.toUpperCase().replace(/-/g, '_');
+      const envName = name.toUpperCase().replace(/-/g, "_");
       console.log(`  💡 Set API key with: LEADCMS_REMOTE_${envName}_API_KEY=<key>`);
-      console.log('');
+      console.log("");
     }
-  } catch (error: any) {
-    console.error(`❌ ${error.message}`);
+  } catch (_error: unknown) {
+    const error = _error as Error;
+    console.error(`❌ ${(error as Error).message}`);
     process.exit(1);
   }
 }
@@ -253,32 +266,34 @@ function showRemoteCommand(subArgs: string[]): void {
 function setDefaultCommand(subArgs: string[]): void {
   const name = subArgs[0];
   if (!name) {
-    console.error('❌ Usage: leadcms remote set-default <name>');
+    console.error("❌ Usage: leadcms remote set-default <name>");
     process.exit(1);
   }
 
   const configPath = findConfigPath();
   if (!configPath) {
-    console.error('❌ No leadcms.config.json found.');
+    console.error("❌ No leadcms.config.json found.");
     process.exit(1);
   }
 
-  const rawConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  const rawConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
 
   if (!rawConfig.remotes || !rawConfig.remotes[name]) {
-    console.error(`❌ Remote "${name}" is not configured. Add it first with: leadcms remote add ${name} <url>`);
+    console.error(
+      `❌ Remote "${name}" is not configured. Add it first with: leadcms remote add ${name} <url>`
+    );
     process.exit(1);
   }
 
   rawConfig.defaultRemote = name;
-  fs.writeFileSync(configPath, JSON.stringify(rawConfig, null, 2) + '\n', 'utf-8');
+  fs.writeFileSync(configPath, JSON.stringify(rawConfig, null, 2) + "\n", "utf-8");
   console.log(`✅ Default remote set to "${name}".`);
 }
 
 function resetRemoteCommand(subArgs: string[]): void {
   const name = subArgs[0];
   if (!name) {
-    console.error('❌ Usage: leadcms remote reset <name>');
+    console.error("❌ Usage: leadcms remote reset <name>");
     process.exit(1);
   }
 
@@ -291,8 +306,8 @@ function resetRemoteCommand(subArgs: string[]): void {
     }
 
     const files = fs.readdirSync(ctx.stateDir);
-    const syncTokenFiles = files.filter(f => f.endsWith('-sync-token'));
-    const mapFiles = files.filter(f => f === 'metadata.json');
+    const syncTokenFiles = files.filter((f) => f.endsWith("-sync-token"));
+    const mapFiles = files.filter((f) => f === "metadata.json");
     const allStateFiles = [...syncTokenFiles, ...mapFiles];
 
     if (allStateFiles.length === 0) {
@@ -308,19 +323,17 @@ function resetRemoteCommand(subArgs: string[]): void {
     if (syncTokenFiles.length > 0) parts.push(`${syncTokenFiles.length} sync token(s)`);
     if (mapFiles.length > 0) parts.push(`${mapFiles.length} map file(s)`);
 
-    console.log(`✅ Reset state for remote "${name}" (${parts.join(', ')} cleared).`);
-    console.log('   Next pull/push will perform a full sync.');
-  } catch (error: any) {
-    console.error(`❌ ${error.message}`);
+    console.log(`✅ Reset state for remote "${name}" (${parts.join(", ")} cleared).`);
+    console.log("   Next pull/push will perform a full sync.");
+  } catch (_error: unknown) {
+    const error = _error as Error;
+    console.error(`❌ ${(error as Error).message}`);
     process.exit(1);
   }
 }
 
 function findConfigPath(): string | null {
-  const candidates = [
-    'leadcms.config.json',
-    'leadcms.config.js',
-  ];
+  const candidates = ["leadcms.config.json", "leadcms.config.js"];
 
   for (const name of candidates) {
     const fullPath = path.resolve(name);

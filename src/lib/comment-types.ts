@@ -13,8 +13,8 @@ export interface Comment {
   authorName: string;
   authorEmail?: string;
   body: string;
-  status?: 'NotApproved' | 'Approved' | 'Spam' | 'Answer';
-  answerStatus?: 'Unanswered' | 'Answered' | 'Closed';
+  status?: "NotApproved" | "Approved" | "Spam" | "Answer";
+  answerStatus?: "Unanswered" | "Answered" | "Closed";
   createdAt: string;
   updatedAt?: string | null;
   publishedAt?: string | null;
@@ -27,9 +27,9 @@ export interface Comment {
   source?: string | null;
   tags?: string[] | null;
   // These are usually included in API responses but we may not need them in local storage
-  content?: any;
+  content?: unknown;
   parent?: Comment | null;
-  contact?: any;
+  contact?: unknown;
 }
 
 /**
@@ -42,8 +42,8 @@ export interface StoredComment {
   authorName: string;
   authorEmail?: string;
   body: string;
-  status?: 'NotApproved' | 'Approved' | 'Spam' | 'Answer';
-  answerStatus?: 'Unanswered' | 'Answered' | 'Closed';
+  status?: "NotApproved" | "Approved" | "Spam" | "Answer";
+  answerStatus?: "Unanswered" | "Answered" | "Closed";
   createdAt: string;
   updatedAt?: string | null;
   publishedAt?: string | null;

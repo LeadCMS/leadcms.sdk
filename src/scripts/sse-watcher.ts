@@ -8,6 +8,7 @@ import {
   fetchContentTypes,
 } from "./leadcms-helpers.js";
 import { saveContentFile } from "../lib/content-transformation.js";
+import type { RemoteContentData } from "../lib/content-transformation.js";
 import { pullLeadCMSContent } from "./pull-leadcms-content.js";
 import { pullLeadCMSMedia } from "./pull-leadcms-media.js";
 import { logger } from "../lib/logger.js";
@@ -18,7 +19,7 @@ interface SSEEventData {
   entityType?: string;
   operation?: string;
   createdById?: string;
-  data?: any;
+  data?: unknown;
 }
 
 interface ConnectedEventData {
@@ -32,7 +33,7 @@ interface HeartbeatEventData {
 
 interface DraftEventData extends SSEEventData {
   createdById: string;
-  data: any;
+  data: unknown;
 }
 
 // Log environment configuration for debugging
@@ -89,7 +90,8 @@ async function executePull(): Promise<void> {
     await pullLeadCMSContent({ forceOverwrite: true, remoteContext: activeRemoteCtx });
     await pullLeadCMSMedia({ remoteContext: activeRemoteCtx });
     logger.verbose("[SSE] Content+media pull completed successfully");
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as Error;
     logger.verbose("[SSE] Content pull failed:", error.message);
   } finally {
     pullInProgress = false;
@@ -129,7 +131,7 @@ async function startSSEWatcher(remoteCtx?: RemoteContext): Promise<void> {
   logger.verbose(`[SSE] Starting SSE watcher...`);
   const typeMap = await fetchContentTypes(effectiveUrl);
   const sseUrl = buildSSEUrl(remoteCtx);
-  const eventSourceOptions: any = {};
+  const eventSourceOptions: Record<string, unknown> = {};
 
   if (effectiveApiKey) {
     logger.verbose(`[SSE] Using API key for authentication`);
@@ -161,7 +163,9 @@ async function startSSEWatcher(remoteCtx?: RemoteContext): Promise<void> {
             JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)
           );
           if (!response.ok) {
-            logger.verbose(`[SSE FETCH] Failed response: ${response.status} ${response.statusText}`);
+            logger.verbose(
+              `[SSE FETCH] Failed response: ${response.status} ${response.statusText}`
+            );
           }
           return response;
         })
@@ -195,7 +199,8 @@ async function startSSEWatcher(remoteCtx?: RemoteContext): Promise<void> {
       } else {
         logger.verbose(`[SSE] Non-content message - Entity type: ${data.entityType}`);
       }
-    } catch (e: any) {
+    } catch (_e: unknown) {
+      const e = _e as Error;
       logger.verbose("[SSE] Failed to parse SSE message:", e.message);
       logger.verbose("[SSE] Raw event data:", event.data);
     }
@@ -208,7 +213,8 @@ async function startSSEWatcher(remoteCtx?: RemoteContext): Promise<void> {
       logger.verbose(
         `[SSE] Connected successfully - Client ID: ${data.clientId}, Starting change log ID: ${data.startingChangeLogId}`
       );
-    } catch (e: any) {
+    } catch (_e: unknown) {
+      const e = _e as Error;
       logger.verbose("[SSE] Failed to parse connected event:", e.message);
       logger.verbose("[SSE] Raw connected event data:", event.data);
     }
@@ -219,7 +225,8 @@ async function startSSEWatcher(remoteCtx?: RemoteContext): Promise<void> {
     try {
       const data: HeartbeatEventData = JSON.parse(event.data);
       logger.verbose(`[SSE] Heartbeat at ${data.timestamp}`);
-    } catch (e: any) {
+    } catch (_e: unknown) {
+      const e = _e as Error;
       logger.verbose("[SSE] Failed to parse heartbeat event:", e.message);
       logger.verbose("[SSE] Raw heartbeat event data:", event.data);
     }
@@ -228,17 +235,27 @@ async function startSSEWatcher(remoteCtx?: RemoteContext): Promise<void> {
   es.addEventListener("draft-updated", (event) => {
     try {
       const data: DraftEventData = JSON.parse(event.data);
-      logger.verbose(`[SSE] Draft updated - entity: ${data.entityType}, operation: ${data.operation}, user: ${data.createdById}`);
+      logger.verbose(
+        `[SSE] Draft updated - entity: ${data.entityType}, operation: ${data.operation}, user: ${data.createdById}`
+      );
 
       if (data.createdById && data.data) {
         logger.verbose(`[SSE] Processing draft update for user: ${data.createdById}`);
-        let contentData: any;
+        let contentData: RemoteContentData;
         try {
-          contentData = typeof data.data === "string" ? JSON.parse(data.data) : data.data;
+          contentData = (
+            typeof data.data === "string" ? JSON.parse(data.data) : data.data
+          ) as RemoteContentData;
           const { body: _body, ...contentSummary } = contentData;
-          const bodyPreview = _body ? `${_body.substring(0, 100).replace(/\n/g, '\\n')}${_body.length > 100 ? '...' : ''}` : 'empty';
-          logger.verbose(`[SSE] Draft content (body ${_body ? `${_body.length} chars` : 'empty'}: ${bodyPreview}):`, JSON.stringify(contentSummary, null, 2));
-        } catch (e: any) {
+          const bodyPreview = _body
+            ? `${_body.substring(0, 100).replace(/\n/g, "\\n")}${_body.length > 100 ? "..." : ""}`
+            : "empty";
+          logger.verbose(
+            `[SSE] Draft content (body ${_body ? `${_body.length} chars` : "empty"}: ${bodyPreview}):`,
+            JSON.stringify(contentSummary, null, 2)
+          );
+        } catch (_e: unknown) {
+          const e = _e as Error;
           logger.verbose("[SSE] Failed to parse draft content data:", e.message);
           logger.verbose("[SSE] Raw data:", data.data);
           return;
@@ -255,7 +272,7 @@ async function startSSEWatcher(remoteCtx?: RemoteContext): Promise<void> {
         if (contentType === "MDX" || contentType === "JSON") {
           if (contentData && typeof contentData === "object") {
             const previewSlug = `${contentData.slug}-${data.createdById}`;
-            const hasMediaRefs = JSON.stringify(contentData).includes('/api/media/');
+            const hasMediaRefs = JSON.stringify(contentData).includes("/api/media/");
             (async () => {
               try {
                 // Pull media first so new images are on disk before the
@@ -275,16 +292,20 @@ async function startSSEWatcher(remoteCtx?: RemoteContext): Promise<void> {
                   previewSlug: previewSlug,
                 });
                 logger.verbose(`[SSE] Saved draft preview for ${previewSlug}`);
-              } catch (error: any) {
+              } catch (_error: unknown) {
+                const error = _error as Error;
                 logger.verbose(`[SSE] Error processing draft update:`, error.message);
               }
             })();
           }
         } else {
-          logger.verbose(`[SSE] Draft is not MDX or JSON (type: ${contentType}), skipping file save.`);
+          logger.verbose(
+            `[SSE] Draft is not MDX or JSON (type: ${contentType}), skipping file save.`
+          );
         }
       }
-    } catch (e: any) {
+    } catch (_e: unknown) {
+      const e = _e as Error;
       logger.verbose("[SSE] Failed to parse draft-updated event:", e.message);
       logger.verbose("[SSE] Raw draft-updated event data:", event.data);
     }
@@ -296,13 +317,23 @@ async function startSSEWatcher(remoteCtx?: RemoteContext): Promise<void> {
       const data: SSEEventData = JSON.parse(event.data);
 
       // Only handle DraftModified operations here for backward compatibility
-      if (data.entityType === "Content" && data.operation === "DraftModified" && data.createdById && data.data) {
-        logger.verbose(`[SSE] Received legacy 'DraftModified' message for user: ${data.createdById}`);
-        let contentData: any;
+      if (
+        data.entityType === "Content" &&
+        data.operation === "DraftModified" &&
+        data.createdById &&
+        data.data
+      ) {
+        logger.verbose(
+          `[SSE] Received legacy 'DraftModified' message for user: ${data.createdById}`
+        );
+        let contentData: RemoteContentData;
         try {
-          contentData = typeof data.data === "string" ? JSON.parse(data.data) : data.data;
+          contentData = (
+            typeof data.data === "string" ? JSON.parse(data.data) : data.data
+          ) as RemoteContentData;
           logger.verbose(`[SSE] Legacy draft content data:`, JSON.stringify(contentData, null, 2));
-        } catch (e: any) {
+        } catch (_e: unknown) {
+          const e = _e as Error;
           logger.verbose("[SSE] Failed to parse legacy draft content data:", e.message);
           logger.verbose("[SSE] Raw data:", data.data);
           return;
@@ -330,13 +361,16 @@ async function startSSEWatcher(remoteCtx?: RemoteContext): Promise<void> {
                   previewSlug: previewSlug,
                 });
                 logger.verbose(`[SSE] Saved legacy draft preview for ${previewSlug}`);
-              } catch (error: any) {
+              } catch (_error: unknown) {
+                const error = _error as Error;
                 logger.verbose(`[SSE] Error processing legacy draft modification:`, error.message);
               }
             })();
           }
         } else {
-          logger.verbose(`[SSE] Legacy draft is not MDX or JSON (type: ${contentType}), skipping file save.`);
+          logger.verbose(
+            `[SSE] Legacy draft is not MDX or JSON (type: ${contentType}), skipping file save.`
+          );
         }
       }
     } catch {
@@ -352,34 +386,36 @@ async function startSSEWatcher(remoteCtx?: RemoteContext): Promise<void> {
 
       logger.verbose(`[SSE] Content updated - triggering full pull`);
       triggerContentPull();
-    } catch (e: any) {
+    } catch (_e: unknown) {
+      const e = _e as Error;
       logger.verbose("[SSE] Failed to parse content-updated event:", e.message);
       logger.verbose("[SSE] Raw content-updated event data:", event.data);
     }
   });
 
-  es.onerror = (err: any) => {
+  es.onerror = (err: unknown) => {
+    const sseErr = err as { type?: unknown; message?: string; code?: number };
     logger.verbose("[SSE] Connection error occurred:", {
-      type: err.type,
-      message: err.message,
-      code: err.code,
+      type: sseErr.type,
+      message: sseErr.message,
+      code: sseErr.code,
       timestamp: new Date().toISOString(),
       readyState: es.readyState,
       url: es.url,
     });
 
     // Log specific error types
-    if (err.code === 401) {
+    if (sseErr.code === 401) {
       logger.verbose("[SSE] Authentication failed (401) - check your LEADCMS_API_KEY");
       logger.verbose(
         "[SSE] Current API Key (first 8 chars):",
         effectiveApiKey ? effectiveApiKey.substring(0, 8) : "NOT_SET"
       );
-    } else if (err.code === 403) {
+    } else if (sseErr.code === 403) {
       logger.verbose("[SSE] Forbidden (403) - insufficient permissions");
-    } else if (err.code === 404) {
+    } else if (sseErr.code === 404) {
       logger.verbose("[SSE] Not Found (404) - check your LEADCMS_URL and endpoint path");
-    } else if (err.code >= 500) {
+    } else if ((sseErr.code ?? 0) >= 500) {
       logger.verbose("[SSE] Server error (5xx) - LeadCMS server issue");
     }
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { spawn } from 'child_process';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { readFileSync } from 'fs';
+import { spawn } from "child_process";
+import path from "path";
+import { fileURLToPath } from "url";
+import { readFileSync } from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,170 +12,141 @@ const commandArgs = process.argv.slice(3);
 
 function runScript(scriptName: string, args: string[] = []) {
   // Use the new CLI bin files instead of the scripts directory
-  const binDir = path.join(__dirname, 'bin');
+  const binDir = path.join(__dirname, "bin");
   const binPath = path.join(binDir, scriptName);
-  const child = spawn('node', [binPath, ...args], {
-    stdio: 'inherit',
-    env: process.env
+  const child = spawn("node", [binPath, ...args], {
+    stdio: "inherit",
+    env: process.env,
   });
 
-  child.on('exit', (code) => {
+  child.on("exit", (code) => {
     process.exit(code || 0);
   });
 }
 
-function runScriptSequence(scripts: string[], args: string[] = []) {
-  let currentIndex = 0;
-
-  function runNext() {
-    if (currentIndex >= scripts.length) {
-      return;
-    }
-
-    const scriptName = scripts[currentIndex];
-    const binDir = path.join(__dirname, 'bin');
-    const binPath = path.join(binDir, scriptName);
-    const child = spawn('node', [binPath, ...args], {
-      stdio: 'inherit',
-      env: process.env
-    });
-
-    child.on('exit', (code) => {
-      if (code !== 0) {
-        process.exit(code || 0);
-      } else {
-        currentIndex++;
-        runNext();
-      }
-    });
-  }
-
-  runNext();
-}
-
 function getVersion(): string {
   try {
-    const packageJsonPath = path.join(__dirname, '../../package.json');
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+    const packageJsonPath = path.join(__dirname, "../../package.json");
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
     return packageJson.version;
-  } catch (error) {
-    return 'unknown';
+  } catch {
+    return "unknown";
   }
 }
 
 switch (command) {
-  case 'version':
-  case '-v':
-  case '--version':
+  case "version":
+  case "-v":
+  case "--version":
     console.log(`LeadCMS SDK v${getVersion()}`);
     process.exit(0);
     break;
-  case 'pull':
-    runScript('pull-all.js', commandArgs);
+  case "pull":
+    runScript("pull-all.js", commandArgs);
     break;
-  case 'pull-content':
-    runScript('pull-content.js', commandArgs);
+  case "pull-content":
+    runScript("pull-content.js", commandArgs);
     break;
-  case 'pull-media':
-    runScript('pull-media.js', commandArgs);
+  case "pull-media":
+    runScript("pull-media.js", commandArgs);
     break;
-  case 'pull-comments':
-    runScript('pull-comments.js', commandArgs);
+  case "pull-comments":
+    runScript("pull-comments.js", commandArgs);
     break;
-  case 'pull-email-templates':
-    runScript('pull-email-templates.js', commandArgs);
+  case "pull-email-templates":
+    runScript("pull-email-templates.js", commandArgs);
     break;
-  case 'pull-settings':
-    runScript('pull-settings.js', commandArgs);
+  case "pull-settings":
+    runScript("pull-settings.js", commandArgs);
     break;
-  case 'pull-segments':
-    runScript('pull-segments.js', commandArgs);
+  case "pull-segments":
+    runScript("pull-segments.js", commandArgs);
     break;
-  case 'pull-sequences':
-    runScript('pull-sequences.js', commandArgs);
+  case "pull-sequences":
+    runScript("pull-sequences.js", commandArgs);
     break;
-  case 'pull-redirects':
-    runScript('pull-redirects.js', commandArgs);
+  case "pull-redirects":
+    runScript("pull-redirects.js", commandArgs);
     break;
-  case 'push':
-    runScript('push-all.js', commandArgs);
+  case "push":
+    runScript("push-all.js", commandArgs);
     break;
-  case 'push-content':
-    runScript('push-content.js', commandArgs);
+  case "push-content":
+    runScript("push-content.js", commandArgs);
     break;
-  case 'push-media':
-    runScript('push-media.js', commandArgs);
+  case "push-media":
+    runScript("push-media.js", commandArgs);
     break;
-  case 'push-comments':
-    runScript('push-comments.js', commandArgs);
+  case "push-comments":
+    runScript("push-comments.js", commandArgs);
     break;
-  case 'push-email-templates':
-    runScript('push-email-templates.js', commandArgs);
+  case "push-email-templates":
+    runScript("push-email-templates.js", commandArgs);
     break;
-  case 'push-settings':
-    runScript('push-settings.js', commandArgs);
+  case "push-settings":
+    runScript("push-settings.js", commandArgs);
     break;
-  case 'push-segments':
-    runScript('push-segments.js', commandArgs);
+  case "push-segments":
+    runScript("push-segments.js", commandArgs);
     break;
-  case 'push-sequences':
-    runScript('push-sequences.js', commandArgs);
+  case "push-sequences":
+    runScript("push-sequences.js", commandArgs);
     break;
-  case 'push-redirects':
-    runScript('push-redirects.js', commandArgs);
+  case "push-redirects":
+    runScript("push-redirects.js", commandArgs);
     break;
-  case 'generate-redirects-map':
-    runScript('generate-redirects-map.js', commandArgs);
+  case "generate-redirects-map":
+    runScript("generate-redirects-map.js", commandArgs);
     break;
-  case 'status':
-    runScript('status-all.js', commandArgs);
+  case "status":
+    runScript("status-all.js", commandArgs);
     break;
-  case 'status-content':
-    runScript('status-content.js', commandArgs);
+  case "status-content":
+    runScript("status-content.js", commandArgs);
     break;
-  case 'status-media':
-    runScript('status-media.js', commandArgs);
+  case "status-media":
+    runScript("status-media.js", commandArgs);
     break;
-  case 'status-comments':
-    runScript('status-comments.js', commandArgs);
+  case "status-comments":
+    runScript("status-comments.js", commandArgs);
     break;
-  case 'status-email-templates':
-    runScript('status-email-templates.js', commandArgs);
+  case "status-email-templates":
+    runScript("status-email-templates.js", commandArgs);
     break;
-  case 'status-settings':
-    runScript('status-settings.js', commandArgs);
+  case "status-settings":
+    runScript("status-settings.js", commandArgs);
     break;
-  case 'status-segments':
-    runScript('status-segments.js', commandArgs);
+  case "status-segments":
+    runScript("status-segments.js", commandArgs);
     break;
-  case 'status-sequences':
-    runScript('status-sequences.js', commandArgs);
+  case "status-sequences":
+    runScript("status-sequences.js", commandArgs);
     break;
-  case 'status-redirects':
-    runScript('status-redirects.js', commandArgs);
+  case "status-redirects":
+    runScript("status-redirects.js", commandArgs);
     break;
-  case 'watch':
-    runScript('watch.js', commandArgs);
+  case "watch":
+    runScript("watch.js", commandArgs);
     break;
-  case 'generate-env':
-    runScript('generate-env.js');
+  case "generate-env":
+    runScript("generate-env.js");
     break;
-  case 'init':
-  case 'config':
-    runScript('init.js');
+  case "init":
+  case "config":
+    runScript("init.js");
     break;
-  case 'login':
-    runScript('login.js', commandArgs);
+  case "login":
+    runScript("login.js", commandArgs);
     break;
-  case 'remote':
-    runScript('remote.js', commandArgs);
+  case "remote":
+    runScript("remote.js", commandArgs);
     break;
-  case 'docker':
-  case 'templates':
+  case "docker":
+  case "templates":
     generateDockerTemplates();
     break;
-  case 'add-content':
-    runScript('add-content.js', commandArgs);
+  case "add-content":
+    runScript("add-content.js", commandArgs);
     break;
   default:
     console.log(`
@@ -355,21 +326,21 @@ Configuration Files:
 }
 
 function generateDockerTemplates() {
-  Promise.all([import('fs'), import('path')]).then(([fs, pathModule]) => {
-    const templateDir = pathModule.join(__dirname, '../templates');
+  Promise.all([import("fs"), import("path")]).then(([fs, pathModule]) => {
+    const templateDir = pathModule.join(__dirname, "../templates");
 
     // Check if templates directory exists
     if (!fs.existsSync(templateDir)) {
-      console.error('❌ Docker templates not found in SDK. Please update to the latest version.');
+      console.error("❌ Docker templates not found in SDK. Please update to the latest version.");
       return;
     }
 
-    console.log('🐳 Generating Docker deployment templates...');
+    console.log("🐳 Generating Docker deployment templates...");
 
     try {
       // Create directories
-      const dirs = ['scripts', 'preview'];
-      dirs.forEach(dir => {
+      const dirs = ["scripts", "preview"];
+      dirs.forEach((dir) => {
         if (!fs.existsSync(dir)) {
           fs.mkdirSync(dir, { recursive: true });
           console.log(`📁 Created directory: ${dir}/`);
@@ -378,16 +349,16 @@ function generateDockerTemplates() {
 
       // Copy production files
       const productionFiles = [
-        { src: 'docker/Dockerfile', dest: 'Dockerfile' },
-        { src: 'docker/nginx.conf', dest: 'nginx.conf' },
-        { src: 'scripts/inject-runtime-env.sh', dest: 'scripts/inject-runtime-env.sh' }
+        { src: "docker/Dockerfile", dest: "Dockerfile" },
+        { src: "docker/nginx.conf", dest: "nginx.conf" },
+        { src: "scripts/inject-runtime-env.sh", dest: "scripts/inject-runtime-env.sh" },
       ];
 
       // Copy preview files
       const previewFiles = [
-        { src: 'docker/preview/Dockerfile', dest: 'preview/Dockerfile' },
-        { src: 'docker/preview/nginx.conf', dest: 'preview/nginx.conf' },
-        { src: 'docker/preview/supervisord.conf', dest: 'preview/supervisord.conf' }
+        { src: "docker/preview/Dockerfile", dest: "preview/Dockerfile" },
+        { src: "docker/preview/nginx.conf", dest: "preview/nginx.conf" },
+        { src: "docker/preview/supervisord.conf", dest: "preview/supervisord.conf" },
       ];
 
       [...productionFiles, ...previewFiles].forEach(({ src, dest }) => {
@@ -395,12 +366,12 @@ function generateDockerTemplates() {
         const destPath = dest;
 
         if (fs.existsSync(srcPath)) {
-          const content = fs.readFileSync(srcPath, 'utf-8');
-          fs.writeFileSync(destPath, content, 'utf-8');
+          const content = fs.readFileSync(srcPath, "utf-8");
+          fs.writeFileSync(destPath, content, "utf-8");
 
           // Make shell scripts executable
-          if (dest.endsWith('.sh')) {
-            fs.chmodSync(destPath, '755');
+          if (dest.endsWith(".sh")) {
+            fs.chmodSync(destPath, "755");
           }
 
           console.log(`✅ Created ${destPath}`);
@@ -409,17 +380,16 @@ function generateDockerTemplates() {
         }
       });
 
-      console.log('\\n🎉 Docker templates generated successfully!');
-      console.log('\\n📖 Usage:');
-      console.log('  Production build:  docker build -t my-site .');
-      console.log('  Preview mode:      docker build -f preview/Dockerfile -t my-site-preview .');
-      console.log('\\n💡 Next steps:');
+      console.log("\\n🎉 Docker templates generated successfully!");
+      console.log("\\n📖 Usage:");
+      console.log("  Production build:  docker build -t my-site .");
+      console.log("  Preview mode:      docker build -f preview/Dockerfile -t my-site-preview .");
+      console.log("\\n💡 Next steps:");
       console.log('  1. Add "livepreview": "your-dev-command" to package.json scripts');
-      console.log('  2. Adjust the COPY source directory in Dockerfile if needed');
-      console.log('  3. Set LEADCMS_URL and LEADCMS_API_KEY environment variables');
-
+      console.log("  2. Adjust the COPY source directory in Dockerfile if needed");
+      console.log("  3. Set LEADCMS_URL and LEADCMS_API_KEY environment variables");
     } catch (error) {
-      console.error('❌ Failed to generate Docker templates:', error);
+      console.error("❌ Failed to generate Docker templates:", error);
     }
   });
 }

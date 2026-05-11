@@ -37,7 +37,7 @@ async function main(options: PullMediaOptions = {}): Promise<void> {
   // Check if media is supported
   try {
     logger.verbose(`🔍 Checking CMS configuration...`);
-    const configUrl = new URL('/api/config', leadCMSUrl).toString();
+    const configUrl = new URL("/api/config", leadCMSUrl).toString();
     const response = await axios.get(configUrl, { timeout: 10000 });
 
     if (response.data) {
@@ -50,13 +50,14 @@ async function main(options: PullMediaOptions = {}): Promise<void> {
 
       logger.verbose(`✅ Media entity supported\n`);
     }
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as Error;
     console.warn(`⚠️  Could not fetch CMS config: ${error.message}`);
     console.warn(`⚠️  Assuming media is supported (backward compatibility)\n`);
   }
 
   // Pull media
-  const { pullLeadCMSMedia } = await import('./pull-leadcms-media.js');
+  const { pullLeadCMSMedia } = await import("./pull-leadcms-media.js");
   await pullLeadCMSMedia({ remoteContext: options.remoteContext });
 
   console.log(`\n✨ Media pull completed!\n`);

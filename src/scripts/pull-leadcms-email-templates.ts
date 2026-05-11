@@ -21,6 +21,15 @@ import { getConfig } from "../lib/config.js";
 import { slugify } from "../lib/slugify.js";
 import { logger } from "../lib/logger.js";
 
+interface ScriptError extends Error {
+  code?: string;
+  response?: {
+    status?: number;
+    data?: { detail?: string; title?: string; message?: string; [key: string]: unknown } | null;
+  };
+  status?: number;
+}
+
 interface EmailTemplateSyncResponse {
   items?: EmailTemplateRemoteData[];
   deleted?: number[];
@@ -48,7 +57,9 @@ async function readFileOrUndefined(filePath: string): Promise<string | undefined
  * Read the email-templates sync token.
  * When remoteCtx is provided, reads from the remote-specific state directory.
  */
-async function readSyncToken(remoteCtx?: RemoteContext): Promise<{ token: string | undefined; migrated: boolean }> {
+async function readSyncToken(
+  remoteCtx?: RemoteContext
+): Promise<{ token: string | undefined; migrated: boolean }> {
   if (remoteCtx) {
     const tokenPath = syncTokenPath(remoteCtx, "email-templates");
     const token = await readFileOrUndefined(tokenPath);
@@ -142,10 +153,8 @@ async function pullEmailTemplateSync(syncToken?: string): Promise<EmailTemplateS
   };
 }
 
-
-
 function getGroupFolderName(template: EmailTemplateRemoteData): string {
-  const groupName = template.emailGroup?.name;
+  const groupName = template.emailGroup?.name as string | undefined;
   if (groupName) {
     const slug = slugify(groupName);
     return slug || groupName;
@@ -196,7 +205,8 @@ async function buildEmailTemplateIdIndex(dir: string): Promise<Map<string, strin
     let entries;
     try {
       entries = await fs.readdir(currentDir, { withFileTypes: true });
-    } catch (err: any) {
+    } catch (_err: unknown) {
+      const err = _err as ScriptError;
       if (err.code !== "ENOENT") {
         console.warn(`[EMAIL_TEMPLATES] Could not read directory ${currentDir}:`, err.message);
       }
@@ -232,7 +242,10 @@ async function buildEmailTemplateIdIndex(dir: string): Promise<Map<string, strin
   return index;
 }
 
-async function deleteEmailTemplateFilesById(index: Map<string, string[]>, id: string): Promise<void> {
+async function deleteEmailTemplateFilesById(
+  index: Map<string, string[]>,
+  id: string
+): Promise<void> {
   const paths = index.get(id);
   if (!paths) return;
 
@@ -254,7 +267,7 @@ export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Prom
 
   // Load per-remote metadata for multi-remote support
   let metadataMap: MetadataMap | undefined;
-  const rcModule = remoteCtx ? await import('../lib/remote-context.js') : undefined;
+  const rcModule = remoteCtx ? await import("../lib/remote-context.js") : undefined;
   if (remoteCtx && rcModule) {
     metadataMap = await rcModule.readMetadataMap(remoteCtx);
   }
@@ -268,9 +281,9 @@ export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Prom
     const cfg = getConfig();
     if (cfg.defaultRemote) {
       const defaultStateDir = path.join(path.dirname(remoteCtx.stateDir), cfg.defaultRemote);
-      const defaultCtx: import('../lib/remote-context.js').RemoteContext = {
+      const defaultCtx: import("../lib/remote-context.js").RemoteContext = {
         name: cfg.defaultRemote,
-        url: cfg.remotes?.[cfg.defaultRemote]?.url || '',
+        url: cfg.remotes?.[cfg.defaultRemote]?.url || "",
         isDefault: true,
         stateDir: defaultStateDir,
       };
@@ -281,7 +294,7 @@ export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Prom
   // The sync API returns emailGroup: null — resolve from the groups endpoint
   if (items.length > 0) {
     const emailGroups = await leadCMSDataService.getAllEmailGroups();
-    const groupById = new Map(emailGroups.map(g => [Number(g.id), g]));
+    const groupById = new Map(emailGroups.map((g) => [Number(g.id), g]));
 
     for (const template of items) {
       if (template.emailGroupId != null && !template.emailGroup) {
@@ -303,9 +316,10 @@ export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Prom
     }
   }
 
-  const idIndex = (items.length > 0 || deleted.length > 0)
-    ? await buildEmailTemplateIdIndex(EMAIL_TEMPLATES_DIR)
-    : new Map<string, string[]>();
+  const idIndex =
+    items.length > 0 || deleted.length > 0
+      ? await buildEmailTemplateIdIndex(EMAIL_TEMPLATES_DIR)
+      : new Map<string, string[]>();
 
   const hasBaseItems = Object.keys(baseItems).length > 0;
   let mergedCount = 0;
@@ -319,19 +333,30 @@ export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Prom
 
     // Capture old entry BEFORE updating metadata so we can detect renames
     // using the correct remote's IDs (not the default remote's file IDs).
-    const oldEntry = (remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap && idStr)
-      ? rcModule.findEmailTemplateByRemoteId(metadataMap, idStr)
-      : undefined;
+    const oldEntry =
+      remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap && idStr
+        ? rcModule.findEmailTemplateByRemoteId(metadataMap, idStr)
+        : undefined;
 
     // Update per-remote metadata with this template's data
     if (remoteCtx && rcModule && metadataMap && template.name && template.language) {
       if (template.id != null) {
-        rcModule.setEmailTemplateRemoteId(metadataMap, template.language || defaultLanguage, template.name, template.id);
+        rcModule.setEmailTemplateRemoteId(
+          metadataMap,
+          template.language || defaultLanguage,
+          template.name,
+          template.id
+        );
       }
-      rcModule.setMetadataForEmailTemplate(metadataMap, template.language || defaultLanguage, template.name, {
-        createdAt: template.createdAt,
-        updatedAt: template.updatedAt ?? undefined,
-      });
+      rcModule.setMetadataForEmailTemplate(
+        metadataMap,
+        template.language || defaultLanguage,
+        template.name,
+        {
+          createdAt: template.createdAt,
+          updatedAt: template.updatedAt ?? undefined,
+        }
+      );
     }
 
     // For non-default remotes, replace server-generated fields with the
@@ -339,9 +364,9 @@ export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Prom
     // The current remote's values are already stored in its per-remote maps.
     let templateToSave = template;
     if (remoteCtx && !remoteCtx.isDefault) {
-      const { id, createdAt, updatedAt, ...rest } = template;
+      const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = template;
       const lang = template.language || defaultLanguage;
-      const name = template.name || '';
+      const name = template.name || "";
       const defaultId = defaultMetadataMap?.emailTemplates?.[lang]?.[name]?.id;
       const defaultMeta = defaultMetadataMap?.emailTemplates?.[lang]?.[name];
       templateToSave = {
@@ -363,16 +388,32 @@ export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Prom
     if (remoteCtx && !remoteCtx.isDefault) {
       // Non-default remote: use metadata-based lookup to avoid
       // matching against the default remote's IDs in local files.
-      if (oldEntry && (oldEntry.name !== template.name || oldEntry.language !== (template.language || defaultLanguage))) {
-        const oldTemplate = { ...template, name: oldEntry.name, language: oldEntry.language } as EmailTemplateRemoteData;
+      if (
+        oldEntry &&
+        (oldEntry.name !== template.name ||
+          oldEntry.language !== (template.language || defaultLanguage))
+      ) {
+        const oldTemplate = {
+          ...template,
+          name: oldEntry.name,
+          language: oldEntry.language,
+        } as EmailTemplateRemoteData;
         const oldPath = getEmailTemplateFilePath(oldTemplate);
-        console.log(`   🗑️  Removing old email template file: ${path.basename(oldPath)} (name or language changed)`);
-        try { await fs.unlink(oldPath); } catch { /* ignore */ }
+        console.log(
+          `   🗑️  Removing old email template file: ${path.basename(oldPath)} (name or language changed)`
+        );
+        try {
+          await fs.unlink(oldPath);
+        } catch {
+          /* ignore */
+        }
       }
     } else if (idStr != null) {
       const oldPaths = idIndex.get(idStr);
-      if (oldPaths && oldPaths.length > 0 && !oldPaths.some(p => p === filePath)) {
-        console.log(`   🗑️  Removing old email template file: ${oldPaths.map(p => path.basename(p)).join(', ')} (name or language changed)`);
+      if (oldPaths && oldPaths.length > 0 && !oldPaths.some((p) => p === filePath)) {
+        console.log(
+          `   🗑️  Removing old email template file: ${oldPaths.map((p) => path.basename(p)).join(", ")} (name or language changed)`
+        );
       }
       await deleteEmailTemplateFilesById(idIndex, idStr);
     }
@@ -396,7 +437,9 @@ export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Prom
           console.log(`🔀 Auto-merged: ${template.name || template.id}`);
           mergedCount++;
         } else {
-          console.warn(`⚠️  Conflict in: ${template.name || template.id} (${mergeResult.conflictCount} conflict(s))`);
+          console.warn(
+            `⚠️  Conflict in: ${template.name || template.id} (${mergeResult.conflictCount} conflict(s))`
+          );
           conflictCount++;
         }
       }
@@ -415,7 +458,8 @@ export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Prom
     if (newCount > 0) console.log(`   ✨ New: ${newCount}`);
     if (overwrittenCount > 0) console.log(`   📝 Updated (no local changes): ${overwrittenCount}`);
     if (mergedCount > 0) console.log(`   🔀 Auto-merged: ${mergedCount}`);
-    if (conflictCount > 0) console.log(`   ⚠️  Conflicts (need manual resolution): ${conflictCount}`);
+    if (conflictCount > 0)
+      console.log(`   ⚠️  Conflicts (need manual resolution): ${conflictCount}`);
   }
 
   if (deleted.length > 0) {
@@ -426,10 +470,17 @@ export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Prom
       // Non-default remote: resolve ID → name via metadata.
       const entry = rcModule.findEmailTemplateByRemoteId(metadataMap, id);
       if (entry) {
-        const oldTemplate = { name: entry.name, language: entry.language } as EmailTemplateRemoteData;
+        const oldTemplate = {
+          name: entry.name,
+          language: entry.language,
+        } as EmailTemplateRemoteData;
         const filePath = getEmailTemplateFilePath(oldTemplate);
         console.log(`   🗑️  ${path.basename(filePath)} (deleted on remote)`);
-        try { await fs.unlink(filePath); } catch { /* ignore */ }
+        try {
+          await fs.unlink(filePath);
+        } catch {
+          /* ignore */
+        }
         // Clean up metadata entry
         if (metadataMap.emailTemplates?.[entry.language]?.[entry.name]) {
           delete metadataMap.emailTemplates[entry.language][entry.name];
@@ -438,7 +489,7 @@ export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Prom
     } else {
       const paths = idIndex.get(String(id));
       if (paths && paths.length > 0) {
-        console.log(`   🗑️  ${paths.map(p => path.basename(p)).join(', ')} (deleted on remote)`);
+        console.log(`   🗑️  ${paths.map((p) => path.basename(p)).join(", ")} (deleted on remote)`);
       }
       await deleteEmailTemplateFilesById(idIndex, String(id));
     }
@@ -455,4 +506,9 @@ export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Prom
   }
 }
 
-export { buildEmailTemplateIdIndex, deleteEmailTemplateFilesById, saveEmailTemplateFile, pullEmailTemplateSync };
+export {
+  buildEmailTemplateIdIndex,
+  deleteEmailTemplateFilesById,
+  saveEmailTemplateFile,
+  pullEmailTemplateSync,
+};

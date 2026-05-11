@@ -2,19 +2,33 @@
  * Content API formatting utilities for LeadCMS
  */
 
-import matter from 'gray-matter';
-import { replaceLocalMediaPaths } from './content-transformation.js';
-import { frontmatterSeoToApi, type FrontmatterSeo, type SeoDefaultSources } from './seo-utils.js';
+import matter from "gray-matter";
+import { replaceLocalMediaPaths } from "./content-transformation.js";
+import { frontmatterSeoToApi, type FrontmatterSeo, type SeoDefaultSources } from "./seo-utils.js";
 
 // Standard API fields that should be sent as top-level properties
 // Based on the actual LeadCMS API schema
 const STANDARD_API_FIELDS = new Set([
-  'id', 'slug', 'type', 'title', 'body', 'language',
-  'createdAt', 'updatedAt', 'publishedAt',
-  'description', 'coverImageUrl', 'coverImageAlt',
-  'author', 'category', 'tags', 'allowComments',
-  'source', 'translationKey', 'translations',
-  'seo'
+  "id",
+  "slug",
+  "type",
+  "title",
+  "body",
+  "language",
+  "createdAt",
+  "updatedAt",
+  "publishedAt",
+  "description",
+  "coverImageUrl",
+  "coverImageAlt",
+  "author",
+  "category",
+  "tags",
+  "allowComments",
+  "source",
+  "translationKey",
+  "translations",
+  "seo",
 ]);
 
 /**
@@ -24,9 +38,12 @@ const STANDARD_API_FIELDS = new Set([
  * For MDX files: custom fields are preserved in frontmatter within the body field
  * For JSON files: custom fields are sent as top-level properties, body contains pure JSON
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function formatContentForAPI(localContent: any) {
   // Start with only standard fields from metadata
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const standardFields: any = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const customFields: any = {};
 
   // Separate standard fields from custom fields
@@ -39,11 +56,12 @@ export function formatContentForAPI(localContent: any) {
   }
 
   // Build the content data with standard fields only
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const contentData: any = {
     slug: localContent.slug,
     type: localContent.type,
     language: localContent.locale,
-    ...standardFields
+    ...standardFields,
   };
 
   // Preserve the file-based slug over metadata slug
@@ -52,7 +70,7 @@ export function formatContentForAPI(localContent: any) {
   }
 
   // Determine if this is a JSON file based on file extension
-  const isJsonFile = localContent.filePath && localContent.filePath.endsWith('.json');
+  const isJsonFile = localContent.filePath && localContent.filePath.endsWith(".json");
 
   if (isJsonFile) {
     // For JSON files: custom fields should be serialized in the body as JSON string
@@ -62,11 +80,11 @@ export function formatContentForAPI(localContent: any) {
       contentData.body = JSON.stringify(customFields, null, 2);
     } else {
       // No custom fields, use original body
-      contentData.body = localContent.body || '';
+      contentData.body = localContent.body || "";
     }
   } else {
     // For MDX files: handle body with custom fields preserved in frontmatter
-    let bodyContent = localContent.body || '';
+    let bodyContent = localContent.body || "";
 
     if (Object.keys(customFields).length > 0) {
       // If we have custom fields, preserve ONLY custom fields in frontmatter
@@ -90,7 +108,7 @@ export function formatContentForAPI(localContent: any) {
   delete contentData.updatedAt;
 
   // Convert frontmatter SEO format to API SeoMetadataDto format
-  if (contentData.seo && typeof contentData.seo === 'object') {
+  if (contentData.seo && typeof contentData.seo === "object") {
     const sources: SeoDefaultSources = {
       title: contentData.title,
       description: contentData.description,
@@ -105,5 +123,6 @@ export function formatContentForAPI(localContent: any) {
   }
 
   // Apply backward URL transformation: convert /media/ paths back to /api/media/ for API
-  return replaceLocalMediaPaths(contentData);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return replaceLocalMediaPaths(contentData) as any;
 }

@@ -17,12 +17,8 @@ import fs from "fs/promises";
 import path from "path";
 import readline from "readline";
 import matter from "gray-matter";
-import {
-  defaultLanguage,
-  CONTENT_DIR,
-  resolveIdentity,
-} from "./leadcms-helpers.js";
-import { leadCMSDataService, type ContentType } from "../lib/data-service.js";
+import { defaultLanguage, CONTENT_DIR, resolveIdentity } from "./leadcms-helpers.js";
+import { leadCMSDataService } from "../lib/data-service.js";
 import { colorConsole } from "../lib/console-colors.js";
 import { logger } from "../lib/logger.js";
 
@@ -89,7 +85,11 @@ export function validateSlug(slug: string): { valid: true } | { valid: false; er
 
   // Only allow alphanumeric, hyphens, underscores, and forward slashes
   if (!/^[a-zA-Z0-9][a-zA-Z0-9\-_/]*$/.test(slug)) {
-    return { valid: false, error: "Slug contains invalid characters. Use letters, numbers, hyphens, and forward slashes." };
+    return {
+      valid: false,
+      error:
+        "Slug contains invalid characters. Use letters, numbers, hyphens, and forward slashes.",
+    };
   }
 
   return { valid: true };
@@ -121,7 +121,6 @@ export function applySlugPrefixPostfix(
   return { slug: result, changed };
 }
 
-
 // ── Frontmatter / content generation ────────────────────────────────────
 
 /**
@@ -130,8 +129,8 @@ export function applySlugPrefixPostfix(
 export function buildFrontmatter(
   options: AddContentOptions,
   contentType: ContentTypeInfo
-): Record<string, any> {
-  const fm: Record<string, any> = {
+): Record<string, unknown> {
+  const fm: Record<string, unknown> = {
     title: options.title,
     description: options.description,
     slug: options.slug,
@@ -230,9 +229,7 @@ async function promptWithOptions(
   const requiredHint = required ? " (required)" : "";
 
   while (true) {
-    const input = await question(
-      `  ${label}${requiredHint}${defaultHint}: `
-    );
+    const input = await question(`  ${label}${requiredHint}${defaultHint}: `);
     const trimmed = input.trim();
 
     if (trimmed === "" && defaultValue) {
@@ -266,10 +263,7 @@ async function promptWithOptions(
  * Display a numbered list and let the user pick multiple or enter custom values (comma-separated).
  * Returns an array of strings.
  */
-async function promptMultipleWithOptions(
-  label: string,
-  existing: string[]
-): Promise<string[]> {
+async function promptMultipleWithOptions(label: string, existing: string[]): Promise<string[]> {
   if (existing.length > 0) {
     colorConsole.info(`\n  Existing ${label}:`);
     existing.forEach((item, i) => {
@@ -284,7 +278,10 @@ async function promptMultipleWithOptions(
 
   if (!trimmed) return [];
 
-  const parts = trimmed.split(",").map((s) => s.trim()).filter(Boolean);
+  const parts = trimmed
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   const result: string[] = [];
 
   for (const part of parts) {
@@ -332,12 +329,16 @@ export async function addContent(options: AddContentRunOptions = {}): Promise<vo
     try {
       contentTypes = await leadCMSDataService.getContentTypes();
     } catch {
-      colorConsole.error("❌ Failed to fetch content types from remote. Make sure you are authenticated.");
+      colorConsole.error(
+        "❌ Failed to fetch content types from remote. Make sure you are authenticated."
+      );
       process.exit(1);
     }
 
     if (contentTypes.length === 0) {
-      colorConsole.error("❌ No content types found on remote. Create at least one content type first.");
+      colorConsole.error(
+        "❌ No content types found on remote. Create at least one content type first."
+      );
       process.exit(1);
     }
 
@@ -346,7 +347,9 @@ export async function addContent(options: AddContentRunOptions = {}): Promise<vo
 
     if (contentTypes.length === 1) {
       selectedType = contentTypes[0];
-      colorConsole.info(`  Content type: ${colorConsole.highlight(selectedType.uid)} (${selectedType.format})`);
+      colorConsole.info(
+        `  Content type: ${colorConsole.highlight(selectedType.uid)} (${selectedType.format})`
+      );
     } else {
       colorConsole.info("  Select content type:");
       contentTypes.forEach((ct, i) => {
@@ -368,7 +371,9 @@ export async function addContent(options: AddContentRunOptions = {}): Promise<vo
     const prefixPostfix = applySlugPrefixPostfix(slug, selectedType);
     if (prefixPostfix.changed) {
       slug = prefixPostfix.slug;
-      colorConsole.info(`  Slug adjusted to match content type rules: ${colorConsole.highlight(slug)}`);
+      colorConsole.info(
+        `  Slug adjusted to match content type rules: ${colorConsole.highlight(slug)}`
+      );
     }
 
     // ── Step 5: Determine file path & check for existing ──────────────
@@ -428,7 +433,8 @@ export async function addContent(options: AddContentRunOptions = {}): Promise<vo
 
     if (selectedType.supportsComments) {
       const commentsInput = await question("  Allow comments? (y/n) [y]: ");
-      allowComments = commentsInput.trim() === "" || commentsInput.trim().toLowerCase().startsWith("y");
+      allowComments =
+        commentsInput.trim() === "" || commentsInput.trim().toLowerCase().startsWith("y");
     }
 
     // ── Step 9: Generate file content ──────────────────────────────────

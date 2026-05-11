@@ -8,5 +8,5 @@ import { slugify as transliterateSlugify } from "transliteration";
  * Example: "Онбординг при регистрации" → "onbording-pri-registracii"
  */
 export function slugify(value: string): string {
-    return transliterateSlugify(value, { lowercase: true, separator: "-" });
+  return transliterateSlugify(value, { lowercase: true, separator: "-" });
 }

@@ -1,10 +1,19 @@
 import fs from "fs/promises";
 import path from "path";
 import axios, { AxiosResponse } from "axios";
-import { getConfig, type LeadCMSConfig } from "../lib/config.js";
+import { getConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
 import { leadCMSDataService, type UserIdentity } from "../lib/data-service.js";
 import type { RemoteContext } from "../lib/remote-context.js";
+
+interface ScriptError extends Error {
+  code?: string;
+  response?: {
+    status?: number;
+    data?: { detail?: string; title?: string; message?: string; [key: string]: unknown } | null;
+  };
+  status?: number;
+}
 
 // Type definitions
 interface ContentType {
@@ -21,6 +30,7 @@ interface ContentItem {
   createdAt?: string;
   updatedAt?: string;
   body?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 }
 
@@ -72,9 +82,13 @@ export async function fetchContentTypes(baseUrl?: string): Promise<Record<string
       typeMap[t.uid] = t.format;
     }
 
-    logger.verbose(`[LeadCMS] Detected ${Object.keys(typeMap).length} content types:`, Object.keys(typeMap).join(', '));
+    logger.verbose(
+      `[LeadCMS] Detected ${Object.keys(typeMap).length} content types:`,
+      Object.keys(typeMap).join(", ")
+    );
     return typeMap;
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as ScriptError;
     console.error(`[LeadCMS] Failed to fetch content types:`, error.message);
     return {};
   }
@@ -96,7 +110,9 @@ export function extractMediaUrlsFromContent(content: ContentItem): string[] {
 
   const foundUrls = Array.from(urls);
   if (foundUrls.length > 0) {
-    logger.verbose(`[LeadCMS] Extracted ${foundUrls.length} media URL(s) from content: ${content.slug || content.id}`);
+    logger.verbose(
+      `[LeadCMS] Extracted ${foundUrls.length} media URL(s) from content: ${content.slug || content.id}`
+    );
   }
 
   return foundUrls;
@@ -107,7 +123,7 @@ export async function downloadMediaFileDirect(
   mediaUrl: string,
   destPath: string,
   leadCMSUrl: string,
-  leadCMSApiKey?: string
+  _leadCMSApiKey?: string
 ): Promise<boolean> {
   await fs.mkdir(path.dirname(destPath), { recursive: true });
 
@@ -120,8 +136,7 @@ export async function downloadMediaFileDirect(
   try {
     const res = await axios.get(fullUrl, {
       responseType: "arraybuffer",
-      validateStatus: (status) =>
-        (status >= 200 && status < 300) || status === 404,
+      validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
     });
 
     if (res.status === 404) {
@@ -129,13 +144,14 @@ export async function downloadMediaFileDirect(
       try {
         await fs.unlink(destPath);
         logger.verbose(`Deleted missing file: ${destPath}`);
-      } catch { }
+      } catch {}
       return false;
     }
 
     await fs.writeFile(destPath, res.data);
     return true;
-  } catch (err: any) {
+  } catch (_err: unknown) {
+    const err = _err as ScriptError;
     console.error(`Failed to download ${mediaUrl}:`, err.message);
     throw err;
   }
@@ -160,7 +176,7 @@ export type { ContentItem };
 export async function resolveIdentity(overrideApiKey?: string): Promise<UserIdentity | null> {
   const effectiveApiKey = overrideApiKey ?? leadCMSApiKey;
   if (!effectiveApiKey) {
-    console.log('👤 Running in anonymous mode');
+    console.log("👤 Running in anonymous mode");
     return null;
   }
 
@@ -168,19 +184,20 @@ export async function resolveIdentity(overrideApiKey?: string): Promise<UserIden
     const user = await leadCMSDataService.getUserMe();
     console.log(`🔑 Authenticated as ${user.displayName} (${user.email})`);
     return user;
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as ScriptError;
     if (error.status === 401 || error.response?.status === 401) {
-      console.error('\n❌ Authentication failed: API key is invalid or expired');
-      console.error('\n💡 To fix this:');
-      console.error('   • Run: leadcms login');
-      console.error('   • Or update LEADCMS_API_KEY in your .env file');
+      console.error("\n❌ Authentication failed: API key is invalid or expired");
+      console.error("\n💡 To fix this:");
+      console.error("   • Run: leadcms login");
+      console.error("   • Or update LEADCMS_API_KEY in your .env file");
       process.exit(1);
     }
 
     // Non-auth errors (network, server down) – warn but proceed
     console.warn(`⚠️  Could not verify identity: ${error.message}`);
-    console.log('🔑 Proceeding with configured API key');
-    return { displayName: 'Unknown', email: '', userName: '' };
+    console.log("🔑 Proceeding with configured API key");
+    return { displayName: "Unknown", email: "", userName: "" };
   }
 }
 
@@ -196,10 +213,10 @@ export async function requireAuthenticatedUser(overrideApiKey?: string): Promise
   const identity = await resolveIdentity(overrideApiKey);
 
   if (!identity) {
-    console.error('\n❌ This operation requires authentication.');
-    console.error('\n💡 To authenticate:');
-    console.error('   • Set LEADCMS_API_KEY in your .env file');
-    console.error('   • Or run: leadcms login');
+    console.error("\n❌ This operation requires authentication.");
+    console.error("\n💡 To authenticate:");
+    console.error("   • Set LEADCMS_API_KEY in your .env file");
+    console.error("   • Or run: leadcms login");
     process.exit(1);
   }
 
@@ -226,10 +243,10 @@ export function configureDataServiceForRemote(ctx: RemoteContext): void {
  */
 export function requireApiKeyOrExit(): void {
   if (!leadCMSApiKey) {
-    console.error('\n❌ Push operations require authentication.');
-    console.error('\n💡 To push changes, you need to configure an API key:');
-    console.error('   • Set LEADCMS_API_KEY in your .env file');
-    console.error('   • Or run: leadcms login');
+    console.error("\n❌ Push operations require authentication.");
+    console.error("\n💡 To push changes, you need to configure an API key:");
+    console.error("   • Set LEADCMS_API_KEY in your .env file");
+    console.error("   • Or run: leadcms login");
     process.exit(1);
   }
 }

@@ -12,10 +12,7 @@ import {
   getCommentsForContentStrict,
   getCommentsTreeForContent,
 } from "../src/lib/cms.js";
-import type {
-  Comment,
-  StoredComment,
-} from "../src/lib/comment-types.js";
+import type { Comment, StoredComment } from "../src/lib/comment-types.js";
 import { createTestConfig } from "./test-helpers";
 
 const TEST_COMMENTS_DIR = path.resolve(".leadcms-test/comments");
@@ -34,13 +31,15 @@ function saveTestContent(slug: string, id: number, language = "en") {
 
 // Mock configuration for tests - must be before imports that use getConfig at module load
 jest.mock("../src/lib/config.js", () => ({
-  getConfig: jest.fn(() => createTestConfig({
-    apiKey: "test-api-key",
-    contentDir: ".leadcms-test/content",
-    mediaDir: ".leadcms-test/media",
-    commentsDir: ".leadcms-test/comments",
-    enableDrafts: false,
-  })),
+  getConfig: jest.fn(() =>
+    createTestConfig({
+      apiKey: "test-api-key",
+      contentDir: ".leadcms-test/content",
+      mediaDir: ".leadcms-test/media",
+      commentsDir: ".leadcms-test/comments",
+      enableDrafts: false,
+    })
+  ),
   isPreviewMode: jest.fn(() => false),
 }));
 
@@ -224,14 +223,24 @@ describe("Comments Feature", () => {
     it("should separate same entity by language", () => {
       const comments: Comment[] = [
         {
-          id: 1, parentId: null, authorName: "User 1",
-          body: "English comment", createdAt: "2024-01-01T00:00:00Z",
-          commentableId: 10, commentableType: "Content", language: "en",
+          id: 1,
+          parentId: null,
+          authorName: "User 1",
+          body: "English comment",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en",
         },
         {
-          id: 2, parentId: null, authorName: "User 2",
-          body: "Spanish comment", createdAt: "2024-01-02T00:00:00Z",
-          commentableId: 10, commentableType: "Content", language: "es",
+          id: 2,
+          parentId: null,
+          authorName: "User 2",
+          body: "Spanish comment",
+          createdAt: "2024-01-02T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "es",
         },
       ];
 
@@ -276,19 +285,34 @@ describe("Comments Feature", () => {
     it("should sort comments by createdAt and id", async () => {
       const comments: StoredComment[] = [
         {
-          id: 3, parentId: null, authorName: "User 3", body: "Comment 3",
-          createdAt: "2024-01-03T00:00:00Z", commentableId: 10,
-          commentableType: "Content", language: "en-US",
+          id: 3,
+          parentId: null,
+          authorName: "User 3",
+          body: "Comment 3",
+          createdAt: "2024-01-03T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en-US",
         },
         {
-          id: 1, parentId: null, authorName: "User 1", body: "Comment 1",
-          createdAt: "2024-01-01T00:00:00Z", commentableId: 10,
-          commentableType: "Content", language: "en-US",
+          id: 1,
+          parentId: null,
+          authorName: "User 1",
+          body: "Comment 1",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en-US",
         },
         {
-          id: 2, parentId: null, authorName: "User 2", body: "Comment 2",
-          createdAt: "2024-01-02T00:00:00Z", commentableId: 10,
-          commentableType: "Content", language: "en-US",
+          id: 2,
+          parentId: null,
+          authorName: "User 2",
+          body: "Comment 2",
+          createdAt: "2024-01-02T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en-US",
         },
       ];
 
@@ -305,9 +329,14 @@ describe("Comments Feature", () => {
     it("should remove file when saving empty comments array", async () => {
       await saveCommentsForEntity("Content", 10, "en", [
         {
-          id: 1, parentId: null, authorName: "Test", body: "Test",
-          createdAt: "2024-01-01T00:00:00Z", commentableId: 10,
-          commentableType: "Content", language: "en-US",
+          id: 1,
+          parentId: null,
+          authorName: "Test",
+          body: "Test",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en-US",
         },
       ]);
 
@@ -321,9 +350,14 @@ describe("Comments Feature", () => {
     it("should load existing comments from file", async () => {
       const comments: StoredComment[] = [
         {
-          id: 1, parentId: null, authorName: "Test", body: "Test",
-          createdAt: "2024-01-01T00:00:00Z", commentableId: 10,
-          commentableType: "Content", language: "en-US",
+          id: 1,
+          parentId: null,
+          authorName: "Test",
+          body: "Test",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en-US",
         },
       ];
 
@@ -343,9 +377,14 @@ describe("Comments Feature", () => {
     it("should save non-default language comments in language subdirectory", async () => {
       const comments: StoredComment[] = [
         {
-          id: 1, parentId: null, authorName: "Usuario", body: "Comentario",
-          createdAt: "2024-01-01T00:00:00Z", commentableId: 10,
-          commentableType: "Content", language: "es",
+          id: 1,
+          parentId: null,
+          authorName: "Usuario",
+          body: "Comentario",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "es",
         },
       ];
 
@@ -364,14 +403,24 @@ describe("Comments Feature", () => {
     it("should delete comment by ID", async () => {
       const comments: StoredComment[] = [
         {
-          id: 1, parentId: null, authorName: "User 1", body: "Comment 1",
-          createdAt: "2024-01-01T00:00:00Z", commentableId: 10,
-          commentableType: "Content", language: "en-US",
+          id: 1,
+          parentId: null,
+          authorName: "User 1",
+          body: "Comment 1",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en-US",
         },
         {
-          id: 2, parentId: null, authorName: "User 2", body: "Comment 2",
-          createdAt: "2024-01-02T00:00:00Z", commentableId: 10,
-          commentableType: "Content", language: "en-US",
+          id: 2,
+          parentId: null,
+          authorName: "User 2",
+          body: "Comment 2",
+          createdAt: "2024-01-02T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en-US",
         },
       ];
 
@@ -390,9 +439,14 @@ describe("Comments Feature", () => {
     it("should remove file if last comment is deleted", async () => {
       const comments: StoredComment[] = [
         {
-          id: 1, parentId: null, authorName: "Test", body: "Test",
-          createdAt: "2024-01-01T00:00:00Z", commentableId: 10,
-          commentableType: "Content", language: "en-US",
+          id: 1,
+          parentId: null,
+          authorName: "Test",
+          body: "Test",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en-US",
         },
       ];
 
@@ -408,9 +462,14 @@ describe("Comments Feature", () => {
     beforeEach(async () => {
       const comments: StoredComment[] = [
         {
-          id: 1, parentId: null, authorName: "Test User", body: "Test comment",
-          createdAt: "2024-01-01T00:00:00Z", commentableId: 10,
-          commentableType: "Content", language: "en-US",
+          id: 1,
+          parentId: null,
+          authorName: "Test User",
+          body: "Test comment",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en-US",
         },
       ];
 
@@ -442,9 +501,14 @@ describe("Comments Feature", () => {
     beforeEach(async () => {
       const comments: StoredComment[] = [
         {
-          id: 1, parentId: null, authorName: "Test User", body: "Content comment",
-          createdAt: "2024-01-01T00:00:00Z", commentableId: 15,
-          commentableType: "Content", language: "en-US",
+          id: 1,
+          parentId: null,
+          authorName: "Test User",
+          body: "Content comment",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 15,
+          commentableType: "Content",
+          language: "en-US",
         },
       ];
 
@@ -467,9 +531,14 @@ describe("Comments Feature", () => {
     it("should resolve comments for localized content slug", async () => {
       const comments: StoredComment[] = [
         {
-          id: 2, parentId: null, authorName: "French User", body: "Bonjour",
-          createdAt: "2024-01-01T00:00:00Z", commentableId: 21,
-          commentableType: "Content", language: "fr",
+          id: 2,
+          parentId: null,
+          authorName: "French User",
+          body: "Bonjour",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 21,
+          commentableType: "Content",
+          language: "fr",
         },
       ];
 
@@ -493,9 +562,14 @@ describe("Comments Feature", () => {
     beforeEach(async () => {
       const comments: StoredComment[] = [
         {
-          id: 1, parentId: null, authorName: "Test User", body: "Test comment",
-          createdAt: "2024-01-01T00:00:00Z", commentableId: 10,
-          commentableType: "Content", language: "en-US",
+          id: 1,
+          parentId: null,
+          authorName: "Test User",
+          body: "Test comment",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en-US",
         },
       ];
 
@@ -509,9 +583,7 @@ describe("Comments Feature", () => {
     });
 
     it("should throw error for non-existent entity", () => {
-      expect(() => getCommentsStrict("Content", 999)).toThrow(
-        /Comments file not found/
-      );
+      expect(() => getCommentsStrict("Content", 999)).toThrow(/Comments file not found/);
     });
 
     it("should throw error for invalid JSON", () => {
@@ -519,9 +591,7 @@ describe("Comments Feature", () => {
       fs.mkdirSync(dirPath, { recursive: true });
       fs.writeFileSync(path.join(dirPath, "20.json"), "invalid json");
 
-      expect(() => getCommentsStrict("Content", 20)).toThrow(
-        /Failed to read or parse/
-      );
+      expect(() => getCommentsStrict("Content", 20)).toThrow(/Failed to read or parse/);
     });
   });
 
@@ -529,9 +599,14 @@ describe("Comments Feature", () => {
     beforeEach(async () => {
       const comments: StoredComment[] = [
         {
-          id: 1, parentId: null, authorName: "Test User", body: "Content comment",
-          createdAt: "2024-01-01T00:00:00Z", commentableId: 15,
-          commentableType: "Content", language: "en-US",
+          id: 1,
+          parentId: null,
+          authorName: "Test User",
+          body: "Content comment",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 15,
+          commentableType: "Content",
+          language: "en-US",
         },
       ];
 
@@ -551,9 +626,7 @@ describe("Comments Feature", () => {
     });
 
     it("should throw error for content without comments", () => {
-      expect(() => getCommentsForContentStrict(999)).toThrow(
-        /Comments file not found/
-      );
+      expect(() => getCommentsForContentStrict(999)).toThrow(/Comments file not found/);
     });
 
     it("should throw error when content slug cannot be resolved", () => {
@@ -606,11 +679,14 @@ describe("Comments Feature", () => {
     it("should handle comments with special characters in body", async () => {
       const comments: StoredComment[] = [
         {
-          id: 1, parentId: null,
+          id: 1,
+          parentId: null,
           authorName: 'User "Special"',
           body: 'Comment with "quotes" and \\backslashes\\ and\nnewlines',
-          createdAt: "2024-01-01T00:00:00Z", commentableId: 10,
-          commentableType: "Content", language: "en-US",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en-US",
         },
       ];
 
@@ -624,14 +700,24 @@ describe("Comments Feature", () => {
     it("should handle nested comments (parent-child relationships)", async () => {
       const comments: StoredComment[] = [
         {
-          id: 1, parentId: null, authorName: "Parent User",
-          body: "Parent comment", createdAt: "2024-01-01T00:00:00Z",
-          commentableId: 10, commentableType: "Content", language: "en-US",
+          id: 1,
+          parentId: null,
+          authorName: "Parent User",
+          body: "Parent comment",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en-US",
         },
         {
-          id: 2, parentId: 1, authorName: "Child User",
-          body: "Child comment", createdAt: "2024-01-02T00:00:00Z",
-          commentableId: 10, commentableType: "Content", language: "en-US",
+          id: 2,
+          parentId: 1,
+          authorName: "Child User",
+          body: "Child comment",
+          createdAt: "2024-01-02T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en-US",
         },
       ];
 
@@ -646,17 +732,27 @@ describe("Comments Feature", () => {
     it("should handle multiple commentable types", async () => {
       const contentComments: StoredComment[] = [
         {
-          id: 1, parentId: null, authorName: "User 1", body: "Content comment",
-          createdAt: "2024-01-01T00:00:00Z", commentableId: 10,
-          commentableType: "Content", language: "en-US",
+          id: 1,
+          parentId: null,
+          authorName: "User 1",
+          body: "Content comment",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en-US",
         },
       ];
 
       const contactComments: StoredComment[] = [
         {
-          id: 2, parentId: null, authorName: "User 2", body: "Contact comment",
-          createdAt: "2024-01-01T00:00:00Z", commentableId: 5,
-          commentableType: "Contact", language: "en-US",
+          id: 2,
+          parentId: null,
+          authorName: "User 2",
+          body: "Contact comment",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 5,
+          commentableType: "Contact",
+          language: "en-US",
         },
       ];
 
@@ -731,9 +827,14 @@ describe("Comments Feature", () => {
     it("should handle updates to existing comments", async () => {
       const initial: StoredComment[] = [
         {
-          id: 1, parentId: null, authorName: "User", body: "Initial comment",
-          createdAt: "2024-01-01T00:00:00Z", commentableId: 10,
-          commentableType: "Content", language: "en-US",
+          id: 1,
+          parentId: null,
+          authorName: "User",
+          body: "Initial comment",
+          createdAt: "2024-01-01T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en-US",
         },
       ];
 
@@ -741,9 +842,15 @@ describe("Comments Feature", () => {
 
       const updated: StoredComment[] = [
         {
-          id: 1, parentId: null, authorName: "User", body: "Updated comment",
-          createdAt: "2024-01-01T00:00:00Z", updatedAt: "2024-01-02T00:00:00Z",
-          commentableId: 10, commentableType: "Content", language: "en-US",
+          id: 1,
+          parentId: null,
+          authorName: "User",
+          body: "Updated comment",
+          createdAt: "2024-01-01T00:00:00Z",
+          updatedAt: "2024-01-02T00:00:00Z",
+          commentableId: 10,
+          commentableType: "Content",
+          language: "en-US",
         },
       ];
 

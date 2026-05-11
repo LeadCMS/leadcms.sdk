@@ -1,35 +1,37 @@
-import * as path from 'path';
+import * as path from "path";
 
 // Test constants
-export const TEST_USER_UID = '550e8400-e29b-41d4-a716-446655440000';
-export const TEST_USER_UID_2 = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+export const TEST_USER_UID = "550e8400-e29b-41d4-a716-446655440000";
+export const TEST_USER_UID_2 = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 
 // Path constants for fixtures
-export const FIXTURES_DIR = path.join(__dirname, 'fixtures');
-export const FIXTURES_CONTENT_DIR = path.join(FIXTURES_DIR, '.leadcms/content');
-export const FIXTURES_MEDIA_DIR = path.join(FIXTURES_DIR, 'public/media');
+export const FIXTURES_DIR = path.join(__dirname, "fixtures");
+export const FIXTURES_CONTENT_DIR = path.join(FIXTURES_DIR, ".leadcms/content");
+export const FIXTURES_MEDIA_DIR = path.join(FIXTURES_DIR, "public/media");
 
 // Global config state for testing
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let mockGlobalConfig: any = {};
 
 // Helper to get the current test config
 const getTestConfig = () => ({
-  url: 'https://test.leadcms.com',
-  apiKey: 'test-api-key',
-  defaultLanguage: 'en',
+  url: "https://test.leadcms.com",
+  apiKey: "test-api-key",
+  defaultLanguage: "en",
   contentDir: FIXTURES_CONTENT_DIR,
   mediaDir: FIXTURES_MEDIA_DIR,
-  commentsDir: path.join(FIXTURES_DIR, '.leadcms/comments'),
-  emailTemplatesDir: path.join(FIXTURES_DIR, '.leadcms/email-templates'),
-  settingsDir: path.join(FIXTURES_DIR, '.leadcms/settings'),
+  commentsDir: path.join(FIXTURES_DIR, ".leadcms/comments"),
+  emailTemplatesDir: path.join(FIXTURES_DIR, ".leadcms/email-templates"),
+  settingsDir: path.join(FIXTURES_DIR, ".leadcms/settings"),
   enableDrafts: true,
   preview: mockGlobalConfig.preview,
 });
 
 // Mock the config module to use our test fixtures
-jest.mock('../src/lib/config', () => ({
+jest.mock("../src/lib/config", () => ({
   getConfig: () => getTestConfig(),
   loadConfig: () => getTestConfig(),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   configure: (config: any) => {
     mockGlobalConfig = config || {};
   },
@@ -40,27 +42,27 @@ jest.mock('../src/lib/config', () => ({
     }
 
     // Check LEADCMS_PREVIEW environment variable for explicit override
-    if (process.env.LEADCMS_PREVIEW === 'false') {
+    if (process.env.LEADCMS_PREVIEW === "false") {
       return false;
     }
-    if (process.env.LEADCMS_PREVIEW === 'true') {
+    if (process.env.LEADCMS_PREVIEW === "true") {
       return true;
     }
 
     // Default to development mode behavior
-    return process.env.NODE_ENV === 'development';
+    return process.env.NODE_ENV === "development";
   },
 }));
 
 // Set up environment variables for tests
-process.env.LEADCMS_URL = 'https://test.leadcms.com';
-process.env.LEADCMS_API_KEY = 'test-api-key';
-process.env.LEADCMS_DEFAULT_LANGUAGE = 'en';
+process.env.LEADCMS_URL = "https://test.leadcms.com";
+process.env.LEADCMS_API_KEY = "test-api-key";
+process.env.LEADCMS_DEFAULT_LANGUAGE = "en";
 // Explicitly set NODE_ENV to test to ensure consistent behavior
-process.env.NODE_ENV = 'test';
+process.env.NODE_ENV = "test";
 
 // Test constants for consistent time testing
-export const MOCK_CURRENT_TIME = '2024-10-29T12:00:00Z';
+export const MOCK_CURRENT_TIME = "2024-10-29T12:00:00Z";
 export const MOCK_CURRENT_TIME_MS = new Date(MOCK_CURRENT_TIME).getTime();
 
 // Mock Date.now for consistent testing

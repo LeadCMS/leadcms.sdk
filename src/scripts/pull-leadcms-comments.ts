@@ -2,10 +2,7 @@ import "dotenv/config";
 import fs from "fs/promises";
 import path from "path";
 import axios, { AxiosResponse } from "axios";
-import {
-  leadCMSUrl,
-  leadCMSApiKey,
-} from "./leadcms-helpers.js";
+import { leadCMSUrl, leadCMSApiKey } from "./leadcms-helpers.js";
 import type {
   Comment,
   CommentSyncResponse,
@@ -15,11 +12,17 @@ import type {
 import { getConfig } from "../lib/config.js";
 import { isValidLocaleCode } from "../lib/locale-utils.js";
 import { logger } from "../lib/logger.js";
-import {
-  syncTokenPath,
-  type RemoteContext,
-  type MetadataMap,
-} from "../lib/remote-context.js";
+
+interface ScriptError extends Error {
+  code?: string;
+  response?: {
+    status?: number;
+    data?: { detail?: string; title?: string; message?: string; [key: string]: unknown } | null;
+  };
+  status?: number;
+}
+
+import { syncTokenPath, type RemoteContext, type MetadataMap } from "../lib/remote-context.js";
 
 // Load config to get commentsDir
 const config = getConfig();
@@ -29,20 +32,27 @@ const COMMENTS_DIR = path.resolve(config.commentsDir);
 // New location: token lives inside the commentsDir.
 const COMMENT_SYNC_TOKEN_PATH = path.join(COMMENTS_DIR, ".sync-token");
 // Legacy location (SDK ≤ 3.2): token lived in the parent of commentsDir.
-const LEGACY_COMMENT_SYNC_TOKEN_PATH = path.join(path.dirname(COMMENTS_DIR), "comment-sync-token.txt");
+const LEGACY_COMMENT_SYNC_TOKEN_PATH = path.join(
+  path.dirname(COMMENTS_DIR),
+  "comment-sync-token.txt"
+);
 
 /**
  * Read the last comment sync token from disk.
  * Checks new location first, then falls back to legacy for migration.
  * When remoteCtx is provided, reads from the remote-specific state directory.
  */
-async function readCommentSyncToken(remoteCtx?: RemoteContext): Promise<{ token: string | undefined; migrated: boolean }> {
+async function readCommentSyncToken(
+  remoteCtx?: RemoteContext
+): Promise<{ token: string | undefined; migrated: boolean }> {
   if (remoteCtx) {
     const tokenPath = syncTokenPath(remoteCtx, "comments");
     try {
       const token = (await fs.readFile(tokenPath, "utf8")).trim();
       if (token) return { token, migrated: false };
-    } catch { /* not found */ }
+    } catch {
+      /* not found */
+    }
 
     // Migration: check old single-remote path and move to per-remote path
     try {
@@ -51,14 +61,18 @@ async function readCommentSyncToken(remoteCtx?: RemoteContext): Promise<{ token:
         logger.verbose(`[SYNC] Migrating comment sync token to remote "${remoteCtx.name}"`);
         return { token: legacyToken, migrated: true };
       }
-    } catch { /* not found */ }
+    } catch {
+      /* not found */
+    }
     return { token: undefined, migrated: false };
   }
 
   try {
     const token = (await fs.readFile(COMMENT_SYNC_TOKEN_PATH, "utf8")).trim();
     if (token) return { token, migrated: false };
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   try {
     const legacy = (await fs.readFile(LEGACY_COMMENT_SYNC_TOKEN_PATH, "utf8")).trim();
@@ -66,7 +80,9 @@ async function readCommentSyncToken(remoteCtx?: RemoteContext): Promise<{ token:
       logger.verbose(`[SYNC] Migrating comment sync token from legacy location`);
       return { token: legacy, migrated: true };
     }
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   return { token: undefined, migrated: false };
 }
@@ -92,7 +108,9 @@ async function writeCommentSyncToken(token: string, remoteCtx?: RemoteContext): 
 async function cleanupLegacyCommentSyncToken(): Promise<void> {
   try {
     await fs.unlink(LEGACY_COMMENT_SYNC_TOKEN_PATH);
-  } catch { /* not found — ok */ }
+  } catch {
+    /* not found — ok */
+  }
 }
 
 /**
@@ -150,7 +168,8 @@ async function pullCommentSync(syncToken?: string): Promise<CommentSyncResult> {
       nextSyncToken = newSyncToken;
       token = newSyncToken;
       page++;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ScriptError;
       console.error(`[PULL_COMMENT_SYNC] Failed on page ${page}:`, error.message);
 
       // Provide helpful error messages based on status code
@@ -226,12 +245,24 @@ function toStoredComment(comment: Comment): StoredComment {
  * Ensures consistent JSON output regardless of the order properties arrive from the API.
  */
 const STORED_COMMENT_KEY_ORDER: (keyof StoredComment)[] = [
-  'id', 'createdAt', 'updatedAt',
-  'parentId', 'authorName', 'authorEmail', 'body',
-  'status', 'answerStatus', 'publishedAt',
-  'commentableId', 'commentableType',
-  'avatarUrl', 'language', 'translationKey',
-  'contactId', 'source', 'tags',
+  "id",
+  "createdAt",
+  "updatedAt",
+  "parentId",
+  "authorName",
+  "authorEmail",
+  "body",
+  "status",
+  "answerStatus",
+  "publishedAt",
+  "commentableId",
+  "commentableType",
+  "avatarUrl",
+  "language",
+  "translationKey",
+  "contactId",
+  "source",
+  "tags",
 ];
 
 /**
@@ -241,7 +272,7 @@ function normalizeCommentKeys(comment: StoredComment): StoredComment {
   const normalized = {} as StoredComment;
   for (const key of STORED_COMMENT_KEY_ORDER) {
     if (key in comment) {
-      (normalized as any)[key] = comment[key];
+      (normalized as unknown as Record<string, unknown>)[key] = comment[key];
     }
   }
   return normalized;
@@ -360,7 +391,8 @@ async function deleteComment(commentId: number): Promise<void> {
         await searchAndDeleteInTypeDirectory(itemPath, item, config.defaultLanguage, commentId);
       }
     }
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as ScriptError;
     if (error.code !== "ENOENT") {
       throw error;
     }
@@ -392,7 +424,9 @@ async function searchAndDeleteInTypeDirectory(
     if (filtered.length < originalLength) {
       // Found and removed the comment
       await saveCommentsForEntity(commentableType, commentableId, language, filtered);
-      console.log(`   🗑️  Comment #${commentId} from ${commentableType}/${commentableId} (${language}) (deleted on remote)`);
+      console.log(
+        `   🗑️  Comment #${commentId} from ${commentableType}/${commentableId} (${language}) (deleted on remote)`
+      );
       return; // Comment found and deleted, we're done
     }
   }
@@ -415,24 +449,23 @@ function groupCommentsByEntityAndLanguage(comments: Comment[]): Map<string, Comm
   return grouped;
 }
 
-
-
 /**
  * Check CMS config to check if comments are supported
  */
 async function fetchCMSConfigForEntity(): Promise<boolean> {
   try {
-    const { default: axios } = await import('axios');
-    const { setCMSConfig, isCommentsSupported } = await import('../lib/cms-config-types.js');
+    const { default: axios } = await import("axios");
+    const { setCMSConfig, isCommentsSupported } = await import("../lib/cms-config-types.js");
 
-    const configUrl = new URL('/api/config', leadCMSUrl).toString();
+    const configUrl = new URL("/api/config", leadCMSUrl).toString();
     const response = await axios.get(configUrl, { timeout: 10000 });
 
     if (response.data) {
       setCMSConfig(response.data);
       return isCommentsSupported();
     }
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as ScriptError;
     console.warn(`[PULL_COMMENT_SYNC] Could not fetch CMS config: ${error.message}`);
     console.warn(`[PULL_COMMENT_SYNC] Assuming comments are supported (backward compatibility)`);
   }
@@ -445,7 +478,7 @@ async function fetchCMSConfigForEntity(): Promise<boolean> {
 export async function main(remoteCtx?: RemoteContext): Promise<void> {
   logger.verbose(`[ENV] LeadCMS URL: ${leadCMSUrl}`);
   logger.verbose(
-    `[ENV] LeadCMS API Key: ${leadCMSApiKey ? 'CONFIGURED (ignored for anonymous comment pull)' : 'NOT_SET'}`
+    `[ENV] LeadCMS API Key: ${leadCMSApiKey ? "CONFIGURED (ignored for anonymous comment pull)" : "NOT_SET"}`
   );
   logger.verbose(`[ENV] Comments Dir: ${COMMENTS_DIR}`);
 
@@ -454,7 +487,9 @@ export async function main(remoteCtx?: RemoteContext): Promise<void> {
   const commentsSupported = await fetchCMSConfigForEntity();
 
   if (!commentsSupported) {
-    console.log(`⏭️  Comments entity not supported by this LeadCMS instance - skipping comment sync`);
+    console.log(
+      `⏭️  Comments entity not supported by this LeadCMS instance - skipping comment sync`
+    );
     return;
   }
 
@@ -462,7 +497,8 @@ export async function main(remoteCtx?: RemoteContext): Promise<void> {
 
   await fs.mkdir(COMMENTS_DIR, { recursive: true });
 
-  const { token: lastSyncToken, migrated: commentTokenMigrated } = await readCommentSyncToken(remoteCtx);
+  const { token: lastSyncToken, migrated: commentTokenMigrated } =
+    await readCommentSyncToken(remoteCtx);
 
   let items: Comment[] = [],
     deleted: number[] = [],
@@ -476,7 +512,8 @@ export async function main(remoteCtx?: RemoteContext): Promise<void> {
       logger.verbose("No comment sync token found. Doing full pull from LeadCMS...");
       ({ items, deleted, nextSyncToken } = await pullCommentSync(undefined));
     }
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as ScriptError;
     console.error(`\n❌ Failed to sync comments from LeadCMS`);
     console.error(`   Error: ${error.message}`);
 
@@ -493,7 +530,7 @@ export async function main(remoteCtx?: RemoteContext): Promise<void> {
   console.log(`\x1b[32mPulled ${items.length} comment items, ${deleted.length} deleted.\x1b[0m`);
 
   // Load per-remote metadata for multi-remote support
-  const rcModule = remoteCtx ? await import('../lib/remote-context.js') : undefined;
+  const rcModule = remoteCtx ? await import("../lib/remote-context.js") : undefined;
   let metadataMap: MetadataMap | undefined;
   if (remoteCtx && rcModule) {
     metadataMap = await rcModule.readMetadataMap(remoteCtx);
@@ -508,9 +545,9 @@ export async function main(remoteCtx?: RemoteContext): Promise<void> {
     const cfg = getConfig();
     if (cfg.defaultRemote) {
       const defaultStateDir = path.join(path.dirname(remoteCtx.stateDir), cfg.defaultRemote);
-      const defaultCtx: import('../lib/remote-context.js').RemoteContext = {
+      const defaultCtx: import("../lib/remote-context.js").RemoteContext = {
         name: cfg.defaultRemote,
-        url: cfg.remotes?.[cfg.defaultRemote]?.url || '',
+        url: cfg.remotes?.[cfg.defaultRemote]?.url || "",
         isDefault: true,
         stateDir: defaultStateDir,
       };
@@ -532,7 +569,7 @@ export async function main(remoteCtx?: RemoteContext): Promise<void> {
       // Create a map of existing comments by ID (or translationKey for id-less
       // comments from non-default remotes) for quick lookup
       const existingMap = new Map<number | string | undefined, StoredComment>(
-        existing.map((c) => [c.id ?? c.translationKey, c]),
+        existing.map((c) => [c.id ?? c.translationKey, c])
       );
 
       // Update or add comments
@@ -540,7 +577,12 @@ export async function main(remoteCtx?: RemoteContext): Promise<void> {
         // Update per-remote metadata with this comment's data
         if (remoteCtx && rcModule && metadataMap && comment.translationKey && comment.language) {
           if (comment.id != null) {
-            rcModule.setCommentRemoteId(metadataMap, comment.language, comment.translationKey, comment.id);
+            rcModule.setCommentRemoteId(
+              metadataMap,
+              comment.language,
+              comment.translationKey,
+              comment.id
+            );
           }
           rcModule.setMetadataForComment(metadataMap, comment.language, comment.translationKey, {
             createdAt: comment.createdAt,
@@ -555,8 +597,9 @@ export async function main(remoteCtx?: RemoteContext): Promise<void> {
         // If the comment has no default entry yet, strip these fields entirely.
         // The current remote's values are already saved in its per-remote maps.
         if (remoteCtx && !remoteCtx.isDefault && comment.translationKey && comment.language) {
-          const defaultEntry = defaultMetadataMap?.comments?.[comment.language]?.[comment.translationKey];
-          const { id, createdAt, updatedAt, ...rest } = commentToStore;
+          const defaultEntry =
+            defaultMetadataMap?.comments?.[comment.language]?.[comment.translationKey];
+          const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = commentToStore;
           commentToStore = {
             ...(defaultEntry?.id != null ? { id: Number(defaultEntry.id) } : {}),
             ...(defaultEntry?.createdAt ? { createdAt: defaultEntry.createdAt as string } : {}),

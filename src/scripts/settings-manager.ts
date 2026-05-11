@@ -15,6 +15,16 @@ import fs from "fs/promises";
 import path from "path";
 import axios, { AxiosResponse } from "axios";
 import { logger } from "../lib/logger.js";
+
+interface ScriptError extends Error {
+  code?: string;
+  response?: {
+    status?: number;
+    data?: { detail?: string; title?: string; message?: string; [key: string]: unknown } | null;
+  };
+  status?: number;
+}
+
 import {
   type SettingDetailsDto,
   type SettingImportDto,
@@ -42,7 +52,7 @@ import {
  */
 export async function fetchRemoteSettings(
   leadCMSUrl: string,
-  leadCMSApiKey: string,
+  leadCMSApiKey: string
 ): Promise<SettingDetailsDto[]> {
   if (!leadCMSUrl) throw new Error("LeadCMS URL is not configured.");
   if (!leadCMSApiKey) throw new Error("LeadCMS API key is required to fetch settings.");
@@ -90,7 +100,7 @@ export async function saveSettingsLocally(
   settings: SettingDetailsDto[],
   settingsDir: string,
   defaultLanguage: string,
-  targetName?: string,
+  targetName?: string
 ): Promise<void> {
   const reconcile = !targetName;
 
@@ -124,7 +134,7 @@ export async function saveSettingsLocally(
 async function saveSettingsForLanguage(
   settings: SettingDetailsDto[],
   baseDir: string,
-  reconcile: boolean,
+  reconcile: boolean
 ): Promise<void> {
   // Group by category
   const fileSettings = settings.filter((s) => isFileSettingKey(s.key));
@@ -259,7 +269,7 @@ async function removeEmptyParentDirs(dir: string, stopAt: string): Promise<void>
 
 async function reconcileMissingLanguages(
   settingsDir: string,
-  byLanguage: Map<string, SettingDetailsDto[]>,
+  byLanguage: Map<string, SettingDetailsDto[]>
 ): Promise<void> {
   const hasDefault = byLanguage.has("__default__");
   if (!hasDefault) {
@@ -296,7 +306,7 @@ async function reconcileMissingLanguages(
  */
 export async function readLocalSettings(
   settingsDir: string,
-  defaultLanguage: string,
+  _defaultLanguage: string
 ): Promise<LocalSettingValue[]> {
   const results: LocalSettingValue[] = [];
 
@@ -334,7 +344,7 @@ export async function readLocalSettings(
  */
 async function readLocalSettingsForDir(
   dir: string,
-  language: string | null,
+  language: string | null
 ): Promise<LocalSettingValue[]> {
   const results: LocalSettingValue[] = [];
 
@@ -407,7 +417,7 @@ async function readLocalSettingsForDir(
  */
 export function buildSettingsStatus(
   localSettings: LocalSettingValue[],
-  remoteSettings: SettingDetailsDto[],
+  remoteSettings: SettingDetailsDto[]
 ): SettingsStatusResult {
   const comparisons: SettingComparisonEntry[] = [];
   const seen = new Set<string>();
@@ -493,7 +503,7 @@ export function buildSettingsStatus(
  */
 export function buildSettingsPushOperations(
   localSettings: LocalSettingValue[],
-  remoteSettings: SettingDetailsDto[],
+  remoteSettings: SettingDetailsDto[]
 ): SettingPushOperation[] {
   const operations: SettingPushOperation[] = [];
 
@@ -573,7 +583,7 @@ export async function pushSettingsToRemote(
   operations: SettingPushOperation[],
   leadCMSUrl: string,
   leadCMSApiKey: string,
-  dryRun: boolean = false,
+  dryRun: boolean = false
 ): Promise<SettingImportResult | null> {
   const toImport = operations.filter((op) => op.type === "create" || op.type === "update");
   const toDelete = operations.filter((op) => op.type === "delete");
@@ -619,7 +629,7 @@ export async function pushSettingsToRemote(
           Authorization: `Bearer ${leadCMSApiKey}`,
           "Content-Type": "application/json",
         },
-      },
+      }
     );
 
     result = res.data;
@@ -633,7 +643,9 @@ export async function pushSettingsToRemote(
         deleteUrl.searchParams.set("language", op.language);
       }
 
-      logger.verbose(`[LeadCMS] Deleting setting ${op.key}${op.language ? ` [${op.language}]` : ""}`);
+      logger.verbose(
+        `[LeadCMS] Deleting setting ${op.key}${op.language ? ` [${op.language}]` : ""}`
+      );
 
       await axios.delete(deleteUrl.toString(), {
         headers: {
@@ -642,7 +654,8 @@ export async function pushSettingsToRemote(
       });
 
       result.updated++;
-    } catch (err: any) {
+    } catch (_err: unknown) {
+      const err = _err as ScriptError;
       result.failed++;
       const lang = op.language ? ` [${op.language}]` : "";
       const errMsg = err.response?.data?.detail || err.message || "Unknown error";

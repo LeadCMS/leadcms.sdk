@@ -1,5 +1,5 @@
-import matter from 'gray-matter';
-import { replaceApiMediaPaths, replaceLocalMediaPaths } from './content-transformation.js';
+import matter from "gray-matter";
+import { replaceApiMediaPaths, replaceLocalMediaPaths } from "./content-transformation.js";
 
 export interface EmailTemplateRemoteData {
   id?: number | string;
@@ -13,17 +13,18 @@ export interface EmailTemplateRemoteData {
   emailGroupId?: number | null;
   createdAt?: string;
   updatedAt?: string | null;
-  emailGroup?: Record<string, any> | null;
+  emailGroup?: Record<string, unknown> | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 }
 
 export interface EmailTemplateLocalData {
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   body: string;
 }
 
 const HTML_FRONTMATTER_REGEX = /^\s*<!--\s*---\n([\s\S]*?)\n---\s*-->\s*/;
-const SYSTEM_FIELDS = new Set(['bodyTemplate', 'isLocal', 'emailGroup', 'emailGroupId']);
+const SYSTEM_FIELDS = new Set(["bodyTemplate", "isLocal", "emailGroup", "emailGroupId"]);
 
 /**
  * Extract YAML frontmatter from an HTML comment block at the start of the file.
@@ -34,12 +35,12 @@ export function parseEmailTemplateFileContent(fileContent: string): EmailTemplat
     return { metadata: {}, body: fileContent };
   }
 
-  let metadata: Record<string, any> = {};
+  let metadata: Record<string, unknown> = {};
   try {
     const yamlWithDelimiters = `---\n${match[1]}\n---\n`;
     metadata = matter(yamlWithDelimiters).data || {};
-  } catch (error: any) {
-    console.warn('Failed to parse email template frontmatter:', error.message);
+  } catch (_error: unknown) {
+    console.warn("Failed to parse email template frontmatter:", (_error as Error).message);
   }
 
   const body = fileContent.slice(match[0].length);
@@ -49,9 +50,12 @@ export function parseEmailTemplateFileContent(fileContent: string): EmailTemplat
 /**
  * Build HTML file content with YAML frontmatter embedded in a leading comment.
  */
-export function buildEmailTemplateFileContent(metadata: Record<string, any>, body: string): string {
+export function buildEmailTemplateFileContent(
+  metadata: Record<string, unknown>,
+  body: string
+): string {
   const filteredMetadata = filterEmptyArrays(filterNullValues(metadata));
-  const yamlBlock = matter.stringify('', filteredMetadata).trim();
+  const yamlBlock = matter.stringify("", filteredMetadata).trim();
   const commentBlock = `<!--\n${yamlBlock}\n-->`;
 
   if (!body) {
@@ -65,11 +69,11 @@ export function buildEmailTemplateFileContent(metadata: Record<string, any>, bod
  * Transform a remote email template into a local HTML file with frontmatter.
  */
 export function transformEmailTemplateRemoteToLocalFormat(remote: EmailTemplateRemoteData): string {
-  if (!remote || typeof remote !== 'object') {
-    throw new Error('Invalid remote email template');
+  if (!remote || typeof remote !== "object") {
+    throw new Error("Invalid remote email template");
   }
 
-  const metadata: Record<string, any> = {};
+  const metadata: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(remote)) {
     if (!SYSTEM_FIELDS.has(key)) {
       metadata[key] = replaceApiMediaPaths(value);
@@ -81,20 +85,20 @@ export function transformEmailTemplateRemoteToLocalFormat(remote: EmailTemplateR
     metadata.groupName = remote.emailGroup.name;
   }
 
-  const body = replaceApiMediaPaths(remote.bodyTemplate || '');
+  const body = replaceApiMediaPaths(remote.bodyTemplate || "");
   return buildEmailTemplateFileContent(metadata, body);
 }
 
 /**
  * Transform local email template data into the API payload.
  */
-export function formatEmailTemplateForApi(local: EmailTemplateLocalData): Record<string, any> {
+export function formatEmailTemplateForApi(local: EmailTemplateLocalData): Record<string, unknown> {
   const metadata = local.metadata || {};
 
-  const payload: Record<string, any> = {
+  const payload: Record<string, unknown> = {
     name: metadata.name,
     subject: metadata.subject,
-    bodyTemplate: local.body || '',
+    bodyTemplate: local.body || "",
     category: metadata.category,
     fromEmail: metadata.fromEmail,
     fromName: metadata.fromName,
@@ -113,8 +117,8 @@ export function formatEmailTemplateForApi(local: EmailTemplateLocalData): Record
   return replaceLocalMediaPaths(payload);
 }
 
-function filterNullValues(obj: Record<string, any>): Record<string, any> {
-  const filtered: Record<string, any> = {};
+function filterNullValues(obj: Record<string, unknown>): Record<string, unknown> {
+  const filtered: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (value !== null && value !== undefined) {
       filtered[key] = value;
@@ -123,8 +127,8 @@ function filterNullValues(obj: Record<string, any>): Record<string, any> {
   return filtered;
 }
 
-function filterEmptyArrays(obj: Record<string, any>): Record<string, any> {
-  const filtered: Record<string, any> = {};
+function filterEmptyArrays(obj: Record<string, unknown>): Record<string, unknown> {
+  const filtered: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (Array.isArray(value) && value.length === 0) {
       continue;

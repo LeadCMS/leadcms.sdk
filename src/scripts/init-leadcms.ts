@@ -4,24 +4,33 @@
  * Guides users through setting up their LeadCMS configuration
  */
 
-import readline from 'readline';
-import fs from 'fs';
-import path from 'path';
-import axios from 'axios';
-import { type CMSConfigResponse, setCMSConfig } from '../lib/cms-config-types.js';
-import { authenticate, saveTokenToEnv } from '../lib/auth.js';
+import readline from "readline";
+import fs from "fs";
+import path from "path";
+import axios from "axios";
+import { type CMSConfigResponse, setCMSConfig } from "../lib/cms-config-types.js";
+import { authenticate, saveTokenToEnv } from "../lib/auth.js";
+
+interface ScriptError extends Error {
+  code?: string;
+  response?: {
+    status?: number;
+    data?: { detail?: string; title?: string; message?: string; [key: string]: unknown } | null;
+  };
+  status?: number;
+}
 
 // Default values
 const DEFAULTS = {
-  contentDir: '.leadcms/content',
-  commentsDir: '.leadcms/comments',
-  mediaDir: 'public/media',
-  emailTemplatesDir: '.leadcms/email-templates',
-  settingsDir: '.leadcms/settings',
+  contentDir: ".leadcms/content",
+  commentsDir: ".leadcms/comments",
+  mediaDir: "public/media",
+  emailTemplatesDir: ".leadcms/email-templates",
+  settingsDir: ".leadcms/settings",
 };
 
 interface UserConfig {
-  mode: 'single' | 'multi';
+  mode: "single" | "multi";
   url: string;
   apiKey: string;
   remoteName: string;
@@ -40,7 +49,7 @@ interface UserConfig {
  */
 async function fetchCMSConfig(url: string): Promise<CMSConfigResponse | null> {
   try {
-    const apiUrl = new URL('/api/config', url).toString();
+    const apiUrl = new URL("/api/config", url).toString();
 
     // /api/config is a public endpoint - never send Authorization header
     const response = await axios.get<CMSConfigResponse>(apiUrl, {
@@ -53,9 +62,10 @@ async function fetchCMSConfig(url: string): Promise<CMSConfigResponse | null> {
     }
 
     return response.data;
-  } catch (error: any) {
-    if (error.code === 'ECONNREFUSED') {
-      console.error('❌ Could not connect to LeadCMS. Please check the URL.');
+  } catch (_error: unknown) {
+    const error = _error as ScriptError;
+    if (error.code === "ECONNREFUSED") {
+      console.error("❌ Could not connect to LeadCMS. Please check the URL.");
     } else {
       console.error(`❌ Failed to fetch CMS config: ${error.message}`);
     }
@@ -69,7 +79,7 @@ async function fetchCMSConfig(url: string): Promise<CMSConfigResponse | null> {
 function isValidUrl(url: string): boolean {
   try {
     new URL(url);
-    return url.startsWith('http://') || url.startsWith('https://');
+    return url.startsWith("http://") || url.startsWith("https://");
   } catch {
     return false;
   }
@@ -79,75 +89,75 @@ function isValidUrl(url: string): boolean {
  * Create or update .env file
  */
 function updateEnvFile(config: UserConfig): void {
-  const envPath = path.join(process.cwd(), '.env');
-  const envLocalPath = path.join(process.cwd(), '.env.local');
+  const envPath = path.join(process.cwd(), ".env");
+  const envLocalPath = path.join(process.cwd(), ".env.local");
 
   // Check which file to use
   const targetEnvFile = fs.existsSync(envLocalPath) ? envLocalPath : envPath;
 
-  let envContent = '';
+  let envContent = "";
 
   // Read existing content if file exists
   if (fs.existsSync(targetEnvFile)) {
-    envContent = fs.readFileSync(targetEnvFile, 'utf-8');
+    envContent = fs.readFileSync(targetEnvFile, "utf-8");
   }
 
   // Parse existing env vars
   const envVars = new Map<string, string>();
-  envContent.split('\n').forEach(line => {
+  envContent.split("\n").forEach((line) => {
     const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith('#')) {
-      const [key, ...valueParts] = trimmed.split('=');
+    if (trimmed && !trimmed.startsWith("#")) {
+      const [key, ...valueParts] = trimmed.split("=");
       if (key) {
-        envVars.set(key.trim(), valueParts.join('=').trim());
+        envVars.set(key.trim(), valueParts.join("=").trim());
       }
     }
   });
 
   // Update with new values
-  const remoteEnvName = config.remoteName.toUpperCase().replace(/-/g, '_');
+  const remoteEnvName = config.remoteName.toUpperCase().replace(/-/g, "_");
   const remoteApiKey = `LEADCMS_REMOTE_${remoteEnvName}_API_KEY`;
   const remoteUrlKey = `LEADCMS_REMOTE_${remoteEnvName}_URL`;
 
-  if (config.mode === 'multi') {
-    envVars.delete('LEADCMS_URL');
+  if (config.mode === "multi") {
+    envVars.delete("LEADCMS_URL");
     envVars.set(remoteUrlKey, config.url);
 
     // Keep generic key as fallback for default remote, but prefer remote-specific key.
     if (config.apiKey) {
       envVars.set(remoteApiKey, config.apiKey);
-      envVars.set('LEADCMS_API_KEY', config.apiKey);
+      envVars.set("LEADCMS_API_KEY", config.apiKey);
     } else {
       envVars.delete(remoteApiKey);
-      envVars.delete('LEADCMS_API_KEY');
+      envVars.delete("LEADCMS_API_KEY");
     }
   } else {
-    envVars.set('LEADCMS_URL', config.url);
+    envVars.set("LEADCMS_URL", config.url);
     if (config.apiKey) {
-      envVars.set('LEADCMS_API_KEY', config.apiKey);
+      envVars.set("LEADCMS_API_KEY", config.apiKey);
     } else {
       // Remove API key if it exists but user wants anonymous mode
-      envVars.delete('LEADCMS_API_KEY');
+      envVars.delete("LEADCMS_API_KEY");
     }
   }
 
-  envVars.set('LEADCMS_DEFAULT_LANGUAGE', config.defaultLanguage);
+  envVars.set("LEADCMS_DEFAULT_LANGUAGE", config.defaultLanguage);
 
   // Build new content
   const newLines: string[] = [];
-  newLines.push('# LeadCMS Configuration');
-  newLines.push('# Generated by leadcms init');
+  newLines.push("# LeadCMS Configuration");
+  newLines.push("# Generated by leadcms init");
   if (!config.apiKey) {
-    newLines.push('# Running in anonymous mode - only public content accessible');
-    newLines.push('# Add LEADCMS_API_KEY for write operations and private content');
+    newLines.push("# Running in anonymous mode - only public content accessible");
+    newLines.push("# Add LEADCMS_API_KEY for write operations and private content");
   }
-  newLines.push('');
+  newLines.push("");
 
   envVars.forEach((value, key) => {
     newLines.push(`${key}=${value}`);
   });
 
-  fs.writeFileSync(targetEnvFile, newLines.join('\n') + '\n', 'utf-8');
+  fs.writeFileSync(targetEnvFile, newLines.join("\n") + "\n", "utf-8");
   console.log(`✅ Updated ${path.basename(targetEnvFile)}`);
 }
 
@@ -155,9 +165,9 @@ function updateEnvFile(config: UserConfig): void {
  * Create leadcms.config.json if needed
  */
 function createConfigFile(config: UserConfig): void {
-  const configPath = path.join(process.cwd(), 'leadcms.config.json');
+  const configPath = path.join(process.cwd(), "leadcms.config.json");
 
-  if (config.mode === 'multi') {
+  if (config.mode === "multi") {
     const remotes: Record<string, { url: string }> = {
       [config.remoteName]: { url: config.url },
     };
@@ -166,7 +176,7 @@ function createConfigFile(config: UserConfig): void {
       remotes[remote.name] = { url: remote.url };
     }
 
-    const configData: any = {
+    const configData: Record<string, unknown> = {
       remotes,
       defaultRemote: config.remoteName,
     };
@@ -191,11 +201,7 @@ function createConfigFile(config: UserConfig): void {
       configData.settingsDir = config.settingsDir;
     }
 
-    fs.writeFileSync(
-      configPath,
-      JSON.stringify(configData, null, 2) + '\n',
-      'utf-8'
-    );
+    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2) + "\n", "utf-8");
 
     console.log(`✅ Created leadcms.config.json`);
     return;
@@ -210,11 +216,11 @@ function createConfigFile(config: UserConfig): void {
     config.settingsDir !== DEFAULTS.settingsDir;
 
   if (!needsConfig) {
-    console.log('ℹ️  Using default directories, no leadcms.config.json needed.');
+    console.log("ℹ️  Using default directories, no leadcms.config.json needed.");
     return;
   }
 
-  const configData: any = {};
+  const configData: Record<string, unknown> = {};
 
   if (config.contentDir !== DEFAULTS.contentDir) {
     configData.contentDir = config.contentDir;
@@ -236,11 +242,7 @@ function createConfigFile(config: UserConfig): void {
     configData.settingsDir = config.settingsDir;
   }
 
-  fs.writeFileSync(
-    configPath,
-    JSON.stringify(configData, null, 2) + '\n',
-    'utf-8'
-  );
+  fs.writeFileSync(configPath, JSON.stringify(configData, null, 2) + "\n", "utf-8");
 
   console.log(`✅ Created leadcms.config.json`);
 }
@@ -252,23 +254,23 @@ function readExistingConfig(): Partial<UserConfig> {
   const existingConfig: Partial<UserConfig> = {};
 
   // Read from .env or .env.local
-  const envPath = path.join(process.cwd(), '.env');
-  const envLocalPath = path.join(process.cwd(), '.env.local');
+  const envPath = path.join(process.cwd(), ".env");
+  const envLocalPath = path.join(process.cwd(), ".env.local");
   const targetEnvFile = fs.existsSync(envLocalPath) ? envLocalPath : envPath;
 
   if (fs.existsSync(targetEnvFile)) {
-    const envContent = fs.readFileSync(targetEnvFile, 'utf-8');
-    envContent.split('\n').forEach(line => {
+    const envContent = fs.readFileSync(targetEnvFile, "utf-8");
+    envContent.split("\n").forEach((line) => {
       const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith('#')) {
-        const [key, ...valueParts] = trimmed.split('=');
-        const value = valueParts.join('=').trim();
+      if (trimmed && !trimmed.startsWith("#")) {
+        const [key, ...valueParts] = trimmed.split("=");
+        const value = valueParts.join("=").trim();
 
-        if (key.trim() === 'LEADCMS_URL' && value) {
+        if (key.trim() === "LEADCMS_URL" && value) {
           existingConfig.url = value;
-        } else if (key.trim() === 'LEADCMS_API_KEY' && value) {
+        } else if (key.trim() === "LEADCMS_API_KEY" && value) {
           existingConfig.apiKey = value;
-        } else if (key.trim() === 'LEADCMS_DEFAULT_LANGUAGE' && value) {
+        } else if (key.trim() === "LEADCMS_DEFAULT_LANGUAGE" && value) {
           existingConfig.defaultLanguage = value;
         }
       }
@@ -276,10 +278,10 @@ function readExistingConfig(): Partial<UserConfig> {
   }
 
   // Read from leadcms.config.json
-  const configPath = path.join(process.cwd(), 'leadcms.config.json');
+  const configPath = path.join(process.cwd(), "leadcms.config.json");
   if (fs.existsSync(configPath)) {
     try {
-      const configContent = fs.readFileSync(configPath, 'utf-8');
+      const configContent = fs.readFileSync(configPath, "utf-8");
       const jsonConfig = JSON.parse(configContent);
 
       if (jsonConfig.contentDir) {
@@ -288,9 +290,13 @@ function readExistingConfig(): Partial<UserConfig> {
       if (jsonConfig.defaultRemote) {
         existingConfig.remoteName = jsonConfig.defaultRemote;
       }
-      if (jsonConfig.remotes && jsonConfig.defaultRemote && jsonConfig.remotes[jsonConfig.defaultRemote]?.url) {
+      if (
+        jsonConfig.remotes &&
+        jsonConfig.defaultRemote &&
+        jsonConfig.remotes[jsonConfig.defaultRemote]?.url
+      ) {
         existingConfig.url = jsonConfig.remotes[jsonConfig.defaultRemote].url;
-        existingConfig.mode = 'multi';
+        existingConfig.mode = "multi";
       }
       if (jsonConfig.mediaDir) {
         existingConfig.mediaDir = jsonConfig.mediaDir;
@@ -305,7 +311,7 @@ function readExistingConfig(): Partial<UserConfig> {
       if (jsonConfig.settingsDir) {
         existingConfig.settingsDir = jsonConfig.settingsDir;
       }
-    } catch (error) {
+    } catch {
       // Ignore parse errors, will use defaults
     }
   }
@@ -331,33 +337,34 @@ export async function initLeadCMS(): Promise<void> {
     });
   }
 
-  console.log('\n🚀 LeadCMS SDK Initialization\n');
+  console.log("\n🚀 LeadCMS SDK Initialization\n");
 
   // Check if config already exists
-  const configPath = path.join(process.cwd(), 'leadcms.config.json');
-  const envPath = path.join(process.cwd(), '.env');
-  const envLocalPath = path.join(process.cwd(), '.env.local');
+  const configPath = path.join(process.cwd(), "leadcms.config.json");
+  const envPath = path.join(process.cwd(), ".env");
+  const envLocalPath = path.join(process.cwd(), ".env.local");
 
-  const hasExistingConfig = fs.existsSync(configPath) || fs.existsSync(envPath) || fs.existsSync(envLocalPath);
+  const hasExistingConfig =
+    fs.existsSync(configPath) || fs.existsSync(envPath) || fs.existsSync(envLocalPath);
   const existingConfig = hasExistingConfig ? readExistingConfig() : {};
 
   if (hasExistingConfig) {
-    const answer = await question('⚠️  Configuration files already exist. Overwrite? (y/N): ');
-    if (answer.toLowerCase() !== 'y' && answer.toLowerCase() !== 'yes') {
-      console.log('✅ Initialization cancelled.');
+    const answer = await question("⚠️  Configuration files already exist. Overwrite? (y/N): ");
+    if (answer.toLowerCase() !== "y" && answer.toLowerCase() !== "yes") {
+      console.log("✅ Initialization cancelled.");
       rl.close();
       return;
     }
-    console.log('');
+    console.log("");
   }
 
   const config: UserConfig = {
-    mode: existingConfig.mode || 'single',
-    url: '',
-    apiKey: existingConfig.apiKey || '',
-    remoteName: existingConfig.remoteName || 'production',
+    mode: existingConfig.mode || "single",
+    url: "",
+    apiKey: existingConfig.apiKey || "",
+    remoteName: existingConfig.remoteName || "production",
     additionalRemotes: [],
-    defaultLanguage: existingConfig.defaultLanguage || 'en',
+    defaultLanguage: existingConfig.defaultLanguage || "en",
     contentDir: existingConfig.contentDir || DEFAULTS.contentDir,
     mediaDir: existingConfig.mediaDir || DEFAULTS.mediaDir,
     commentsDir: existingConfig.commentsDir || DEFAULTS.commentsDir,
@@ -366,35 +373,38 @@ export async function initLeadCMS(): Promise<void> {
   };
 
   // Step 1: Choose setup mode
-  const setupModeInput = await question('Setup mode - single or multi remote? [single]: ');
-  if (setupModeInput.trim().toLowerCase() === 'multi' || setupModeInput.trim().toLowerCase() === 'm') {
-    config.mode = 'multi';
+  const setupModeInput = await question("Setup mode - single or multi remote? [single]: ");
+  if (
+    setupModeInput.trim().toLowerCase() === "multi" ||
+    setupModeInput.trim().toLowerCase() === "m"
+  ) {
+    config.mode = "multi";
   } else {
-    config.mode = 'single';
+    config.mode = "single";
   }
 
-  if (config.mode === 'multi') {
+  if (config.mode === "multi") {
     const remoteNameInput = await question(`Default remote name [${config.remoteName}]: `);
     if (remoteNameInput.trim()) {
       config.remoteName = remoteNameInput.trim().toLowerCase();
     }
 
     if (!/^[a-z0-9][a-z0-9-]*$/.test(config.remoteName)) {
-      console.log('❌ Remote name must be lowercase alphanumeric with hyphens.');
+      console.log("❌ Remote name must be lowercase alphanumeric with hyphens.");
       rl.close();
       return;
     }
   }
 
   // Step 2: Get LeadCMS URL
-  const existingUrlForPrompt = existingConfig.url || '';
+  const existingUrlForPrompt = existingConfig.url || "";
   const urlPrompt = existingUrlForPrompt
-    ? `Enter URL for ${config.mode === 'multi' ? `${config.remoteName} remote` : 'LeadCMS'} [${existingUrlForPrompt}]: `
-    : `Enter ${config.mode === 'multi' ? `${config.remoteName} remote ` : ''}LeadCMS URL (e.g., https://your-instance.leadcms.ai): `;
+    ? `Enter URL for ${config.mode === "multi" ? `${config.remoteName} remote` : "LeadCMS"} [${existingUrlForPrompt}]: `
+    : `Enter ${config.mode === "multi" ? `${config.remoteName} remote ` : ""}LeadCMS URL (e.g., https://your-instance.leadcms.ai): `;
 
   while (!config.url) {
     const urlInput = await question(urlPrompt);
-    const trimmedUrl = urlInput.trim().replace(/\/$/, ''); // Remove trailing slash
+    const trimmedUrl = urlInput.trim().replace(/\/$/, ""); // Remove trailing slash
 
     // If empty and we have existing URL, use it
     if (!trimmedUrl && existingUrlForPrompt) {
@@ -403,40 +413,40 @@ export async function initLeadCMS(): Promise<void> {
     }
 
     if (!trimmedUrl) {
-      console.log('❌ URL is required.\n');
+      console.log("❌ URL is required.\n");
       continue;
     }
 
     if (!isValidUrl(trimmedUrl)) {
-      console.log('❌ Invalid URL format. Must start with http:// or https://\n');
+      console.log("❌ Invalid URL format. Must start with http:// or https://\n");
       continue;
     }
 
     config.url = trimmedUrl;
   }
 
-  if (config.mode === 'multi') {
+  if (config.mode === "multi") {
     while (true) {
-      const addRemote = await question('Add another remote? (y/N): ');
-      if (addRemote.toLowerCase() !== 'y' && addRemote.toLowerCase() !== 'yes') {
+      const addRemote = await question("Add another remote? (y/N): ");
+      if (addRemote.toLowerCase() !== "y" && addRemote.toLowerCase() !== "yes") {
         break;
       }
 
-      const name = (await question('  Remote name: ')).trim().toLowerCase();
-      const url = (await question('  Remote URL: ')).trim().replace(/\/$/, '');
+      const name = (await question("  Remote name: ")).trim().toLowerCase();
+      const url = (await question("  Remote URL: ")).trim().replace(/\/$/, "");
 
       if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) {
-        console.log('  ❌ Invalid remote name. Use lowercase alphanumeric with hyphens.');
+        console.log("  ❌ Invalid remote name. Use lowercase alphanumeric with hyphens.");
         continue;
       }
 
       if (!isValidUrl(url)) {
-        console.log('  ❌ Invalid URL. Must start with http:// or https://');
+        console.log("  ❌ Invalid URL. Must start with http:// or https://");
         continue;
       }
 
-      if (name === config.remoteName || config.additionalRemotes.some(r => r.name === name)) {
-        console.log('  ❌ Remote name already exists.');
+      if (name === config.remoteName || config.additionalRemotes.some((r) => r.name === name)) {
+        console.log("  ❌ Remote name already exists.");
         continue;
       }
 
@@ -446,64 +456,68 @@ export async function initLeadCMS(): Promise<void> {
   }
 
   // Step 3: Authentication
-  console.log('');
+  console.log("");
 
   // Check if API key already exists in environment or .env files
-  const remoteEnvName = config.remoteName.toUpperCase().replace(/-/g, '_');
+  const remoteEnvName = config.remoteName.toUpperCase().replace(/-/g, "_");
   const existingRemoteApiKey = process.env[`LEADCMS_REMOTE_${remoteEnvName}_API_KEY`];
-  const existingApiKey = config.mode === 'multi'
-    ? (existingRemoteApiKey || process.env.LEADCMS_API_KEY)
-    : process.env.LEADCMS_API_KEY;
-  const envFilePath = path.join(process.cwd(), '.env');
+  const existingApiKey =
+    config.mode === "multi"
+      ? existingRemoteApiKey || process.env.LEADCMS_API_KEY
+      : process.env.LEADCMS_API_KEY;
+  const envFilePath = path.join(process.cwd(), ".env");
   const hasEnvFile = fs.existsSync(envFilePath);
 
   if (existingApiKey) {
-    console.log('✓ API key found in environment');
+    console.log("✓ API key found in environment");
     config.apiKey = existingApiKey;
   } else {
     // Only mention "No API key found" if .env file exists
     if (hasEnvFile) {
-      console.log('ℹ️  No API key found in existing .env file.\n');
+      console.log("ℹ️  No API key found in existing .env file.\n");
     }
 
-    console.log('🔐 Authentication Setup');
-    console.log('   Authentication is optional and can be skipped for most use cases.');
-    console.log('   • Without authentication: You can pull content and build your site (read-only access)');
-    console.log('   • With authentication: You can also push content changes back to LeadCMS');
-    console.log('   • You can always authenticate later by running: leadcms login\n');
+    console.log("🔐 Authentication Setup");
+    console.log("   Authentication is optional and can be skipped for most use cases.");
+    console.log(
+      "   • Without authentication: You can pull content and build your site (read-only access)"
+    );
+    console.log("   • With authentication: You can also push content changes back to LeadCMS");
+    console.log("   • You can always authenticate later by running: leadcms login\n");
 
-    const authenticateNow = await question('Would you like to authenticate now? (Y/n): ');
+    const authenticateNow = await question("Would you like to authenticate now? (Y/n): ");
 
-    if (authenticateNow.toLowerCase() !== 'n' && authenticateNow.toLowerCase() !== 'no') {
+    if (authenticateNow.toLowerCase() !== "n" && authenticateNow.toLowerCase() !== "no") {
       try {
-        console.log('');
+        console.log("");
         const { token, user } = await authenticate(config.url, question);
 
         // Save to .env
-        if (config.mode === 'multi') {
-          const envName = config.remoteName.toUpperCase().replace(/-/g, '_');
+        if (config.mode === "multi") {
+          const envName = config.remoteName.toUpperCase().replace(/-/g, "_");
           saveTokenToEnv(token, `LEADCMS_REMOTE_${envName}_API_KEY`);
-          saveTokenToEnv(token, 'LEADCMS_API_KEY');
+          saveTokenToEnv(token, "LEADCMS_API_KEY");
         } else {
           saveTokenToEnv(token);
         }
         config.apiKey = token;
 
-        console.log('✅ Authentication successful!');
+        console.log("✅ Authentication successful!");
         console.log(`   Logged in as: ${user.displayName || user.userName}\n`);
-      } catch (error: any) {
-        console.log('\n⚠️  Authentication failed. Continuing in read-only mode.');
+      } catch (_error: unknown) {
+        const error = _error as ScriptError;
+        console.log("\n⚠️  Authentication failed. Continuing in read-only mode.");
         console.log(`   Error: ${error.message}`);
         console.log('   You can run "leadcms login" later to authenticate.\n');
       }
     } else {
-      console.log('ℹ️  Skipping authentication. Continuing in read-only mode.');
+      console.log("ℹ️  Skipping authentication. Continuing in read-only mode.");
       console.log('   You can run "leadcms login" later to authenticate.\n');
     }
   }
 
   // Step 4: Fetch CMS configuration (public endpoint, no authentication required)
-  console.log('\n🔍 Connecting to LeadCMS...');
+  console.log("\n🔍 Connecting to LeadCMS...");
   let cmsConfig: CMSConfigResponse | null = null;
   cmsConfig = await fetchCMSConfig(config.url);
 
@@ -514,7 +528,7 @@ export async function initLeadCMS(): Promise<void> {
   let supportsEmailTemplates = false;
 
   if (!cmsConfig) {
-    console.log('\n⚠️  Could not fetch CMS configuration. Continuing with manual setup...\n');
+    console.log("\n⚠️  Could not fetch CMS configuration. Continuing with manual setup...\n");
 
     // Manual default language input
     const langInput = await question(`Default language code [${config.defaultLanguage}]: `);
@@ -526,14 +540,14 @@ export async function initLeadCMS(): Promise<void> {
     supportsContent = supportsMedia = supportsComments = supportsEmailTemplates = false;
   } else {
     // Successfully fetched CMS config
-    console.log('✅ Connected successfully!\n');
+    console.log("✅ Connected successfully!\n");
 
-    console.log('📋 Available languages:');
+    console.log("📋 Available languages:");
     cmsConfig.languages.forEach((lang: { code: string; name: string }, idx: number) => {
-      const marker = lang.code === cmsConfig.defaultLanguage ? '(default)' : '';
+      const marker = lang.code === cmsConfig.defaultLanguage ? "(default)" : "";
       console.log(`   ${idx + 1}. ${lang.name} [${lang.code}] ${marker}`);
     });
-    console.log('');
+    console.log("");
 
     // Ask for default language confirmation
     const suggestedLanguage = cmsConfig.defaultLanguage;
@@ -549,30 +563,31 @@ export async function initLeadCMS(): Promise<void> {
     // Check which entities are supported
     if (cmsConfig.entities && Array.isArray(cmsConfig.entities) && cmsConfig.entities.length > 0) {
       const entityNames = cmsConfig.entities.map((e: string) => e.toLowerCase());
-      supportsContent = entityNames.includes('content');
-      supportsMedia = entityNames.includes('media');
-      supportsComments = entityNames.includes('comment') || entityNames.includes('comments');
-      supportsEmailTemplates = entityNames.includes('emailtemplate') || entityNames.includes('emailtemplates');
+      supportsContent = entityNames.includes("content");
+      supportsMedia = entityNames.includes("media");
+      supportsComments = entityNames.includes("comment") || entityNames.includes("comments");
+      supportsEmailTemplates =
+        entityNames.includes("emailtemplate") || entityNames.includes("emailtemplates");
 
-      console.log('📦 Supported entity types:');
-      if (supportsContent) console.log('   ✓ Content');
-      if (supportsMedia) console.log('   ✓ Media');
-      if (supportsComments) console.log('   ✓ Comments');
-      if (supportsEmailTemplates) console.log('   ✓ Email Templates');
+      console.log("📦 Supported entity types:");
+      if (supportsContent) console.log("   ✓ Content");
+      if (supportsMedia) console.log("   ✓ Media");
+      if (supportsComments) console.log("   ✓ Comments");
+      if (supportsEmailTemplates) console.log("   ✓ Email Templates");
 
       if (!supportsContent && !supportsMedia && !supportsComments && !supportsEmailTemplates) {
-        console.log('   ⚠️  No matching entity types found');
-        console.log('\n💡 This LeadCMS instance does not support standard entity types.');
-        console.log('   Configuration will be created without directory prompts.\n');
+        console.log("   ⚠️  No matching entity types found");
+        console.log("\n💡 This LeadCMS instance does not support standard entity types.");
+        console.log("   Configuration will be created without directory prompts.\n");
       } else {
-        console.log('');
+        console.log("");
       }
     } else {
       // Empty or missing entities array - don't assume anything
-      console.log('📦 Supported entity types:');
-      console.log('   ⚠️  No entities information available');
-      console.log('\n💡 Cannot determine supported entity types from the API.');
-      console.log('   Configuration will be created without directory prompts.\n');
+      console.log("📦 Supported entity types:");
+      console.log("   ⚠️  No entities information available");
+      console.log("\n💡 Cannot determine supported entity types from the API.");
+      console.log("   Configuration will be created without directory prompts.\n");
     }
   }
 
@@ -599,7 +614,9 @@ export async function initLeadCMS(): Promise<void> {
   }
 
   if (supportsEmailTemplates) {
-    const emailTemplatesDirInput = await question(`Email templates directory [${config.emailTemplatesDir}]: `);
+    const emailTemplatesDirInput = await question(
+      `Email templates directory [${config.emailTemplatesDir}]: `
+    );
     if (emailTemplatesDirInput.trim()) {
       config.emailTemplatesDir = emailTemplatesDirInput.trim();
     }
@@ -611,7 +628,7 @@ export async function initLeadCMS(): Promise<void> {
     config.settingsDir = settingsDirInput.trim();
   }
 
-  console.log('\n📝 Creating configuration files...\n');
+  console.log("\n📝 Creating configuration files...\n");
 
   // Create .env file
   updateEnvFile(config);
@@ -619,16 +636,20 @@ export async function initLeadCMS(): Promise<void> {
   // Create config file if needed
   createConfigFile(config);
 
-  console.log('\n✨ Configuration complete!\n');
-  console.log('Next steps:');
+  console.log("\n✨ Configuration complete!\n");
+  console.log("Next steps:");
 
   if (!config.apiKey) {
-    console.log('  1. Run: npx leadcms login (for write access and private content)');
-    console.log(`  2. Run: npx leadcms pull${config.mode === 'multi' ? ` -r ${config.remoteName}` : ''} (to download content)`);
-    console.log('  3. Start using LeadCMS content in your project\n');
+    console.log("  1. Run: npx leadcms login (for write access and private content)");
+    console.log(
+      `  2. Run: npx leadcms pull${config.mode === "multi" ? ` -r ${config.remoteName}` : ""} (to download content)`
+    );
+    console.log("  3. Start using LeadCMS content in your project\n");
   } else {
-    console.log(`  1. Run: npx leadcms pull${config.mode === 'multi' ? ` -r ${config.remoteName}` : ''} (to download content)`);
-    console.log('  2. Start using LeadCMS content in your project\n');
+    console.log(
+      `  1. Run: npx leadcms pull${config.mode === "multi" ? ` -r ${config.remoteName}` : ""} (to download content)`
+    );
+    console.log("  2. Start using LeadCMS content in your project\n");
   }
 
   rl.close();

@@ -19,8 +19,8 @@
  *   await pullLeadCMSContent();
  */
 
-import path from 'path';
-import fs from 'fs/promises';
+import path from "path";
+import fs from "fs/promises";
 
 // ── Low-level mock factories ───────────────────────────────────────────
 
@@ -28,15 +28,16 @@ import fs from 'fs/promises';
  * Create a standard config mock object.
  * Matches the shape returned by getConfig() in src/lib/config.ts.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createTestConfig(overrides: Record<string, any> = {}) {
   return {
-    url: 'https://test.leadcms.com',
-    apiKey: 'test-key',
-    defaultLanguage: 'en',
-    contentDir: '/tmp/test-content',
-    mediaDir: '/tmp/test-media',
-    commentsDir: '/tmp/test-comments',
-    emailTemplatesDir: '/tmp/test-email-templates',
+    url: "https://test.leadcms.com",
+    apiKey: "test-key",
+    defaultLanguage: "en",
+    contentDir: "/tmp/test-content",
+    mediaDir: "/tmp/test-media",
+    commentsDir: "/tmp/test-comments",
+    emailTemplatesDir: "/tmp/test-email-templates",
     ...overrides,
   };
 }
@@ -45,6 +46,7 @@ export function createTestConfig(overrides: Record<string, any> = {}) {
  * Create a standard leadCMSDataService mock.
  * Prevents real API calls during testing.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createDataServiceMock(overrides: Record<string, any> = {}) {
   return {
     getAllContent: jest.fn(() => Promise.resolve([])),
@@ -60,6 +62,7 @@ export function createDataServiceMock(overrides: Record<string, any> = {}) {
  * For pull integration tests, use createSyncTestHarness() instead.
  */
 export function createAxiosMock() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mockAxios: any = jest.fn(() => Promise.resolve({ data: [] }));
   mockAxios.get = jest.fn(() => Promise.resolve({ data: [], headers: {} }));
   mockAxios.post = jest.fn(() => Promise.resolve({ data: {} }));
@@ -84,7 +87,7 @@ export async function listContentFiles(dir: string): Promise<string[]> {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         files.push(...(await listContentFiles(fullPath)));
-      } else if (entry.name.endsWith('.mdx') || entry.name.endsWith('.json')) {
+      } else if (entry.name.endsWith(".mdx") || entry.name.endsWith(".json")) {
         files.push(fullPath);
       }
     }
@@ -124,6 +127,7 @@ interface SyncTestHarnessOptions {
   /** Content types the mock API returns. Defaults to article(MDX), component(JSON), page(MDX). */
   contentTypes?: Array<{ uid: string; format: string }>;
   /** Extra config overrides merged into createTestConfig(). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   configOverrides?: Record<string, any>;
 }
 
@@ -156,11 +160,11 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
   const {
     contentDir,
     mediaDir,
-    commentsDir = path.join(path.dirname(contentDir), 'comments'),
+    commentsDir = path.join(path.dirname(contentDir), "comments"),
     contentTypes = [
-      { uid: 'article', format: 'MDX' },
-      { uid: 'component', format: 'JSON' },
-      { uid: 'page', format: 'MDX' },
+      { uid: "article", format: "MDX" },
+      { uid: "component", format: "JSON" },
+      { uid: "page", format: "MDX" },
     ],
     configOverrides = {},
   } = options;
@@ -168,44 +172,57 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
   const tmpRoot = path.dirname(contentDir);
 
   // ── Internal state (mutated by helper methods, read by axios mock) ──
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   const state = {
-    contentSyncQueue: [] as Array<{ items: any[]; deleted: number[]; token: string; baseItems?: Record<string, any> }>,
+    contentSyncQueue: [] as Array<{
+      items: any[];
+      deleted: number[];
+      token: string;
+      baseItems?: Record<string, any>;
+    }>,
     mediaSyncQueue: [] as Array<{ items: any[]; deleted: any[]; token: string }>,
-    emailTemplateSyncQueue: [] as Array<{ items: any[]; deleted: number[]; token: string; baseItems?: Record<string, any> }>,
+    emailTemplateSyncQueue: [] as Array<{
+      items: any[];
+      deleted: number[];
+      token: string;
+      baseItems?: Record<string, any>;
+    }>,
     commentSyncQueue: [] as Array<{ items: any[]; deleted: number[]; token: string }>,
     emailGroups: [] as Array<{ id: number; name: string; language: string }>,
     contentTypes: [...contentTypes],
   };
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 
   // ── Config object (stable reference, captured by jest.mock factory) ──
   const config = createTestConfig({
     contentDir,
     mediaDir,
     commentsDir,
-    emailTemplatesDir: path.join(tmpRoot, 'email-templates'),
+    emailTemplatesDir: path.join(tmpRoot, "email-templates"),
     ...configOverrides,
   });
 
   // ── Axios mock with URL-based routing ───────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mockGet = jest.fn((url: string, _opts?: any) => {
-    if (url.includes('/api/config')) {
+    if (url.includes("/api/config")) {
       return Promise.resolve({
         status: 200,
-        data: { entities: ['Content', 'Media', 'Comment'] },
+        data: { entities: ["Content", "Media", "Comment"] },
         headers: {},
       });
     }
 
-    if (url.includes('/api/comments/sync')) {
+    if (url.includes("/api/comments/sync")) {
       const urlObj = new URL(url);
-      const sentToken = urlObj.searchParams.get('syncToken') || '';
+      const sentToken = urlObj.searchParams.get("syncToken") || "";
       const pending = state.commentSyncQueue[0];
 
       if (pending && sentToken !== pending.token) {
         return Promise.resolve({
           status: 200,
           data: { items: pending.items, deleted: pending.deleted },
-          headers: { 'x-next-sync-token': pending.token },
+          headers: { "x-next-sync-token": pending.token },
         });
       }
       if (pending && sentToken === pending.token) {
@@ -214,11 +231,11 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
       return Promise.resolve({
         status: 200,
         data: { items: [], deleted: [] },
-        headers: { 'x-next-sync-token': sentToken || 'done' },
+        headers: { "x-next-sync-token": sentToken || "done" },
       });
     }
 
-    if (url.includes('/api/content-types')) {
+    if (url.includes("/api/content-types")) {
       return Promise.resolve({
         status: 200,
         data: state.contentTypes,
@@ -226,12 +243,13 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
       });
     }
 
-    if (url.includes('/api/content/sync')) {
+    if (url.includes("/api/content/sync")) {
       const urlObj = new URL(url);
-      const sentToken = urlObj.searchParams.get('syncToken') || '';
+      const sentToken = urlObj.searchParams.get("syncToken") || "";
       const pending = state.contentSyncQueue[0];
 
       if (pending && sentToken !== pending.token) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const responseData: any = { items: pending.items, deleted: pending.deleted };
         if (pending.baseItems) {
           responseData.baseItems = pending.baseItems;
@@ -239,7 +257,7 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
         return Promise.resolve({
           status: 200,
           data: responseData,
-          headers: { 'x-next-sync-token': pending.token },
+          headers: { "x-next-sync-token": pending.token },
         });
       }
       if (pending && sentToken === pending.token) {
@@ -248,16 +266,17 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
       return Promise.resolve({
         status: 200,
         data: { items: [], deleted: [] },
-        headers: { 'x-next-sync-token': sentToken || 'done' },
+        headers: { "x-next-sync-token": sentToken || "done" },
       });
     }
 
-    if (url.includes('/api/email-templates/sync')) {
+    if (url.includes("/api/email-templates/sync")) {
       const urlObj = new URL(url);
-      const sentToken = urlObj.searchParams.get('syncToken') || '';
+      const sentToken = urlObj.searchParams.get("syncToken") || "";
       const pending = state.emailTemplateSyncQueue[0];
 
       if (pending && sentToken !== pending.token) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const responseData: any = { items: pending.items, deleted: pending.deleted };
         if (pending.baseItems) {
           responseData.baseItems = pending.baseItems;
@@ -265,7 +284,7 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
         return Promise.resolve({
           status: 200,
           data: responseData,
-          headers: { 'x-next-sync-token': pending.token },
+          headers: { "x-next-sync-token": pending.token },
         });
       }
       if (pending && sentToken === pending.token) {
@@ -274,11 +293,11 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
       return Promise.resolve({
         status: 200,
         data: { items: [], deleted: [] },
-        headers: { 'x-next-sync-token': sentToken || 'done' },
+        headers: { "x-next-sync-token": sentToken || "done" },
       });
     }
 
-    if (url.includes('/api/email-groups')) {
+    if (url.includes("/api/email-groups")) {
       return Promise.resolve({
         status: 200,
         data: state.emailGroups,
@@ -286,16 +305,16 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
       });
     }
 
-    if (url.includes('/api/media/sync')) {
+    if (url.includes("/api/media/sync")) {
       const urlObj = new URL(url);
-      const sentToken = urlObj.searchParams.get('syncToken') || '';
+      const sentToken = urlObj.searchParams.get("syncToken") || "";
       const pending = state.mediaSyncQueue[0];
 
       if (pending && sentToken !== pending.token) {
         return Promise.resolve({
           status: 200,
           data: { items: pending.items, deleted: pending.deleted },
-          headers: { 'x-next-sync-token': pending.token },
+          headers: { "x-next-sync-token": pending.token },
         });
       }
       if (pending && sentToken === pending.token) {
@@ -304,7 +323,7 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
       return Promise.resolve({
         status: 200,
         data: { items: [], deleted: [] },
-        headers: { 'x-next-sync-token': sentToken || 'done' },
+        headers: { "x-next-sync-token": sentToken || "done" },
       });
     }
 
@@ -313,18 +332,20 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
 
   // Media file download mock — handles direct media file requests (not /api/media/sync)
   // downloadMediaFileDirect uses axios.get with responseType: 'arraybuffer'
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mockGetWithMediaDownload = jest.fn((url: string, opts?: any) => {
     // If it's a media file download (arraybuffer), return a Buffer
-    if (opts?.responseType === 'arraybuffer') {
+    if (opts?.responseType === "arraybuffer") {
       return Promise.resolve({
         status: 200,
-        data: Buffer.from('mock-media-data'),
+        data: Buffer.from("mock-media-data"),
         headers: {},
       });
     }
     return mockGet(url, opts);
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mockAxiosInstance: any = jest.fn(mockGetWithMediaDownload);
   mockAxiosInstance.get = mockGetWithMediaDownload;
   mockAxiosInstance.interceptors = {
@@ -336,12 +357,12 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
   const axiosMock = { __esModule: true, default: mockAxiosInstance };
 
   // ── Sync token file paths (inside data directories, matching the SDK) ──
-  const syncTokenPath = path.join(contentDir, '.sync-token');
-  const mediaSyncTokenPath = path.join(mediaDir, '.sync-token');
+  const syncTokenPath = path.join(contentDir, ".sync-token");
+  const mediaSyncTokenPath = path.join(mediaDir, ".sync-token");
 
   // Legacy sync token paths (SDK ≤ 3.2, in parent of contentDir)
-  const legacySyncTokenPath = path.join(path.dirname(contentDir), 'sync-token.txt');
-  const legacyMediaSyncTokenPath = path.join(path.dirname(contentDir), 'media-sync-token.txt');
+  const legacySyncTokenPath = path.join(path.dirname(contentDir), "sync-token.txt");
+  const legacyMediaSyncTokenPath = path.join(path.dirname(contentDir), "media-sync-token.txt");
 
   return {
     /** Config object — pass to jest.mock factory: `getConfig: () => harness.config` */
@@ -350,8 +371,14 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
     /** Axios mock module — pass to jest.mock factory: `jest.mock('axios', () => harness.axiosMock)` */
     axiosMock,
 
+    /* eslint-disable @typescript-eslint/no-explicit-any */
     /** Queue a content sync response for the next pull call. */
-    addContentSync(items: any[], deleted: number[], token: string, baseItems?: Record<string, any>) {
+    addContentSync(
+      items: any[],
+      deleted: number[],
+      token: string,
+      baseItems?: Record<string, any>
+    ) {
       state.contentSyncQueue.push({ items, deleted, token, baseItems });
     },
 
@@ -366,9 +393,15 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
     },
 
     /** Queue an email template sync response for the next pull call. */
-    addEmailTemplateSync(items: any[], deleted: number[], token: string, baseItems?: Record<string, any>) {
+    addEmailTemplateSync(
+      items: any[],
+      deleted: number[],
+      token: string,
+      baseItems?: Record<string, any>
+    ) {
       state.emailTemplateSyncQueue.push({ items, deleted, token, baseItems });
     },
+    /* eslint-enable @typescript-eslint/no-explicit-any */
 
     /** Set the email groups the mock API will return. */
     setEmailGroups(groups: Array<{ id: number; name: string; language: string }>) {
@@ -395,10 +428,26 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
       state.commentSyncQueue.length = 0;
       state.emailTemplateSyncQueue.length = 0;
       // Clean up both new and legacy sync token locations
-      try { await fs.unlink(syncTokenPath); } catch { /* not found */ }
-      try { await fs.unlink(mediaSyncTokenPath); } catch { /* not found */ }
-      try { await fs.unlink(legacySyncTokenPath); } catch { /* not found */ }
-      try { await fs.unlink(legacyMediaSyncTokenPath); } catch { /* not found */ }
+      try {
+        await fs.unlink(syncTokenPath);
+      } catch {
+        /* not found */
+      }
+      try {
+        await fs.unlink(mediaSyncTokenPath);
+      } catch {
+        /* not found */
+      }
+      try {
+        await fs.unlink(legacySyncTokenPath);
+      } catch {
+        /* not found */
+      }
+      try {
+        await fs.unlink(legacyMediaSyncTokenPath);
+      } catch {
+        /* not found */
+      }
     },
 
     /**
@@ -407,10 +456,26 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
      */
     async cleanup() {
       await fs.rm(tmpRoot, { recursive: true, force: true });
-      try { await fs.unlink(syncTokenPath); } catch { /* not found */ }
-      try { await fs.unlink(mediaSyncTokenPath); } catch { /* not found */ }
-      try { await fs.unlink(legacySyncTokenPath); } catch { /* not found */ }
-      try { await fs.unlink(legacyMediaSyncTokenPath); } catch { /* not found */ }
+      try {
+        await fs.unlink(syncTokenPath);
+      } catch {
+        /* not found */
+      }
+      try {
+        await fs.unlink(mediaSyncTokenPath);
+      } catch {
+        /* not found */
+      }
+      try {
+        await fs.unlink(legacySyncTokenPath);
+      } catch {
+        /* not found */
+      }
+      try {
+        await fs.unlink(legacyMediaSyncTokenPath);
+      } catch {
+        /* not found */
+      }
     },
   };
 }

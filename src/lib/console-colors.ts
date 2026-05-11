@@ -5,29 +5,29 @@
 
 // ANSI color codes
 const colors = {
-  reset: '\x1b[0m',
-  bright: '\x1b[1m',
-  dim: '\x1b[2m',
+  reset: "\x1b[0m",
+  bright: "\x1b[1m",
+  dim: "\x1b[2m",
 
   // Foreground colors
-  black: '\x1b[30m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  magenta: '\x1b[35m',
-  cyan: '\x1b[36m',
-  white: '\x1b[37m',
-  gray: '\x1b[90m',
+  black: "\x1b[30m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  magenta: "\x1b[35m",
+  cyan: "\x1b[36m",
+  white: "\x1b[37m",
+  gray: "\x1b[90m",
 
   // Background colors
-  bgRed: '\x1b[41m',
-  bgGreen: '\x1b[42m',
-  bgYellow: '\x1b[43m',
-  bgBlue: '\x1b[44m',
-  bgMagenta: '\x1b[45m',
-  bgCyan: '\x1b[46m',
-  bgWhite: '\x1b[47m',
+  bgRed: "\x1b[41m",
+  bgGreen: "\x1b[42m",
+  bgYellow: "\x1b[43m",
+  bgBlue: "\x1b[44m",
+  bgMagenta: "\x1b[45m",
+  bgCyan: "\x1b[46m",
+  bgWhite: "\x1b[47m",
 } as const;
 
 /**
@@ -40,7 +40,7 @@ function shouldUseColors(): boolean {
   }
 
   // Check if we're in a TTY (terminal)
-  if (typeof process.stdout.isTTY === 'boolean') {
+  if (typeof process.stdout.isTTY === "boolean") {
     return process.stdout.isTTY;
   }
 
@@ -60,37 +60,37 @@ function colorize(text: string, color: string): string {
  */
 export const colorConsole = {
   // Success messages (green)
-  success: (message: any, ...args: any[]) => {
+  success: (message: unknown, ...args: unknown[]) => {
     console.log(colorize(String(message), colors.green), ...args);
   },
 
   // Error messages (red)
-  error: (message: any, ...args: any[]) => {
+  error: (message: unknown, ...args: unknown[]) => {
     console.error(colorize(String(message), colors.red), ...args);
   },
 
   // Warning messages (yellow)
-  warn: (message: any, ...args: any[]) => {
+  warn: (message: unknown, ...args: unknown[]) => {
     console.warn(colorize(String(message), colors.yellow), ...args);
   },
 
   // Info messages (cyan)
-  info: (message: any, ...args: any[]) => {
+  info: (message: unknown, ...args: unknown[]) => {
     console.log(colorize(String(message), colors.cyan), ...args);
   },
 
   // Debug messages (gray)
-  debug: (message: any, ...args: any[]) => {
+  debug: (message: unknown, ...args: unknown[]) => {
     console.log(colorize(String(message), colors.gray), ...args);
   },
 
   // Progress messages (blue)
-  progress: (message: any, ...args: any[]) => {
+  progress: (message: unknown, ...args: unknown[]) => {
     console.log(colorize(String(message), colors.blue), ...args);
   },
 
   // Important messages (bright/bold)
-  important: (message: any, ...args: any[]) => {
+  important: (message: unknown, ...args: unknown[]) => {
     console.log(colorize(String(message), colors.bright), ...args);
   },
 
@@ -107,9 +107,9 @@ export const colorConsole = {
   bold: (text: string) => colorize(text, colors.bright),
 
   // Regular console.log but respects color settings
-  log: (message: any, ...args: any[]) => {
+  log: (message: unknown, ...args: unknown[]) => {
     console.log(message, ...args);
-  }
+  },
 };
 
 /**

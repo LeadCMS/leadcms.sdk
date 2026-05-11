@@ -3,27 +3,27 @@
  * LeadCMS Pull Sequences CLI Entry Point
  */
 
-import { pullLeadCMSSequences } from '../../scripts/pull-sequences.js';
-import { resolveIdentity } from '../../scripts/leadcms-helpers.js';
-import { initVerboseFromArgs } from '../../lib/logger.js';
-import { startSpinner } from '../../lib/spinner.js';
-import { parseRemoteFlag } from './remote-flag.js';
+import { pullLeadCMSSequences } from "../../scripts/pull-sequences.js";
+import { resolveIdentity } from "../../scripts/leadcms-helpers.js";
+import { initVerboseFromArgs } from "../../lib/logger.js";
+import { startSpinner } from "../../lib/spinner.js";
+import { parseRemoteFlag } from "./remote-flag.js";
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
 const remoteContext = parseRemoteFlag(args);
-const reset = args.includes('--reset');
+const reset = args.includes("--reset");
 
 await resolveIdentity();
 
-const spinner = startSpinner('Pulling sequences from LeadCMS…');
+const spinner = startSpinner("Pulling sequences from LeadCMS…");
 pullLeadCMSSequences({ reset, remoteContext })
   .then(() => {
     spinner.stop();
     process.exit(0);
   })
-  .catch((error: any) => {
-    spinner.fail('Sequence pull failed');
-    console.error(error.message);
+  .catch((error: unknown) => {
+    spinner.fail("Sequence pull failed");
+    console.error((error as Error).message);
     process.exit(1);
   });

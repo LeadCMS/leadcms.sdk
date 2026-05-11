@@ -34,12 +34,14 @@ import { REDIRECTS_DIR, singleLanguage } from "./leadcms-helpers.js";
 import { getConfig } from "../lib/config.js";
 import { leadCMSDataService } from "../lib/data-service.js";
 import { logger } from "../lib/logger.js";
-import type {
-  LocalRedirect,
-  LocalRedirectsFile,
-  RedirectKind,
+import type { LocalRedirect, LocalRedirectsFile, RedirectKind } from "../lib/automation-types.js";
+import {
+  detectSourceType,
+  detectTargetType,
+  redirectSurrogateKey,
+  flattenRedirectsFile,
+  injectDefaultLanguage,
 } from "../lib/automation-types.js";
-import { detectSourceType, detectTargetType, redirectSurrogateKey, flattenRedirectsFile, injectDefaultLanguage } from "../lib/automation-types.js";
 
 export interface GenerateRedirectsMapOptions {
   /** Override output directory path. */
@@ -66,11 +68,13 @@ async function readLocalRedirects(): Promise<LocalRedirect[]> {
   try {
     const raw = await fs.readFile(filePath, "utf8");
     const parsed = yaml.load(raw) as LocalRedirectsFile | null;
-    if (parsed && typeof parsed === 'object') {
+    if (parsed && typeof parsed === "object") {
       const flat = flattenRedirectsFile(parsed);
       return singleLanguage ? injectDefaultLanguage(flat, singleLanguage) : flat;
     }
-  } catch { /* file doesn't exist */ }
+  } catch {
+    /* file doesn't exist */
+  }
   return [];
 }
 
@@ -78,9 +82,9 @@ function applyPathPattern(
   pattern: string,
   language: string,
   slug: string,
-  languageDomains?: Record<string, string>,
+  languageDomains?: Record<string, string>
 ): string {
-  const domain = (languageDomains && language) ? (languageDomains[language] ?? "") : "";
+  const domain = languageDomains && language ? (languageDomains[language] ?? "") : "";
   return pattern
     .replace("{language}", language)
     .replace("{slug}", slug)
@@ -91,7 +95,7 @@ function applyPathPattern(
 const contentCache = new Map<number, { language: string; slug: string } | null>();
 
 async function resolveContentId(
-  contentId: number,
+  contentId: number
 ): Promise<{ language: string; slug: string } | null> {
   if (contentCache.has(contentId)) {
     return contentCache.get(contentId)!;
@@ -104,8 +108,11 @@ async function resolveContentId(
       contentCache.set(contentId, result);
       return result;
     }
-  } catch (error: any) {
-    logger.verbose(`[generate-redirects-map] Could not resolve content #${contentId}: ${error.message}`);
+  } catch (_error: unknown) {
+    const error = _error as Error;
+    logger.verbose(
+      `[generate-redirects-map] Could not resolve content #${contentId}: ${error.message}`
+    );
   }
 
   contentCache.set(contentId, null);
@@ -118,7 +125,7 @@ async function resolveFrom(
   r: LocalRedirect,
   pathPattern: string,
   languageDomains: Record<string, string> | undefined,
-  filterLanguage: string | undefined,
+  filterLanguage: string | undefined
 ): Promise<string | null> {
   const sourceType = detectSourceType(r);
 
@@ -137,7 +144,9 @@ async function resolveFrom(
     if (r.fromContentId == null) return null;
     const resolved = await resolveContentId(r.fromContentId);
     if (!resolved) {
-      console.warn(`   ⚠️  Could not resolve content #${r.fromContentId} for redirect [${redirectSurrogateKey(r)}] — skipping`);
+      console.warn(
+        `   ⚠️  Could not resolve content #${r.fromContentId} for redirect [${redirectSurrogateKey(r)}] — skipping`
+      );
       return null;
     }
     if (filterLanguage && resolved.language !== filterLanguage) return null;
@@ -150,7 +159,7 @@ async function resolveFrom(
 async function resolveTo(
   r: LocalRedirect,
   pathPattern: string,
-  languageDomains: Record<string, string> | undefined,
+  languageDomains: Record<string, string> | undefined
 ): Promise<string | null> {
   const targetType = detectTargetType(r);
 
@@ -172,7 +181,9 @@ async function resolveTo(
     if (r.toContentId == null) return null;
     const resolved = await resolveContentId(r.toContentId);
     if (!resolved) {
-      console.warn(`   ⚠️  Could not resolve target content #${r.toContentId} for redirect [${redirectSurrogateKey(r)}] — skipping`);
+      console.warn(
+        `   ⚠️  Could not resolve target content #${r.toContentId} for redirect [${redirectSurrogateKey(r)}] — skipping`
+      );
       return null;
     }
     return applyPathPattern(pathPattern, resolved.language, resolved.slug, languageDomains);
@@ -195,7 +206,7 @@ async function resolveTo(
  *   }
  */
 function buildMapFile(redirects: ResolvedRedirect[], kind: RedirectKind): string {
-  const filtered = redirects.filter(r => r.kind === kind);
+  const filtered = redirects.filter((r) => r.kind === kind);
   const statusCode = kind === "Permanent" ? 301 : 302;
   const lines: string[] = [
     `# LeadCMS ${statusCode} redirect map`,
@@ -214,13 +225,16 @@ function buildMapFile(redirects: ResolvedRedirect[], kind: RedirectKind): string
 
 // ── Main export ────────────────────────────────────────────────────────
 
-export async function generateRedirectsMap(options: GenerateRedirectsMapOptions = {}): Promise<void> {
+export async function generateRedirectsMap(
+  options: GenerateRedirectsMapOptions = {}
+): Promise<void> {
   const { outputDir: outputDirArg, language: languageArg, dryRun = false } = options;
 
   const config = getConfig();
   const pathPattern = config.redirects?.pathPattern ?? "/{language}/{slug}";
   const languageDomains = config.languageDomains;
-  const filterLanguage = languageArg || process.env.LEADCMS_DEFAULT_LANGUAGE || config.defaultLanguage;
+  const filterLanguage =
+    languageArg || process.env.LEADCMS_DEFAULT_LANGUAGE || config.defaultLanguage;
 
   const outputDir = path.resolve(outputDirArg ?? config.redirects?.outputDir ?? "redirects");
   const file301 = path.join(outputDir, "301.map");
@@ -250,10 +264,12 @@ export async function generateRedirectsMap(options: GenerateRedirectsMapOptions 
     resolved.push({ from, to, kind: r.kind });
   }
 
-  const permanent = resolved.filter(r => r.kind === "Permanent");
-  const temporary = resolved.filter(r => r.kind === "Temporary");
+  const permanent = resolved.filter((r) => r.kind === "Permanent");
+  const temporary = resolved.filter((r) => r.kind === "Temporary");
 
-  console.log(`   ✅ Resolved ${resolved.length} redirect(s) (${permanent.length} permanent, ${temporary.length} temporary)`);
+  console.log(
+    `   ✅ Resolved ${resolved.length} redirect(s) (${permanent.length} permanent, ${temporary.length} temporary)`
+  );
 
   if (dryRun) {
     console.log(`\n   🔍 Dry run — output directory would be: ${outputDir}`);

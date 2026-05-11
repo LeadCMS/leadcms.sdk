@@ -2,193 +2,206 @@
  * Tests for leadcms-helpers.ts - extractMediaUrlsFromContent
  */
 
-import { jest } from '@jest/globals';
-import { createTestConfig } from './test-helpers';
+import { createTestConfig } from "./test-helpers";
 
-jest.mock('../src/lib/config.js', () => ({
+jest.mock("../src/lib/config.js", () => ({
   getConfig: jest.fn(() => createTestConfig()),
 }));
 
-import { extractMediaUrlsFromContent, configureDataServiceForRemote, leadCMSUrl, leadCMSApiKey } from '../src/scripts/leadcms-helpers';
-import type { RemoteContext } from '../src/lib/remote-context';
+import {
+  extractMediaUrlsFromContent,
+  configureDataServiceForRemote,
+} from "../src/scripts/leadcms-helpers";
+import type { RemoteContext } from "../src/lib/remote-context";
 
-describe('configureDataServiceForRemote updates module-level vars', () => {
-  it('should update leadCMSUrl and leadCMSApiKey when called', async () => {
+describe("configureDataServiceForRemote updates module-level vars", () => {
+  it("should update leadCMSUrl and leadCMSApiKey when called", async () => {
     // Dynamic import to read live bindings after configuration
-    const helpers = await import('../src/scripts/leadcms-helpers');
+    const helpers = await import("../src/scripts/leadcms-helpers");
 
     const originalUrl = helpers.leadCMSUrl;
-    const originalKey = helpers.leadCMSApiKey;
+    const _originalKey = helpers.leadCMSApiKey;
 
     const ctx: RemoteContext = {
-      name: 'staging',
-      url: 'https://staging.example.com',
-      apiKey: 'staging-api-key-123',
+      name: "staging",
+      url: "https://staging.example.com",
+      apiKey: "staging-api-key-123",
       isDefault: false,
-      stateDir: '/tmp/.leadcms/remotes/staging',
+      stateDir: "/tmp/.leadcms/remotes/staging",
     };
 
     configureDataServiceForRemote(ctx);
 
-    expect(helpers.leadCMSUrl).toBe('https://staging.example.com');
-    expect(helpers.leadCMSApiKey).toBe('staging-api-key-123');
+    expect(helpers.leadCMSUrl).toBe("https://staging.example.com");
+    expect(helpers.leadCMSApiKey).toBe("staging-api-key-123");
 
     // Verify they actually changed (not coincidentally the same)
     expect(helpers.leadCMSUrl).not.toBe(originalUrl);
   });
 
-  it('should clear leadCMSApiKey when the remote has no API key', async () => {
-    const helpers = await import('../src/scripts/leadcms-helpers');
+  it("should clear leadCMSApiKey when the remote has no API key", async () => {
+    const helpers = await import("../src/scripts/leadcms-helpers");
 
     configureDataServiceForRemote({
-      name: 'staging',
-      url: 'https://staging.example.com',
-      apiKey: 'staging-api-key-123',
+      name: "staging",
+      url: "https://staging.example.com",
+      apiKey: "staging-api-key-123",
       isDefault: false,
-      stateDir: '/tmp/.leadcms/remotes/staging',
+      stateDir: "/tmp/.leadcms/remotes/staging",
     });
 
     configureDataServiceForRemote({
-      name: 'dev',
-      url: 'https://dev.example.com',
+      name: "dev",
+      url: "https://dev.example.com",
       apiKey: undefined,
       isDefault: false,
-      stateDir: '/tmp/.leadcms/remotes/dev',
+      stateDir: "/tmp/.leadcms/remotes/dev",
     });
 
-    expect(helpers.leadCMSUrl).toBe('https://dev.example.com');
+    expect(helpers.leadCMSUrl).toBe("https://dev.example.com");
     expect(helpers.leadCMSApiKey).toBeUndefined();
   });
 });
 
-describe('extractMediaUrlsFromContent', () => {
-  it('should extract media URLs from body content', () => {
+describe("extractMediaUrlsFromContent", () => {
+  it("should extract media URLs from body content", () => {
     const content = {
-      slug: 'test-article',
-      type: 'article',
+      slug: "test-article",
+      type: "article",
       body: 'Check out this image: "/api/media/images/photo.jpg" and this "/api/media/docs/file.pdf"',
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const urls = extractMediaUrlsFromContent(content as any);
     expect(urls).toHaveLength(2);
-    expect(urls).toContain('/api/media/images/photo.jpg');
-    expect(urls).toContain('/api/media/docs/file.pdf');
+    expect(urls).toContain("/api/media/images/photo.jpg");
+    expect(urls).toContain("/api/media/docs/file.pdf");
   });
 
-  it('should extract media URLs from single-quoted strings', () => {
+  it("should extract media URLs from single-quoted strings", () => {
     const content = {
-      slug: 'test',
-      type: 'article',
+      slug: "test",
+      type: "article",
       body: "Some text '/api/media/images/photo.jpg' more text",
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const urls = extractMediaUrlsFromContent(content as any);
     expect(urls).toHaveLength(1);
-    expect(urls).toContain('/api/media/images/photo.jpg');
+    expect(urls).toContain("/api/media/images/photo.jpg");
   });
 
-  it('should extract media URLs from markdown image syntax', () => {
+  it("should extract media URLs from markdown image syntax", () => {
     const content = {
-      slug: 'test',
-      type: 'article',
-      body: '![Alt text](/api/media/images/photo.jpg)',
+      slug: "test",
+      type: "article",
+      body: "![Alt text](/api/media/images/photo.jpg)",
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const urls = extractMediaUrlsFromContent(content as any);
     expect(urls).toHaveLength(1);
-    expect(urls).toContain('/api/media/images/photo.jpg');
+    expect(urls).toContain("/api/media/images/photo.jpg");
   });
 
-  it('should extract coverImageUrl', () => {
+  it("should extract coverImageUrl", () => {
     const content = {
-      slug: 'test',
-      type: 'article',
-      body: '',
-      coverImageUrl: '/api/media/covers/article-cover.jpg',
+      slug: "test",
+      type: "article",
+      body: "",
+      coverImageUrl: "/api/media/covers/article-cover.jpg",
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const urls = extractMediaUrlsFromContent(content as any);
     expect(urls).toHaveLength(1);
-    expect(urls).toContain('/api/media/covers/article-cover.jpg');
+    expect(urls).toContain("/api/media/covers/article-cover.jpg");
   });
 
-  it('should not include coverImageUrl that does not start with /api/media/', () => {
+  it("should not include coverImageUrl that does not start with /api/media/", () => {
     const content = {
-      slug: 'test',
-      type: 'article',
-      body: '',
-      coverImageUrl: 'https://external.com/image.jpg',
+      slug: "test",
+      type: "article",
+      body: "",
+      coverImageUrl: "https://external.com/image.jpg",
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const urls = extractMediaUrlsFromContent(content as any);
     expect(urls).toHaveLength(0);
   });
 
-  it('should deduplicate URLs', () => {
+  it("should deduplicate URLs", () => {
     const content = {
-      slug: 'test',
-      type: 'article',
+      slug: "test",
+      type: "article",
       body: '"/api/media/images/photo.jpg" and again "/api/media/images/photo.jpg"',
-      coverImageUrl: '/api/media/images/photo.jpg',
+      coverImageUrl: "/api/media/images/photo.jpg",
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const urls = extractMediaUrlsFromContent(content as any);
     expect(urls).toHaveLength(1);
   });
 
-  it('should return empty array when no media URLs found', () => {
+  it("should return empty array when no media URLs found", () => {
     const content = {
-      slug: 'test',
-      type: 'article',
-      body: 'Regular content with no media references',
+      slug: "test",
+      type: "article",
+      body: "Regular content with no media references",
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const urls = extractMediaUrlsFromContent(content as any);
     expect(urls).toHaveLength(0);
   });
 
-  it('should handle empty body', () => {
+  it("should handle empty body", () => {
     const content = {
-      slug: 'test',
-      type: 'article',
-      body: '',
+      slug: "test",
+      type: "article",
+      body: "",
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const urls = extractMediaUrlsFromContent(content as any);
     expect(urls).toHaveLength(0);
   });
 
-  it('should handle undefined body', () => {
+  it("should handle undefined body", () => {
     const content = {
-      slug: 'test',
-      type: 'article',
+      slug: "test",
+      type: "article",
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const urls = extractMediaUrlsFromContent(content as any);
     expect(urls).toHaveLength(0);
   });
 
-  it('should extract multiple different media URLs from body and coverImageUrl', () => {
+  it("should extract multiple different media URLs from body and coverImageUrl", () => {
     const content = {
-      slug: 'test',
-      type: 'article',
+      slug: "test",
+      type: "article",
       body: 'Image: "/api/media/images/body-image.png"',
-      coverImageUrl: '/api/media/covers/cover.jpg',
+      coverImageUrl: "/api/media/covers/cover.jpg",
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const urls = extractMediaUrlsFromContent(content as any);
     expect(urls).toHaveLength(2);
-    expect(urls).toContain('/api/media/images/body-image.png');
-    expect(urls).toContain('/api/media/covers/cover.jpg');
+    expect(urls).toContain("/api/media/images/body-image.png");
+    expect(urls).toContain("/api/media/covers/cover.jpg");
   });
 
-  it('should not match non-media API URLs', () => {
+  it("should not match non-media API URLs", () => {
     const content = {
-      slug: 'test',
-      type: 'article',
+      slug: "test",
+      type: "article",
       body: 'Check "/api/content/articles" and "/api/users/me"',
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const urls = extractMediaUrlsFromContent(content as any);
     expect(urls).toHaveLength(0);
   });

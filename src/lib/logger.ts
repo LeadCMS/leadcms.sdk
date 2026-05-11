@@ -14,8 +14,8 @@
  *   logger.success('Done!');        // always shown
  */
 
-import { colorConsole } from './console-colors.js';
-import { registerApiLogger } from './api-logger.js';
+import { colorConsole } from "./console-colors.js";
+import { registerApiLogger } from "./api-logger.js";
 
 let _verbose = false;
 
@@ -45,7 +45,7 @@ export const logger = {
    * Verbose/debug output — only printed when --verbose is active.
    * Use for internal details: API URLs, sync tokens, file counts, debug info.
    */
-  verbose: (message: string, ...args: any[]): void => {
+  verbose: (message: string, ...args: unknown[]): void => {
     if (_verbose) {
       colorConsole.debug(message, ...args);
     }
@@ -55,35 +55,35 @@ export const logger = {
    * Info / progress — always printed.
    * Use for user-facing progress: "Fetching content...", "Scanning files..."
    */
-  info: (message: string, ...args: any[]): void => {
+  info: (message: string, ...args: unknown[]): void => {
     colorConsole.info(message, ...args);
   },
 
   /**
    * Success — always printed.
    */
-  success: (message: string, ...args: any[]): void => {
+  success: (message: string, ...args: unknown[]): void => {
     colorConsole.success(message, ...args);
   },
 
   /**
    * Warning — always printed.
    */
-  warn: (message: string, ...args: any[]): void => {
+  warn: (message: string, ...args: unknown[]): void => {
     colorConsole.warn(message, ...args);
   },
 
   /**
    * Error — always printed.
    */
-  error: (message: string, ...args: any[]): void => {
+  error: (message: string, ...args: unknown[]): void => {
     colorConsole.error(message, ...args);
   },
 
   /**
    * Plain log — always printed. For structured output (status tables, etc.)
    */
-  log: (message: any, ...args: any[]): void => {
+  log: (message: unknown, ...args: unknown[]): void => {
     console.log(message, ...args);
   },
 };
@@ -94,7 +94,7 @@ export const logger = {
  * Call this at the top of each CLI entry point.
  */
 export function initVerboseFromArgs(args: string[] = process.argv): void {
-  if (args.includes('--verbose') || args.includes('-V') || process.env.LEADCMS_VERBOSE === 'true') {
+  if (args.includes("--verbose") || args.includes("-V") || process.env.LEADCMS_VERBOSE === "true") {
     setVerbose(true);
     registerApiLogger();
   }

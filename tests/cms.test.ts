@@ -1,4 +1,3 @@
-import * as path from 'path';
 import {
   isContentDraft,
   getCMSContentBySlug,
@@ -15,278 +14,276 @@ import {
   makeLocaleAwareLink,
   getLocaleFromPath,
   type CMSContent,
-} from '../src/lib/cms';
-import { TEST_USER_UID, TEST_USER_UID_2, mockDate } from './setup';
+} from "../src/lib/cms";
+import { TEST_USER_UID, TEST_USER_UID_2, mockDate } from "./setup";
 
-describe('LeadCMS SDK Core Functionality', () => {
-  describe('isContentDraft', () => {
-    it('should return true for content without publishedAt', () => {
+describe("LeadCMS SDK Core Functionality", () => {
+  describe("isContentDraft", () => {
+    it("should return true for content without publishedAt", () => {
       const content: CMSContent = {
         id: 1,
-        slug: 'test',
-        type: 'article',
-        body: 'content',
+        slug: "test",
+        type: "article",
+        body: "content",
       };
       expect(isContentDraft(content)).toBe(true);
     });
 
-    it('should return true for content with future publishedAt', () => {
+    it("should return true for content with future publishedAt", () => {
       const content: CMSContent = {
         id: 1,
-        slug: 'test',
-        type: 'article',
-        body: 'content',
-        publishedAt: new Date('2024-12-01T10:00:00Z'), // Future date
+        slug: "test",
+        type: "article",
+        body: "content",
+        publishedAt: new Date("2024-12-01T10:00:00Z"), // Future date
       };
       expect(isContentDraft(content)).toBe(true);
     });
 
-    it('should return false for content with past publishedAt', () => {
+    it("should return false for content with past publishedAt", () => {
       const content: CMSContent = {
         id: 1,
-        slug: 'test',
-        type: 'article',
-        body: 'content',
-        publishedAt: new Date('2024-10-28T10:00:00Z'), // Past date
+        slug: "test",
+        type: "article",
+        body: "content",
+        publishedAt: new Date("2024-10-28T10:00:00Z"), // Past date
       };
       expect(isContentDraft(content)).toBe(false);
     });
 
-    it('should handle string dates correctly', () => {
+    it("should handle string dates correctly", () => {
       const content: CMSContent = {
         id: 1,
-        slug: 'test',
-        type: 'article',
-        body: 'content',
-        publishedAt: '2024-10-28T10:00:00Z', // Past date as string
+        slug: "test",
+        type: "article",
+        body: "content",
+        publishedAt: "2024-10-28T10:00:00Z", // Past date as string
       };
       expect(isContentDraft(content)).toBe(false);
     });
   });
 
-  describe('getCMSContentBySlug', () => {
-    it('should return published content by default', () => {
-      const content = getCMSContentBySlug('published-article');
+  describe("getCMSContentBySlug", () => {
+    it("should return published content by default", () => {
+      const content = getCMSContentBySlug("published-article");
       expect(content).not.toBeNull();
-      expect(content?.title).toBe('Published Article');
+      expect(content?.title).toBe("Published Article");
       expect(content?.publishedAt).toBeInstanceOf(Date);
     });
 
-    it('should not return draft content by default', () => {
-      const content = getCMSContentBySlug('draft-article');
+    it("should not return draft content by default", () => {
+      const content = getCMSContentBySlug("draft-article");
       expect(content).toBeNull();
     });
 
-    it('should not return future content by default', () => {
-      const content = getCMSContentBySlug('future-article');
+    it("should not return future content by default", () => {
+      const content = getCMSContentBySlug("future-article");
       expect(content).toBeNull();
     });
 
-    it('should handle JSON files correctly', () => {
-      const content = getCMSContentBySlug('json-article');
+    it("should handle JSON files correctly", () => {
+      const content = getCMSContentBySlug("json-article");
       expect(content).not.toBeNull();
-      expect(content?.title).toBe('JSON Article');
+      expect(content?.title).toBe("JSON Article");
       expect(content?.publishedAt).toBeInstanceOf(Date);
     });
 
-    it('should return null for non-existent content', () => {
-      const content = getCMSContentBySlug('non-existent');
+    it("should return null for non-existent content", () => {
+      const content = getCMSContentBySlug("non-existent");
       expect(content).toBeNull();
     });
   });
 
-  describe('getCMSContentBySlugForLocale', () => {
-    it('should return content for default locale', () => {
-      const content = getCMSContentBySlugForLocale('published-article', 'en');
+  describe("getCMSContentBySlugForLocale", () => {
+    it("should return content for default locale", () => {
+      const content = getCMSContentBySlugForLocale("published-article", "en");
       expect(content).not.toBeNull();
-      expect(content?.title).toBe('Published Article');
-      expect(content?.language).toBe('en');
+      expect(content?.title).toBe("Published Article");
+      expect(content?.language).toBe("en");
     });
 
-    it('should return content for specific locale', () => {
-      const content = getCMSContentBySlugForLocale('published-article', 'es');
+    it("should return content for specific locale", () => {
+      const content = getCMSContentBySlugForLocale("published-article", "es");
       expect(content).not.toBeNull();
-      expect(content?.title).toBe('Artículo Publicado');
-      expect(content?.language).toBe('es');
+      expect(content?.title).toBe("Artículo Publicado");
+      expect(content?.language).toBe("es");
     });
 
-    it('should filter out draft content in production mode', () => {
-      const content = getCMSContentBySlugForLocale('draft-article', 'en');
+    it("should filter out draft content in production mode", () => {
+      const content = getCMSContentBySlugForLocale("draft-article", "en");
       expect(content).toBeNull(); // Draft content is filtered out in test environment
     });
   });
 
-  describe('getAllContentSlugs', () => {
-    it('should return only published content slugs by default', () => {
+  describe("getAllContentSlugs", () => {
+    it("should return only published content slugs by default", () => {
       const slugs = getAllContentSlugs();
-      expect(slugs).toContain('published-article');
-      expect(slugs).toContain('json-article');
-      expect(slugs).toContain('about');
-      expect(slugs).toContain('blog/post-1');
-      expect(slugs).not.toContain('draft-article');
-      expect(slugs).not.toContain('future-article');
-      expect(slugs).not.toContain('blog/post-2-draft');
+      expect(slugs).toContain("published-article");
+      expect(slugs).toContain("json-article");
+      expect(slugs).toContain("about");
+      expect(slugs).toContain("blog/post-1");
+      expect(slugs).not.toContain("draft-article");
+      expect(slugs).not.toContain("future-article");
+      expect(slugs).not.toContain("blog/post-2-draft");
     });
 
-    it('should filter by content types', () => {
-      const articleSlugs = getAllContentSlugs(['article']);
-      expect(articleSlugs).toContain('published-article');
-      expect(articleSlugs).toContain('json-article');
-      expect(articleSlugs).not.toContain('about'); // page type
-      expect(articleSlugs).not.toContain('blog/post-1'); // blog type
+    it("should filter by content types", () => {
+      const articleSlugs = getAllContentSlugs(["article"]);
+      expect(articleSlugs).toContain("published-article");
+      expect(articleSlugs).toContain("json-article");
+      expect(articleSlugs).not.toContain("about"); // page type
+      expect(articleSlugs).not.toContain("blog/post-1"); // blog type
 
-      const blogSlugs = getAllContentSlugs(['blog']);
-      expect(blogSlugs).toContain('blog/post-1');
-      expect(blogSlugs).not.toContain('published-article');
+      const blogSlugs = getAllContentSlugs(["blog"]);
+      expect(blogSlugs).toContain("blog/post-1");
+      expect(blogSlugs).not.toContain("published-article");
     });
 
-    it('should not include user-specific drafts in general listing', () => {
+    it("should not include user-specific drafts in general listing", () => {
       const slugs = getAllContentSlugs();
       expect(slugs).not.toContain(`published-article-${TEST_USER_UID}`);
       expect(slugs).not.toContain(`user-only-draft-${TEST_USER_UID}`);
     });
   });
 
-  describe('getAllContentSlugsForLocale', () => {
-    it('should return content for default locale', () => {
-      const slugs = getAllContentSlugsForLocale('en');
-      expect(slugs).toContain('published-article');
-      expect(slugs).toContain('blog/post-1');
+  describe("getAllContentSlugsForLocale", () => {
+    it("should return content for default locale", () => {
+      const slugs = getAllContentSlugsForLocale("en");
+      expect(slugs).toContain("published-article");
+      expect(slugs).toContain("blog/post-1");
     });
 
-    it('should return content for specific locale', () => {
-      const slugs = getAllContentSlugsForLocale('es');
-      expect(slugs).toContain('published-article');
-      expect(slugs).toContain('blog/post-1');
+    it("should return content for specific locale", () => {
+      const slugs = getAllContentSlugsForLocale("es");
+      expect(slugs).toContain("published-article");
+      expect(slugs).toContain("blog/post-1");
     });
 
-    it('should handle user-specific content with userUid', () => {
+    it("should handle user-specific content with userUid", () => {
       // Without preview mode, userUid has no effect
-      const slugs1 = getAllContentSlugsForLocale('en', undefined, TEST_USER_UID);
-      expect(slugs1).toContain('published-article');
-      expect(slugs1).not.toContain('draft-article'); // Drafts filtered out in test environment
-      expect(slugs1).not.toContain('user-only-draft'); // User drafts filtered out in test environment
+      const slugs1 = getAllContentSlugsForLocale("en", undefined, TEST_USER_UID);
+      expect(slugs1).toContain("published-article");
+      expect(slugs1).not.toContain("draft-article"); // Drafts filtered out in test environment
+      expect(slugs1).not.toContain("user-only-draft"); // User drafts filtered out in test environment
     });
   });
 
-  describe('getAllContentForLocale', () => {
-    it('should return content objects directly', () => {
-      const content = getAllContentForLocale('en');
+  describe("getAllContentForLocale", () => {
+    it("should return content objects directly", () => {
+      const content = getAllContentForLocale("en");
       expect(Array.isArray(content)).toBe(true);
       expect(content.length).toBeGreaterThan(0);
 
       // Should contain actual content objects
-      content.forEach(item => {
-        expect(item).toHaveProperty('slug');
-        expect(item).toHaveProperty('title');
-        expect(item).toHaveProperty('type');
+      content.forEach((item) => {
+        expect(item).toHaveProperty("slug");
+        expect(item).toHaveProperty("title");
+        expect(item).toHaveProperty("type");
       });
 
       // Should contain expected content
-      const slugs = content.map(c => c.slug);
-      expect(slugs).toContain('published-article');
-      expect(slugs).toContain('json-article');
+      const slugs = content.map((c) => c.slug);
+      expect(slugs).toContain("published-article");
+      expect(slugs).toContain("json-article");
     });
 
-    it('should filter by content type', () => {
-      const articles = getAllContentForLocale('en', ['article']);
-      const blogs = getAllContentForLocale('en', ['blog']);
+    it("should filter by content type", () => {
+      const articles = getAllContentForLocale("en", ["article"]);
+      const blogs = getAllContentForLocale("en", ["blog"]);
 
       // All articles should have article type
-      articles.forEach(content => {
-        expect(content.type).toBe('article');
+      articles.forEach((content) => {
+        expect(content.type).toBe("article");
       });
 
       // All blogs should have blog type
-      blogs.forEach(content => {
-        expect(content.type).toBe('blog');
+      blogs.forEach((content) => {
+        expect(content.type).toBe("blog");
       });
     });
 
-    it('should be equivalent to getAllContentSlugsForLocale + individual fetches', () => {
+    it("should be equivalent to getAllContentSlugsForLocale + individual fetches", () => {
       // Compare new method with old pattern
-      const directContent = getAllContentForLocale('en', ['article']);
+      const directContent = getAllContentForLocale("en", ["article"]);
 
-      const slugs = getAllContentSlugsForLocale('en', ['article']);
+      const slugs = getAllContentSlugsForLocale("en", ["article"]);
       const individualContent = slugs
-        .map(slug => getCMSContentBySlugForLocale(slug, 'en'))
-        .filter(content => content !== null);
+        .map((slug) => getCMSContentBySlugForLocale(slug, "en"))
+        .filter((content) => content !== null);
 
       expect(directContent.length).toBe(individualContent.length);
 
       // Should have same slugs
-      const directSlugs = directContent.map(c => c.slug).sort();
-      const individualSlugs = individualContent.map(c => c!.slug).sort();
+      const directSlugs = directContent.map((c) => c.slug).sort();
+      const individualSlugs = individualContent.map((c) => c!.slug).sort();
       expect(directSlugs).toEqual(individualSlugs);
     });
   });
 
-  describe('getContentTranslations', () => {
-    it('should return translations for published content', () => {
-      const { getAvailableLanguages } = require('../src/lib/cms');
-      const languages = getAvailableLanguages();
-      const translations = getContentTranslations('article-1');
-
-
+  describe("getContentTranslations", () => {
+    it("should return translations for published content", () => {
+      const { getAvailableLanguages } = require("../src/lib/cms");
+      const _languages = getAvailableLanguages();
+      const translations = getContentTranslations("article-1");
 
       expect(translations).toHaveLength(2);
 
       // Find translations by title instead of locale for debugging
-      const enTranslation = translations.find(t => t.content.title === 'Published Article');
-      const esTranslation = translations.find(t => t.content.title === 'Artículo Publicado');
+      const enTranslation = translations.find((t) => t.content.title === "Published Article");
+      const esTranslation = translations.find((t) => t.content.title === "Artículo Publicado");
 
       expect(enTranslation).toBeDefined();
       expect(esTranslation).toBeDefined();
 
       // Verify locales match titles
-      expect(enTranslation?.locale).toBe('en');
-      expect(esTranslation?.locale).toBe('es');
+      expect(enTranslation?.locale).toBe("en");
+      expect(esTranslation?.locale).toBe("es");
     });
 
-    it('should not return draft translations by default', () => {
-      const translations = getContentTranslations('article-2'); // draft-article
+    it("should not return draft translations by default", () => {
+      const translations = getContentTranslations("article-2"); // draft-article
       expect(translations).toHaveLength(0);
     });
   });
 
-  describe('getAllContentRoutes', () => {
-    it('should return routes for all locales', () => {
+  describe("getAllContentRoutes", () => {
+    it("should return routes for all locales", () => {
       const routes = getAllContentRoutes();
 
       // Check for English routes (default locale)
-      const enRoutes = routes.filter(r => r.locale === 'en');
-      expect(enRoutes.some(r => r.path === '/published-article')).toBe(true);
-      expect(enRoutes.some(r => r.path === '/blog/post-1')).toBe(true);
+      const enRoutes = routes.filter((r) => r.locale === "en");
+      expect(enRoutes.some((r) => r.path === "/published-article")).toBe(true);
+      expect(enRoutes.some((r) => r.path === "/blog/post-1")).toBe(true);
 
       // Check for Spanish routes
-      const esRoutes = routes.filter(r => r.locale === 'es');
-      expect(esRoutes.some(r => r.path === '/es/published-article')).toBe(true);
-      expect(esRoutes.some(r => r.path === '/es/blog/post-1')).toBe(true);
+      const esRoutes = routes.filter((r) => r.locale === "es");
+      expect(esRoutes.some((r) => r.path === "/es/published-article")).toBe(true);
+      expect(esRoutes.some((r) => r.path === "/es/blog/post-1")).toBe(true);
     });
 
-    it('should filter by content types', () => {
-      const routes = getAllContentRoutes(['blog']);
-      expect(routes.every(r => r.slug.startsWith('blog/'))).toBe(true);
+    it("should filter by content types", () => {
+      const routes = getAllContentRoutes(["blog"]);
+      expect(routes.every((r) => r.slug.startsWith("blog/"))).toBe(true);
     });
   });
 
-  describe('extractUserUidFromSlug', () => {
-    it('should extract GUID from user-specific slug', () => {
+  describe("extractUserUidFromSlug", () => {
+    it("should extract GUID from user-specific slug", () => {
       const uid = extractUserUidFromSlug(`published-article-${TEST_USER_UID}`);
       expect(uid).toBe(TEST_USER_UID);
     });
 
-    it('should return null for regular slug', () => {
-      const uid = extractUserUidFromSlug('published-article');
+    it("should return null for regular slug", () => {
+      const uid = extractUserUidFromSlug("published-article");
       expect(uid).toBeNull();
     });
 
-    it('should return null for invalid GUID pattern', () => {
-      const uid = extractUserUidFromSlug('published-article-invalid-guid');
+    it("should return null for invalid GUID pattern", () => {
+      const uid = extractUserUidFromSlug("published-article-invalid-guid");
       expect(uid).toBeNull();
     });
 
-    it('should handle different GUID formats', () => {
+    it("should handle different GUID formats", () => {
       const uid1 = extractUserUidFromSlug(`article-${TEST_USER_UID}`);
       const uid2 = extractUserUidFromSlug(`article-${TEST_USER_UID_2}`);
 
@@ -295,128 +292,129 @@ describe('LeadCMS SDK Core Functionality', () => {
     });
   });
 
-  describe('getAvailableLanguages', () => {
-    it('should return all available languages', () => {
+  describe("getAvailableLanguages", () => {
+    it("should return all available languages", () => {
       const languages = getAvailableLanguages();
-      expect(languages).toContain('en');
-      expect(languages).toContain('es');
+      expect(languages).toContain("en");
+      expect(languages).toContain("es");
       expect(languages).toHaveLength(2);
     });
   });
 
-  describe('Configuration loading', () => {
-    it('should load header config for default locale', () => {
+  describe("Configuration loading", () => {
+    it("should load header config for default locale", () => {
       const config = getHeaderConfig();
       expect(config).not.toBeNull();
       expect(config?.navigation).toHaveLength(3);
-      expect(config?.navigation[0].label).toBe('Home');
+      expect((config?.navigation as Array<{ label: string }>)[0]?.label).toBe("Home");
     });
 
-    it('should load header config for specific locale', () => {
-      const config = getHeaderConfig('es');
+    it("should load header config for specific locale", () => {
+      const config = getHeaderConfig("es");
       expect(config).not.toBeNull();
-      expect(config?.navigation[0].label).toBe('Inicio');
+      expect((config?.navigation as Array<{ label: string }>)[0]?.label).toBe("Inicio");
     });
 
-    it('should load user-specific draft config', () => {
-      const config = getHeaderConfig('en', TEST_USER_UID);
+    it("should load user-specific draft config", () => {
+      const config = getHeaderConfig("en", TEST_USER_UID);
       expect(config).not.toBeNull();
       expect(config?.navigation).toHaveLength(4); // Draft has extra item
-      expect(config?.navigation[0].label).toBe('Home (Draft)');
+      expect((config?.navigation as Array<{ label: string }>)[0]?.label).toBe("Home (Draft)");
     });
 
-    it('should use loadContentConfig for generic configs', () => {
-      const config = loadContentConfig<any>('header');
+    it("should use loadContentConfig for generic configs", () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const config = loadContentConfig<any>("header");
       expect(config).not.toBeNull();
     });
   });
 
-  describe('Locale utilities', () => {
-    it('should extract locale from path', () => {
-      expect(getLocaleFromPath('/en/about')).toBe('en');
-      expect(getLocaleFromPath('/es/blog/post-1')).toBe('es');
-      expect(getLocaleFromPath('/about')).toBe('en'); // default
-      expect(getLocaleFromPath('/unknown/about')).toBe('en'); // default for unknown
+  describe("Locale utilities", () => {
+    it("should extract locale from path", () => {
+      expect(getLocaleFromPath("/en/about")).toBe("en");
+      expect(getLocaleFromPath("/es/blog/post-1")).toBe("es");
+      expect(getLocaleFromPath("/about")).toBe("en"); // default
+      expect(getLocaleFromPath("/unknown/about")).toBe("en"); // default for unknown
     });
 
-    it('should make links locale-aware', () => {
-      expect(makeLocaleAwareLink('/about', 'en')).toBe('/about'); // default locale
-      expect(makeLocaleAwareLink('/about', 'es')).toBe('/es/about');
-      expect(makeLocaleAwareLink('about', 'es')).toBe('/es/about');
-      expect(makeLocaleAwareLink('https://example.com', 'es')).toBe('https://example.com'); // external
-      expect(makeLocaleAwareLink('#section', 'es')).toBe('#section'); // anchor
+    it("should make links locale-aware", () => {
+      expect(makeLocaleAwareLink("/about", "en")).toBe("/about"); // default locale
+      expect(makeLocaleAwareLink("/about", "es")).toBe("/es/about");
+      expect(makeLocaleAwareLink("about", "es")).toBe("/es/about");
+      expect(makeLocaleAwareLink("https://example.com", "es")).toBe("https://example.com"); // external
+      expect(makeLocaleAwareLink("#section", "es")).toBe("#section"); // anchor
     });
   });
 
-  describe('Edge cases and error handling', () => {
-    it('should handle non-existent locales gracefully', () => {
-      const content = getCMSContentBySlugForLocale('published-article', 'fr');
+  describe("Edge cases and error handling", () => {
+    it("should handle non-existent locales gracefully", () => {
+      const content = getCMSContentBySlugForLocale("published-article", "fr");
       expect(content).toBeNull();
     });
 
-    it('should handle corrupted date strings', () => {
+    it("should handle corrupted date strings", () => {
       // Mock a file with invalid date
       const content: CMSContent = {
         id: 1,
-        slug: 'test',
-        type: 'article',
-        body: 'content',
-        publishedAt: 'invalid-date',
+        slug: "test",
+        type: "article",
+        body: "content",
+        publishedAt: "invalid-date",
       };
 
       // Should not throw, but treat as draft due to invalid date
       expect(() => isContentDraft(content)).not.toThrow();
 
       // Check if the date is actually invalid
-      const invalidDate = new Date('invalid-date');
+      const invalidDate = new Date("invalid-date");
       expect(isNaN(invalidDate.getTime())).toBe(true);
 
       // Invalid date should be treated as future (draft)
       expect(isContentDraft(content)).toBe(true);
     });
 
-    it('should handle empty content directories', () => {
+    it("should handle empty content directories", () => {
       // This should return empty array for nonexistent locale
-      const slugs = getAllContentSlugsForLocale('fr'); // French doesn't exist in our fixtures
+      const slugs = getAllContentSlugsForLocale("fr"); // French doesn't exist in our fixtures
       expect(Array.isArray(slugs)).toBe(true);
       expect(slugs.length).toBe(0);
     });
   });
 
-  describe('Time-sensitive tests', () => {
-    it('should handle edge case around current time', () => {
+  describe("Time-sensitive tests", () => {
+    it("should handle edge case around current time", () => {
       // Mock current time to be very close to publishedAt
-      mockDate('2024-10-28T10:00:01Z'); // 1 second after published article
+      mockDate("2024-10-28T10:00:01Z"); // 1 second after published article
 
-      const content = getCMSContentBySlug('published-article');
+      const content = getCMSContentBySlug("published-article");
       expect(content).not.toBeNull(); // Should still be published
 
       // Mock to be 1 second before
-      mockDate('2024-10-28T09:59:59Z');
-      const contentBefore = getCMSContentBySlug('published-article');
+      mockDate("2024-10-28T09:59:59Z");
+      const contentBefore = getCMSContentBySlug("published-article");
       expect(contentBefore).toBeNull(); // Should be draft (future)
     });
 
-    it('should handle timezone differences correctly', () => {
+    it("should handle timezone differences correctly", () => {
       const content: CMSContent = {
         id: 1,
-        slug: 'test',
-        type: 'article',
-        body: 'content',
-        publishedAt: '2024-10-29T12:00:00+02:00', // Same time as mock but with timezone
+        slug: "test",
+        type: "article",
+        body: "content",
+        publishedAt: "2024-10-29T12:00:00+02:00", // Same time as mock but with timezone
       };
 
       expect(isContentDraft(content)).toBe(false); // Should be published
     });
   });
 
-  describe('Content Transformation and Comparison', () => {
+  describe("Content Transformation and Comparison", () => {
     // Import necessary dependencies for transformation tests
-    const fs = require('fs/promises');
-    const path = require('path');
-    const os = require('os');
+    const fs = require("fs/promises");
+    const path = require("path");
+    const os = require("os");
 
-    const tempDir = path.join(os.tmpdir(), 'leadcms-transform-test-' + Date.now());
+    const tempDir = path.join(os.tmpdir(), "leadcms-transform-test-" + Date.now());
 
     beforeEach(async () => {
       await fs.mkdir(tempDir, { recursive: true });
@@ -425,17 +423,20 @@ describe('LeadCMS SDK Core Functionality', () => {
     afterEach(async () => {
       try {
         await fs.rm(tempDir, { recursive: true, force: true });
-      } catch (error) {
+      } catch {
         // Ignore cleanup errors
       }
     });
 
     // Import shared transformation logic
-    const { transformRemoteToLocalFormat, transformRemoteForComparison } = require('../src/lib/content-transformation');
+    const {
+      transformRemoteToLocalFormat,
+      transformRemoteForComparison,
+    } = require("../src/lib/content-transformation");
 
-    it('should preserve createdAt and publishedAt in content transformation', async () => {
+    it("should preserve createdAt and publishedAt in content transformation", async () => {
       // Create a local file that matches real-world structure
-      const localFilePath = path.join(tempDir, 'test-content.mdx');
+      const localFilePath = path.join(tempDir, "test-content.mdx");
       const localContent = `---
 id: 51
 createdAt: '2025-09-10T09:32:54.223364Z'
@@ -457,39 +458,39 @@ This is test content.`;
       // Remote content with the same timestamp fields
       const remoteContent = {
         id: 51,
-        createdAt: '2025-09-10T09:32:54.223364Z',
-        title: 'Test Content',
-        description: 'A test article',
-        slug: 'test-content',
-        type: 'doc',
-        author: 'Test Author',
-        language: 'en',
-        publishedAt: '2025-09-09T18:30:00Z',
+        createdAt: "2025-09-10T09:32:54.223364Z",
+        title: "Test Content",
+        description: "A test article",
+        slug: "test-content",
+        type: "doc",
+        author: "Test Author",
+        language: "en",
+        publishedAt: "2025-09-09T18:30:00Z",
         isLocal: false,
         body: `# Test Content
 
-This is test content.`
+This is test content.`,
       };
 
-      const typeMap = { doc: 'MDX' as const };
+      const typeMap = { doc: "MDX" as const };
 
       // Transform remote content
       const transformedRemote = await transformRemoteToLocalFormat(remoteContent, typeMap);
-      const localFileContent = await fs.readFile(localFilePath, 'utf-8');
+      const localFileContent = await fs.readFile(localFilePath, "utf-8");
 
       // Should be identical after transformation
       expect(localFileContent.trim()).toBe(transformedRemote.trim());
 
       // Verify that timestamp fields are preserved
-      expect(transformedRemote).toContain('createdAt');
-      expect(transformedRemote).toContain('publishedAt');
-      expect(transformedRemote).toContain('2025-09-10T09:32:54.223364Z');
-      expect(transformedRemote).toContain('2025-09-09T18:30:00Z');
+      expect(transformedRemote).toContain("createdAt");
+      expect(transformedRemote).toContain("publishedAt");
+      expect(transformedRemote).toContain("2025-09-10T09:32:54.223364Z");
+      expect(transformedRemote).toContain("2025-09-09T18:30:00Z");
     });
 
-    it('should detect legitimate updatedAt differences as changes', async () => {
+    it("should detect legitimate updatedAt differences as changes", async () => {
       // Local file without updatedAt
-      const localFilePath = path.join(tempDir, 'updated-content.mdx');
+      const localFilePath = path.join(tempDir, "updated-content.mdx");
       const localContent = `---
 id: 51
 createdAt: '2025-09-10T09:32:54.223364Z'
@@ -504,57 +505,57 @@ publishedAt: '2025-09-09T18:30:00Z'
       // Remote content with updatedAt (indicating changes)
       const remoteContent = {
         id: 51,
-        createdAt: '2025-09-10T09:32:54.223364Z',
-        updatedAt: '2025-10-29T10:00:00.000Z',
-        title: 'Test Content',
-        publishedAt: '2025-09-09T18:30:00Z',
+        createdAt: "2025-09-10T09:32:54.223364Z",
+        updatedAt: "2025-10-29T10:00:00.000Z",
+        title: "Test Content",
+        publishedAt: "2025-09-09T18:30:00Z",
         isLocal: false,
-        body: '# Test Content'
+        body: "# Test Content",
       };
 
-      const typeMap = { doc: 'MDX' as const };
+      const typeMap = { doc: "MDX" as const };
       const transformedRemote = await transformRemoteToLocalFormat(remoteContent, typeMap);
-      const localFileContent = await fs.readFile(localFilePath, 'utf-8');
+      const localFileContent = await fs.readFile(localFilePath, "utf-8");
 
       // Should detect difference due to updatedAt
       const hasChanges = localFileContent.trim() !== transformedRemote.trim();
       expect(hasChanges).toBe(true);
-      expect(transformedRemote).toContain('updatedAt');
-      expect(localFileContent).not.toContain('updatedAt');
+      expect(transformedRemote).toContain("updatedAt");
+      expect(localFileContent).not.toContain("updatedAt");
     });
 
-    it('should exclude only truly internal fields from transformation', async () => {
+    it("should exclude only truly internal fields from transformation", async () => {
       const remoteContent = {
         id: 51,
-        title: 'Test',
-        createdAt: '2025-09-10T09:32:54.223364Z',
-        updatedAt: '2025-10-01T10:00:00.000Z',
-        publishedAt: '2025-09-09T18:30:00Z',
+        title: "Test",
+        createdAt: "2025-09-10T09:32:54.223364Z",
+        updatedAt: "2025-10-01T10:00:00.000Z",
+        publishedAt: "2025-09-09T18:30:00Z",
         isLocal: false, // Should be excluded (truly internal)
-        body: '# Test Content', // Should be excluded (content, not metadata)
-        customField: 'user value', // Should be included
-        type: 'doc'
+        body: "# Test Content", // Should be excluded (content, not metadata)
+        customField: "user value", // Should be included
+        type: "doc",
       };
 
-      const typeMap = { doc: 'MDX' as const };
+      const typeMap = { doc: "MDX" as const };
       const result = await transformRemoteToLocalFormat(remoteContent, typeMap);
 
       // Should include user content fields and timestamps
-      expect(result).toContain('createdAt');
-      expect(result).toContain('updatedAt');
-      expect(result).toContain('publishedAt');
-      expect(result).toContain('customField');
-      expect(result).toContain('title');
+      expect(result).toContain("createdAt");
+      expect(result).toContain("updatedAt");
+      expect(result).toContain("publishedAt");
+      expect(result).toContain("customField");
+      expect(result).toContain("title");
 
       // Should exclude truly internal fields
-      expect(result).not.toContain('isLocal: false');
+      expect(result).not.toContain("isLocal: false");
       // Body content should be in the content section, not frontmatter
-      expect(result).toContain('# Test Content');
+      expect(result).toContain("# Test Content");
     });
 
-    it('should handle content comparison edge cases', async () => {
+    it("should handle content comparison edge cases", async () => {
       // Test with identical content except for whitespace normalization
-      const localFilePath = path.join(tempDir, 'whitespace-test.mdx');
+      const localFilePath = path.join(tempDir, "whitespace-test.mdx");
       const localContent = `---
 id: 51
 title: Test
@@ -568,21 +569,23 @@ Some content here.`;
 
       const remoteContent = {
         id: 51,
-        title: 'Test',
+        title: "Test",
         isLocal: false,
-        body: `# Test Content\n\nSome content here.` // Different whitespace
+        body: `# Test Content\n\nSome content here.`, // Different whitespace
       };
 
-      const transformedRemote = await transformRemoteToLocalFormat(remoteContent, { doc: 'MDX' as const });
-      const localFileContent = await fs.readFile(localFilePath, 'utf-8');
+      const transformedRemote = await transformRemoteToLocalFormat(remoteContent, {
+        doc: "MDX" as const,
+      });
+      const localFileContent = await fs.readFile(localFilePath, "utf-8");
 
       // Should normalize whitespace differences
       const normalizeContent = (content: string): string => {
         return content
           .trim()
-          .replace(/\r\n/g, '\n')
-          .replace(/\s+\n/g, '\n')
-          .replace(/\n\n+/g, '\n\n');
+          .replace(/\r\n/g, "\n")
+          .replace(/\s+\n/g, "\n")
+          .replace(/\n\n+/g, "\n\n");
       };
 
       const normalizedLocal = normalizeContent(localFileContent);
@@ -591,9 +594,9 @@ Some content here.`;
       expect(normalizedLocal).toBe(normalizedRemote);
     });
 
-    it('should detect differences when remote has fields not present in local file', async () => {
+    it("should detect differences when remote has fields not present in local file", async () => {
       // Create a local file that is missing some remote fields (e.g., updatedAt)
-      const localFilePath = path.join(tempDir, 'real-world-content.mdx');
+      const localFilePath = path.join(tempDir, "real-world-content.mdx");
       const localContent = `---
 id: 25
 createdAt: '2025-09-10T09:32:54.223364Z'
@@ -615,46 +618,50 @@ Test page content.`;
       // Remote content has all the same fields plus updatedAt
       const remoteContent = {
         id: 25,
-        createdAt: '2025-09-10T09:32:54.223364Z',
-        updatedAt: '2025-10-15T14:22:33.123456Z', // Not in local
-        title: 'Test Page',
-        description: 'Test page description',
-        slug: 'test-page',
-        type: 'page',
-        author: 'Test Author',
-        language: 'en',
-        publishedAt: '2025-09-09T18:30:00Z',
+        createdAt: "2025-09-10T09:32:54.223364Z",
+        updatedAt: "2025-10-15T14:22:33.123456Z", // Not in local
+        title: "Test Page",
+        description: "Test page description",
+        slug: "test-page",
+        type: "page",
+        author: "Test Author",
+        language: "en",
+        publishedAt: "2025-09-09T18:30:00Z",
         isLocal: false,
         body: `# Test Page
 
-Test page content.`
+Test page content.`,
       };
 
-      const typeMap = { page: 'MDX' as const };
+      const typeMap = { page: "MDX" as const };
 
-      const localFileContent = await fs.readFile(localFilePath, 'utf-8');
+      const localFileContent = await fs.readFile(localFilePath, "utf-8");
 
       // transformRemoteForComparison now includes ALL non-system remote fields
       // so that field removals from local content are properly detected.
       // False positive protection for new server fields comes from the
       // timestamp check in matchContent (remote newer -> conflict).
-      const transformedRemote = await transformRemoteForComparison(remoteContent, localFileContent, typeMap);
+      const transformedRemote = await transformRemoteForComparison(
+        remoteContent,
+        localFileContent,
+        typeMap
+      );
 
       // updatedAt should be present in the transform output even though local doesn't have it
-      expect(transformedRemote).toContain('updatedAt');
-      expect(localFileContent).not.toContain('updatedAt');
+      expect(transformedRemote).toContain("updatedAt");
+      expect(localFileContent).not.toContain("updatedAt");
 
       // The comparison correctly detects a difference
       const hasChanges = localFileContent.trim() !== transformedRemote.trim();
       expect(hasChanges).toBe(true);
 
       // System field 'isLocal' should still be excluded
-      expect(transformedRemote).not.toContain('isLocal');
+      expect(transformedRemote).not.toContain("isLocal");
     });
 
-    it('should show no changes when local file matches remote content exactly', async () => {
+    it("should show no changes when local file matches remote content exactly", async () => {
       // Create a local file that has ALL the same fields as remote (typical after pull)
-      const localFilePath = path.join(tempDir, 'synced-content.mdx');
+      const localFilePath = path.join(tempDir, "synced-content.mdx");
       const localContent = `---
 id: 25
 createdAt: '2025-09-10T09:32:54.223364Z'
@@ -676,98 +683,102 @@ Test page content.`;
 
       const remoteContent = {
         id: 25,
-        createdAt: '2025-09-10T09:32:54.223364Z',
-        updatedAt: '2025-10-15T14:22:33.123456Z',
-        title: 'Test Page',
-        description: 'Test page description',
-        slug: 'test-page',
-        type: 'page',
-        author: 'Test Author',
-        language: 'en',
-        publishedAt: '2025-09-09T18:30:00Z',
+        createdAt: "2025-09-10T09:32:54.223364Z",
+        updatedAt: "2025-10-15T14:22:33.123456Z",
+        title: "Test Page",
+        description: "Test page description",
+        slug: "test-page",
+        type: "page",
+        author: "Test Author",
+        language: "en",
+        publishedAt: "2025-09-09T18:30:00Z",
         isLocal: false,
         body: `# Test Page
 
-Test page content.`
+Test page content.`,
       };
 
-      const typeMap = { page: 'MDX' as const };
+      const typeMap = { page: "MDX" as const };
 
-      const localFileContent = await fs.readFile(localFilePath, 'utf-8');
-      const transformedRemote = await transformRemoteForComparison(remoteContent, localFileContent, typeMap);
+      const localFileContent = await fs.readFile(localFilePath, "utf-8");
+      const transformedRemote = await transformRemoteForComparison(
+        remoteContent,
+        localFileContent,
+        typeMap
+      );
 
       // When local content has ALL the same fields as remote, no changes should be detected
-      const { hasContentDifferences } = await import('../src/lib/content-transformation.js');
+      const { hasContentDifferences } = await import("../src/lib/content-transformation.js");
       expect(hasContentDifferences(localFileContent, transformedRemote)).toBe(false);
     });
 
-    it('should not include null values in transformed frontmatter', async () => {
+    it("should not include null values in transformed frontmatter", async () => {
       // Import the transformation function
-      const { transformRemoteToLocalFormat } = await import('../src/lib/content-transformation.js');
+      const { transformRemoteToLocalFormat } = await import("../src/lib/content-transformation.js");
 
       // Create remote content with null values that should be excluded
       const remoteContent = {
         id: 56,
-        slug: 'blog',
-        type: 'blog-index',
-        title: 'Test Blog',
-        description: 'Test description',
-        coverImageUrl: '',
-        coverImageAlt: '',
-        author: 'Test Author',
-        language: 'en',
-        category: 'Blog',
+        slug: "blog",
+        type: "blog-index",
+        title: "Test Blog",
+        description: "Test description",
+        coverImageUrl: "",
+        coverImageAlt: "",
+        author: "Test Author",
+        language: "en",
+        category: "Blog",
         tags: [],
         allowComments: false,
-        publishedAt: '2025-10-23T18:30:00Z',
-        createdAt: '2025-10-24T12:38:00.088466Z',
-        updatedAt: '2025-10-24T12:38:25.125472Z',
+        publishedAt: "2025-10-23T18:30:00Z",
+        createdAt: "2025-10-24T12:38:00.088466Z",
+        updatedAt: "2025-10-24T12:38:25.125472Z",
         // These are null values that should NOT appear in the output
         comments: null,
         translations: null,
         translationKey: null,
         source: null,
-        body: 'Test content'
+        body: "Test content",
       };
 
-      const typeMap = { 'blog-index': 'MDX' as const };
+      const typeMap = { "blog-index": "MDX" as const };
       const transformed = await transformRemoteToLocalFormat(remoteContent, typeMap);
 
       // Verify that null values are NOT included in the output
-      expect(transformed).not.toContain('comments: null');
-      expect(transformed).not.toContain('translations: null');
-      expect(transformed).not.toContain('translationKey: null');
-      expect(transformed).not.toContain('source: null');
+      expect(transformed).not.toContain("comments: null");
+      expect(transformed).not.toContain("translations: null");
+      expect(transformed).not.toContain("translationKey: null");
+      expect(transformed).not.toContain("source: null");
 
       // Verify that non-null values ARE included
-      expect(transformed).toContain('title: Test Blog');
-      expect(transformed).toContain('author: Test Author');
-      expect(transformed).toContain('allowComments: false'); // false is not null
-      expect(transformed).not.toContain('tags:'); // empty array is filtered out
+      expect(transformed).toContain("title: Test Blog");
+      expect(transformed).toContain("author: Test Author");
+      expect(transformed).toContain("allowComments: false"); // false is not null
+      expect(transformed).not.toContain("tags:"); // empty array is filtered out
       expect(transformed).toContain("coverImageUrl: ''"); // empty string is not null
     });
 
-    it('should transform API media URLs to local media URLs in frontmatter and body content', async () => {
+    it("should transform API media URLs to local media URLs in frontmatter and body content", async () => {
       // Import the transformation function
-      const { transformRemoteToLocalFormat } = await import('../src/lib/content-transformation.js');
+      const { transformRemoteToLocalFormat } = await import("../src/lib/content-transformation.js");
 
       // Create remote content with API media URLs that should be transformed
       const remoteContent = {
         id: 58,
-        slug: 'test-article',
-        type: 'article',
-        title: 'Test Article',
-        description: 'Test article description',
-        coverImageUrl: '/api/media/test-cover.jpg',
-        coverImageAlt: 'Test Cover',
-        author: 'Test Author',
-        language: 'en',
-        category: 'Test',
-        tags: ['test'],
+        slug: "test-article",
+        type: "article",
+        title: "Test Article",
+        description: "Test article description",
+        coverImageUrl: "/api/media/test-cover.jpg",
+        coverImageAlt: "Test Cover",
+        author: "Test Author",
+        language: "en",
+        category: "Test",
+        tags: ["test"],
         allowComments: true,
         featured: false,
-        createdAt: '2025-10-24T17:03:44.678452Z',
-        updatedAt: '2025-10-29T11:09:20.158347Z',
+        createdAt: "2025-10-24T17:03:44.678452Z",
+        updatedAt: "2025-10-29T11:09:20.158347Z",
         body: `# Test Content
 
 Content with media references:
@@ -791,31 +802,31 @@ Check this ![inline image](/api/media/icon.svg) and [resources](/api/media/packa
   src="/api/media/example.jpg"
   poster="/api/media/poster.jpg"
   data-background="/api/media/bg.png"
-/>`
+/>`,
       };
 
-      const typeMap = { article: 'MDX' as const };
+      const typeMap = { article: "MDX" as const };
       const transformed = await transformRemoteToLocalFormat(remoteContent, typeMap);
 
       // Verify that /api/media/ URLs are converted to /media/ URLs in frontmatter
-      expect(transformed).toContain('coverImageUrl: /media/test-cover.jpg');
-      expect(transformed).not.toContain('coverImageUrl: /api/media/');
+      expect(transformed).toContain("coverImageUrl: /media/test-cover.jpg");
+      expect(transformed).not.toContain("coverImageUrl: /api/media/");
 
       // Verify that /api/media/ URLs are converted in the body content
-      expect(transformed).toContain('![Test Image](/media/test.jpg)');
-      expect(transformed).toContain('[Download PDF](/media/doc.pdf)');
+      expect(transformed).toContain("![Test Image](/media/test.jpg)");
+      expect(transformed).toContain("[Download PDF](/media/doc.pdf)");
       expect(transformed).toContain('image="/media/logo.svg"');
       expect(transformed).toContain('thumbnail="/media/thumb.jpg"');
       expect(transformed).toContain('coverImage="/media/cover.jpg"');
       expect(transformed).toContain('authorAvatar="/media/avatar.png"');
-      expect(transformed).toContain('![inline image](/media/icon.svg)');
-      expect(transformed).toContain('[resources](/media/package.zip)');
+      expect(transformed).toContain("![inline image](/media/icon.svg)");
+      expect(transformed).toContain("[resources](/media/package.zip)");
       expect(transformed).toContain('src="/media/example.jpg"');
       expect(transformed).toContain('poster="/media/poster.jpg"');
       expect(transformed).toContain('data-background="/media/bg.png"');
 
       // Verify NO /api/media/ URLs remain anywhere
-      expect(transformed).not.toContain('/api/media/');
+      expect(transformed).not.toContain("/api/media/");
     });
   });
 });

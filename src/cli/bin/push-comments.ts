@@ -3,22 +3,22 @@
  * LeadCMS Push Comments CLI Entry Point
  */
 
-import { pushComments } from '../../scripts/push-comments.js';
-import { requireAuthenticatedUser, resolveIdentity } from '../../scripts/leadcms-helpers.js';
-import { initVerboseFromArgs } from '../../lib/logger.js';
-import { startSpinner } from '../../lib/spinner.js';
-import { parseRemoteFlag } from './remote-flag.js';
+import { pushComments } from "../../scripts/push-comments.js";
+import { requireAuthenticatedUser, resolveIdentity } from "../../scripts/leadcms-helpers.js";
+import { initVerboseFromArgs } from "../../lib/logger.js";
+import { startSpinner } from "../../lib/spinner.js";
+import { parseRemoteFlag } from "./remote-flag.js";
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
 const remoteContext = parseRemoteFlag(args);
 
-const force = args.includes('--force') || args.includes('-f');
-const dryRun = args.includes('--dry-run') || args.includes('-d');
-const allowDelete = args.includes('--delete');
+const force = args.includes("--force") || args.includes("-f");
+const dryRun = args.includes("--dry-run") || args.includes("-d");
+const allowDelete = args.includes("--delete");
 
 let targetId: string | undefined;
-const idIndex = args.findIndex(arg => arg === '--id');
+const idIndex = args.findIndex((arg) => arg === "--id");
 if (idIndex !== -1 && args[idIndex + 1]) {
   targetId = args[idIndex + 1];
 }
@@ -29,11 +29,11 @@ if (!dryRun) {
   await resolveIdentity(remoteContext?.apiKey);
 }
 
-const spinner = startSpinner('Pushing comments to LeadCMS…');
+const spinner = startSpinner("Pushing comments to LeadCMS…");
 pushComments({ force, dryRun, allowDelete, targetId, remoteContext })
   .then(() => spinner.stop())
-  .catch((error: any) => {
-    spinner.fail('Comment push failed');
-    console.error(error.message);
+  .catch((error: unknown) => {
+    spinner.fail("Comment push failed");
+    console.error((error as Error).message);
     process.exit(1);
   });

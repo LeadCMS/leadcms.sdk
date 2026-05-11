@@ -51,10 +51,7 @@ const REMOTES_BASE_DIR = ".leadcms/remotes";
  * @param config      Optional config override (for testing). Falls back
  *                    to `getConfig()`.
  */
-export function resolveRemote(
-  remoteName?: string,
-  config?: LeadCMSConfig,
-): RemoteContext {
+export function resolveRemote(remoteName?: string, config?: LeadCMSConfig): RemoteContext {
   const cfg = config ?? getConfig();
 
   // ── Single-remote mode ───────────────────────────────────────────
@@ -62,7 +59,7 @@ export function resolveRemote(
     if (remoteName && remoteName !== "default") {
       throw new Error(
         `Remote "${remoteName}" is not configured. ` +
-        `Add a "remotes" block to your leadcms config file to use named remotes.`,
+          `Add a "remotes" block to your leadcms config file to use named remotes.`
       );
     }
     return {
@@ -80,23 +77,19 @@ export function resolveRemote(
   // 2. LEADCMS_REMOTE env var
   // 3. URL match: LEADCMS_URL / NEXT_PUBLIC_LEADCMS_URL against configured remotes
   // 4. defaultRemote from config
-  const name = remoteName
-    ?? process.env.LEADCMS_REMOTE
-    ?? resolveRemoteByUrl(cfg)
-    ?? cfg.defaultRemote;
+  const name =
+    remoteName ?? process.env.LEADCMS_REMOTE ?? resolveRemoteByUrl(cfg) ?? cfg.defaultRemote;
   if (!name) {
     throw new Error(
       `No remote specified and no "defaultRemote" configured. ` +
-      `Either pass --remote <name> or set "defaultRemote" in your config.`,
+        `Either pass --remote <name> or set "defaultRemote" in your config.`
     );
   }
 
   const remote = cfg.remotes[name];
   if (!remote) {
     const available = Object.keys(cfg.remotes).join(", ");
-    throw new Error(
-      `Remote "${name}" is not configured. Available remotes: ${available}`,
-    );
+    throw new Error(`Remote "${name}" is not configured. Available remotes: ${available}`);
   }
 
   const isDefault = name === cfg.defaultRemote;
@@ -131,11 +124,14 @@ export function listRemotes(config?: LeadCMSConfig): RemoteContext[] {
  * Returns the matching remote name, or undefined if no match.
  */
 function resolveRemoteByUrl(cfg: LeadCMSConfig): string | undefined {
-  const envUrl = (process.env.LEADCMS_URL || process.env.NEXT_PUBLIC_LEADCMS_URL || '').replace(/\/+$/, '');
+  const envUrl = (process.env.LEADCMS_URL || process.env.NEXT_PUBLIC_LEADCMS_URL || "").replace(
+    /\/+$/,
+    ""
+  );
   if (!envUrl || !cfg.remotes) return undefined;
 
   for (const [name, remote] of Object.entries(cfg.remotes)) {
-    if ((remote.url || '').replace(/\/+$/, '') === envUrl) {
+    if ((remote.url || "").replace(/\/+$/, "") === envUrl) {
       return name;
     }
   }
@@ -152,9 +148,7 @@ function resolveRemoteByUrl(cfg: LeadCMSConfig): string | undefined {
  * NOTE: NEXT_PUBLIC_* prefixed keys are intentionally NOT checked here.
  * API keys must never be exposed to the browser via NEXT_PUBLIC_.
  */
-function resolveApiKeyFromEnv(
-  remoteName: string,
-): string | undefined {
+function resolveApiKeyFromEnv(remoteName: string): string | undefined {
   const envName = remoteName.toUpperCase().replace(/-/g, "_");
   const remoteSpecific = process.env[`LEADCMS_REMOTE_${envName}_API_KEY`];
   if (remoteSpecific) return remoteSpecific;
@@ -167,7 +161,14 @@ function resolveApiKeyFromEnv(
 /** Absolute path to a sync token file for a given remote + entity type. */
 export function syncTokenPath(
   ctx: RemoteContext,
-  entityType: "content" | "media" | "comments" | "email-templates" | "segments" | "sequences" | "redirects",
+  entityType:
+    | "content"
+    | "media"
+    | "comments"
+    | "email-templates"
+    | "segments"
+    | "sequences"
+    | "redirects"
 ): string {
   return path.join(ctx.stateDir, `${entityType}-sync-token`);
 }
@@ -210,11 +211,15 @@ function deduplicateSection(
   section: Record<string, Record<string, MetadataEntry>>,
   incomingLang: string,
   incomingSlug: string,
-  id: number | string,
+  id: number | string
 ): void {
   for (const [lang, slugs] of Object.entries(section)) {
     for (const [slug, entry] of Object.entries(slugs)) {
-      if ((lang !== incomingLang || slug !== incomingSlug) && entry.id != null && String(entry.id) === String(id)) {
+      if (
+        (lang !== incomingLang || slug !== incomingSlug) &&
+        entry.id != null &&
+        String(entry.id) === String(id)
+      ) {
         delete slugs[slug];
       }
     }
@@ -257,7 +262,9 @@ function deduplicateSectionOnRead(section: Record<string, Record<string, Metadat
  * Sort a nested map: language keys sorted alphabetically,
  * and slugs within each language sorted alphabetically.
  */
-function sortNestedMap<T>(map: Record<string, Record<string, T>>): Record<string, Record<string, T>> {
+function sortNestedMap<T>(
+  map: Record<string, Record<string, T>>
+): Record<string, Record<string, T>> {
   const sorted: Record<string, Record<string, T>> = {};
   for (const lang of Object.keys(map).sort()) {
     sorted[lang] = {};
@@ -283,7 +290,7 @@ function sortFlatMap<T>(map: Record<string, T>): Record<string, T> {
 export function lookupRemoteId(
   map: MetadataMap,
   language: string,
-  slug: string,
+  slug: string
 ): number | string | undefined {
   return map.content[language]?.[slug]?.id;
 }
@@ -296,7 +303,7 @@ export function setRemoteId(
   map: MetadataMap,
   language: string,
   slug: string,
-  id: number | string,
+  id: number | string
 ): void {
   deduplicateSection(map.content, language, slug, id);
   if (!map.content[language]) map.content[language] = {};
@@ -315,7 +322,7 @@ export function setRemoteId(
  */
 export function findInNestedMetadataSection(
   section: Record<string, Record<string, MetadataEntry>> | undefined,
-  id: number | string,
+  id: number | string
 ): { language: string; key: string } | undefined {
   if (!section) return undefined;
   const idStr = String(id);
@@ -336,7 +343,7 @@ export function findInNestedMetadataSection(
  */
 export function findInFlatMetadataSection(
   section: Record<string, MetadataEntry> | undefined,
-  id: number | string,
+  id: number | string
 ): { key: string } | undefined {
   if (!section) return undefined;
   const idStr = String(id);
@@ -351,7 +358,7 @@ export function findInFlatMetadataSection(
 /** Reverse-lookup: find the content slug + language that owns a remote ID. */
 export function findContentByRemoteId(
   map: MetadataMap,
-  id: number | string,
+  id: number | string
 ): { language: string; slug: string } | undefined {
   const result = findInNestedMetadataSection(map.content, id);
   return result ? { language: result.language, slug: result.key } : undefined;
@@ -360,7 +367,7 @@ export function findContentByRemoteId(
 /** Reverse-lookup: find the email template name + language that owns a remote ID. */
 export function findEmailTemplateByRemoteId(
   map: MetadataMap,
-  id: number | string,
+  id: number | string
 ): { language: string; name: string } | undefined {
   const result = findInNestedMetadataSection(map.emailTemplates, id);
   return result ? { language: result.language, name: result.key } : undefined;
@@ -369,7 +376,7 @@ export function findEmailTemplateByRemoteId(
 /** Reverse-lookup: find the segment name that owns a remote ID. */
 export function findSegmentByRemoteId(
   map: MetadataMap,
-  id: number | string,
+  id: number | string
 ): { name: string } | undefined {
   const result = findInFlatMetadataSection(map.segments, id);
   return result ? { name: result.key } : undefined;
@@ -378,7 +385,7 @@ export function findSegmentByRemoteId(
 /** Reverse-lookup: find the sequence name + language that owns a remote ID. */
 export function findSequenceByRemoteId(
   map: MetadataMap,
-  id: number | string,
+  id: number | string
 ): { language: string; name: string } | undefined {
   const result = findInNestedMetadataSection(map.sequences, id);
   return result ? { language: result.language, name: result.key } : undefined;
@@ -388,7 +395,7 @@ export function findSequenceByRemoteId(
 export function lookupEmailTemplateRemoteId(
   map: MetadataMap,
   language: string,
-  name: string,
+  name: string
 ): number | string | undefined {
   return map.emailTemplates?.[language]?.[name]?.id;
 }
@@ -401,7 +408,7 @@ export function setEmailTemplateRemoteId(
   map: MetadataMap,
   language: string,
   name: string,
-  id: number | string,
+  id: number | string
 ): void {
   if (!map.emailTemplates) map.emailTemplates = {};
   deduplicateSection(map.emailTemplates, language, name, id);
@@ -460,10 +467,10 @@ export async function readMetadataMap(ctx: RemoteContext): Promise<MetadataMap> 
  */
 export async function clearMetadataSection(
   ctx: RemoteContext,
-  section: keyof MetadataMap,
+  section: keyof MetadataMap
 ): Promise<void> {
   const map = await readMetadataMap(ctx);
-  if (section === 'content') {
+  if (section === "content") {
     map.content = {};
   } else {
     delete map[section];
@@ -488,20 +495,13 @@ export async function clearMetadataSection(
       ? { redirects: sortFlatMap(map.redirects) }
       : {}),
   };
-  await fs.writeFile(
-    metadataMapPath(ctx),
-    JSON.stringify(sorted, null, 2),
-    "utf-8",
-  );
+  await fs.writeFile(metadataMapPath(ctx), JSON.stringify(sorted, null, 2), "utf-8");
 }
 
 /** Write the metadata-map for a remote, creating the directory if needed.
  *  Keys are sorted alphabetically for consistency across regenerations.
  */
-export async function writeMetadataMap(
-  ctx: RemoteContext,
-  map: MetadataMap,
-): Promise<void> {
+export async function writeMetadataMap(ctx: RemoteContext, map: MetadataMap): Promise<void> {
   await fs.mkdir(ctx.stateDir, { recursive: true });
   const sorted: MetadataMap = {
     content: sortNestedMap(map.content),
@@ -521,18 +521,14 @@ export async function writeMetadataMap(
       ? { redirects: sortFlatMap(map.redirects) }
       : {}),
   };
-  await fs.writeFile(
-    metadataMapPath(ctx),
-    JSON.stringify(sorted, null, 2),
-    "utf-8",
-  );
+  await fs.writeFile(metadataMapPath(ctx), JSON.stringify(sorted, null, 2), "utf-8");
 }
 
 /** Get metadata for a content item from the map. */
 export function getMetadataForContent(
   map: MetadataMap,
   language: string,
-  slug: string,
+  slug: string
 ): MetadataEntry | undefined {
   return map.content[language]?.[slug];
 }
@@ -550,7 +546,7 @@ export function setMetadataForContent(
   map: MetadataMap,
   language: string,
   slug: string,
-  entry: MetadataEntry,
+  entry: MetadataEntry
 ): void {
   if (!map.content[language]) map.content[language] = {};
   const current = map.content[language][slug] || {};
@@ -561,7 +557,7 @@ export function setMetadataForContent(
 export function getMetadataForEmailTemplate(
   map: MetadataMap,
   language: string,
-  name: string,
+  name: string
 ): MetadataEntry | undefined {
   return map.emailTemplates?.[language]?.[name];
 }
@@ -571,7 +567,7 @@ export function setMetadataForEmailTemplate(
   map: MetadataMap,
   language: string,
   name: string,
-  entry: MetadataEntry,
+  entry: MetadataEntry
 ): void {
   if (!map.emailTemplates) map.emailTemplates = {};
   if (!map.emailTemplates[language]) map.emailTemplates[language] = {};
@@ -585,7 +581,7 @@ export function setMetadataForEmailTemplate(
 export function lookupCommentRemoteId(
   map: MetadataMap,
   language: string,
-  translationKey: string,
+  translationKey: string
 ): number | string | undefined {
   return map.comments?.[language]?.[translationKey]?.id;
 }
@@ -597,7 +593,7 @@ export function setCommentRemoteId(
   map: MetadataMap,
   language: string,
   translationKey: string,
-  id: number | string,
+  id: number | string
 ): void {
   if (!map.comments) map.comments = {};
   deduplicateSection(map.comments, language, translationKey, id);
@@ -610,7 +606,7 @@ export function setCommentRemoteId(
 export function getMetadataForComment(
   map: MetadataMap,
   language: string,
-  translationKey: string,
+  translationKey: string
 ): MetadataEntry | undefined {
   return map.comments?.[language]?.[translationKey];
 }
@@ -620,7 +616,7 @@ export function setMetadataForComment(
   map: MetadataMap,
   language: string,
   translationKey: string,
-  entry: MetadataEntry,
+  entry: MetadataEntry
 ): void {
   if (!map.comments) map.comments = {};
   if (!map.comments[language]) map.comments[language] = {};
@@ -631,32 +627,12 @@ export function setMetadataForComment(
 // ── Segment helpers ───────────────────────────────────────────────────
 
 /**
- * Deduplicate a flat section (segments, sequences) on read:
- * if multiple keys map to the same ID, keep only the last one.
- */
-function deduplicateFlatSectionOnRead(section: Record<string, MetadataEntry>): void {
-  const seen = new Map<string, string>();
-  for (const [key, entry] of Object.entries(section)) {
-    if (entry.id != null) {
-      seen.set(String(entry.id), key);
-    }
-  }
-  for (const [key, entry] of Object.entries(section)) {
-    if (entry.id == null) continue;
-    const winner = seen.get(String(entry.id));
-    if (winner && winner !== key) {
-      delete section[key];
-    }
-  }
-}
-
-/**
  * Remove other entries in a flat section that already claim the given ID.
  */
 function deduplicateFlatSection(
   section: Record<string, MetadataEntry>,
   incomingKey: string,
-  id: number | string,
+  id: number | string
 ): void {
   for (const [key, entry] of Object.entries(section)) {
     if (key !== incomingKey && entry.id != null && String(entry.id) === String(id)) {
@@ -666,19 +642,12 @@ function deduplicateFlatSection(
 }
 
 /** Look up the remote ID for a segment by name. */
-export function lookupSegmentRemoteId(
-  map: MetadataMap,
-  name: string,
-): number | string | undefined {
+export function lookupSegmentRemoteId(map: MetadataMap, name: string): number | string | undefined {
   return map.segments?.[name]?.id;
 }
 
 /** Set the remote ID for a segment (keyed by name). */
-export function setSegmentRemoteId(
-  map: MetadataMap,
-  name: string,
-  id: number | string,
-): void {
+export function setSegmentRemoteId(map: MetadataMap, name: string, id: number | string): void {
   if (!map.segments) map.segments = {};
   deduplicateFlatSection(map.segments, name, id);
   const current = map.segments[name] || {};
@@ -686,19 +655,12 @@ export function setSegmentRemoteId(
 }
 
 /** Get metadata for a segment from the map. */
-export function getMetadataForSegment(
-  map: MetadataMap,
-  name: string,
-): MetadataEntry | undefined {
+export function getMetadataForSegment(map: MetadataMap, name: string): MetadataEntry | undefined {
   return map.segments?.[name];
 }
 
 /** Set metadata for a segment in the map. */
-export function setMetadataForSegment(
-  map: MetadataMap,
-  name: string,
-  entry: MetadataEntry,
-): void {
+export function setMetadataForSegment(map: MetadataMap, name: string, entry: MetadataEntry): void {
   if (!map.segments) map.segments = {};
   const current = map.segments[name] || {};
   map.segments[name] = { ...current, ...stripNulls(entry) };
@@ -710,7 +672,7 @@ export function setMetadataForSegment(
 export function lookupSequenceRemoteId(
   map: MetadataMap,
   language: string,
-  name: string,
+  name: string
 ): number | string | undefined {
   return map.sequences?.[language]?.[name]?.id;
 }
@@ -723,7 +685,7 @@ export function setSequenceRemoteId(
   map: MetadataMap,
   language: string,
   name: string,
-  id: number | string,
+  id: number | string
 ): void {
   if (!map.sequences) map.sequences = {};
   deduplicateSection(map.sequences, language, name, id);
@@ -736,7 +698,7 @@ export function setSequenceRemoteId(
 export function getMetadataForSequence(
   map: MetadataMap,
   language: string,
-  name: string,
+  name: string
 ): MetadataEntry | undefined {
   return map.sequences?.[language]?.[name];
 }
@@ -746,7 +708,7 @@ export function setMetadataForSequence(
   map: MetadataMap,
   language: string,
   name: string,
-  entry: MetadataEntry,
+  entry: MetadataEntry
 ): void {
   if (!map.sequences) map.sequences = {};
   if (!map.sequences[language]) map.sequences[language] = {};
@@ -761,20 +723,20 @@ export function setMetadataForSequence(
  * Unknown-language entries are placed under "_migrated" until next pull.
  */
 function migrateSequencesFormat(parsed: MetadataMap): void {
-  if (!parsed.sequences || typeof parsed.sequences !== 'object') return;
+  if (!parsed.sequences || typeof parsed.sequences !== "object") return;
   // Check if any first-level value is a MetadataEntry (has 'id' directly)
   const entries = Object.entries(parsed.sequences);
   const needsMigration = entries.some(
-    ([, val]) => val != null && typeof val === 'object' && 'id' in val && !isNestedRecord(val),
+    ([, val]) => val != null && typeof val === "object" && "id" in val && !isNestedRecord(val)
   );
   if (!needsMigration) return;
 
   const migrated: Record<string, Record<string, MetadataEntry>> = {};
   for (const [key, val] of entries) {
-    if (val != null && typeof val === 'object' && 'id' in val && !isNestedRecord(val)) {
+    if (val != null && typeof val === "object" && "id" in val && !isNestedRecord(val)) {
       // Old flat entry — move under "_migrated" language bucket
-      if (!migrated['_migrated']) migrated['_migrated'] = {};
-      migrated['_migrated'][key] = val as MetadataEntry;
+      if (!migrated["_migrated"]) migrated["_migrated"] = {};
+      migrated["_migrated"][key] = val as MetadataEntry;
     } else {
       // Already nested entry — keep as-is
       migrated[key] = val as Record<string, MetadataEntry>;
@@ -784,9 +746,9 @@ function migrateSequencesFormat(parsed: MetadataMap): void {
 }
 
 /** Check if a value looks like a nested record (has sub-objects, not a MetadataEntry). */
-function isNestedRecord(val: any): boolean {
-  if (typeof val !== 'object' || val === null) return false;
+function isNestedRecord(val: unknown): boolean {
+  if (typeof val !== "object" || val === null) return false;
   // MetadataEntry has id/createdAt/updatedAt string/number fields
   // Nested record has sub-objects as values
-  return Object.values(val).some(v => typeof v === 'object' && v !== null);
+  return Object.values(val).some((v) => typeof v === "object" && v !== null);
 }

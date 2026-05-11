@@ -1,9 +1,9 @@
 // Main exports
-export * from './lib/cms.js';
-export * from './lib/config.js';
-export * from './lib/locale-utils.js';
-export * from './lib/comment-types.js';
-export * from './lib/cms-config-types.js';
+export * from "./lib/cms.js";
+export * from "./lib/config.js";
+export * from "./lib/locale-utils.js";
+export * from "./lib/comment-types.js";
+export * from "./lib/cms-config-types.js";
 
 // Settings types for programmatic use
 export type {
@@ -14,7 +14,7 @@ export type {
   SettingComparisonEntry,
   SettingsStatusResult,
   SettingPushOperation,
-} from './lib/settings-types.js';
+} from "./lib/settings-types.js";
 export {
   TRACKED_SETTING_KEYS,
   AI_SITEPROFILE_PREFIX,
@@ -38,7 +38,7 @@ export {
   settingKeyToRelativePath,
   relativePathToSettingKey,
   getFileSettingTopLevelDirs,
-} from './lib/settings-types.js';
+} from "./lib/settings-types.js";
 
 // Automation types (segments, sequences)
 export type {
@@ -64,19 +64,29 @@ export type {
   LocalAutomationFile,
   AutomationEntityType,
   Utms,
-} from './lib/automation-types.js';
-export { toLocalSequence, toRemoteSequencePayload } from './lib/automation-types.js';
+} from "./lib/automation-types.js";
+export { toLocalSequence, toRemoteSequencePayload } from "./lib/automation-types.js";
 
 // Content merge utilities for three-way merge support
-export { threeWayMerge, threeWayMergeJson, isLocallyModified } from './lib/content-merge.js';
-export type { MergeResult } from './lib/content-merge.js';
+export { threeWayMerge, threeWayMergeJson, isLocallyModified } from "./lib/content-merge.js";
+export type { MergeResult } from "./lib/content-merge.js";
 
 // Export only public comment tree types (functions are exported from cms.js)
-export type { CommentTreeNode, CommentTreeOptions, CommentStatistics, CommentSortOrder } from './lib/comment-utils.js';
+export type {
+  CommentTreeNode,
+  CommentTreeOptions,
+  CommentStatistics,
+  CommentSortOrder,
+} from "./lib/comment-utils.js";
 
 // SEO metadata types and utilities
-export type { FrontmatterSeo, SeoMetadataDto, SeoDefaultSources } from './lib/seo-utils.js';
-export { computeSeoDefaults, apiSeoToFrontmatter, frontmatterSeoToApi, DEFAULT_ROBOTS } from './lib/seo-utils.js';
+export type { FrontmatterSeo, SeoMetadataDto, SeoDefaultSources } from "./lib/seo-utils.js";
+export {
+  computeSeoDefaults,
+  apiSeoToFrontmatter,
+  frontmatterSeoToApi,
+  DEFAULT_ROBOTS,
+} from "./lib/seo-utils.js";
 
 // LeadCMS SDK - Framework-agnostic content management
 //

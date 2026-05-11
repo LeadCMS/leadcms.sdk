@@ -13,7 +13,12 @@ import { saveContentFile } from "../lib/content-transformation.js";
 import { CONTENT_DIR, fetchContentTypes } from "./leadcms-helpers.js";
 import { resetContentState } from "./pull-all.js";
 import { logger } from "../lib/logger.js";
-import { filterContentOperations, getContentStatusData, type ContentOperations, type MatchOperation } from "./push-leadcms-content.js";
+import {
+  filterContentOperations,
+  getContentStatusData,
+  type ContentOperations,
+  type MatchOperation,
+} from "./push-leadcms-content.js";
 import type { RemoteContext } from "../lib/remote-context.js";
 
 interface PullContentOptions {
@@ -57,7 +62,7 @@ export function getPullTargetsFromOperations(operations: ContentOperations): Pul
 
   for (const operation of remoteBackedOperations) {
     const id = operation.remote?.id;
-    if (typeof id !== 'number') {
+    if (typeof id !== "number") {
       skipped.push(operation);
       continue;
     }
@@ -73,19 +78,30 @@ export function getPullTargetsFromOperations(operations: ContentOperations): Pul
   return { items, skipped };
 }
 
-async function pullFilteredContent(targetId?: string, targetSlug?: string, statusFilter?: string[]): Promise<boolean> {
+async function pullFilteredContent(
+  targetId?: string,
+  targetSlug?: string,
+  statusFilter?: string[]
+): Promise<boolean> {
   const hasFilter = !!(targetId || targetSlug || (statusFilter && statusFilter.length > 0));
   if (!hasFilter) {
     return false;
   }
 
   const { operations } = await getContentStatusData({ showDelete: true });
-  const filteredOperations = filterContentOperations(operations, targetId, targetSlug, statusFilter);
+  const filteredOperations = filterContentOperations(
+    operations,
+    targetId,
+    targetSlug,
+    statusFilter
+  );
   const { items, skipped } = getPullTargetsFromOperations(filteredOperations);
 
   if (items.length === 0) {
     if (skipped.length > 0) {
-      console.log(`⚠️  ${skipped.length} matching local-only file(s) have no remote content to pull.`);
+      console.log(
+        `⚠️  ${skipped.length} matching local-only file(s) have no remote content to pull.`
+      );
       for (const operation of skipped) {
         console.log(`   - ${operation.local.slug}`);
       }
@@ -98,7 +114,9 @@ async function pullFilteredContent(targetId?: string, targetSlug?: string, statu
   console.log(`🎯 Pulling ${items.length} content item(s) from LeadCMS...`);
 
   if (skipped.length > 0) {
-    console.log(`⚠️  Skipping ${skipped.length} local-only file(s) with no remote content to pull.`);
+    console.log(
+      `⚠️  Skipping ${skipped.length} local-only file(s) with no remote content to pull.`
+    );
   }
 
   const typeMap = await fetchContentTypes();
@@ -147,7 +165,9 @@ async function main(options: PullContentOptions = {}): Promise<void> {
       }
     }
 
-    console.log(`🎯 Pulling specific content: ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`}`);
+    console.log(
+      `🎯 Pulling specific content: ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`}`
+    );
 
     try {
       let content = null;
@@ -164,15 +184,17 @@ async function main(options: PullContentOptions = {}): Promise<void> {
       }
 
       if (!content) {
-        console.log(`⚠️  Content not found: ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`}`);
+        console.log(
+          `⚠️  Content not found: ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`}`
+        );
         return;
       }
 
       console.log(`✅ Found content: ${content.title} (${content.type})`);
       console.log(`   - Slug: ${content.slug}`);
-      console.log(`   - Language: ${content.language || 'default'}`);
+      console.log(`   - Language: ${content.language || "default"}`);
       console.log(`   - Type: ${content.type}`);
-      console.log(`   - Last updated: ${content.updatedAt || 'unknown'}`);
+      console.log(`   - Last updated: ${content.updatedAt || "unknown"}`);
 
       // Fetch content types for transformation
       const typeMap = await fetchContentTypes();
@@ -185,10 +207,13 @@ async function main(options: PullContentOptions = {}): Promise<void> {
       });
 
       console.log(`\n✅ Content file saved successfully!`);
-      console.log(`   Location: ${CONTENT_DIR}/${content.language || 'default'}/${content.type}/${content.slug}`);
+      console.log(
+        `   Location: ${CONTENT_DIR}/${content.language || "default"}/${content.type}/${content.slug}`
+      );
       console.log(`\n✨ Pull completed!\n`);
       return;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as Error;
       console.error(`❌ Failed to pull content:`, error.message);
       throw error;
     }
@@ -197,7 +222,7 @@ async function main(options: PullContentOptions = {}): Promise<void> {
   // Check if content is supported
   try {
     logger.verbose(`🔍 Checking CMS configuration...`);
-    const configUrl = new URL('/api/config', effectiveUrl).toString();
+    const configUrl = new URL("/api/config", effectiveUrl).toString();
     const response = await axios.get(configUrl, { timeout: 10000 });
 
     if (response.data) {
@@ -210,7 +235,8 @@ async function main(options: PullContentOptions = {}): Promise<void> {
 
       logger.verbose(`✅ Content entity supported\n`);
     }
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as Error;
     console.warn(`⚠️  Could not fetch CMS config: ${error.message}`);
     console.warn(`⚠️  Assuming content is supported (backward compatibility)\n`);
   }

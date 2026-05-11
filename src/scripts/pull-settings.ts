@@ -12,6 +12,15 @@ import {
 } from "./settings-manager.js";
 import { logger } from "../lib/logger.js";
 
+interface ScriptError extends Error {
+  code?: string;
+  response?: {
+    status?: number;
+    data?: { detail?: string; title?: string; message?: string; [key: string]: unknown } | null;
+  };
+  status?: number;
+}
+
 export interface PullSettingsOptions {
   /** Only pull a specific setting by key name */
   targetName?: string;
@@ -66,16 +75,21 @@ export async function pullSettings(options: PullSettingsOptions = {}): Promise<v
         return;
       }
       await saveSettingsLocally(matching, SETTINGS_DIR, defaultLanguage, targetName);
-      console.log(`   ✅ Pulled setting: ${targetName} (${matching.length} language variant${matching.length !== 1 ? 's' : ''})`);
+      console.log(
+        `   ✅ Pulled setting: ${targetName} (${matching.length} language variant${matching.length !== 1 ? "s" : ""})`
+      );
     } else {
       await saveSettingsLocally(tracked, SETTINGS_DIR, defaultLanguage);
 
       // Count unique keys
       const uniqueKeys = new Set(tracked.map((s) => s.key));
       const languages = new Set(tracked.filter((s) => s.language).map((s) => s.language));
-      console.log(`   ✅ Pulled ${uniqueKeys.size} settings${languages.size > 0 ? ` across ${languages.size + 1} language(s)` : ''}`);
+      console.log(
+        `   ✅ Pulled ${uniqueKeys.size} settings${languages.size > 0 ? ` across ${languages.size + 1} language(s)` : ""}`
+      );
     }
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as ScriptError;
     if (error.response?.status === 401) {
       console.error("   ❌ Authentication failed while pulling settings");
       throw error;

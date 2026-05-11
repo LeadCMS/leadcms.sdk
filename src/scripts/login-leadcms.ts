@@ -2,12 +2,12 @@
  * LeadCMS Login - Interactive token-based authentication
  */
 
-import { config as dotenvConfig } from 'dotenv';
-import { getConfig } from '../lib/config.js';
-import { authenticate, saveTokenToEnv } from '../lib/auth.js';
-import { resolveRemote } from '../lib/remote-context.js';
-import axios from 'axios';
-import * as readline from 'readline';
+import { config as dotenvConfig } from "dotenv";
+import { getConfig } from "../lib/config.js";
+import { authenticate, saveTokenToEnv } from "../lib/auth.js";
+import { resolveRemote } from "../lib/remote-context.js";
+import axios from "axios";
+import * as readline from "readline";
 
 // Load environment variables from .env file
 dotenvConfig();
@@ -30,21 +30,21 @@ function prompt(question: string): Promise<string> {
 }
 
 function parseRemoteArg(args: string[]): string | undefined {
-  const idx = args.findIndex(arg => arg === '--remote' || arg === '-r');
+  const idx = args.findIndex((arg) => arg === "--remote" || arg === "-r");
   if (idx === -1) {
     return undefined;
   }
 
   const name = args[idx + 1];
-  if (!name || name.startsWith('-')) {
-    throw new Error('--remote requires a remote name (e.g. --remote production)');
+  if (!name || name.startsWith("-")) {
+    throw new Error("--remote requires a remote name (e.g. --remote production)");
   }
 
   return name;
 }
 
 function remoteApiKeyEnvName(remoteName: string): string {
-  return `LEADCMS_REMOTE_${remoteName.toUpperCase().replace(/-/g, '_')}_API_KEY`;
+  return `LEADCMS_REMOTE_${remoteName.toUpperCase().replace(/-/g, "_")}_API_KEY`;
 }
 
 /**
@@ -76,10 +76,10 @@ async function main(args: string[] = []): Promise<void> {
   }
 
   if (!leadCMSUrl) {
-    console.log('\n❌ LeadCMS URL is not configured.');
-    console.log('\n💡 Options:');
-    console.log('   1. Run: leadcms init (to create a config file)');
-    console.log('   2. Or set LEADCMS_URL in your .env file\n');
+    console.log("\n❌ LeadCMS URL is not configured.");
+    console.log("\n💡 Options:");
+    console.log("   1. Run: leadcms init (to create a config file)");
+    console.log("   2. Or set LEADCMS_URL in your .env file\n");
     return;
   }
 
@@ -92,32 +92,33 @@ async function main(args: string[] = []): Promise<void> {
       const remoteEnvKey = remoteApiKeyEnvName(selectedRemoteName);
       saveTokenToEnv(token, remoteEnvKey);
       if (shouldAlsoSaveGenericKey) {
-        saveTokenToEnv(token, 'LEADCMS_API_KEY');
+        saveTokenToEnv(token, "LEADCMS_API_KEY");
       }
       console.log(`✅ Token verified and saved to .env file (${remoteEnvKey})!`);
     } else {
       saveTokenToEnv(token);
-      console.log('✅ Token verified and saved to .env file!');
+      console.log("✅ Token verified and saved to .env file!");
     }
 
     console.log(`\n👤 Successfully logged in as: ${user.displayName || user.userName}`);
     console.log(`   Email: ${user.email}`);
 
-    console.log('\n✅ You can now use commands like:');
-    console.log('   • leadcms push   - Push local changes to LeadCMS');
-    console.log('   • leadcms pull   - Pull content from LeadCMS');
-    console.log('   • leadcms status - Check sync status\n');
-  } catch (error: any) {
+    console.log("\n✅ You can now use commands like:");
+    console.log("   • leadcms push   - Push local changes to LeadCMS");
+    console.log("   • leadcms pull   - Pull content from LeadCMS");
+    console.log("   • leadcms status - Check sync status\n");
+  } catch (_error: unknown) {
+    const error = _error as Error;
     if (axios.isAxiosError(error)) {
       if (error.response?.status === 401) {
-        console.log('\n❌ Authentication failed: Invalid token');
-        console.log('   Please make sure you copied the token correctly.\n');
+        console.log("\n❌ Authentication failed: Invalid token");
+        console.log("   Please make sure you copied the token correctly.\n");
       } else if (error.response?.status === 404) {
-        console.log('\n❌ User not found');
-        console.log('   The token is valid but the user account may not exist.\n');
+        console.log("\n❌ User not found");
+        console.log("   The token is valid but the user account may not exist.\n");
       } else {
         console.log(`\n❌ Error: ${error.response?.statusText || error.message}`);
-        console.log('   Please try again or contact support.\n');
+        console.log("   Please try again or contact support.\n");
       }
     } else {
       console.log(`\n❌ ${error.message}\n`);

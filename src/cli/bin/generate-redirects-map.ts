@@ -6,37 +6,37 @@
  * Writes {outputDir}/301.map and {outputDir}/302.map with bare "from" "to" pairs.
  */
 
-import { generateRedirectsMap } from '../../scripts/generate-redirects-map.js';
-import { initVerboseFromArgs } from '../../lib/logger.js';
-import { startSpinner } from '../../lib/spinner.js';
+import { generateRedirectsMap } from "../../scripts/generate-redirects-map.js";
+import { initVerboseFromArgs } from "../../lib/logger.js";
+import { startSpinner } from "../../lib/spinner.js";
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
 
-const dryRun = args.includes('--dry-run') || args.includes('-n');
+const dryRun = args.includes("--dry-run") || args.includes("-n");
 
 // Parse --output-dir <dir> flag
 let outputDir: string | undefined;
-const outputIdx = args.findIndex(a => a === '--output-dir' || a === '-d');
+const outputIdx = args.findIndex((a) => a === "--output-dir" || a === "-d");
 if (outputIdx !== -1 && args[outputIdx + 1]) {
   outputDir = args[outputIdx + 1];
 }
 
 // Parse --language <lang> flag
 let language: string | undefined;
-const langIdx = args.findIndex(a => a === '--language' || a === '-l');
+const langIdx = args.findIndex((a) => a === "--language" || a === "-l");
 if (langIdx !== -1 && args[langIdx + 1]) {
   language = args[langIdx + 1];
 }
 
-const spinner = startSpinner('Generating redirect map files…');
+const spinner = startSpinner("Generating redirect map files…");
 generateRedirectsMap({ outputDir, language, dryRun })
   .then(() => {
     spinner.stop();
     process.exit(0);
   })
-  .catch((error: any) => {
-    spinner.fail('Redirect map generation failed');
-    console.error(error.message);
+  .catch((error: unknown) => {
+    spinner.fail("Redirect map generation failed");
+    console.error((error as Error).message);
     process.exit(1);
   });

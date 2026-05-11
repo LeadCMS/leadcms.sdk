@@ -1,29 +1,33 @@
-import 'dotenv/config';
-import fs from 'fs/promises';
-import path from 'path';
-import readline from 'readline';
-import type { Dirent } from 'fs';
-import * as Diff from 'diff';
+import "dotenv/config";
+import fs from "fs/promises";
+import path from "path";
+import readline from "readline";
+import type { Dirent } from "fs";
+import * as Diff from "diff";
 
-import { getConfig } from '../lib/config.js';
-import { leadCMSDataService } from '../lib/data-service.js';
-import { compareVersions } from '../lib/auth.js';
-import { isValidLocaleCode } from '../lib/locale-utils.js';
-import { colorConsole, diffColors, statusColors } from '../lib/console-colors.js';
-import { logger } from '../lib/logger.js';
-import { pullCommentSync, pullLeadCMSComments, saveCommentsForEntity } from './pull-leadcms-comments.js';
+import { getConfig } from "../lib/config.js";
+import { leadCMSDataService } from "../lib/data-service.js";
+import { compareVersions } from "../lib/auth.js";
+import { isValidLocaleCode } from "../lib/locale-utils.js";
+import { colorConsole, diffColors, statusColors } from "../lib/console-colors.js";
+import { logger } from "../lib/logger.js";
+import {
+  pullCommentSync,
+  pullLeadCMSComments,
+  saveCommentsForEntity,
+} from "./pull-leadcms-comments.js";
 
-import type { Comment, StoredComment } from '../lib/comment-types.js';
-import type { CommentCreateItem, CommentUpdateItem } from '../lib/data-service.js';
-import type { RemoteContext, MetadataMap } from '../lib/remote-context.js';
+import type { Comment, StoredComment } from "../lib/comment-types.js";
+import type { CommentCreateItem, CommentUpdateItem } from "../lib/data-service.js";
+import type { RemoteContext, MetadataMap } from "../lib/remote-context.js";
 
 const config = getConfig();
 const COMMENTS_DIR = path.resolve(config.commentsDir);
 const DEFAULT_LANGUAGE = config.defaultLanguage;
 
-type EditableComment = Omit<StoredComment, 'id'> & { id?: number };
+type EditableComment = Omit<StoredComment, "id"> & { id?: number };
 
-type CommentOperationType = 'create' | 'update' | 'delete' | 'conflict';
+type CommentOperationType = "create" | "update" | "delete" | "conflict";
 
 interface LocalCommentFile {
   filePath: string;
@@ -40,7 +44,7 @@ interface LocalCommentItem {
   comment: EditableComment;
 }
 
-interface RemoteCommentItem extends Comment { }
+type RemoteCommentItem = Comment;
 
 interface CommentOperation {
   type: CommentOperationType;
@@ -72,7 +76,7 @@ export interface CommentStatusResult {
 
 function normalizeCommentableType(segment: string, fallback?: string): string {
   if (fallback) return fallback;
-  if (!segment) return 'Content';
+  if (!segment) return "Content";
   return segment.charAt(0).toUpperCase() + segment.slice(1);
 }
 
@@ -83,11 +87,12 @@ function normalizeTags(tags?: string[] | null): string[] {
 function normalizeEditableFields(
   comment: Partial<EditableComment | RemoteCommentItem>,
   remote?: RemoteCommentItem,
-  canReparent: boolean = true,
+  canReparent: boolean = true
 ) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const base: Record<string, any> = {
-    body: comment.body ?? remote?.body ?? '',
-    authorName: comment.authorName ?? remote?.authorName ?? '',
+    body: comment.body ?? remote?.body ?? "",
+    authorName: comment.authorName ?? remote?.authorName ?? "",
     language: comment.language ?? remote?.language ?? DEFAULT_LANGUAGE,
     status: comment.status ?? remote?.status ?? undefined,
     answerStatus: comment.answerStatus ?? remote?.answerStatus ?? undefined,
@@ -109,7 +114,7 @@ function normalizeEditableFields(
 function hasEditableDifferences(
   local: EditableComment,
   remote: RemoteCommentItem,
-  canReparent: boolean = true,
+  canReparent: boolean = true
 ): boolean {
   const normalizedLocal = normalizeEditableFields(local, remote, canReparent);
   const normalizedRemote = normalizeEditableFields(remote, undefined, canReparent);
@@ -128,7 +133,11 @@ function hasReparentingIntent(local: EditableComment, remote: RemoteCommentItem)
   return localCommentable !== remoteCommentable;
 }
 
-function isRemoteNewer(local: EditableComment, remote: RemoteCommentItem, metadataMap?: MetadataMap): boolean {
+function isRemoteNewer(
+  local: EditableComment,
+  remote: RemoteCommentItem,
+  metadataMap?: MetadataMap
+): boolean {
   // When a metadata map is available, use the remote-specific updatedAt
   // for conflict detection instead of whatever is stored in the local file
   // (local file may carry the default remote's timestamp).
@@ -163,14 +172,14 @@ async function readLocalCommentFiles(): Promise<LocalCommentFile[]> {
         continue;
       }
 
-      if (!entry.name.endsWith('.json') || entry.name.startsWith('.')) {
+      if (!entry.name.endsWith(".json") || entry.name.startsWith(".")) {
         continue;
       }
 
       const relativePath = path.relative(COMMENTS_DIR, fullPath);
       const segments = relativePath.split(path.sep);
       const fileName = segments[segments.length - 1];
-      const commentableId = Number.parseInt(fileName.replace(/\.json$/i, ''), 10);
+      const commentableId = Number.parseInt(fileName.replace(/\.json$/i, ""), 10);
       if (Number.isNaN(commentableId)) {
         continue;
       }
@@ -180,26 +189,29 @@ async function readLocalCommentFiles(): Promise<LocalCommentFile[]> {
       const typeSegment = hasLocale ? segments[1] : segments[0];
       const inferredType = normalizeCommentableType(typeSegment);
 
-      let rawComments: any[] = [];
+      let rawComments: StoredComment[] = [];
       try {
-        const content = await fs.readFile(fullPath, 'utf8');
+        const content = await fs.readFile(fullPath, "utf8");
         const parsed = JSON.parse(content);
         if (!Array.isArray(parsed)) {
           logger.verbose(`[COMMENTS] Skipping non-array comment file: ${fullPath}`);
           continue;
         }
         rawComments = parsed;
-      } catch (error: any) {
+      } catch (_error: unknown) {
+        const error = _error as Error;
         logger.verbose(`[COMMENTS] Failed to parse ${fullPath}: ${error.message}`);
         continue;
       }
 
-      const comments = rawComments.map((comment): EditableComment => ({
-        ...comment,
-        commentableId: comment.commentableId ?? commentableId,
-        commentableType: comment.commentableType ?? inferredType,
-        language: comment.language ?? language,
-      }));
+      const comments = rawComments.map(
+        (comment): EditableComment => ({
+          ...comment,
+          commentableId: comment.commentableId ?? commentableId,
+          commentableType: comment.commentableType ?? inferredType,
+          language: comment.language ?? language,
+        })
+      );
 
       files.push({
         filePath: fullPath,
@@ -216,17 +228,22 @@ async function readLocalCommentFiles(): Promise<LocalCommentFile[]> {
 }
 
 function flattenLocalComments(files: LocalCommentFile[]): LocalCommentItem[] {
-  return files.flatMap(file => file.comments.map(comment => ({
-    file,
-    filePath: file.filePath,
-    locale: comment.language || file.language,
-    comment,
-  })));
+  return files.flatMap((file) =>
+    file.comments.map((comment) => ({
+      file,
+      filePath: file.filePath,
+      locale: comment.language || file.language,
+      comment,
+    }))
+  );
 }
 
-function filterOperationsByTargetId(operations: CommentOperation[], targetId?: string): CommentOperation[] {
+function filterOperationsByTargetId(
+  operations: CommentOperation[],
+  targetId?: string
+): CommentOperation[] {
   if (!targetId) return operations;
-  return operations.filter(op => {
+  return operations.filter((op) => {
     const localId = op.local?.comment.id != null ? String(op.local.comment.id) : undefined;
     const remoteId = op.remote?.id != null ? String(op.remote.id) : undefined;
     return localId === targetId || remoteId === targetId;
@@ -254,9 +271,10 @@ function buildCreatePayload(local: LocalCommentItem): CommentCreateItem {
 function buildUpdatePayload(
   local: LocalCommentItem,
   remote: RemoteCommentItem,
-  canReparent: boolean = true,
+  canReparent: boolean = true
 ): CommentUpdateItem {
   const normalized = normalizeEditableFields(local.comment, remote, canReparent);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const payload: Record<string, any> = {
     body: normalized.body,
     authorName: normalized.authorName,
@@ -264,7 +282,7 @@ function buildUpdatePayload(
     status: normalized.status,
     answerStatus: normalized.answerStatus,
     translationKey: normalized.translationKey,
-    tags: normalized.tags.length > 0 ? normalized.tags : local.comment.tags ?? remote.tags,
+    tags: normalized.tags.length > 0 ? normalized.tags : (local.comment.tags ?? remote.tags),
     publishedAt: normalized.publishedAt,
   };
   if (canReparent) {
@@ -274,10 +292,9 @@ function buildUpdatePayload(
   return filterUndefinedValues(payload) as CommentUpdateItem;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function filterUndefinedValues<T extends Record<string, any>>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, item]) => item !== undefined)
-  ) as T;
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
 }
 
 async function fetchRemoteComments(): Promise<RemoteCommentItem[]> {
@@ -288,12 +305,12 @@ async function fetchRemoteComments(): Promise<RemoteCommentItem[]> {
 async function updateLocalFileFromResponse(
   local: LocalCommentItem,
   remote: RemoteCommentItem,
-  remoteCtx?: RemoteContext,
+  remoteCtx?: RemoteContext
 ): Promise<void> {
   // Update per-remote metadata
   if (remoteCtx) {
     try {
-      const rc = await import('../lib/remote-context.js');
+      const rc = await import("../lib/remote-context.js");
       const metaMap = await rc.readMetadataMap(remoteCtx);
       if (remote.id != null && remote.translationKey && remote.language) {
         rc.setCommentRemoteId(metaMap, remote.language, remote.translationKey, remote.id);
@@ -303,7 +320,8 @@ async function updateLocalFileFromResponse(
         });
       }
       await rc.writeMetadataMap(remoteCtx, metaMap);
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as Error;
       console.warn(`Failed to update remote metadata for comment ${remote.id}:`, error.message);
     }
   }
@@ -363,7 +381,7 @@ async function updateLocalFileFromResponse(
 
 // Minimum LeadCMS server version that supports updating parentId and
 // commentableId via PATCH /api/comments/{id} (i.e. reparenting comments).
-const REPARENT_MIN_VERSION = '1.5.16-pre';
+const REPARENT_MIN_VERSION = "1.5.16-pre";
 
 /**
  * Check whether the configured LeadCMS server supports reparenting comments
@@ -388,12 +406,14 @@ async function checkReparentingSupport(): Promise<{ supported: boolean; version:
   };
 }
 
-export async function buildCommentStatus(options: CommentStatusOptions = {}): Promise<CommentStatusResult> {
+export async function buildCommentStatus(
+  options: CommentStatusOptions = {}
+): Promise<CommentStatusResult> {
   const { showDelete, targetId, remoteContext: remoteCtx } = options;
   const localFiles = await readLocalCommentFiles();
   const localComments = flattenLocalComments(localFiles);
   const remoteComments = await fetchRemoteComments();
-  const remoteById = new Map(remoteComments.map(comment => [comment.id, comment]));
+  const remoteById = new Map(remoteComments.map((comment) => [comment.id, comment]));
 
   // Feature-gate reparenting (parentId/commentableId updates) on server version.
   const { supported: canReparent, version: serverVersion } = await checkReparentingSupport();
@@ -409,7 +429,7 @@ export async function buildCommentStatus(options: CommentStatusOptions = {}): Pr
   // Load per-remote metadata map for matching
   let metadataMap: MetadataMap | undefined;
   if (remoteCtx) {
-    const rcMod = await import('../lib/remote-context.js');
+    const rcMod = await import("../lib/remote-context.js");
     metadataMap = await rcMod.readMetadataMap(remoteCtx);
   }
 
@@ -422,7 +442,8 @@ export async function buildCommentStatus(options: CommentStatusOptions = {}): Pr
     let effectiveRemoteId: number | undefined;
 
     if (metadataMap && local.comment.translationKey && local.comment.language) {
-      const metaId = metadataMap.comments?.[local.comment.language]?.[local.comment.translationKey]?.id;
+      const metaId =
+        metadataMap.comments?.[local.comment.language]?.[local.comment.translationKey]?.id;
       if (metaId != null) {
         effectiveRemoteId = Number(metaId);
       }
@@ -445,16 +466,16 @@ export async function buildCommentStatus(options: CommentStatusOptions = {}): Pr
     }
 
     if (effectiveRemoteId == null) {
-      operations.push({ type: 'create', local });
+      operations.push({ type: "create", local });
       continue;
     }
 
     const remote = remoteById.get(effectiveRemoteId);
     if (!remote) {
       operations.push({
-        type: 'conflict',
+        type: "conflict",
         local,
-        reason: 'Remote comment not found for local ID',
+        reason: "Remote comment not found for local ID",
       });
       continue;
     }
@@ -462,13 +483,13 @@ export async function buildCommentStatus(options: CommentStatusOptions = {}): Pr
     if (hasEditableDifferences(local.comment, remote, canReparent)) {
       if (isRemoteNewer(local.comment, remote, metadataMap)) {
         operations.push({
-          type: 'conflict',
+          type: "conflict",
           local,
           remote,
-          reason: 'Remote comment changed after the last pull',
+          reason: "Remote comment changed after the last pull",
         });
       } else {
-        operations.push({ type: 'update', local, remote });
+        operations.push({ type: "update", local, remote });
       }
     }
 
@@ -476,12 +497,12 @@ export async function buildCommentStatus(options: CommentStatusOptions = {}): Pr
     // not sync so the user isn't left wondering why their reparenting is
     // silently dropped.
     if (!canReparent && hasReparentingIntent(local.comment, remote)) {
-      const commentableType = local.comment.commentableType ?? 'Content';
-      const separator = commentableType === 'Content' ? ' #' : '#';
+      const commentableType = local.comment.commentableType ?? "Content";
+      const separator = commentableType === "Content" ? " #" : "#";
       const label = `${commentableType}${separator}${local.comment.commentableId} comment ${remote.id}`;
-      const versionSuffix = serverVersion ? ` (server ${serverVersion})` : '';
+      const versionSuffix = serverVersion ? ` (server ${serverVersion})` : "";
       console.warn(
-        `⚠️  Skipping parentId/commentableId change for ${label}: LeadCMS ${REPARENT_MIN_VERSION} or later required to reparent comments${versionSuffix}.`,
+        `⚠️  Skipping parentId/commentableId change for ${label}: LeadCMS ${REPARENT_MIN_VERSION} or later required to reparent comments${versionSuffix}.`
       );
     }
   }
@@ -492,14 +513,15 @@ export async function buildCommentStatus(options: CommentStatusOptions = {}): Pr
     for (const item of localComments) {
       if (item.comment.id != null) knownRemoteIds.add(item.comment.id);
       if (metadataMap && item.comment.translationKey && item.comment.language) {
-        const metaId = metadataMap.comments?.[item.comment.language]?.[item.comment.translationKey]?.id;
+        const metaId =
+          metadataMap.comments?.[item.comment.language]?.[item.comment.translationKey]?.id;
         if (metaId != null) knownRemoteIds.add(Number(metaId));
       }
     }
 
     for (const remote of remoteComments) {
       if (!knownRemoteIds.has(remote.id)) {
-        operations.push({ type: 'delete', remote });
+        operations.push({ type: "delete", remote });
       }
     }
   }
@@ -524,9 +546,9 @@ async function buildContentSlugMap(operations: CommentOperation[]): Promise<Map<
   const contentIds = new Set<number>();
   for (const op of operations) {
     const type = op.local?.comment.commentableType ?? op.remote?.commentableType;
-    if (type !== 'Content') continue;
+    if (type !== "Content") continue;
     const id = op.local?.comment.commentableId ?? op.remote?.commentableId;
-    if (typeof id === 'number' && Number.isFinite(id)) {
+    if (typeof id === "number" && Number.isFinite(id)) {
       contentIds.add(id);
     }
   }
@@ -534,11 +556,11 @@ async function buildContentSlugMap(operations: CommentOperation[]): Promise<Map<
 
   // 1. Local content (fast, offline)
   try {
-    const { readLocalContent } = await import('./push-leadcms-content.js');
+    const { readLocalContent } = await import("./push-leadcms-content.js");
     const localContent = await readLocalContent();
     for (const item of localContent) {
-      const rawId = (item as any).id;
-      const numericId = typeof rawId === 'number' ? rawId : Number(rawId);
+      const rawId = (item as Record<string, unknown>).id;
+      const numericId = typeof rawId === "number" ? rawId : Number(rawId);
       if (Number.isFinite(numericId) && item.slug && !slugById.has(numericId)) {
         slugById.set(numericId, item.slug);
       }
@@ -548,7 +570,7 @@ async function buildContentSlugMap(operations: CommentOperation[]): Promise<Map<
   }
 
   // 2. Remote lookup for any ids still unresolved
-  const missing = [...contentIds].filter(id => !slugById.has(id));
+  const missing = [...contentIds].filter((id) => !slugById.has(id));
   if (missing.length === 0) return slugById;
 
   try {
@@ -572,13 +594,23 @@ async function buildContentSlugMap(operations: CommentOperation[]): Promise<Map<
  * can see why the comment couldn't be saved without having to read raw
  * axios error objects.
  */
-function formatCommentApiError(error: any): { message: string; isNotFound: boolean } {
-  const status: number | undefined = error?.response?.status ?? error?.status;
-  const data: any = error?.response?.data;
+function formatCommentApiError(error: unknown): { message: string; isNotFound: boolean } {
+  const err = error as {
+    response?: { status?: number; data?: Record<string, unknown> };
+    status?: number;
+    message?: string;
+  };
+  const status: number | undefined = err?.response?.status ?? err?.status;
+  const data = err?.response?.data;
   const isNotFound = status === 404;
 
-  if (isNotFound && data && typeof data === 'object') {
-    const { entityType, entityUid, title, detail } = data;
+  if (isNotFound && data && typeof data === "object") {
+    const { entityType, entityUid, title, detail } = data as {
+      entityType?: unknown;
+      entityUid?: unknown;
+      title?: unknown;
+      detail?: unknown;
+    };
     if (entityType && entityUid != null) {
       return {
         message: `404 Not Found — ${entityType}#${entityUid} does not exist on the server`,
@@ -590,12 +622,13 @@ function formatCommentApiError(error: any): { message: string; isNotFound: boole
     }
   }
 
-  if (status && data && typeof data === 'object') {
-    const detail = data.detail || data.title;
+  if (status && data && typeof data === "object") {
+    const dataObj = data as Record<string, unknown>;
+    const detail = dataObj.detail || dataObj.title;
     if (detail) return { message: `${status} ${detail}`, isNotFound };
   }
 
-  const msg = error?.message || String(error);
+  const msg = err?.message || String(error);
   return { message: status ? `${status} ${msg}` : msg, isNotFound };
 }
 
@@ -609,17 +642,17 @@ export async function statusComments(options: CommentStatusOptions = {}): Promis
   const contentSlugById = await buildContentSlugMap(operations);
 
   function formatCommentableLabel(type: string, id: number | string): string {
-    if (type === 'Content' && typeof id === 'number') {
+    if (type === "Content" && typeof id === "number") {
       const slug = contentSlugById.get(id);
       if (slug) return `${type} #${id} (${slug})`;
     }
-    const separator = type === 'Content' ? ' #' : '#';
+    const separator = type === "Content" ? " #" : "#";
     return `${type}${separator}${id}`;
   }
 
   function formatInlineCommentPreview(body: string | undefined, maxLength = 48): string {
-    const normalized = (body || '').replace(/\s+/g, ' ').trim();
-    if (!normalized) return '';
+    const normalized = (body || "").replace(/\s+/g, " ").trim();
+    if (!normalized) return "";
     if (normalized.length <= maxLength) return normalized;
     return `${normalized.slice(0, maxLength - 3).trimEnd()}...`;
   }
@@ -630,54 +663,62 @@ export async function statusComments(options: CommentStatusOptions = {}): Promis
     const local = op.local?.comment;
     const remote = op.remote;
 
-    if (op.type === 'delete' && remote) {
-      colorConsole.info('          Comment preview:');
-      colorConsole.log(`          ${colorConsole.gray('Remote body:')} ${remote.body}`);
-      colorConsole.log('');
+    if (op.type === "delete" && remote) {
+      colorConsole.info("          Comment preview:");
+      colorConsole.log(`          ${colorConsole.gray("Remote body:")} ${remote.body}`);
+      colorConsole.log("");
       return;
     }
 
-    if (op.type === 'create' && local) {
-      colorConsole.info('          Comment preview:');
-      colorConsole.log(`          ${colorConsole.gray('Author:')} ${local.authorName || 'Unknown'} <${local.authorEmail || 'no-email'}>`);
+    if (op.type === "create" && local) {
+      colorConsole.info("          Comment preview:");
+      colorConsole.log(
+        `          ${colorConsole.gray("Author:")} ${local.authorName || "Unknown"} <${local.authorEmail || "no-email"}>`
+      );
       if (local.status) {
-        colorConsole.log(`          ${colorConsole.gray('Status:')} ${local.status}`);
+        colorConsole.log(`          ${colorConsole.gray("Status:")} ${local.status}`);
       }
       if (local.answerStatus) {
-        colorConsole.log(`          ${colorConsole.gray('Answer status:')} ${local.answerStatus}`);
+        colorConsole.log(`          ${colorConsole.gray("Answer status:")} ${local.answerStatus}`);
       }
-      colorConsole.log(`          ${colorConsole.gray('Body:')} ${local.body}`);
-      colorConsole.log('');
+      colorConsole.log(`          ${colorConsole.gray("Body:")} ${local.body}`);
+      colorConsole.log("");
       return;
     }
 
     if (!local || !remote) return;
 
-    colorConsole.info('          Comment diff preview:');
+    colorConsole.info("          Comment diff preview:");
 
     const fieldDiffs: Array<[string, string | undefined, string | undefined]> = [
-      ['authorName', remote.authorName, local.authorName],
-      ['language', remote.language, local.language],
-      ['status', remote.status, local.status],
-      ['answerStatus', remote.answerStatus, local.answerStatus],
-      ['publishedAt', remote.publishedAt ?? undefined, local.publishedAt ?? undefined],
-      ['translationKey', remote.translationKey ?? undefined, local.translationKey ?? undefined],
-      ['tags', JSON.stringify(normalizeTags(remote.tags)), JSON.stringify(normalizeTags(local.tags))],
+      ["authorName", remote.authorName, local.authorName],
+      ["language", remote.language, local.language],
+      ["status", remote.status, local.status],
+      ["answerStatus", remote.answerStatus, local.answerStatus],
+      ["publishedAt", remote.publishedAt ?? undefined, local.publishedAt ?? undefined],
+      ["translationKey", remote.translationKey ?? undefined, local.translationKey ?? undefined],
+      [
+        "tags",
+        JSON.stringify(normalizeTags(remote.tags)),
+        JSON.stringify(normalizeTags(local.tags)),
+      ],
     ];
 
     for (const [field, before, after] of fieldDiffs) {
-      if ((before ?? '') !== (after ?? '')) {
-        colorConsole.log(`          ${colorConsole.gray(`${field}:`)} ${colorConsole.red(before ?? '∅')} ${colorConsole.gray('->')} ${colorConsole.green(after ?? '∅')}`);
+      if ((before ?? "") !== (after ?? "")) {
+        colorConsole.log(
+          `          ${colorConsole.gray(`${field}:`)} ${colorConsole.red(before ?? "∅")} ${colorConsole.gray("->")} ${colorConsole.green(after ?? "∅")}`
+        );
       }
     }
 
     if (remote.body !== local.body) {
-      const diff = Diff.diffLines(remote.body || '', local.body || '');
+      const diff = Diff.diffLines(remote.body || "", local.body || "");
       let previewLines = 0;
       const maxPreviewLines = 6;
 
       for (const part of diff) {
-        const lines = part.value.split('\n').filter(line => line.trim() !== '');
+        const lines = part.value.split("\n").filter((line) => line.trim() !== "");
         for (const line of lines) {
           if (previewLines >= maxPreviewLines) break;
           if (part.added) {
@@ -692,42 +733,42 @@ export async function statusComments(options: CommentStatusOptions = {}): Promis
       }
     }
 
-    colorConsole.log('');
+    colorConsole.log("");
   }
 
   if (operations.length === 0) {
-    console.log('✅ Comments are in sync');
+    console.log("✅ Comments are in sync");
     return;
   }
 
-  colorConsole.important('\n💬 Comment Status');
+  colorConsole.important("\n💬 Comment Status");
   for (const op of operations) {
     const local = op.local?.comment;
     const remote = op.remote;
-    const commentId = local?.id ?? remote?.id ?? 'new';
+    const commentId = local?.id ?? remote?.id ?? "new";
     const locale = local?.language ?? remote?.language ?? DEFAULT_LANGUAGE;
-    const commentableType = local?.commentableType ?? remote?.commentableType ?? 'Unknown';
-    const commentableId = local?.commentableId ?? remote?.commentableId ?? 'unknown';
-    const commentRef = op.type === 'create' ? '' : ` comment ${commentId}`;
-    const createPreview = op.type === 'create' ? formatInlineCommentPreview(local?.body) : '';
-    const previewSuffix = createPreview ? ` - ${JSON.stringify(createPreview)}` : '';
+    const commentableType = local?.commentableType ?? remote?.commentableType ?? "Unknown";
+    const commentableId = local?.commentableId ?? remote?.commentableId ?? "unknown";
+    const commentRef = op.type === "create" ? "" : ` comment ${commentId}`;
+    const createPreview = op.type === "create" ? formatInlineCommentPreview(local?.body) : "";
+    const previewSuffix = createPreview ? ` - ${JSON.stringify(createPreview)}` : "";
     const line = `${formatCommentableLabel(commentableType, commentableId)} [${locale}]${commentRef}${previewSuffix}`;
 
     switch (op.type) {
-      case 'create':
-        colorConsole.log(`   ${statusColors.created('new:      ')} ${line}`);
+      case "create":
+        colorConsole.log(`   ${statusColors.created("new:      ")} ${line}`);
         printCommentPreview(op);
         break;
-      case 'update':
-        colorConsole.log(`   ${statusColors.modified('modified: ')} ${line}`);
+      case "update":
+        colorConsole.log(`   ${statusColors.modified("modified: ")} ${line}`);
         printCommentPreview(op);
         break;
-      case 'delete':
-        colorConsole.log(`   ${statusColors.conflict('deleted:  ')} ${line}`);
+      case "delete":
+        colorConsole.log(`   ${statusColors.conflict("deleted:  ")} ${line}`);
         printCommentPreview(op);
         break;
-      case 'conflict':
-        colorConsole.log(`   ${statusColors.conflict('conflict: ')} ${line}`);
+      case "conflict":
+        colorConsole.log(`   ${statusColors.conflict("conflict: ")} ${line}`);
         if (op.reason) {
           colorConsole.log(`              ${colorConsole.gray(op.reason)}`);
         }
@@ -736,7 +777,7 @@ export async function statusComments(options: CommentStatusOptions = {}): Promis
     }
   }
 
-  console.log('');
+  console.log("");
 }
 
 async function promptForLine(rl: readline.Interface, prompt: string): Promise<string> {
@@ -747,10 +788,10 @@ async function promptForLine(rl: readline.Interface, prompt: string): Promise<st
 
 async function resolveAuthorEmails(
   createOps: CommentOperation[],
-  currentUserEmail: string | undefined,
+  currentUserEmail: string | undefined
 ): Promise<Map<CommentOperation, string>> {
   const emailMap = new Map<CommentOperation, string>();
-  const opsNeedingEmail = createOps.filter(op => op.local && !op.local.comment.authorEmail);
+  const opsNeedingEmail = createOps.filter((op) => op.local && !op.local.comment.authorEmail);
   if (opsNeedingEmail.length === 0) {
     // All create ops already have authorEmail from the local file
     for (const op of createOps) {
@@ -771,16 +812,15 @@ async function resolveAuthorEmails(
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
   try {
-    const defaultEmail = currentUserEmail || '';
-    const defaultHint = defaultEmail ? ` [${defaultEmail}]` : '';
+    const defaultEmail = currentUserEmail || "";
+    const defaultHint = defaultEmail ? ` [${defaultEmail}]` : "";
 
-    const emailInput = await promptForLine(
-      rl,
-      `📧 Author email for new comments${defaultHint}: `,
-    );
+    const emailInput = await promptForLine(rl, `📧 Author email for new comments${defaultHint}: `);
     const chosenEmail = emailInput || defaultEmail;
     if (!chosenEmail) {
-      console.warn('⚠️  No author email provided — new comments without authorEmail will be skipped');
+      console.warn(
+        "⚠️  No author email provided — new comments without authorEmail will be skipped"
+      );
       return emailMap;
     }
 
@@ -791,10 +831,10 @@ async function resolveAuthorEmails(
 
     const applyAll = await promptForLine(
       rl,
-      `Apply "${chosenEmail}" to all ${opsNeedingEmail.length} new comments? [Y/n]: `,
+      `Apply "${chosenEmail}" to all ${opsNeedingEmail.length} new comments? [Y/n]: `
     );
 
-    if (!applyAll || applyAll.toLowerCase() === 'y' || applyAll.toLowerCase() === 'yes') {
+    if (!applyAll || applyAll.toLowerCase() === "y" || applyAll.toLowerCase() === "yes") {
       for (const op of opsNeedingEmail) {
         emailMap.set(op, chosenEmail);
       }
@@ -805,8 +845,8 @@ async function resolveAuthorEmails(
     let lastEmail = chosenEmail;
     for (const op of opsNeedingEmail) {
       const local = op.local!.comment;
-      const label = `${local.commentableType}#${local.commentableId} [${local.language || 'en'}]`;
-      const perHint = lastEmail ? ` [${lastEmail}]` : '';
+      const label = `${local.commentableType}#${local.commentableId} [${local.language || "en"}]`;
+      const perHint = lastEmail ? ` [${lastEmail}]` : "";
       const perInput = await promptForLine(rl, `📧 Email for ${label}${perHint}: `);
       lastEmail = perInput || lastEmail;
       if (lastEmail) {
@@ -822,23 +862,30 @@ async function resolveAuthorEmails(
 
 export async function pushComments(options: PushCommentsOptions = {}): Promise<void> {
   if (!leadCMSDataService.isApiKeyConfigured()) {
-    console.log('⏭️  Comments require authentication — no API key configured, skipping');
+    console.log("⏭️  Comments require authentication — no API key configured, skipping");
     return;
   }
 
   const { force, dryRun, allowDelete, targetId, remoteContext: remoteCtx } = options;
-  const status = await buildCommentStatus({ showDelete: allowDelete, targetId, remoteContext: remoteCtx });
+  const status = await buildCommentStatus({
+    showDelete: allowDelete,
+    targetId,
+    remoteContext: remoteCtx,
+  });
   const { supported: canReparent } = await checkReparentingSupport();
   let didMutate = false;
   let failureCount = 0;
 
   // Resolve Content id -> slug for user-facing messages (best-effort, offline-first).
   const contentSlugById = await buildContentSlugMap(status.operations);
-  const formatCommentable = (type: string | undefined, id: number | string | null | undefined): string => {
-    const t = type ?? 'Unknown';
-    const separator = t === 'Content' ? ' #' : '#';
+  const formatCommentable = (
+    type: string | undefined,
+    id: number | string | null | undefined
+  ): string => {
+    const t = type ?? "Unknown";
+    const separator = t === "Content" ? " #" : "#";
     if (id == null) return `${t}${separator}unknown`;
-    if (t === 'Content' && typeof id === 'number') {
+    if (t === "Content" && typeof id === "number") {
       const slug = contentSlugById.get(id);
       if (slug) return `${t} #${id} (${slug})`;
     }
@@ -848,22 +895,22 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
   // Count operations that actually result in an API call so we can emit
   // `[n/total]` progress prefixes similar to `push-media`.
   const totalOps = status.operations.reduce((count, op) => {
-    if (op.type === 'create') return count + 1;
-    if (op.type === 'update') return count + 1;
-    if (op.type === 'conflict' && force && op.local) return count + 1;
-    if (op.type === 'delete' && allowDelete) return count + 1;
+    if (op.type === "create") return count + 1;
+    if (op.type === "update") return count + 1;
+    if (op.type === "conflict" && force && op.local) return count + 1;
+    if (op.type === "delete" && allowDelete) return count + 1;
     return count;
   }, 0);
   let completedOps = 0;
   const progress = () => `[${completedOps}/${totalOps}]`;
 
   // Resolve author emails for new comments before processing
-  const createOps = status.operations.filter(op => op.type === 'create' && op.local);
+  const createOps = status.operations.filter((op) => op.type === "create" && op.local);
   let authorEmails = new Map<CommentOperation, string>();
   if (createOps.length > 0 && !dryRun) {
     let currentUserEmail: string | undefined;
     try {
-      const { resolveIdentity } = await import('./leadcms-helpers.js');
+      const { resolveIdentity } = await import("./leadcms-helpers.js");
       const identity = await resolveIdentity();
       currentUserEmail = identity?.email;
     } catch {
@@ -873,13 +920,13 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
   }
 
   for (const operation of status.operations) {
-    if (operation.type === 'conflict' && !force) {
-      const label = operation.local?.comment.id ?? operation.remote?.id ?? 'unknown';
-      console.warn(`⚠️  Skipping comment ${label}: ${operation.reason || 'Conflict detected'}`);
+    if (operation.type === "conflict" && !force) {
+      const label = operation.local?.comment.id ?? operation.remote?.id ?? "unknown";
+      console.warn(`⚠️  Skipping comment ${label}: ${operation.reason || "Conflict detected"}`);
       continue;
     }
 
-    if (operation.type === 'create' && operation.local) {
+    if (operation.type === "create" && operation.local) {
       const payload = buildCreatePayload(operation.local);
 
       // Apply resolved authorEmail if the local file didn't have one
@@ -891,7 +938,9 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
       }
 
       if (!payload.body || !payload.authorEmail || !payload.commentableType) {
-        console.warn(`⚠️  Skipping ${operation.local.filePath} - missing required fields for new comment`);
+        console.warn(
+          `⚠️  Skipping ${operation.local.filePath} - missing required fields for new comment`
+        );
         continue;
       }
 
@@ -909,10 +958,13 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
         console.log(`${progress()} ✅ Created comment ${created.id} in ${createdTarget}`);
         await updateLocalFileFromResponse(operation.local, created, remoteCtx);
         didMutate = true;
-      } catch (error: any) {
+      } catch (_error: unknown) {
+        const error = _error as Error;
         const { message, isNotFound } = formatCommentApiError(error);
         if (isNotFound) {
-          console.warn(`${progress()} ⚠️  Skipped creating comment in ${target}: ${message}. The comment will be retried on the next push once the target exists.`);
+          console.warn(
+            `${progress()} ⚠️  Skipped creating comment in ${target}: ${message}. The comment will be retried on the next push once the target exists.`
+          );
         } else {
           console.error(`${progress()} ❌ Failed to create comment in ${target}: ${message}`);
         }
@@ -921,16 +973,18 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
       continue;
     }
 
-    if (operation.type === 'update' && operation.local && operation.remote) {
+    if (operation.type === "update" && operation.local && operation.remote) {
       const payload = buildUpdatePayload(operation.local, operation.remote, canReparent);
       completedOps++;
       const target = formatCommentable(
         operation.local.comment.commentableType ?? operation.remote.commentableType,
-        operation.local.comment.commentableId ?? operation.remote.commentableId,
+        operation.local.comment.commentableId ?? operation.remote.commentableId
       );
 
       if (dryRun) {
-        console.log(`${progress()} 🟡 [DRY RUN] Update comment ${operation.remote.id} in ${target}`);
+        console.log(
+          `${progress()} 🟡 [DRY RUN] Update comment ${operation.remote.id} in ${target}`
+        );
         continue;
       }
 
@@ -939,24 +993,29 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
         console.log(`${progress()} ✅ Updated comment ${updated.id} in ${target}`);
         await updateLocalFileFromResponse(operation.local, updated, remoteCtx);
         didMutate = true;
-      } catch (error: any) {
+      } catch (_error: unknown) {
+        const error = _error as Error;
         const { message, isNotFound } = formatCommentApiError(error);
         if (isNotFound) {
-          console.warn(`${progress()} ⚠️  Skipped updating comment ${operation.remote.id} in ${target}: ${message}.`);
+          console.warn(
+            `${progress()} ⚠️  Skipped updating comment ${operation.remote.id} in ${target}: ${message}.`
+          );
         } else {
-          console.error(`${progress()} ❌ Failed to update comment ${operation.remote.id} in ${target}: ${message}`);
+          console.error(
+            `${progress()} ❌ Failed to update comment ${operation.remote.id} in ${target}: ${message}`
+          );
         }
         failureCount++;
       }
       continue;
     }
 
-    if (operation.type === 'conflict' && force && operation.local) {
+    if (operation.type === "conflict" && force && operation.local) {
       // Look up the remote ID for this comment — it might differ from local.comment.id
       // when working with a non-default remote
       let remoteId: number | undefined;
       if (remoteCtx) {
-        const rcMod = await import('../lib/remote-context.js');
+        const rcMod = await import("../lib/remote-context.js");
         const metaMap = await rcMod.readMetadataMap(remoteCtx);
         const lang = operation.local.comment.language;
         const tk = operation.local.comment.translationKey;
@@ -980,7 +1039,7 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
       completedOps++;
       const target = formatCommentable(
         operation.local.comment.commentableType ?? remote.commentableType,
-        operation.local.comment.commentableId ?? remote.commentableId,
+        operation.local.comment.commentableId ?? remote.commentableId
       );
 
       if (dryRun) {
@@ -993,24 +1052,34 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
         console.log(`${progress()} ✅ Force-updated comment ${updated.id} in ${target}`);
         await updateLocalFileFromResponse(operation.local, updated, remoteCtx);
         didMutate = true;
-      } catch (error: any) {
+      } catch (_error: unknown) {
+        const error = _error as Error;
         const { message, isNotFound } = formatCommentApiError(error);
         if (isNotFound) {
-          console.warn(`${progress()} ⚠️  Skipped force-updating comment ${remoteId} in ${target}: ${message}.`);
+          console.warn(
+            `${progress()} ⚠️  Skipped force-updating comment ${remoteId} in ${target}: ${message}.`
+          );
         } else {
-          console.error(`${progress()} ❌ Failed to force-update comment ${remoteId} in ${target}: ${message}`);
+          console.error(
+            `${progress()} ❌ Failed to force-update comment ${remoteId} in ${target}: ${message}`
+          );
         }
         failureCount++;
       }
       continue;
     }
 
-    if (operation.type === 'delete' && allowDelete && operation.remote) {
+    if (operation.type === "delete" && allowDelete && operation.remote) {
       completedOps++;
-      const target = formatCommentable(operation.remote.commentableType, operation.remote.commentableId);
+      const target = formatCommentable(
+        operation.remote.commentableType,
+        operation.remote.commentableId
+      );
 
       if (dryRun) {
-        console.log(`${progress()} 🟡 [DRY RUN] Delete remote comment ${operation.remote.id} in ${target}`);
+        console.log(
+          `${progress()} 🟡 [DRY RUN] Delete remote comment ${operation.remote.id} in ${target}`
+        );
         continue;
       }
 
@@ -1018,22 +1087,33 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
         await leadCMSDataService.deleteComment(operation.remote.id);
         console.log(`${progress()} ✅ Deleted remote comment ${operation.remote.id} in ${target}`);
         didMutate = true;
-      } catch (error: any) {
+      } catch (_error: unknown) {
+        const error = _error as Error;
         const { message } = formatCommentApiError(error);
-        console.error(`${progress()} ❌ Failed to delete comment ${operation.remote.id} in ${target}: ${message}`);
+        console.error(
+          `${progress()} ❌ Failed to delete comment ${operation.remote.id} in ${target}: ${message}`
+        );
         failureCount++;
       }
     }
   }
 
   if (!dryRun && didMutate) {
-    console.log('🔄 Refreshing local comments anonymously...');
+    console.log("🔄 Refreshing local comments anonymously...");
     await pullLeadCMSComments(remoteCtx);
   }
 
   if (failureCount > 0) {
-    console.warn(`⚠️  ${failureCount} comment ${failureCount === 1 ? 'operation' : 'operations'} failed (see messages above). Other comments were processed successfully.`);
+    console.warn(
+      `⚠️  ${failureCount} comment ${failureCount === 1 ? "operation" : "operations"} failed (see messages above). Other comments were processed successfully.`
+    );
   }
 }
 
-export type { CommentOperation, LocalCommentItem, RemoteCommentItem, PushCommentsOptions, CommentStatusOptions };
+export type {
+  CommentOperation,
+  LocalCommentItem,
+  RemoteCommentItem,
+  PushCommentsOptions,
+  CommentStatusOptions,
+};

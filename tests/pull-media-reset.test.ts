@@ -8,30 +8,27 @@
  * TDD: Test written first to reproduce the bug.
  */
 
-import fsPromises from 'fs/promises';
-import path from 'path';
-import os from 'os';
-import { jest } from '@jest/globals';
-import { createTestConfig, createDataServiceMock } from './test-helpers';
+import fsPromises from "fs/promises";
+import path from "path";
+import os from "os";
+import { createTestConfig, createDataServiceMock } from "./test-helpers";
 
 // ── Temp directories ───────────────────────────────────────────────────
-const tmpRoot = path.join(os.tmpdir(), 'leadcms-pull-media-reset');
-const mediaDir = path.join(tmpRoot, 'media');
-const contentDir = path.join(tmpRoot, 'content');
-const remotesDir = path.join(tmpRoot, 'remotes');
+const tmpRoot = path.join(os.tmpdir(), "leadcms-pull-media-reset");
+const mediaDir = path.join(tmpRoot, "media");
+const contentDir = path.join(tmpRoot, "content");
+const remotesDir = path.join(tmpRoot, "remotes");
 
 // ── Mocks ──────────────────────────────────────────────────────────────
-jest.mock('../src/lib/config.js', () => ({
-  getConfig: jest.fn(() =>
-    createTestConfig({ mediaDir, contentDir }),
-  ),
+jest.mock("../src/lib/config.js", () => ({
+  getConfig: jest.fn(() => createTestConfig({ mediaDir, contentDir })),
 }));
 
-jest.mock('../src/lib/data-service.js', () => ({
+jest.mock("../src/lib/data-service.js", () => ({
   leadCMSDataService: createDataServiceMock(),
 }));
 
-jest.mock('../src/lib/cms-config-types.js', () => ({
+jest.mock("../src/lib/cms-config-types.js", () => ({
   setCMSConfig: jest.fn(),
   isMediaSupported: jest.fn(() => true),
 }));
@@ -39,17 +36,18 @@ jest.mock('../src/lib/cms-config-types.js', () => ({
 // Mock axios to intercept both config and sync calls
 let mediaSyncCalls: string[] = [];
 
-jest.mock('axios', () => {
+jest.mock("axios", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mockGet = jest.fn((url: string, _opts?: any) => {
-    if (url.includes('/api/config')) {
+    if (url.includes("/api/config")) {
       return Promise.resolve({
         status: 200,
-        data: { features: ['media'] },
+        data: { features: ["media"] },
         headers: {},
       });
     }
 
-    if (url.includes('/api/media/sync')) {
+    if (url.includes("/api/media/sync")) {
       mediaSyncCalls.push(url);
       // Always return 204 (no changes)
       return Promise.resolve({
@@ -62,6 +60,7 @@ jest.mock('axios', () => {
     return Promise.resolve({ status: 200, data: {}, headers: {} });
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mockInstance: any = jest.fn(mockGet);
   mockInstance.get = mockGet;
   mockInstance.interceptors = {
@@ -88,26 +87,26 @@ afterEach(async () => {
 //  pull-media --reset should clear per-remote sync token
 // ════════════════════════════════════════════════════════════════════════
 
-describe('pullMedia with reset clears per-remote sync token', () => {
-  it('should delete the per-remote sync token when reset is true', async () => {
-    const remoteStateDir = path.join(remotesDir, 'prod');
+describe("pullMedia with reset clears per-remote sync token", () => {
+  it("should delete the per-remote sync token when reset is true", async () => {
+    const remoteStateDir = path.join(remotesDir, "prod");
     await fsPromises.mkdir(remoteStateDir, { recursive: true });
 
     const remoteCtx = {
-      name: 'prod',
-      url: 'https://cms.example.com',
+      name: "prod",
+      url: "https://cms.example.com",
       isDefault: true,
       stateDir: remoteStateDir,
     };
 
     // Simulate an existing per-remote sync token
-    const tokenPath = path.join(remoteStateDir, 'media-sync-token');
-    await fsPromises.writeFile(tokenPath, 'stale-sync-token', 'utf8');
+    const tokenPath = path.join(remoteStateDir, "media-sync-token");
+    await fsPromises.writeFile(tokenPath, "stale-sync-token", "utf8");
 
     // Also write some media files
-    await fsPromises.writeFile(path.join(mediaDir, 'image.png'), 'fake-image');
+    await fsPromises.writeFile(path.join(mediaDir, "image.png"), "fake-image");
 
-    const { pullMedia } = await import('../src/scripts/pull-media');
+    const { pullMedia } = await import("../src/scripts/pull-media");
     await pullMedia({ reset: true, remoteContext: remoteCtx });
 
     // Per-remote sync token should be deleted
@@ -117,27 +116,29 @@ describe('pullMedia with reset clears per-remote sync token', () => {
     let mediaFiles: string[] = [];
     try {
       mediaFiles = await fsPromises.readdir(mediaDir);
-    } catch { /* directory deleted entirely — that's fine */ }
+    } catch {
+      /* directory deleted entirely — that's fine */
+    }
     // .sync-token and actual files should be gone
-    expect(mediaFiles.filter(f => f !== '.sync-token')).toHaveLength(0);
+    expect(mediaFiles.filter((f) => f !== ".sync-token")).toHaveLength(0);
   });
 
-  it('should NOT leave stale token that causes 204 on next sync', async () => {
-    const remoteStateDir = path.join(remotesDir, 'prod');
+  it("should NOT leave stale token that causes 204 on next sync", async () => {
+    const remoteStateDir = path.join(remotesDir, "prod");
     await fsPromises.mkdir(remoteStateDir, { recursive: true });
 
     const remoteCtx = {
-      name: 'prod',
-      url: 'https://cms.example.com',
+      name: "prod",
+      url: "https://cms.example.com",
       isDefault: true,
       stateDir: remoteStateDir,
     };
 
     // Simulate an existing per-remote sync token
-    const tokenPath = path.join(remoteStateDir, 'media-sync-token');
-    await fsPromises.writeFile(tokenPath, 'stale-sync-token', 'utf8');
+    const tokenPath = path.join(remoteStateDir, "media-sync-token");
+    await fsPromises.writeFile(tokenPath, "stale-sync-token", "utf8");
 
-    const { pullMedia } = await import('../src/scripts/pull-media');
+    const { pullMedia } = await import("../src/scripts/pull-media");
     await pullMedia({ reset: true, remoteContext: remoteCtx });
 
     // After reset, the token file should be gone

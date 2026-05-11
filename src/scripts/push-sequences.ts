@@ -60,18 +60,22 @@ interface LocalSequenceFile {
   sequence: LocalSequenceDto;
 }
 
-function formatSequenceApiError(error: any): string {
-  const title = error?.response?.data?.title;
+function formatSequenceApiError(error: unknown): string {
+  const err = error as {
+    response?: { data?: { title?: string; detail?: string; errors?: Record<string, unknown[]> } };
+    message?: string;
+  };
+  const title = err?.response?.data?.title;
   if (typeof title === "string" && title.trim()) {
     return title.trim();
   }
 
-  const detail = error?.response?.data?.detail;
+  const detail = err?.response?.data?.detail;
   if (typeof detail === "string" && detail.trim()) {
     return detail.trim();
   }
 
-  const errors = error?.response?.data?.errors;
+  const errors = err?.response?.data?.errors;
   if (errors && typeof errors === "object") {
     const messages: string[] = [];
     for (const [field, fieldErrors] of Object.entries(errors)) {
@@ -86,7 +90,7 @@ function formatSequenceApiError(error: any): string {
     }
   }
 
-  return error?.message || "Unknown error";
+  return err?.message || "Unknown error";
 }
 
 async function readLocalSequences(dir?: string): Promise<LocalSequenceFile[]> {
@@ -111,11 +115,13 @@ async function readLocalSequences(dir?: string): Promise<LocalSequenceFile[]> {
       const raw = JSON.parse(await fs.readFile(fullPath, "utf8"));
       // Support both flat format and legacy _entityType wrapper
       const sequence: LocalSequenceDto | undefined =
-        raw?._entityType === "sequence" ? raw.data : (raw?.name ? raw : undefined);
+        raw?._entityType === "sequence" ? raw.data : raw?.name ? raw : undefined;
       if (sequence) {
         results.push({ filePath: fullPath, sequence });
       }
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
 
   return results;
@@ -172,25 +178,23 @@ async function buildIdToNameMaps(): Promise<{
 function getRemoteMatch(
   local: LocalSequenceDto,
   remotes: SequenceDetailsDto[],
-  metadataMap?: MetadataMap,
+  metadataMap?: MetadataMap
 ): SequenceDetailsDto | undefined {
   // Priority 1: name + language match (composite natural key)
-  const nameMatch = remotes.find(
-    r => r.name === local.name && r.language === local.language,
-  );
+  const nameMatch = remotes.find((r) => r.name === local.name && r.language === local.language);
   if (nameMatch) return nameMatch;
 
   // Priority 2: metadata-map ID (keyed by language + name)
   if (metadataMap?.sequences) {
     const entry = metadataMap.sequences[local.language]?.[local.name];
     if (entry?.id != null) {
-      return remotes.find(r => r.id === entry.id);
+      return remotes.find((r) => r.id === entry.id);
     }
   }
 
   // Priority 3: local id (backward compat for single-remote)
   if (local.id != null) {
-    return remotes.find(r => r.id === local.id);
+    return remotes.find((r) => r.id === local.id);
   }
 
   return undefined;
@@ -202,7 +206,7 @@ function hasSequenceChanges(
   local: LocalSequenceDto,
   remote: SequenceDetailsDto,
   segmentIdNameMap: SegmentIdNameMap,
-  templateIdNameMap: EmailTemplateIdNameMap,
+  templateIdNameMap: EmailTemplateIdNameMap
 ): boolean {
   // Compare using the local representation of the remote
   const remoteAsLocal = toLocalSequence(remote, segmentIdNameMap, templateIdNameMap);
@@ -219,13 +223,13 @@ async function updateLocalFileAfterPush(
   response: SequenceDetailsDto,
   segmentIdNameMap: SegmentIdNameMap,
   templateIdNameMap: EmailTemplateIdNameMap,
-  remoteCtx?: RemoteContext,
+  remoteCtx?: RemoteContext
 ): Promise<void> {
   if (remoteCtx) {
     try {
       const rc = await import("../lib/remote-context.js");
       const metaMap = await rc.readMetadataMap(remoteCtx);
-      const lang = response.language || 'en';
+      const lang = response.language || "en";
       rc.setSequenceRemoteId(metaMap, lang, response.name, response.id!);
       rc.setMetadataForSequence(metaMap, lang, response.name, {
         id: response.id,
@@ -233,7 +237,8 @@ async function updateLocalFileAfterPush(
         updatedAt: response.updatedAt ?? undefined,
       });
       await rc.writeMetadataMap(remoteCtx, metaMap);
-    } catch (e: any) {
+    } catch (_e: unknown) {
+      const e = _e as Error;
       console.warn(`Failed to update remote metadata: ${e.message}`);
     }
   }
@@ -244,14 +249,17 @@ async function updateLocalFileAfterPush(
     const localDto = toLocalSequence(response, segmentIdNameMap, templateIdNameMap);
     await fs.writeFile(filePath, JSON.stringify(localDto, null, 2) + "\n", "utf8");
     logger.verbose(`[PUSH] Updated local file: ${filePath}`);
-  } catch (e: any) {
+  } catch (_e: unknown) {
+    const e = _e as Error;
     logger.verbose(`[PUSH] Failed to update local file ${filePath}: ${e.message}`);
   }
 }
 
 // ── Status ──────────────────────────────────────────────────────────────
 
-export async function buildSequenceStatus(options: StatusOptions = {}): Promise<SequenceStatusResult> {
+export async function buildSequenceStatus(
+  options: StatusOptions = {}
+): Promise<SequenceStatusResult> {
   const { showDelete, remoteContext: remoteCtx } = options;
   const operations: SequenceOperation[] = [];
 
@@ -279,7 +287,7 @@ export async function buildSequenceStatus(options: StatusOptions = {}): Promise<
     // Use per-remote metadata timestamps for conflict detection when available
     let lastKnownRemoteUpdated = localUpdated;
     if (metadataMap) {
-      const lang = sequence.language || 'en';
+      const lang = sequence.language || "en";
       const meta = metadataMap.sequences?.[lang]?.[sequence.name];
       if (meta?.updatedAt) {
         lastKnownRemoteUpdated = new Date(meta.updatedAt);
@@ -303,9 +311,7 @@ export async function buildSequenceStatus(options: StatusOptions = {}): Promise<
   }
 
   if (showDelete) {
-    const localKeys = new Set(
-      localFiles.map(f => `${f.sequence.language}:${f.sequence.name}`),
-    );
+    const localKeys = new Set(localFiles.map((f) => `${f.sequence.language}:${f.sequence.name}`));
     for (const remote of remoteSequences) {
       const key = `${remote.language}:${remote.name}`;
       if (!localKeys.has(key)) {
@@ -324,7 +330,7 @@ export async function buildSequenceStatus(options: StatusOptions = {}): Promise<
 function printSequenceDiffPreview(
   op: SequenceOperation,
   segIdNameMap: SegmentIdNameMap,
-  tplIdNameMap: EmailTemplateIdNameMap,
+  tplIdNameMap: EmailTemplateIdNameMap
 ): void {
   if (op.type !== "update" && op.type !== "conflict") return;
   if (!op.local || !op.remote) return;
@@ -351,7 +357,10 @@ function printSequenceDiffPreview(
       if (part.added) {
         addedLines += lines.length;
         if (previewLines < maxPreviewLines) {
-          for (const line of lines.slice(0, Math.min(lines.length, maxPreviewLines - previewLines))) {
+          for (const line of lines.slice(
+            0,
+            Math.min(lines.length, maxPreviewLines - previewLines)
+          )) {
             colorConsole.log(`          ${diffColors.added(`+ ${line}`)}`);
             previewLines++;
           }
@@ -359,7 +368,10 @@ function printSequenceDiffPreview(
       } else if (part.removed) {
         removedLines += lines.length;
         if (previewLines < maxPreviewLines) {
-          for (const line of lines.slice(0, Math.min(lines.length, maxPreviewLines - previewLines))) {
+          for (const line of lines.slice(
+            0,
+            Math.min(lines.length, maxPreviewLines - previewLines)
+          )) {
             colorConsole.log(`          ${diffColors.removed(`- ${line}`)}`);
             previewLines++;
           }
@@ -369,14 +381,19 @@ function printSequenceDiffPreview(
       if (previewLines >= maxPreviewLines) break;
     }
 
-    if (previewLines >= maxPreviewLines && (addedLines + removedLines > previewLines)) {
+    if (previewLines >= maxPreviewLines && addedLines + removedLines > previewLines) {
       colorConsole.gray(`          ... (${addedLines + removedLines - previewLines} more changes)`);
     }
 
-    colorConsole.log(`          ${colorConsole.green(`+${addedLines}`)} / ${colorConsole.red(`-${removedLines}`)} lines`);
+    colorConsole.log(
+      `          ${colorConsole.green(`+${addedLines}`)} / ${colorConsole.red(`-${removedLines}`)} lines`
+    );
     colorConsole.log("");
-  } catch (error: any) {
-    logger.verbose(`[DIFF] Failed to generate diff for sequence ${op.local?.name}: ${error.message}`);
+  } catch (_error: unknown) {
+    const error = _error as Error;
+    logger.verbose(
+      `[DIFF] Failed to generate diff for sequence ${op.local?.name}: ${error.message}`
+    );
   }
 }
 
@@ -413,17 +430,25 @@ export async function statusSequences(options: StatusOptions = {}): Promise<void
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
     switch (op.type) {
       case "create":
-        colorConsole.log(`   ${statusColors.created("new:      ")} ${colorConsole.highlight(nameLabel)}`);
+        colorConsole.log(
+          `   ${statusColors.created("new:      ")} ${colorConsole.highlight(nameLabel)}`
+        );
         break;
       case "update":
-        colorConsole.log(`   ${statusColors.modified("modified: ")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`);
+        colorConsole.log(
+          `   ${statusColors.modified("modified: ")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+        );
         break;
       case "conflict":
-        colorConsole.log(`   ${statusColors.conflict("conflict: ")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`);
+        colorConsole.log(
+          `   ${statusColors.conflict("conflict: ")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+        );
         if (op.reason) colorConsole.log(`              ${colorConsole.gray(op.reason)}`);
         break;
       case "delete":
-        colorConsole.log(`   ${statusColors.conflict("deleted:  ")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`);
+        colorConsole.log(
+          `   ${statusColors.conflict("deleted:  ")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+        );
         break;
     }
 
@@ -467,7 +492,8 @@ export async function pushSequences(options: PushOptions = {}): Promise<void> {
     let payload: SequenceCreateDto;
     try {
       payload = toRemoteSequencePayload(sequence, segNameIdMap, tplNameIdMap);
-    } catch (e: any) {
+    } catch (_e: unknown) {
+      const e = _e as Error;
       console.warn(`⚠️  Skipping sequence "${sequence.name}": ${e.message}`);
       continue;
     }
@@ -481,7 +507,8 @@ export async function pushSequences(options: PushOptions = {}): Promise<void> {
       let created: SequenceDetailsDto;
       try {
         created = await leadCMSDataService.createSequence(payload);
-      } catch (error: any) {
+      } catch (_error: unknown) {
+        const error = _error as Error;
         const reason = formatSequenceApiError(error);
         throw new Error(`Failed to create sequence "${sequence.name}": ${reason}`);
       }
@@ -497,7 +524,7 @@ export async function pushSequences(options: PushOptions = {}): Promise<void> {
     // Use per-remote metadata timestamps for conflict detection when available
     let lastKnownRemoteUpdated = localUpdated;
     if (metadataMap) {
-      const lang = sequence.language || 'en';
+      const lang = sequence.language || "en";
       const meta = metadataMap.sequences?.[lang]?.[sequence.name];
       if (meta?.updatedAt) {
         lastKnownRemoteUpdated = new Date(meta.updatedAt);
@@ -505,7 +532,9 @@ export async function pushSequences(options: PushOptions = {}): Promise<void> {
     }
 
     if (!force && remoteUpdated > lastKnownRemoteUpdated) {
-      console.warn(`⚠️  Remote sequence updated after local changes: ${sequence.name} — skipping (use --force to override)`);
+      console.warn(
+        `⚠️  Remote sequence updated after local changes: ${sequence.name} — skipping (use --force to override)`
+      );
       continue;
     }
 
@@ -520,7 +549,8 @@ export async function pushSequences(options: PushOptions = {}): Promise<void> {
     let updated: SequenceDetailsDto;
     try {
       updated = await leadCMSDataService.updateSequence(match.id!, payload);
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as Error;
       const reason = formatSequenceApiError(error);
       throw new Error(`Failed to update sequence "${sequence.name}" (ID ${match.id}): ${reason}`);
     }
@@ -531,9 +561,7 @@ export async function pushSequences(options: PushOptions = {}): Promise<void> {
 
   if (!allowDelete) return;
 
-  const localKeys = new Set(
-    localFiles.map(f => `${f.sequence.language}:${f.sequence.name}`),
-  );
+  const localKeys = new Set(localFiles.map((f) => `${f.sequence.language}:${f.sequence.name}`));
 
   for (const remote of remoteSequences) {
     const key = `${remote.language}:${remote.name}`;

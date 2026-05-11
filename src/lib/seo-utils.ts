@@ -43,7 +43,7 @@ export interface SeoDefaultSources {
 }
 
 /** Default robots value for content with SEO enabled */
-export const DEFAULT_ROBOTS = 'index,follow';
+export const DEFAULT_ROBOTS = "index,follow";
 
 /**
  * Compute default SEO values from content fields.
@@ -92,7 +92,10 @@ export function apiSeoToFrontmatter(
   if (apiSeo.openGraphTitle && apiSeo.openGraphTitle !== defaults.openGraphTitle) {
     fm.ogTitle = apiSeo.openGraphTitle;
   }
-  if (apiSeo.openGraphDescription && apiSeo.openGraphDescription !== defaults.openGraphDescription) {
+  if (
+    apiSeo.openGraphDescription &&
+    apiSeo.openGraphDescription !== defaults.openGraphDescription
+  ) {
     fm.ogDescription = apiSeo.openGraphDescription;
   }
   if (apiSeo.openGraphImageUrl && apiSeo.openGraphImageUrl !== defaults.openGraphImageUrl) {

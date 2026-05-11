@@ -3,15 +3,15 @@
  * Shared authentication functions for device auth and manual token flows
  */
 
-import axios from 'axios';
-import * as fs from 'fs';
-import * as path from 'path';
+import axios from "axios";
+import * as fs from "fs";
+import * as path from "path";
 
 interface UserDetailsDto {
   email: string;
   userName: string;
   displayName: string;
-  data?: Record<string, any> | null;
+  data?: Record<string, unknown> | null;
   id?: string;
   createdAt?: string;
   lastTimeLoggedIn?: string | null;
@@ -61,7 +61,7 @@ export async function getLeadCMSVersion(url: string): Promise<string | null> {
       timeout: 5000,
     });
     return response.data.version;
-  } catch (error) {
+  } catch {
     // If version endpoint is not available, return null
     return null;
   }
@@ -95,7 +95,7 @@ export function compareVersions(v1: string, v2: string): number {
  */
 export function supportsDeviceAuth(version: string | null): boolean {
   if (!version) return false;
-  return compareVersions(version, '1.2.88-pre') >= 0;
+  return compareVersions(version, "1.2.88-pre") >= 0;
 }
 
 /**
@@ -114,39 +114,39 @@ export async function verifyToken(url: string, token: string): Promise<UserDetai
 /**
  * Save API token to .env file
  */
-export function saveTokenToEnv(token: string, envKey = 'LEADCMS_API_KEY'): void {
-  const envPath = path.join(process.cwd(), '.env');
-  let envContent = '';
+export function saveTokenToEnv(token: string, envKey = "LEADCMS_API_KEY"): void {
+  const envPath = path.join(process.cwd(), ".env");
+  let envContent = "";
 
   // Read existing .env file if it exists
   if (fs.existsSync(envPath)) {
-    envContent = fs.readFileSync(envPath, 'utf-8');
+    envContent = fs.readFileSync(envPath, "utf-8");
   }
 
   // Check if target key already exists
-  const lines = envContent.split('\n');
+  const lines = envContent.split("\n");
   const apiKeyIndex = lines.findIndex((line) => line.startsWith(`${envKey}=`));
 
   if (apiKeyIndex !== -1) {
     // Update existing key
     lines[apiKeyIndex] = `${envKey}=${token}`;
-    envContent = lines.join('\n');
+    envContent = lines.join("\n");
   } else {
     // Add new key
-    if (envContent && !envContent.endsWith('\n')) {
-      envContent += '\n';
+    if (envContent && !envContent.endsWith("\n")) {
+      envContent += "\n";
     }
     envContent += `${envKey}=${token}\n`;
   }
 
-  fs.writeFileSync(envPath, envContent, 'utf-8');
+  fs.writeFileSync(envPath, envContent, "utf-8");
 }
 
 /**
  * Device authentication flow
  */
 export async function deviceAuthFlow(url: string): Promise<string> {
-  console.log('\n🔐 Starting device authentication...\n');
+  console.log("\n🔐 Starting device authentication...\n");
 
   // Step 1: Initiate device authentication
   let initData: DeviceAuthInitiateDto;
@@ -154,18 +154,19 @@ export async function deviceAuthFlow(url: string): Promise<string> {
     const response = await axios.post<DeviceAuthInitiateDto>(
       `${url}/api/identity/device/initiate`,
       {},
-      { headers: { 'Content-Type': 'application/json' } }
+      { headers: { "Content-Type": "application/json" } }
     );
     initData = response.data;
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as Error;
     throw new Error(`Failed to initiate device authentication: ${error.message}`);
   }
 
   // Step 2: Display instructions to user
-  console.log('📋 To complete authentication, open this link in your browser:\n');
+  console.log("📋 To complete authentication, open this link in your browser:\n");
   console.log(`   ${initData.verificationUriComplete}\n`);
   console.log(`⏱️  Code expires in ${Math.floor(initData.expiresIn / 60)} minutes`);
-  console.log('⏳ Waiting for authorization...\n');
+  console.log("⏳ Waiting for authorization...\n");
 
   // Step 3: Poll for completion
   const pollRequest = { deviceCode: initData.deviceCode };
@@ -179,14 +180,14 @@ export async function deviceAuthFlow(url: string): Promise<string> {
       const pollResponse = await axios.post<JWTokenDto>(
         `${url}/api/identity/device/poll`,
         pollRequest,
-        { headers: { 'Content-Type': 'application/json' } }
+        { headers: { "Content-Type": "application/json" } }
       );
 
       if (pollResponse.status === 200) {
         // Authentication successful
         return pollResponse.data.token;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (axios.isAxiosError(error)) {
         if (error.response?.status === 202) {
           // Still pending, continue polling
@@ -195,13 +196,11 @@ export async function deviceAuthFlow(url: string): Promise<string> {
           // Device code expired, denied, or invalid
           const errorData = error.response.data as DeviceAuthErrorDto;
           throw new Error(
-            errorData.error_description || errorData.message || 'Device authentication failed'
+            errorData.error_description || errorData.message || "Device authentication failed"
           );
         } else {
           // Other error
-          throw new Error(
-            `Authentication failed: ${error.response?.statusText || error.message}`
-          );
+          throw new Error(`Authentication failed: ${error.response?.statusText || error.message}`);
         }
       } else {
         throw error;
@@ -209,7 +208,7 @@ export async function deviceAuthFlow(url: string): Promise<string> {
     }
   }
 
-  throw new Error('Authentication timeout: Code expired');
+  throw new Error("Authentication timeout: Code expired");
 }
 
 /**
@@ -220,28 +219,28 @@ export async function manualTokenFlow(
   url: string,
   question: (prompt: string) => Promise<string>
 ): Promise<string> {
-  console.log('\n🔐 LeadCMS Authentication\n');
-  console.log('⚠️  Note: This instance does not support automatic device authentication.');
-  console.log('   (Device authentication requires LeadCMS version 1.2.88 or higher)');
-  console.log('   Please follow these steps to obtain your API token:\n');
+  console.log("\n🔐 LeadCMS Authentication\n");
+  console.log("⚠️  Note: This instance does not support automatic device authentication.");
+  console.log("   (Device authentication requires LeadCMS version 1.2.88 or higher)");
+  console.log("   Please follow these steps to obtain your API token:\n");
 
-  console.log('📋 Steps to get your API token:\n');
+  console.log("📋 Steps to get your API token:\n");
   console.log(`   1. Open your browser and navigate to: ${url}`);
-  console.log('   2. Open Developer Tools (press F12 or right-click → Inspect)');
+  console.log("   2. Open Developer Tools (press F12 or right-click → Inspect)");
   console.log('   3. Go to the "Network" tab in Developer Tools');
-  console.log('   4. Log in to your LeadCMS account');
-  console.log('   5. After successful login, look for an API call in the Network tab');
+  console.log("   4. Log in to your LeadCMS account");
+  console.log("   5. After successful login, look for an API call in the Network tab");
   console.log('      → Look for "/api/users/me" request');
-  console.log('   6. Click on that request');
+  console.log("   6. Click on that request");
   console.log('   7. Find the "Request Headers" section');
   console.log('   8. Locate the "Authorization" header');
   console.log('   9. Copy the token value (without the "Bearer " prefix)\n');
 
   // Prompt for token
-  const token = await question('🔑 Paste your API token here: ');
+  const token = await question("🔑 Paste your API token here: ");
 
   if (!token) {
-    throw new Error('No token provided');
+    throw new Error("No token provided");
   }
 
   return token;
@@ -256,7 +255,7 @@ export async function authenticate(
   question: (prompt: string) => Promise<string>
 ): Promise<AuthResult> {
   // Check LeadCMS version to determine authentication method
-  console.log('🔍 Checking LeadCMS version...');
+  console.log("🔍 Checking LeadCMS version...");
   const version = await getLeadCMSVersion(url);
 
   let token: string;
@@ -269,17 +268,17 @@ export async function authenticate(
       token = await deviceAuthFlow(url);
     } else {
       // Use manual token flow
-      console.log('   Device authentication not supported in this version.\n');
+      console.log("   Device authentication not supported in this version.\n");
       token = await manualTokenFlow(url, question);
     }
   } else {
     // Version check failed, use manual flow
-    console.log('   Could not determine version, using manual authentication.\n');
+    console.log("   Could not determine version, using manual authentication.\n");
     token = await manualTokenFlow(url, question);
   }
 
   // Verify token
-  console.log('\n⏳ Verifying token...');
+  console.log("\n⏳ Verifying token...");
   const user = await verifyToken(url, token);
 
   return { token, user };

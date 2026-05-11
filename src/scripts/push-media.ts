@@ -1,33 +1,33 @@
-import * as fs from 'fs';
-import * as fsPromises from 'fs/promises';
-import * as path from 'path';
-import readline from 'readline';
-import FormData from 'form-data';
-import axios from 'axios';
-import { leadCMSDataService, MediaItem } from '../lib/data-service.js';
-import { loadConfig, LeadCMSConfig } from '../lib/config.js';
-import { success, error, warn, info } from '../lib/console-colors.js';
-import { logger } from '../lib/logger.js';
-import type { RemoteContext } from '../lib/remote-context.js';
+import * as fs from "fs";
+import * as fsPromises from "fs/promises";
+import * as path from "path";
+import readline from "readline";
+import FormData from "form-data";
+import axios from "axios";
+import { leadCMSDataService, MediaItem } from "../lib/data-service.js";
+import { loadConfig, LeadCMSConfig } from "../lib/config.js";
+import { success, error, warn, info } from "../lib/console-colors.js";
+import { logger } from "../lib/logger.js";
+import type { RemoteContext } from "../lib/remote-context.js";
 
 /**
  * Represents a local media file with metadata
  */
 export interface LocalMediaFile {
-  filePath: string;      // Relative path from media directory (e.g., 'blog/hero.jpg')
-  absolutePath: string;  // Full filesystem path
-  scopeUid: string;      // Scope identifier (e.g., 'blog', 'pages/about')
-  name: string;          // Filename (e.g., 'hero.jpg')
-  size: number;          // File size in bytes
-  extension: string;     // File extension including dot (e.g., '.jpg')
-  mimeType: string;      // MIME type (e.g., 'image/jpeg')
+  filePath: string; // Relative path from media directory (e.g., 'blog/hero.jpg')
+  absolutePath: string; // Full filesystem path
+  scopeUid: string; // Scope identifier (e.g., 'blog', 'pages/about')
+  name: string; // Filename (e.g., 'hero.jpg')
+  size: number; // File size in bytes
+  extension: string; // File extension including dot (e.g., '.jpg')
+  mimeType: string; // MIME type (e.g., 'image/jpeg')
 }
 
 /**
  * Represents operation to perform on a media file
  */
 export interface MediaOperation {
-  type: 'create' | 'update' | 'delete' | 'skip';
+  type: "create" | "update" | "delete" | "skip";
   local?: LocalMediaFile;
   remote?: MediaItem;
   reason: string;
@@ -69,8 +69,10 @@ export interface MediaDependencies {
   /** Function to fetch remote media - defaults to leadCMSDataService.getAllMedia */
   fetchRemoteMedia?: () => Promise<MediaItem[]>;
   /** Function to upload media - defaults to leadCMSDataService.uploadMedia */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   uploadMedia?: (formData: any) => Promise<MediaItem>;
   /** Function to update media - defaults to leadCMSDataService.updateMedia */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateMedia?: (formData: any) => Promise<MediaItem>;
   /** Function to delete media - defaults to leadCMSDataService.deleteMedia */
   deleteMedia?: (pathToFile: string) => Promise<void>;
@@ -99,7 +101,7 @@ function getDefaultDependencies(): Required<MediaDependencies> {
     if (!rl) {
       rl = readline.createInterface({
         input: process.stdin,
-        output: process.stdout
+        output: process.stdout,
       });
     }
     return rl;
@@ -107,7 +109,9 @@ function getDefaultDependencies(): Required<MediaDependencies> {
 
   return {
     fetchRemoteMedia: () => leadCMSDataService.getAllMedia(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     uploadMedia: (formData: any) => leadCMSDataService.uploadMedia(formData),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     updateMedia: (formData: any) => leadCMSDataService.updateMedia(formData),
     deleteMedia: (pathToFile: string) => leadCMSDataService.deleteMedia(pathToFile),
     logInfo: info,
@@ -120,17 +124,17 @@ function getDefaultDependencies(): Required<MediaDependencies> {
         readline.question(message, (answer) => {
           readline.close();
           rl = null;
-          const confirmed = answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes';
+          const confirmed = answer.toLowerCase() === "y" || answer.toLowerCase() === "yes";
           resolve(confirmed);
         });
       });
     },
     downloadMediaFile: async (location: string) => {
-      const baseUrl = (leadCMSDataService.getBaseUrl() || '').replace(/\/$/, '');
-      const fullUrl = location.startsWith('http') ? location : `${baseUrl}${location}`;
-      const res = await axios.get(fullUrl, { responseType: 'arraybuffer' });
+      const baseUrl = (leadCMSDataService.getBaseUrl() || "").replace(/\/$/, "");
+      const fullUrl = location.startsWith("http") ? location : `${baseUrl}${location}`;
+      const res = await axios.get(fullUrl, { responseType: "arraybuffer" });
       return Buffer.from(res.data);
-    }
+    },
   };
 }
 
@@ -138,19 +142,19 @@ function getDefaultDependencies(): Required<MediaDependencies> {
  * Maximum file sizes by type (in bytes)
  */
 const MAX_FILE_SIZES = {
-  image: 10 * 1024 * 1024,    // 10MB for images
-  video: 100 * 1024 * 1024,   // 100MB for videos
+  image: 10 * 1024 * 1024, // 10MB for images
+  video: 100 * 1024 * 1024, // 100MB for videos
   document: 25 * 1024 * 1024, // 25MB for documents
-  other: 10 * 1024 * 1024     // 10MB for other files
+  other: 10 * 1024 * 1024, // 10MB for other files
 };
 
 /**
  * File extensions by category
  */
 const FILE_CATEGORIES = {
-  image: ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.avif', '.bmp', '.ico'],
-  video: ['.mp4', '.webm', '.ogg', '.mov', '.avi'],
-  document: ['.pdf', '.doc', '.docx', '.txt', '.md']
+  image: [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".avif", ".bmp", ".ico"],
+  video: [".mp4", ".webm", ".ogg", ".mov", ".avi"],
+  document: [".pdf", ".doc", ".docx", ".txt", ".md"],
 };
 
 /**
@@ -158,37 +162,37 @@ const FILE_CATEGORIES = {
  */
 export function getMimeType(extension: string): string {
   const mimeTypes: Record<string, string> = {
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp',
-    '.svg': 'image/svg+xml',
-    '.avif': 'image/avif',
-    '.bmp': 'image/bmp',
-    '.ico': 'image/x-icon',
-    '.mp4': 'video/mp4',
-    '.webm': 'video/webm',
-    '.ogg': 'video/ogg',
-    '.pdf': 'application/pdf',
-    '.txt': 'text/plain',
-    '.md': 'text/markdown'
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    ".avif": "image/avif",
+    ".bmp": "image/bmp",
+    ".ico": "image/x-icon",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".ogg": "video/ogg",
+    ".pdf": "application/pdf",
+    ".txt": "text/plain",
+    ".md": "text/markdown",
   };
 
-  return mimeTypes[extension.toLowerCase()] || 'application/octet-stream';
+  return mimeTypes[extension.toLowerCase()] || "application/octet-stream";
 }
 
 /**
  * Get file category from extension
  */
-export function getFileCategory(extension: string): 'image' | 'video' | 'document' | 'other' {
+export function getFileCategory(extension: string): "image" | "video" | "document" | "other" {
   const lowerExt = extension.toLowerCase();
 
-  if (FILE_CATEGORIES.image.includes(lowerExt)) return 'image';
-  if (FILE_CATEGORIES.video.includes(lowerExt)) return 'video';
-  if (FILE_CATEGORIES.document.includes(lowerExt)) return 'document';
+  if (FILE_CATEGORIES.image.includes(lowerExt)) return "image";
+  if (FILE_CATEGORIES.video.includes(lowerExt)) return "video";
+  if (FILE_CATEGORIES.document.includes(lowerExt)) return "document";
 
-  return 'other';
+  return "other";
 }
 
 /**
@@ -201,7 +205,7 @@ export function validateFileSize(file: LocalMediaFile): { valid: boolean; messag
   if (file.size > maxSize) {
     return {
       valid: false,
-      message: `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds ${category} limit of ${(maxSize / 1024 / 1024).toFixed(0)}MB`
+      message: `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds ${category} limit of ${(maxSize / 1024 / 1024).toFixed(0)}MB`,
     };
   }
 
@@ -213,23 +217,23 @@ export function validateFileSize(file: LocalMediaFile): { valid: boolean; messag
  */
 function shouldIgnoreFile(filename: string): boolean {
   const ignoredPatterns = [
-    '.DS_Store',           // macOS
-    'Thumbs.db',           // Windows
-    'desktop.ini',         // Windows
-    '.gitkeep',            // Git placeholder
-    '.gitignore',          // Git
-    '.htaccess',           // Apache
-    '~$',                  // Office temp files (prefix)
-    '.tmp',                // Temp files
-    '.temp',               // Temp files
-    '.bak',                // Backup files
-    '.swp',                // Vim swap files
-    '.swo',                // Vim swap files
+    ".DS_Store", // macOS
+    "Thumbs.db", // Windows
+    "desktop.ini", // Windows
+    ".gitkeep", // Git placeholder
+    ".gitignore", // Git
+    ".htaccess", // Apache
+    "~$", // Office temp files (prefix)
+    ".tmp", // Temp files
+    ".temp", // Temp files
+    ".bak", // Backup files
+    ".swp", // Vim swap files
+    ".swo", // Vim swap files
   ];
 
   // Check if filename matches any ignored pattern
   for (const pattern of ignoredPatterns) {
-    if (pattern.startsWith('~') && filename.startsWith(pattern.slice(1))) {
+    if (pattern.startsWith("~") && filename.startsWith(pattern.slice(1))) {
       return true;
     }
     if (filename === pattern || filename.endsWith(pattern)) {
@@ -238,7 +242,7 @@ function shouldIgnoreFile(filename: string): boolean {
   }
 
   // Ignore hidden files (starting with dot) except common media files
-  if (filename.startsWith('.')) {
+  if (filename.startsWith(".")) {
     return true;
   }
 
@@ -248,14 +252,14 @@ function shouldIgnoreFile(filename: string): boolean {
 /**
  * Recursively scan directory for media files
  */
-export function scanLocalMedia(mediaDir: string, config: LeadCMSConfig): LocalMediaFile[] {
+export function scanLocalMedia(mediaDir: string, _config: LeadCMSConfig): LocalMediaFile[] {
   const files: LocalMediaFile[] = [];
 
   if (!fs.existsSync(mediaDir)) {
     return files;
   }
 
-  function scanDirectory(currentDir: string, relativePath: string = '') {
+  function scanDirectory(currentDir: string, relativePath: string = "") {
     const entries = fs.readdirSync(currentDir, { withFileTypes: true });
 
     for (const entry of entries) {
@@ -275,16 +279,16 @@ export function scanLocalMedia(mediaDir: string, config: LeadCMSConfig): LocalMe
 
         // Parse scopeUid from path structure
         // Format: mediaDir/scopeUid/filename or mediaDir/scope/uid/filename
-        const scopeUid = path.dirname(relPath).replace(/\\/g, '/');
+        const scopeUid = path.dirname(relPath).replace(/\\/g, "/");
 
         const localFile: LocalMediaFile = {
-          filePath: relPath.replace(/\\/g, '/'),
+          filePath: relPath.replace(/\\/g, "/"),
           absolutePath: fullPath,
           scopeUid,
           name: entry.name,
           size: stats.size,
           extension: ext,
-          mimeType: getMimeType(ext)
+          mimeType: getMimeType(ext),
         };
 
         files.push(localFile);
@@ -323,10 +327,10 @@ export async function reconcileLocalFile(
   }
 
   const reasons: string[] = [];
-  if (nameChanged) reasons.push('name');
-  if (extensionChanged) reasons.push('extension');
-  if (sizeChanged) reasons.push('size');
-  const reason = `Server changed: ${reasons.join(', ')}`;
+  if (nameChanged) reasons.push("name");
+  if (extensionChanged) reasons.push("extension");
+  if (sizeChanged) reasons.push("size");
+  const reason = `Server changed: ${reasons.join(", ")}`;
 
   const oldFilePath = path.join(mediaDir, local.scopeUid, local.name);
   const newFilePath = path.join(mediaDir, serverResponse.scopeUid, serverResponse.name);
@@ -398,25 +402,25 @@ export function matchMediaFiles(
     if (!remote) {
       // New file - needs to be uploaded
       operations.push({
-        type: 'create',
+        type: "create",
         local,
-        reason: 'New file not present remotely'
+        reason: "New file not present remotely",
       });
     } else if (local.size !== remote.size) {
       // File size changed - needs update
       operations.push({
-        type: 'update',
+        type: "update",
         local,
         remote,
-        reason: `File size changed (local: ${local.size}, remote: ${remote.size})`
+        reason: `File size changed (local: ${local.size}, remote: ${remote.size})`,
       });
     } else {
       // No changes detected
       operations.push({
-        type: 'skip',
+        type: "skip",
         local,
         remote,
-        reason: 'No changes detected'
+        reason: "No changes detected",
       });
     }
   }
@@ -427,9 +431,9 @@ export function matchMediaFiles(
       const key = `${remote.scopeUid}/${remote.name}`.toLowerCase();
       if (!localMap.has(key)) {
         operations.push({
-          type: 'delete',
+          type: "delete",
           remote,
-          reason: 'File removed locally'
+          reason: "File removed locally",
         });
       }
     }
@@ -452,26 +456,26 @@ export function displayMediaStatus(
   const logErr = deps?.logError || error;
   const logOk = deps?.logSuccess || success;
 
-  const creates = operations.filter(op => op.type === 'create');
-  const updates = operations.filter(op => op.type === 'update');
-  const deletes = showDelete ? operations.filter(op => op.type === 'delete') : [];
-  const skips = operations.filter(op => op.type === 'skip');
+  const creates = operations.filter((op) => op.type === "create");
+  const updates = operations.filter((op) => op.type === "update");
+  const deletes = showDelete ? operations.filter((op) => op.type === "delete") : [];
+  const skips = operations.filter((op) => op.type === "skip");
 
-  console.log('\n📊 Media Status:');
-  console.log('─'.repeat(80));
+  console.log("\n📊 Media Status:");
+  console.log("─".repeat(80));
 
   if (creates.length > 0) {
     log(`\n✨ ${creates.length} file(s) to upload:`);
-    creates.forEach(op => {
-      const sizeKB = ((op.local!.size / 1024).toFixed(2));
+    creates.forEach((op) => {
+      const sizeKB = (op.local!.size / 1024).toFixed(2);
       console.log(`   + ${op.local!.scopeUid}/${op.local!.name} (${sizeKB}KB)`);
     });
   }
 
   if (updates.length > 0) {
     logWarning(`\n📝 ${updates.length} file(s) to update:`);
-    updates.forEach(op => {
-      const sizeKB = ((op.local!.size / 1024).toFixed(2));
+    updates.forEach((op) => {
+      const sizeKB = (op.local!.size / 1024).toFixed(2);
       console.log(`   ↻ ${op.local!.scopeUid}/${op.local!.name} (${sizeKB}KB)`);
       console.log(`     ${op.reason}`);
     });
@@ -479,7 +483,7 @@ export function displayMediaStatus(
 
   if (deletes.length > 0) {
     logErr(`\n🗑️  ${deletes.length} file(s) to delete:`);
-    deletes.forEach(op => {
+    deletes.forEach((op) => {
       console.log(`   - ${op.remote!.scopeUid}/${op.remote!.name}`);
     });
   }
@@ -488,11 +492,11 @@ export function displayMediaStatus(
     log(`\n✓ ${skips.length} file(s) up to date`);
   }
 
-  console.log('\n' + '─'.repeat(80));
+  console.log("\n" + "─".repeat(80));
 
   const totalOperations = creates.length + updates.length + deletes.length;
   if (totalOperations === 0) {
-    logOk('All media files are in sync! ✨');
+    logOk("All media files are in sync! ✨");
   } else {
     if (dryRun) {
       log(`\nDry run complete. Run without --dry-run to apply ${totalOperations} change(s).`);
@@ -501,7 +505,7 @@ export function displayMediaStatus(
     }
   }
 
-  console.log('');
+  console.log("");
 }
 
 /**
@@ -525,7 +529,7 @@ export async function executeMediaPush(
   const result: MediaPushResult = {
     operations,
     executed: { successful: 0, failed: 0, skipped: 0 },
-    errors: []
+    errors: [],
   };
 
   if (dryRun) {
@@ -534,10 +538,10 @@ export async function executeMediaPush(
     return result;
   }
 
-  const creates = operations.filter(op => op.type === 'create');
-  const updates = operations.filter(op => op.type === 'update');
-  const deletes = operations.filter(op => op.type === 'delete');
-  const skips = operations.filter(op => op.type === 'skip');
+  const creates = operations.filter((op) => op.type === "create");
+  const updates = operations.filter((op) => op.type === "update");
+  const deletes = operations.filter((op) => op.type === "delete");
+  const skips = operations.filter((op) => op.type === "skip");
 
   result.executed.skipped = skips.length;
 
@@ -550,15 +554,17 @@ export async function executeMediaPush(
     try {
       const validation = validateFileSize(op.local!);
       if (!validation.valid) {
-        logErr(`[${completedOps}/${totalOps}] ✗ ${op.local!.scopeUid}/${op.local!.name}: ${validation.message}`);
+        logErr(
+          `[${completedOps}/${totalOps}] ✗ ${op.local!.scopeUid}/${op.local!.name}: ${validation.message}`
+        );
         result.executed.failed++;
         result.errors.push({ operation: op, error: validation.message! });
         continue;
       }
 
       const formData = new FormData();
-      formData.append('File', fs.createReadStream(op.local!.absolutePath));
-      formData.append('ScopeUid', op.local!.scopeUid);
+      formData.append("File", fs.createReadStream(op.local!.absolutePath));
+      formData.append("ScopeUid", op.local!.scopeUid);
 
       const serverResponse = await uploadMedia(formData);
       logOk(`[${completedOps}/${totalOps}] ✓ Uploaded ${op.local!.scopeUid}/${op.local!.name}`);
@@ -567,16 +573,25 @@ export async function executeMediaPush(
       // Post-upload reconciliation: sync local file with server response
       if (mediaDir && serverResponse) {
         try {
-          const reconcileResult = await reconcileLocalFile(op.local!, serverResponse, mediaDir, downloadMediaFile);
+          const reconcileResult = await reconcileLocalFile(
+            op.local!,
+            serverResponse,
+            mediaDir,
+            downloadMediaFile
+          );
           if (reconcileResult.changed) {
             logOk(`  ↳ Reconciled: ${reconcileResult.reason}`);
           }
-        } catch (reconcileErr: any) {
+        } catch (_reconcileErr: unknown) {
+          const reconcileErr = _reconcileErr as Error;
           logWarning(`  ↳ reconciliation warning for ${op.local!.name}: ${reconcileErr.message}`);
         }
       }
-    } catch (err: any) {
-      logErr(`[${completedOps}/${totalOps}] ✗ Failed to upload ${op.local!.scopeUid}/${op.local!.name}: ${err.message}`);
+    } catch (_err: unknown) {
+      const err = _err as Error;
+      logErr(
+        `[${completedOps}/${totalOps}] ✗ Failed to upload ${op.local!.scopeUid}/${op.local!.name}: ${err.message}`
+      );
       result.executed.failed++;
       result.errors.push({ operation: op, error: err.message });
     }
@@ -588,16 +603,18 @@ export async function executeMediaPush(
     try {
       const validation = validateFileSize(op.local!);
       if (!validation.valid) {
-        logErr(`[${completedOps}/${totalOps}] ✗ ${op.local!.scopeUid}/${op.local!.name}: ${validation.message}`);
+        logErr(
+          `[${completedOps}/${totalOps}] ✗ ${op.local!.scopeUid}/${op.local!.name}: ${validation.message}`
+        );
         result.executed.failed++;
         result.errors.push({ operation: op, error: validation.message! });
         continue;
       }
 
       const formData = new FormData();
-      formData.append('File', fs.createReadStream(op.local!.absolutePath));
-      formData.append('ScopeUid', op.local!.scopeUid);
-      formData.append('FileName', op.local!.name);
+      formData.append("File", fs.createReadStream(op.local!.absolutePath));
+      formData.append("ScopeUid", op.local!.scopeUid);
+      formData.append("FileName", op.local!.name);
 
       const serverResponse = await updateMedia(formData);
       logOk(`[${completedOps}/${totalOps}] ✓ Updated ${op.local!.scopeUid}/${op.local!.name}`);
@@ -606,16 +623,25 @@ export async function executeMediaPush(
       // Post-update reconciliation: sync local file with server response
       if (mediaDir && serverResponse) {
         try {
-          const reconcileResult = await reconcileLocalFile(op.local!, serverResponse, mediaDir, downloadMediaFile);
+          const reconcileResult = await reconcileLocalFile(
+            op.local!,
+            serverResponse,
+            mediaDir,
+            downloadMediaFile
+          );
           if (reconcileResult.changed) {
             logOk(`  ↳ Reconciled: ${reconcileResult.reason}`);
           }
-        } catch (reconcileErr: any) {
+        } catch (_reconcileErr: unknown) {
+          const reconcileErr = _reconcileErr as Error;
           logWarning(`  ↳ reconciliation warning for ${op.local!.name}: ${reconcileErr.message}`);
         }
       }
-    } catch (err: any) {
-      logErr(`[${completedOps}/${totalOps}] ✗ Failed to update ${op.local!.scopeUid}/${op.local!.name}: ${err.message}`);
+    } catch (_err: unknown) {
+      const err = _err as Error;
+      logErr(
+        `[${completedOps}/${totalOps}] ✗ Failed to update ${op.local!.scopeUid}/${op.local!.name}: ${err.message}`
+      );
       result.executed.failed++;
       result.errors.push({ operation: op, error: err.message });
     }
@@ -629,21 +655,26 @@ export async function executeMediaPush(
       await deleteMedia(pathToFile);
       logOk(`[${completedOps}/${totalOps}] ✓ Deleted ${pathToFile}`);
       result.executed.successful++;
-    } catch (err: any) {
-      logErr(`[${completedOps}/${totalOps}] ✗ Failed to delete ${op.remote!.scopeUid}/${op.remote!.name}: ${err.message}`);
+    } catch (_err: unknown) {
+      const err = _err as Error;
+      logErr(
+        `[${completedOps}/${totalOps}] ✗ Failed to delete ${op.remote!.scopeUid}/${op.remote!.name}: ${err.message}`
+      );
       result.executed.failed++;
       result.errors.push({ operation: op, error: err.message });
     }
   }
 
   // Summary
-  console.log('\n' + '─'.repeat(80));
+  console.log("\n" + "─".repeat(80));
   if (result.executed.failed === 0) {
     logOk(`\n✨ Media push complete! ${result.executed.successful} operation(s) successful.`);
   } else {
-    logWarning(`\n⚠️  Media push completed with errors: ${result.executed.successful} succeeded, ${result.executed.failed} failed.`);
+    logWarning(
+      `\n⚠️  Media push completed with errors: ${result.executed.successful} succeeded, ${result.executed.failed} failed.`
+    );
   }
-  console.log('');
+  console.log("");
 
   return result;
 }
@@ -669,7 +700,6 @@ export async function statusMedia(
 ): Promise<MediaStatusResult> {
   const defaults = getDefaultDependencies();
   const fetchRemoteMedia = deps?.fetchRemoteMedia || defaults.fetchRemoteMedia;
-  const logInfoFn = deps?.logInfo || defaults.logInfo;
   const logWarnFn = deps?.logWarn || defaults.logWarn;
   const logErrFn = deps?.logError || defaults.logError;
 
@@ -677,18 +707,18 @@ export async function statusMedia(
     const config = loadConfig();
 
     // Use provided mediaDir or resolve from config
-    const mediaDir = options.mediaDir || path.resolve(process.cwd(), config.mediaDir || 'media');
+    const mediaDir = options.mediaDir || path.resolve(process.cwd(), config.mediaDir || "media");
 
     logger.verbose(`Scanning local media: ${mediaDir}`);
     const localFiles = scanLocalMedia(mediaDir, config);
 
     if (localFiles.length === 0) {
-      logWarnFn('No media files found locally.');
+      logWarnFn("No media files found locally.");
       return {
         operations: [],
         localFiles: [],
         remoteFiles: [],
-        summary: { creates: 0, updates: 0, deletes: 0, skips: 0, total: 0 }
+        summary: { creates: 0, updates: 0, deletes: 0, skips: 0, total: 0 },
       };
     }
 
@@ -699,8 +729,8 @@ export async function statusMedia(
     let filteredRemote = remoteFiles;
 
     if (options.scopeUid) {
-      filteredLocal = localFiles.filter(f => f.scopeUid === options.scopeUid);
-      filteredRemote = remoteFiles.filter(f => f.scopeUid === options.scopeUid);
+      filteredLocal = localFiles.filter((f) => f.scopeUid === options.scopeUid);
+      filteredRemote = remoteFiles.filter((f) => f.scopeUid === options.scopeUid);
     }
 
     // Show deletes only if showDelete flag is provided
@@ -709,10 +739,10 @@ export async function statusMedia(
       displayMediaStatus(operations, false, options.showDelete || false, deps);
     }
 
-    const creates = operations.filter(op => op.type === 'create').length;
-    const updates = operations.filter(op => op.type === 'update').length;
-    const deletes = operations.filter(op => op.type === 'delete').length;
-    const skips = operations.filter(op => op.type === 'skip').length;
+    const creates = operations.filter((op) => op.type === "create").length;
+    const updates = operations.filter((op) => op.type === "update").length;
+    const deletes = operations.filter((op) => op.type === "delete").length;
+    const skips = operations.filter((op) => op.type === "skip").length;
 
     return {
       operations,
@@ -723,11 +753,11 @@ export async function statusMedia(
         updates,
         deletes,
         skips,
-        total: creates + updates + deletes
-      }
+        total: creates + updates + deletes,
+      },
     };
-
-  } catch (err: any) {
+  } catch (_err: unknown) {
+    const err = _err as Error;
     logErrFn(`Media status check failed: ${err.message}`);
     throw err;
   }
@@ -759,14 +789,16 @@ export async function pushMedia(
   // Defense-in-depth: CLI entry points already gate on API key,
   // but guard here too in case the function is called directly.
   if (!leadCMSDataService.isApiKeyConfigured()) {
-    console.log('⏭️  Media push requires authentication — no API key configured, skipping');
+    console.log("⏭️  Media push requires authentication — no API key configured, skipping");
     return { operations: [], executed: { successful: 0, failed: 0, skipped: 0 }, errors: [] };
   }
 
   // Configure data service for the target remote (multi-remote support)
   if (options.remoteContext) {
     leadCMSDataService.configureForRemote(options.remoteContext.url, options.remoteContext.apiKey);
-    logger.verbose(`[PUSH] Using remote "${options.remoteContext.name}" (${options.remoteContext.url})`);
+    logger.verbose(
+      `[PUSH] Using remote "${options.remoteContext.name}" (${options.remoteContext.url})`
+    );
   }
 
   const defaults = getDefaultDependencies();
@@ -780,17 +812,17 @@ export async function pushMedia(
     const config = loadConfig();
 
     // Use provided mediaDir or resolve from config
-    const mediaDir = options.mediaDir || path.resolve(process.cwd(), config.mediaDir || 'media');
+    const mediaDir = options.mediaDir || path.resolve(process.cwd(), config.mediaDir || "media");
 
     logger.verbose(`Scanning local media: ${mediaDir}`);
     const localFiles = scanLocalMedia(mediaDir, config);
 
     if (localFiles.length === 0) {
-      logWarnFn('No media files found locally.');
+      logWarnFn("No media files found locally.");
       return {
         operations: [],
         executed: { successful: 0, failed: 0, skipped: 0 },
-        errors: []
+        errors: [],
       };
     }
 
@@ -802,8 +834,8 @@ export async function pushMedia(
     let filteredRemote = remoteFiles;
 
     if (options.scopeUid) {
-      filteredLocal = localFiles.filter(f => f.scopeUid === options.scopeUid);
-      filteredRemote = remoteFiles.filter(f => f.scopeUid === options.scopeUid);
+      filteredLocal = localFiles.filter((f) => f.scopeUid === options.scopeUid);
+      filteredRemote = remoteFiles.filter((f) => f.scopeUid === options.scopeUid);
       logInfoFn(`Filtering by scope: ${options.scopeUid}`);
     }
 
@@ -819,17 +851,17 @@ export async function pushMedia(
       return {
         operations,
         executed: { successful: 0, failed: 0, skipped: operations.length },
-        errors: []
+        errors: [],
       };
     }
 
-    const totalOps = operations.filter(op => op.type !== 'skip').length;
+    const totalOps = operations.filter((op) => op.type !== "skip").length;
 
     if (totalOps === 0) {
       return {
         operations,
         executed: { successful: 0, failed: 0, skipped: operations.length },
-        errors: []
+        errors: [],
       };
     }
 
@@ -839,18 +871,18 @@ export async function pushMedia(
       const confirmed = await promptConfirmation(confirmMsg);
 
       if (!confirmed) {
-        console.log('🚫 Push cancelled.');
+        console.log("🚫 Push cancelled.");
         return {
           operations,
           executed: { successful: 0, failed: 0, skipped: operations.length },
-          errors: []
+          errors: [],
         };
       }
     }
 
     return await executeMediaPush(operations, false, deps, mediaDir);
-
-  } catch (err: any) {
+  } catch (_err: unknown) {
+    const err = _err as Error;
     logErrFn(`Media push failed: ${err.message}`);
     throw err;
   }

@@ -12,7 +12,7 @@
  * any local storage of base snapshots.
  */
 
-import { diff3Merge } from 'node-diff3';
+import { diff3Merge } from "node-diff3";
 
 /**
  * Result of a three-way content merge
@@ -34,11 +34,7 @@ export interface MergeResult {
  * These fields are set/updated by the server automatically and should never
  * be treated as meaningful local edits.
  */
-const SERVER_CONTROLLED_FIELDS = new Set([
-  'updatedAt',
-  'createdAt',
-  'publishedAt',
-]);
+const SERVER_CONTROLLED_FIELDS = new Set(["updatedAt", "createdAt", "publishedAt"]);
 
 /**
  * Regex to match a YAML frontmatter line for a server-controlled field.
@@ -67,9 +63,9 @@ const SERVER_CONTROLLED_YAML_LINE = /^\s*(updatedAt|createdAt|publishedAt)\s*:/;
  * @returns MergeResult with merged content and conflict information
  */
 export function threeWayMerge(base: string, local: string, remote: string): MergeResult {
-  const baseLines = base.split('\n');
-  const localLines = local.split('\n');
-  const remoteLines = remote.split('\n');
+  const baseLines = base.split("\n");
+  const localLines = local.split("\n");
+  const remoteLines = remote.split("\n");
 
   const regions = diff3Merge(localLines, baseLines, remoteLines);
 
@@ -77,9 +73,9 @@ export function threeWayMerge(base: string, local: string, remote: string): Merg
   const resultLines: string[] = [];
 
   for (const region of regions) {
-    if ('ok' in region && region.ok) {
+    if ("ok" in region && region.ok) {
       resultLines.push(...region.ok);
-    } else if ('conflict' in region && region.conflict) {
+    } else if ("conflict" in region && region.conflict) {
       const localConflictLines = region.conflict.a;
       const remoteConflictLines = region.conflict.b;
 
@@ -90,11 +86,11 @@ export function threeWayMerge(base: string, local: string, remote: string): Merg
         // There are still real conflicts after extracting server-controlled fields
         conflictCount++;
         resultLines.push(...resolved.resolvedLines);
-        resultLines.push('<<<<<<< local');
+        resultLines.push("<<<<<<< local");
         resultLines.push(...resolved.remainingConflict.local);
-        resultLines.push('=======');
+        resultLines.push("=======");
         resultLines.push(...resolved.remainingConflict.remote);
-        resultLines.push('>>>>>>> remote');
+        resultLines.push(">>>>>>> remote");
       } else {
         // All lines in this conflict were server-controlled → fully auto-resolved
         resultLines.push(...resolved.resolvedLines);
@@ -102,9 +98,10 @@ export function threeWayMerge(base: string, local: string, remote: string): Merg
     }
   }
 
-  const merged = conflictCount === 0
-    ? applyRemoteServerControlledFrontmatter(resultLines.join('\n'), remote)
-    : resultLines.join('\n');
+  const merged =
+    conflictCount === 0
+      ? applyRemoteServerControlledFrontmatter(resultLines.join("\n"), remote)
+      : resultLines.join("\n");
 
   return {
     success: conflictCount === 0,
@@ -115,14 +112,14 @@ export function threeWayMerge(base: string, local: string, remote: string): Merg
 }
 
 function applyRemoteServerControlledFrontmatter(merged: string, remote: string): string {
-  const mergedLines = merged.split('\n');
-  const remoteLines = remote.split('\n');
+  const mergedLines = merged.split("\n");
+  const remoteLines = remote.split("\n");
 
-  if (mergedLines[0] !== '---' || remoteLines[0] !== '---') {
+  if (mergedLines[0] !== "---" || remoteLines[0] !== "---") {
     return merged;
   }
 
-  const getFrontmatterEndIndex = (lines: string[]): number => lines.indexOf('---', 1);
+  const getFrontmatterEndIndex = (lines: string[]): number => lines.indexOf("---", 1);
   const mergedFrontmatterEnd = getFrontmatterEndIndex(mergedLines);
   const remoteFrontmatterEnd = getFrontmatterEndIndex(remoteLines);
 
@@ -132,7 +129,7 @@ function applyRemoteServerControlledFrontmatter(merged: string, remote: string):
 
   const remoteServerLines = remoteLines
     .slice(1, remoteFrontmatterEnd)
-    .filter(line => SERVER_CONTROLLED_YAML_LINE.test(line));
+    .filter((line) => SERVER_CONTROLLED_YAML_LINE.test(line));
 
   const remoteServerFieldValues = new Map<string, string>();
   for (const line of remoteServerLines) {
@@ -178,10 +175,7 @@ function applyRemoteServerControlledFrontmatter(merged: string, remote: string):
 
   normalizedFrontmatter.push(mergedLines[mergedFrontmatterEnd]);
 
-  return [
-    ...normalizedFrontmatter,
-    ...mergedLines.slice(mergedFrontmatterEnd + 1),
-  ].join('\n');
+  return [...normalizedFrontmatter, ...mergedLines.slice(mergedFrontmatterEnd + 1)].join("\n");
 }
 
 /**
@@ -252,7 +246,7 @@ function resolveServerControlledConflict(
   };
 
   const stripServerControlledLines = (lines: string[]): string[] =>
-    lines.filter(line => !SERVER_CONTROLLED_YAML_LINE.test(line));
+    lines.filter((line) => !SERVER_CONTROLLED_YAML_LINE.test(line));
 
   const normalizedRemote = normalizeWithRemotePriority(remoteLines);
 
@@ -293,25 +287,33 @@ function resolveServerControlledConflict(
  * Result of a structural field-level merge for a single value.
  */
 interface FieldMergeResult {
-  value: any;
+  value: unknown;
   conflicted: boolean;
 }
 
 interface JsonConflictValue {
   __leadcmsConflict: true;
-  local: any;
-  remote: any;
+  local: unknown;
+  remote: unknown;
 }
 
-function createJsonConflictValue(local: any, remote: any): JsonConflictValue {
+function createJsonConflictValue(local: unknown, remote: unknown): JsonConflictValue {
   return { __leadcmsConflict: true, local, remote };
 }
 
-function isJsonConflictValue(value: any): value is JsonConflictValue {
-  return Boolean(value && typeof value === 'object' && value.__leadcmsConflict === true);
+function isJsonConflictValue(value: unknown): value is JsonConflictValue {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    (value as Record<string, unknown>).__leadcmsConflict === true
+  );
 }
 
-function cloneWithConflictPlaceholders(value: any, placeholders: Map<string, JsonConflictValue>, state: { index: number }): any {
+function cloneWithConflictPlaceholders(
+  value: unknown,
+  placeholders: Map<string, JsonConflictValue>,
+  state: { index: number }
+): unknown {
   if (isJsonConflictValue(value)) {
     const key = `__LEADCMS_CONFLICT_${state.index++}__`;
     placeholders.set(key, value);
@@ -319,11 +321,11 @@ function cloneWithConflictPlaceholders(value: any, placeholders: Map<string, Jso
   }
 
   if (Array.isArray(value)) {
-    return value.map(item => cloneWithConflictPlaceholders(item, placeholders, state));
+    return value.map((item) => cloneWithConflictPlaceholders(item, placeholders, state));
   }
 
-  if (value !== null && typeof value === 'object') {
-    const cloned: Record<string, any> = {};
+  if (value !== null && typeof value === "object") {
+    const cloned: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(value)) {
       cloned[key] = cloneWithConflictPlaceholders(val, placeholders, state);
     }
@@ -335,20 +337,23 @@ function cloneWithConflictPlaceholders(value: any, placeholders: Map<string, Jso
 
 function indentMultiline(text: string, indent: string): string {
   return text
-    .split('\n')
-    .map(line => `${indent}${line}`)
-    .join('\n');
+    .split("\n")
+    .map((line) => `${indent}${line}`)
+    .join("\n");
 }
 
 function addCommaToLastLine(block: string): string {
-  const lines = block.split('\n');
+  const lines = block.split("\n");
   if (lines.length === 0) return block;
   lines[lines.length - 1] = `${lines[lines.length - 1]},`;
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
-function renderJsonConflictMarkers(mergedWithPlaceholders: string, placeholders: Map<string, JsonConflictValue>): string {
-  const lines = mergedWithPlaceholders.split('\n');
+function renderJsonConflictMarkers(
+  mergedWithPlaceholders: string,
+  placeholders: Map<string, JsonConflictValue>
+): string {
+  const lines = mergedWithPlaceholders.split("\n");
   const output: string[] = [];
 
   for (const line of lines) {
@@ -363,7 +368,7 @@ function renderJsonConflictMarkers(mergedWithPlaceholders: string, placeholders:
     const isProperty = Boolean(propertyMatch);
     const prefix = isProperty ? propertyMatch![1] : arrayMatch![1];
     const token = isProperty ? propertyMatch![2] : arrayMatch![2];
-    const trailingComma = (isProperty ? propertyMatch![3] : arrayMatch![3]) === ',';
+    const trailingComma = (isProperty ? propertyMatch![3] : arrayMatch![3]) === ",";
     const conflict = placeholders.get(token);
 
     if (!conflict) {
@@ -371,7 +376,7 @@ function renderJsonConflictMarkers(mergedWithPlaceholders: string, placeholders:
       continue;
     }
 
-    const markerIndent = prefix.match(/^\s*/)?.[0] ?? '';
+    const markerIndent = prefix.match(/^\s*/)?.[0] ?? "";
     const valueIndent = `${markerIndent}  `;
     let localJson = indentMultiline(JSON.stringify(conflict.local, null, 2), valueIndent);
     let remoteJson = indentMultiline(JSON.stringify(conflict.remote, null, 2), valueIndent);
@@ -388,7 +393,7 @@ function renderJsonConflictMarkers(mergedWithPlaceholders: string, placeholders:
     output.push(block);
   }
 
-  return output.join('\n');
+  return output.join("\n");
 }
 
 /**
@@ -411,9 +416,9 @@ function renderJsonConflictMarkers(mergedWithPlaceholders: string, placeholders:
  * @returns MergeResult with the merged JSON string
  */
 export function threeWayMergeJson(base: string, local: string, remote: string): MergeResult {
-  let baseObj: any;
-  let localObj: any;
-  let remoteObj: any;
+  let baseObj: unknown;
+  let localObj: unknown;
+  let remoteObj: unknown;
 
   try {
     baseObj = JSON.parse(base);
@@ -446,7 +451,11 @@ export function threeWayMergeJson(base: string, local: string, remote: string): 
  * Recursively merge three values (base, local, remote).
  * Returns the merged value and whether any conflicts were found.
  */
-function mergeValues(base: any, local: any, remote: any): FieldMergeResult & { conflictCount: number } {
+function mergeValues(
+  base: unknown,
+  local: unknown,
+  remote: unknown
+): FieldMergeResult & { conflictCount: number } {
   // If both local and remote are objects (not arrays), merge field by field
   if (isPlainObject(base) && isPlainObject(local) && isPlainObject(remote)) {
     return mergeObjects(base, local, remote);
@@ -491,17 +500,13 @@ function mergeValues(base: any, local: any, remote: any): FieldMergeResult & { c
  * Merge three plain objects field by field.
  */
 function mergeObjects(
-  base: Record<string, any>,
-  local: Record<string, any>,
-  remote: Record<string, any>
+  base: Record<string, unknown>,
+  local: Record<string, unknown>,
+  remote: Record<string, unknown>
 ): FieldMergeResult & { conflictCount: number } {
-  const allKeys = new Set([
-    ...Object.keys(base),
-    ...Object.keys(local),
-    ...Object.keys(remote),
-  ]);
+  const allKeys = new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(remote)]);
 
-  const merged: Record<string, any> = {};
+  const merged: Record<string, unknown> = {};
   let hasConflict = false;
   let totalConflicts = 0;
 
@@ -578,8 +583,8 @@ function mergeObjects(
 /**
  * Check if a value is a plain object (not array, null, Date, etc.)
  */
-function isPlainObject(value: any): value is Record<string, any> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 /**
@@ -606,15 +611,17 @@ export function isLocallyModified(base: string, local: string): boolean {
  * trigger a merge.
  */
 function normalizeForMergeComparison(content: string): string {
-  return content
-    .replace(/\r\n/g, '\n')
-    .replace(/\s+\n/g, '\n')
-    // Normalize ISO timestamp precision: truncate fractional seconds to 6 decimal
-    // places (microsecond precision) then strip trailing zeros.
-    // e.g. "2026-02-13T10:32:20.2939836Z" → "2026-02-13T10:32:20.293983Z"
-    // This prevents false diffs from servers returning 7-digit precision while
-    // local serializers use 6-digit precision.
-    .replace(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{1,6})\d*Z/g, '$1Z')
-    .replace(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+?)0+Z/g, '$1Z')
-    .trimEnd();
+  return (
+    content
+      .replace(/\r\n/g, "\n")
+      .replace(/\s+\n/g, "\n")
+      // Normalize ISO timestamp precision: truncate fractional seconds to 6 decimal
+      // places (microsecond precision) then strip trailing zeros.
+      // e.g. "2026-02-13T10:32:20.2939836Z" → "2026-02-13T10:32:20.293983Z"
+      // This prevents false diffs from servers returning 7-digit precision while
+      // local serializers use 6-digit precision.
+      .replace(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{1,6})\d*Z/g, "$1Z")
+      .replace(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+?)0+Z/g, "$1Z")
+      .trimEnd()
+  );
 }

@@ -7,7 +7,10 @@ import dotenv from "dotenv";
 /**
  * Filter environment variables by prefix (e.g. NEXT_PUBLIC_)
  */
-export function filterEnvVars(env: Record<string, string | undefined>, prefix: string = "NEXT_PUBLIC_"): Record<string, string | undefined> {
+export function filterEnvVars(
+  env: Record<string, string | undefined>,
+  prefix: string = "NEXT_PUBLIC_"
+): Record<string, string | undefined> {
   return Object.keys(env)
     .filter((key) => key.startsWith(prefix))
     .reduce((acc: Record<string, string | undefined>, key) => {
@@ -32,7 +35,7 @@ export function generateEnv(prefix: string = "NEXT_PUBLIC_"): void {
   dotenv.config({ path: path.resolve(process.cwd(), ".env") });
   try {
     dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
-  } catch { }
+  } catch {}
 
   const envVars = filterEnvVars(process.env, prefix);
   const jsContent = generateEnvJsContent(envVars);

@@ -26,7 +26,7 @@ export interface SegmentRule {
   id: string;
   fieldId: string;
   operator: string;
-  value?: any;
+  value?: unknown;
 }
 
 export interface RuleGroup {
@@ -324,12 +324,15 @@ export interface RedirectUpdateDto {
 
 /** Compute a stable surrogate key from the "from" fields (which must be unique per redirect). */
 export function redirectSurrogateKey(
-  r: Pick<LocalRedirect | RedirectDetailsDto, 'fromPath' | 'fromLanguage' | 'fromSlug' | 'fromContentId'>
+  r: Pick<
+    LocalRedirect | RedirectDetailsDto,
+    "fromPath" | "fromLanguage" | "fromSlug" | "fromContentId"
+  >
 ): string {
   if (r.fromPath != null) return `path:${r.fromPath}`;
-  if (r.fromSlug != null) return `slug:${r.fromLanguage ?? ''}/${r.fromSlug}`;
+  if (r.fromSlug != null) return `slug:${r.fromLanguage ?? ""}/${r.fromSlug}`;
   if (r.fromContentId != null) return `content:${r.fromContentId}`;
-  return 'unknown';
+  return "unknown";
 }
 
 /**
@@ -350,7 +353,7 @@ export interface LocalRedirect {
 }
 
 /** A redirect item as stored on disk — `kind` is implied by the YAML section. */
-export type LocalRedirectItem = Omit<LocalRedirect, 'kind'>;
+export type LocalRedirectItem = Omit<LocalRedirect, "kind">;
 
 /**
  * On-disk format for redirects.yaml.
@@ -363,18 +366,24 @@ export interface LocalRedirectsFile {
 
 /** Flatten a LocalRedirectsFile into LocalRedirect[] with `kind` injected. */
 export function flattenRedirectsFile(file: LocalRedirectsFile): LocalRedirect[] {
-  const permanents = (file.permanent ?? []).map(r => ({ ...r, kind: 'Permanent' as RedirectKind }));
-  const temporaries = (file.temporary ?? []).map(r => ({ ...r, kind: 'Temporary' as RedirectKind }));
+  const permanents = (file.permanent ?? []).map((r) => ({
+    ...r,
+    kind: "Permanent" as RedirectKind,
+  }));
+  const temporaries = (file.temporary ?? []).map((r) => ({
+    ...r,
+    kind: "Temporary" as RedirectKind,
+  }));
   return [...permanents, ...temporaries];
 }
 
 /** Build a LocalRedirectsFile from a flat LocalRedirect[] by splitting on kind. */
 export function buildRedirectsFile(redirects: LocalRedirect[]): LocalRedirectsFile {
   const permanent = redirects
-    .filter(r => r.kind === 'Permanent')
+    .filter((r) => r.kind === "Permanent")
     .map(({ kind: _k, ...rest }): LocalRedirectItem => rest);
   const temporary = redirects
-    .filter(r => r.kind === 'Temporary')
+    .filter((r) => r.kind === "Temporary")
     .map(({ kind: _k, ...rest }): LocalRedirectItem => rest);
   const file: LocalRedirectsFile = {};
   if (permanent.length) file.permanent = permanent;
@@ -389,12 +398,16 @@ export function buildRedirectsFile(redirects: LocalRedirect[]): LocalRedirectsFi
  */
 export function stripDefaultLanguage(
   redirects: LocalRedirect[],
-  language: string,
+  language: string
 ): LocalRedirect[] {
-  return redirects.map(r => {
+  return redirects.map((r) => {
     const result = { ...r };
-    if (result.fromLanguage === language) { delete result.fromLanguage; }
-    if (result.toLanguage === language) { delete result.toLanguage; }
+    if (result.fromLanguage === language) {
+      delete result.fromLanguage;
+    }
+    if (result.toLanguage === language) {
+      delete result.toLanguage;
+    }
     return result;
   });
 }
@@ -406,9 +419,9 @@ export function stripDefaultLanguage(
  */
 export function injectDefaultLanguage(
   redirects: LocalRedirect[],
-  language: string,
+  language: string
 ): LocalRedirect[] {
-  return redirects.map(r => {
+  return redirects.map((r) => {
     const result = { ...r };
     if (r.fromSlug != null && r.fromLanguage == null) {
       result.fromLanguage = language;
@@ -493,16 +506,16 @@ export function toRedirectUpdateDto(r: LocalRedirect): RedirectUpdateDto {
 export function stripNullsAndEmptyArrays<T>(obj: T): T {
   if (obj === null || obj === undefined) return obj;
   if (Array.isArray(obj)) {
-    return obj.map(item =>
-      typeof item === 'object' && item !== null ? stripNullsAndEmptyArrays(item) : item
+    return obj.map((item) =>
+      typeof item === "object" && item !== null ? stripNullsAndEmptyArrays(item) : item
     ) as unknown as T;
   }
-  if (typeof obj === 'object') {
-    const result: Record<string, any> = {};
-    for (const [key, value] of Object.entries(obj as any)) {
+  if (typeof obj === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
       if (value === null || value === undefined) continue;
       if (Array.isArray(value) && value.length === 0) continue;
-      result[key] = typeof value === 'object' ? stripNullsAndEmptyArrays(value) : value;
+      result[key] = typeof value === "object" ? stripNullsAndEmptyArrays(value) : value;
     }
     return result as T;
   }
@@ -527,7 +540,7 @@ function stripNullTimingFields(timing: SequenceStepTiming): SequenceStepTiming {
 export function toLocalSequence(
   remote: SequenceDetailsDto,
   segmentMap: SegmentIdNameMap,
-  templateMap: EmailTemplateIdNameMap,
+  templateMap: EmailTemplateIdNameMap
 ): LocalSequenceDto {
   const local: LocalSequenceDto = {
     id: remote.id,
@@ -551,10 +564,10 @@ export function toLocalSequence(
       modes: remote.enrollment.modes,
       reentryPolicy: remote.enrollment.reentryPolicy,
       includeSegmentNames: (remote.enrollment.includeSegmentIds ?? []).map(
-        (id) => segmentMap.get(id) ?? `unknown-segment-${id}`,
+        (id) => segmentMap.get(id) ?? `unknown-segment-${id}`
       ),
       excludeSegmentNames: (remote.enrollment.excludeSegmentIds ?? []).map(
-        (id) => segmentMap.get(id) ?? `unknown-segment-${id}`,
+        (id) => segmentMap.get(id) ?? `unknown-segment-${id}`
       ),
     };
   }
@@ -567,8 +580,7 @@ export function toLocalSequence(
     local.steps = remote.steps.map((step) => {
       const localStep: LocalSequenceStepDto = {
         emailTemplateName:
-          templateMap.get(step.emailTemplateId) ??
-          `unknown-template-${step.emailTemplateId}`,
+          templateMap.get(step.emailTemplateId) ?? `unknown-template-${step.emailTemplateId}`,
         name: step.name,
         type: step.type,
         timing: stripNullTimingFields(step.timing),
@@ -588,7 +600,7 @@ export function toLocalSequence(
 export function toRemoteSequencePayload(
   local: LocalSequenceDto,
   segmentMap: SegmentNameIdMap,
-  templateMap: EmailTemplateNameIdMap,
+  templateMap: EmailTemplateNameIdMap
 ): SequenceCreateDto {
   const payload: SequenceCreateDto = {
     name: local.name,
@@ -603,22 +615,16 @@ export function toRemoteSequencePayload(
     payload.enrollment = {
       modes: local.enrollment.modes,
       reentryPolicy: local.enrollment.reentryPolicy,
-      includeSegmentIds: (local.enrollment.includeSegmentNames ?? []).map(
-        (name) => {
-          const id = segmentMap.get(name);
-          if (id === undefined)
-            throw new Error(`Unknown segment name: "${name}"`);
-          return id;
-        },
-      ),
-      excludeSegmentIds: (local.enrollment.excludeSegmentNames ?? []).map(
-        (name) => {
-          const id = segmentMap.get(name);
-          if (id === undefined)
-            throw new Error(`Unknown segment name: "${name}"`);
-          return id;
-        },
-      ),
+      includeSegmentIds: (local.enrollment.includeSegmentNames ?? []).map((name) => {
+        const id = segmentMap.get(name);
+        if (id === undefined) throw new Error(`Unknown segment name: "${name}"`);
+        return id;
+      }),
+      excludeSegmentIds: (local.enrollment.excludeSegmentNames ?? []).map((name) => {
+        const id = segmentMap.get(name);
+        if (id === undefined) throw new Error(`Unknown segment name: "${name}"`);
+        return id;
+      }),
     };
   }
 
@@ -627,12 +633,10 @@ export function toRemoteSequencePayload(
   }
 
   if (local.steps) {
-    payload.steps = local.steps.map((step, index) => {
+    payload.steps = local.steps.map((step, _index) => {
       const templateId = templateMap.get(step.emailTemplateName);
       if (templateId === undefined)
-        throw new Error(
-          `Unknown email template name: "${step.emailTemplateName}"`,
-        );
+        throw new Error(`Unknown email template name: "${step.emailTemplateName}"`);
       return {
         emailTemplateId: templateId,
         name: step.name,

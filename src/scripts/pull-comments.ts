@@ -36,7 +36,7 @@ async function main(options: PullCommentsOptions = {}): Promise<void> {
   // Check if comments are supported
   try {
     logger.verbose(`🔍 Checking CMS configuration...`);
-    const configUrl = new URL('/api/config', leadCMSUrl).toString();
+    const configUrl = new URL("/api/config", leadCMSUrl).toString();
     const response = await axios.get(configUrl, { timeout: 10000 });
 
     if (response.data) {
@@ -49,7 +49,8 @@ async function main(options: PullCommentsOptions = {}): Promise<void> {
 
       logger.verbose(`✅ Comments entity supported\n`);
     }
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as Error;
     console.warn(`⚠️  Could not fetch CMS config: ${error.message}`);
     console.warn(`⚠️  Assuming comments are supported (backward compatibility)\n`);
   }

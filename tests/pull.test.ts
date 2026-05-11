@@ -3,23 +3,23 @@
  * These tests focus on testing the content fetching and transformation logic
  */
 
-import fs from 'fs';
-import path from 'path';
+import fs from "fs";
+import path from "path";
 
 // Mock the data service to provide predictable test data
 const mockPullData = {
   contentTypes: [
-    { uid: 'article', format: 'MDX', name: 'Article' },
-    { uid: 'page', format: 'MDX', name: 'Page' },
-    { uid: 'component', format: 'JSON', name: 'Component' }
+    { uid: "article", format: "MDX", name: "Article" },
+    { uid: "page", format: "MDX", name: "Page" },
+    { uid: "component", format: "JSON", name: "Component" },
   ],
   content: [
     {
       id: 1,
-      slug: 'test-article',
-      type: 'article',
-      language: 'en',
-      title: 'Test Article',
+      slug: "test-article",
+      type: "article",
+      language: "en",
+      title: "Test Article",
       body: `---
 title: Test Article
 coverImageUrl: /api/media/blog/covers/test-article.jpg
@@ -31,46 +31,46 @@ featuredImage: /api/media/images/featured.png
 This is a test article with ![inline image](/api/media/inline/test.jpg) and [download link](/api/media/docs/file.pdf).
 
 <Image src="/api/media/gallery/hero.webp" alt="Hero Image" />`,
-      publishedAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z'
+      publishedAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-01T00:00:00Z",
     },
     {
       id: 2,
-      slug: 'navigation',
-      type: 'component',
-      language: 'en',
-      title: 'Navigation Component',
+      slug: "navigation",
+      type: "component",
+      language: "en",
+      title: "Navigation Component",
       body: JSON.stringify({
-        slug: 'navigation',
-        type: 'component',
-        title: 'Navigation Component',
-        logo: '/api/media/brand/logo.svg',
+        slug: "navigation",
+        type: "component",
+        title: "Navigation Component",
+        logo: "/api/media/brand/logo.svg",
         menuItems: [
           {
-            label: 'Home',
-            url: '/',
-            icon: '/api/media/icons/home.svg'
+            label: "Home",
+            url: "/",
+            icon: "/api/media/icons/home.svg",
           },
           {
-            label: 'About',
-            url: '/about',
-            backgroundImage: '/api/media/backgrounds/about.jpg'
-          }
+            label: "About",
+            url: "/about",
+            backgroundImage: "/api/media/backgrounds/about.jpg",
+          },
         ],
         ctaButton: {
-          text: 'Get Started',
-          backgroundImage: '/api/media/buttons/cta-bg.png'
-        }
+          text: "Get Started",
+          backgroundImage: "/api/media/buttons/cta-bg.png",
+        },
       }),
-      publishedAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z'
+      publishedAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-01T00:00:00Z",
     },
     {
       id: 3,
-      slug: 'about-us',
-      type: 'page',
-      language: 'es',
-      title: 'Acerca de Nosotros',
+      slug: "about-us",
+      type: "page",
+      language: "es",
+      title: "Acerca de Nosotros",
       body: `---
 title: Acerca de Nosotros
 heroImage: /api/media/pages/about/hero-es.jpg
@@ -88,15 +88,15 @@ testimonials:
 ![Company Photo](/api/media/company/team-photo.jpg)
 
 Descarga nuestro [catálogo en PDF](/api/media/downloads/catalogo.pdf).`,
-      publishedAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z'
-    }
-  ]
+      publishedAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-01T00:00:00Z",
+    },
+  ],
 };
 
-describe('LeadCMS Pull', () => {
-  const tmpRoot = path.join(__dirname, 'tmp-pull-test');
-  const contentDir = path.join(tmpRoot, 'content');
+describe("LeadCMS Pull", () => {
+  const tmpRoot = path.join(__dirname, "tmp-pull-test");
+  const contentDir = path.join(tmpRoot, "content");
 
   beforeAll(() => {
     // Clean up any existing temp directory
@@ -109,280 +109,280 @@ describe('LeadCMS Pull', () => {
     // Cleanup
     try {
       fs.rmSync(tmpRoot, { recursive: true, force: true });
-    } catch (e) {
+    } catch {
       // ignore
     }
   });
 
-  describe('Content Fetching and Transformation', () => {
-    it('should transform remote content to local MDX format with URL transformation', async () => {
+  describe("Content Fetching and Transformation", () => {
+    it("should transform remote content to local MDX format with URL transformation", async () => {
       // Import the transformation function
-      const { transformRemoteToLocalFormat } = require('../src/lib/content-transformation');
+      const { transformRemoteToLocalFormat } = require("../src/lib/content-transformation");
 
       const remoteContent = mockPullData.content[0]; // Test article
-      const typeMap = { 'article': 'MDX' };
+      const typeMap = { article: "MDX" };
 
       const result = await transformRemoteToLocalFormat(remoteContent, typeMap);
 
       // Should be MDX format with frontmatter
-      expect(result).toContain('---');
-      expect(result).toContain('title: Test Article');
+      expect(result).toContain("---");
+      expect(result).toContain("title: Test Article");
 
       // URL transformation: /api/media/ should become /media/
-      expect(result).toContain('coverImageUrl: /media/blog/covers/test-article.jpg');
-      expect(result).toContain('featuredImage: /media/images/featured.png');
+      expect(result).toContain("coverImageUrl: /media/blog/covers/test-article.jpg");
+      expect(result).toContain("featuredImage: /media/images/featured.png");
 
       // URLs in body content should also be transformed
-      expect(result).toContain('![inline image](/media/inline/test.jpg)');
-      expect(result).toContain('[download link](/media/docs/file.pdf)');
+      expect(result).toContain("![inline image](/media/inline/test.jpg)");
+      expect(result).toContain("[download link](/media/docs/file.pdf)");
       expect(result).toContain('<Image src="/media/gallery/hero.webp"');
 
       // Should NOT contain original /api/media/ URLs
-      expect(result).not.toContain('/api/media/');
+      expect(result).not.toContain("/api/media/");
     });
 
-    it('should transform remote content to local JSON format with URL transformation', async () => {
-      const { transformRemoteToLocalFormat } = require('../src/lib/content-transformation');
+    it("should transform remote content to local JSON format with URL transformation", async () => {
+      const { transformRemoteToLocalFormat } = require("../src/lib/content-transformation");
 
       const remoteContent = mockPullData.content[1]; // Navigation component
-      const typeMap = { 'component': 'JSON' };
+      const typeMap = { component: "JSON" };
 
       const result = await transformRemoteToLocalFormat(remoteContent, typeMap);
 
       const parsed = JSON.parse(result);
 
       // Should be JSON format
-      expect(parsed.slug).toBe('navigation');
-      expect(parsed.type).toBe('component');
-      expect(parsed.title).toBe('Navigation Component');
+      expect(parsed.slug).toBe("navigation");
+      expect(parsed.type).toBe("component");
+      expect(parsed.title).toBe("Navigation Component");
 
       // URL transformation in JSON fields
-      expect(parsed.logo).toBe('/media/brand/logo.svg');
-      expect(parsed.menuItems[0].icon).toBe('/media/icons/home.svg');
-      expect(parsed.menuItems[1].backgroundImage).toBe('/media/backgrounds/about.jpg');
-      expect(parsed.ctaButton.backgroundImage).toBe('/media/buttons/cta-bg.png');
+      expect(parsed.logo).toBe("/media/brand/logo.svg");
+      expect(parsed.menuItems[0].icon).toBe("/media/icons/home.svg");
+      expect(parsed.menuItems[1].backgroundImage).toBe("/media/backgrounds/about.jpg");
+      expect(parsed.ctaButton.backgroundImage).toBe("/media/buttons/cta-bg.png");
 
       // Should NOT contain original /api/media/ URLs
-      expect(result).not.toContain('/api/media/');
+      expect(result).not.toContain("/api/media/");
     });
 
-    it('should handle multi-language content with URL transformation', async () => {
-      const { transformRemoteToLocalFormat } = require('../src/lib/content-transformation');
+    it("should handle multi-language content with URL transformation", async () => {
+      const { transformRemoteToLocalFormat } = require("../src/lib/content-transformation");
 
       const remoteContent = mockPullData.content[2]; // Spanish page
-      const typeMap = { 'page': 'MDX' };
+      const typeMap = { page: "MDX" };
 
       const result = await transformRemoteToLocalFormat(remoteContent, typeMap);
 
       // Should be MDX format with Spanish content
-      expect(result).toContain('title: Acerca de Nosotros');
+      expect(result).toContain("title: Acerca de Nosotros");
 
       // URL transformation in frontmatter arrays/objects
-      expect(result).toContain('heroImage: /media/pages/about/hero-es.jpg');
-      expect(result).toContain('avatar: /media/avatars/juan.jpg');
-      expect(result).toContain('image: /media/testimonials/juan-bg.png');
-      expect(result).toContain('avatar: /media/avatars/maria.jpg');
-      expect(result).toContain('image: /media/testimonials/maria-bg.png');
+      expect(result).toContain("heroImage: /media/pages/about/hero-es.jpg");
+      expect(result).toContain("avatar: /media/avatars/juan.jpg");
+      expect(result).toContain("image: /media/testimonials/juan-bg.png");
+      expect(result).toContain("avatar: /media/avatars/maria.jpg");
+      expect(result).toContain("image: /media/testimonials/maria-bg.png");
 
       // URL transformation in body content
-      expect(result).toContain('![Company Photo](/media/company/team-photo.jpg)');
-      expect(result).toContain('[catálogo en PDF](/media/downloads/catalogo.pdf)');
+      expect(result).toContain("![Company Photo](/media/company/team-photo.jpg)");
+      expect(result).toContain("[catálogo en PDF](/media/downloads/catalogo.pdf)");
 
       // Should NOT contain original /api/media/ URLs
-      expect(result).not.toContain('/api/media/');
+      expect(result).not.toContain("/api/media/");
     });
 
-    it('should handle nested URL transformations in complex objects', async () => {
-      const { replaceApiMediaPaths } = require('../src/lib/content-transformation');
+    it("should handle nested URL transformations in complex objects", async () => {
+      const { replaceApiMediaPaths } = require("../src/lib/content-transformation");
 
       const complexObject = {
         hero: {
-          backgroundImage: '/api/media/backgrounds/hero.jpg',
-          overlayImage: '/api/media/overlays/gradient.png'
+          backgroundImage: "/api/media/backgrounds/hero.jpg",
+          overlayImage: "/api/media/overlays/gradient.png",
         },
         gallery: [
-          '/api/media/gallery/image1.jpg',
-          '/api/media/gallery/image2.png',
-          '/api/media/gallery/image3.webp'
+          "/api/media/gallery/image1.jpg",
+          "/api/media/gallery/image2.png",
+          "/api/media/gallery/image3.webp",
         ],
         sections: [
           {
-            title: 'Section 1',
-            image: '/api/media/sections/section1.jpg',
-            items: [
-              { icon: '/api/media/icons/icon1.svg' },
-              { icon: '/api/media/icons/icon2.svg' }
-            ]
+            title: "Section 1",
+            image: "/api/media/sections/section1.jpg",
+            items: [{ icon: "/api/media/icons/icon1.svg" }, { icon: "/api/media/icons/icon2.svg" }],
           },
           {
-            title: 'Section 2',
-            backgroundImage: '/api/media/backgrounds/section2.jpg'
-          }
+            title: "Section 2",
+            backgroundImage: "/api/media/backgrounds/section2.jpg",
+          },
         ],
-        regularString: 'This is just text',
-        mixedContent: 'Check out this image: /api/media/mixed/example.jpg and this other one: /api/media/mixed/another.png'
+        regularString: "This is just text",
+        mixedContent:
+          "Check out this image: /api/media/mixed/example.jpg and this other one: /api/media/mixed/another.png",
       };
 
       const result = replaceApiMediaPaths(complexObject);
 
       // Hero section URLs should be transformed
-      expect(result.hero.backgroundImage).toBe('/media/backgrounds/hero.jpg');
-      expect(result.hero.overlayImage).toBe('/media/overlays/gradient.png');
+      expect(result.hero.backgroundImage).toBe("/media/backgrounds/hero.jpg");
+      expect(result.hero.overlayImage).toBe("/media/overlays/gradient.png");
 
       // Gallery array URLs should be transformed
       expect(result.gallery).toEqual([
-        '/media/gallery/image1.jpg',
-        '/media/gallery/image2.png',
-        '/media/gallery/image3.webp'
+        "/media/gallery/image1.jpg",
+        "/media/gallery/image2.png",
+        "/media/gallery/image3.webp",
       ]);
 
       // Nested sections URLs should be transformed
-      expect(result.sections[0].image).toBe('/media/sections/section1.jpg');
-      expect(result.sections[0].items[0].icon).toBe('/media/icons/icon1.svg');
-      expect(result.sections[0].items[1].icon).toBe('/media/icons/icon2.svg');
-      expect(result.sections[1].backgroundImage).toBe('/media/backgrounds/section2.jpg');
+      expect(result.sections[0].image).toBe("/media/sections/section1.jpg");
+      expect(result.sections[0].items[0].icon).toBe("/media/icons/icon1.svg");
+      expect(result.sections[0].items[1].icon).toBe("/media/icons/icon2.svg");
+      expect(result.sections[1].backgroundImage).toBe("/media/backgrounds/section2.jpg");
 
       // Regular strings should be preserved
-      expect(result.regularString).toBe('This is just text');
+      expect(result.regularString).toBe("This is just text");
 
       // Mixed content strings should have URLs transformed
-      expect(result.mixedContent).toBe('Check out this image: /media/mixed/example.jpg and this other one: /media/mixed/another.png');
+      expect(result.mixedContent).toBe(
+        "Check out this image: /media/mixed/example.jpg and this other one: /media/mixed/another.png"
+      );
     });
 
-    it('should preserve non-media URLs during transformation', async () => {
-      const { replaceApiMediaPaths } = require('../src/lib/content-transformation');
+    it("should preserve non-media URLs during transformation", async () => {
+      const { replaceApiMediaPaths } = require("../src/lib/content-transformation");
 
       const contentWithMixedUrls = {
-        mediaImage: '/api/media/images/test.jpg',
-        externalUrl: 'https://example.com/api/media/should-not-change.jpg',
-        relativeUrl: '/api/content/something',
-        hashUrl: '#section',
-        mailtoUrl: 'mailto:test@example.com',
-        telUrl: 'tel:+1234567890',
-        apiEndpoint: '/api/users/123',
-        description: 'Test article with media URLs'
+        mediaImage: "/api/media/images/test.jpg",
+        externalUrl: "https://example.com/api/media/should-not-change.jpg",
+        relativeUrl: "/api/content/something",
+        hashUrl: "#section",
+        mailtoUrl: "mailto:test@example.com",
+        telUrl: "tel:+1234567890",
+        apiEndpoint: "/api/users/123",
+        description: "Test article with media URLs",
       };
 
       const result = replaceApiMediaPaths(contentWithMixedUrls);
 
       // Only /api/media/ URLs should be transformed to /media/
-      expect(result.mediaImage).toBe('/media/images/test.jpg');
+      expect(result.mediaImage).toBe("/media/images/test.jpg");
 
       // Other URLs should remain unchanged
-      expect(result.externalUrl).toBe('https://example.com/api/media/should-not-change.jpg');
-      expect(result.relativeUrl).toBe('/api/content/something');
-      expect(result.hashUrl).toBe('#section');
-      expect(result.mailtoUrl).toBe('mailto:test@example.com');
-      expect(result.telUrl).toBe('tel:+1234567890');
-      expect(result.apiEndpoint).toBe('/api/users/123');
+      expect(result.externalUrl).toBe("https://example.com/api/media/should-not-change.jpg");
+      expect(result.relativeUrl).toBe("/api/content/something");
+      expect(result.hashUrl).toBe("#section");
+      expect(result.mailtoUrl).toBe("mailto:test@example.com");
+      expect(result.telUrl).toBe("tel:+1234567890");
+      expect(result.apiEndpoint).toBe("/api/users/123");
 
       // In strings, only /api/media/ should be transformed
-      expect(result.description).toBe('Test article with media URLs');
+      expect(result.description).toBe("Test article with media URLs");
     });
   });
 
-  describe('Content File Saving', () => {
-    it('should save MDX content files with correct directory structure', async () => {
-      const { saveContentFile } = require('../src/lib/content-transformation');
+  describe("Content File Saving", () => {
+    it("should save MDX content files with correct directory structure", async () => {
+      const { saveContentFile } = require("../src/lib/content-transformation");
 
       // Mock the config
-      process.env.LEADCMS_DEFAULT_LANGUAGE = 'en';
+      process.env.LEADCMS_DEFAULT_LANGUAGE = "en";
 
       const content = mockPullData.content[0];
-      const typeMap = { 'article': 'MDX' };
-
-      const filePath = await saveContentFile({
-        content,
-        typeMap,
-        contentDir
-      });
-
-      expect(filePath).toBe(path.join(contentDir, 'test-article.mdx'));
-      expect(fs.existsSync(filePath!)).toBe(true);
-
-      const fileContent = fs.readFileSync(filePath!, 'utf-8');
-      expect(fileContent).toContain('title: Test Article');
-      expect(fileContent).toContain('/media/blog/covers/test-article.jpg');
-      expect(fileContent).not.toContain('/api/media/');
-    });
-
-    it('should save JSON content files with correct directory structure', async () => {
-      const { saveContentFile } = require('../src/lib/content-transformation');
-
-      // Mock the config
-      process.env.LEADCMS_DEFAULT_LANGUAGE = 'en';
-
-      const content = mockPullData.content[1];
-      const typeMap = { 'component': 'JSON' };
-
-      const filePath = await saveContentFile({
-        content,
-        typeMap,
-        contentDir
-      });
-
-      expect(filePath).toBe(path.join(contentDir, 'navigation.json'));
-      expect(fs.existsSync(filePath!)).toBe(true);
-
-      const fileContent = fs.readFileSync(filePath!, 'utf-8');
-      const parsed = JSON.parse(fileContent);
-      expect(parsed.logo).toBe('/media/brand/logo.svg');
-      expect(fileContent).not.toContain('/api/media/');
-    });
-
-    it('should save multi-language content in language-specific directories', async () => {
-      const { saveContentFile } = require('../src/lib/content-transformation');
-
-      // Mock the config
-      process.env.LEADCMS_DEFAULT_LANGUAGE = 'en';
-
-      const content = mockPullData.content[2]; // Spanish content
-      const typeMap = { 'page': 'MDX' };
-
-      const filePath = await saveContentFile({
-        content,
-        typeMap,
-        contentDir
-      });
-
-      expect(filePath).toBe(path.join(contentDir, 'es', 'about-us.mdx'));
-      expect(fs.existsSync(filePath!)).toBe(true);
-
-      const fileContent = fs.readFileSync(filePath!, 'utf-8');
-      expect(fileContent).toContain('title: Acerca de Nosotros');
-      expect(fileContent).toContain('/media/pages/about/hero-es.jpg');
-      expect(fileContent).not.toContain('/api/media/');
-    });
-
-    it('should handle draft content with preview slugs', async () => {
-      const { saveContentFile } = require('../src/lib/content-transformation');
-
-      // Mock the config
-      process.env.LEADCMS_DEFAULT_LANGUAGE = 'en';
-
-      const content = { ...mockPullData.content[0] };
-      const typeMap = { 'article': 'MDX' };
+      const typeMap = { article: "MDX" };
 
       const filePath = await saveContentFile({
         content,
         typeMap,
         contentDir,
-        previewSlug: 'draft-preview-article'
       });
 
-      expect(filePath).toBe(path.join(contentDir, 'draft-preview-article.mdx'));
+      expect(filePath).toBe(path.join(contentDir, "test-article.mdx"));
       expect(fs.existsSync(filePath!)).toBe(true);
 
-      const fileContent = fs.readFileSync(filePath!, 'utf-8');
-      expect(fileContent).toContain('draft: true');
-      expect(fileContent).toContain('/media/blog/covers/test-article.jpg');
-      expect(fileContent).not.toContain('/api/media/');
+      const fileContent = fs.readFileSync(filePath!, "utf-8");
+      expect(fileContent).toContain("title: Test Article");
+      expect(fileContent).toContain("/media/blog/covers/test-article.jpg");
+      expect(fileContent).not.toContain("/api/media/");
+    });
+
+    it("should save JSON content files with correct directory structure", async () => {
+      const { saveContentFile } = require("../src/lib/content-transformation");
+
+      // Mock the config
+      process.env.LEADCMS_DEFAULT_LANGUAGE = "en";
+
+      const content = mockPullData.content[1];
+      const typeMap = { component: "JSON" };
+
+      const filePath = await saveContentFile({
+        content,
+        typeMap,
+        contentDir,
+      });
+
+      expect(filePath).toBe(path.join(contentDir, "navigation.json"));
+      expect(fs.existsSync(filePath!)).toBe(true);
+
+      const fileContent = fs.readFileSync(filePath!, "utf-8");
+      const parsed = JSON.parse(fileContent);
+      expect(parsed.logo).toBe("/media/brand/logo.svg");
+      expect(fileContent).not.toContain("/api/media/");
+    });
+
+    it("should save multi-language content in language-specific directories", async () => {
+      const { saveContentFile } = require("../src/lib/content-transformation");
+
+      // Mock the config
+      process.env.LEADCMS_DEFAULT_LANGUAGE = "en";
+
+      const content = mockPullData.content[2]; // Spanish content
+      const typeMap = { page: "MDX" };
+
+      const filePath = await saveContentFile({
+        content,
+        typeMap,
+        contentDir,
+      });
+
+      expect(filePath).toBe(path.join(contentDir, "es", "about-us.mdx"));
+      expect(fs.existsSync(filePath!)).toBe(true);
+
+      const fileContent = fs.readFileSync(filePath!, "utf-8");
+      expect(fileContent).toContain("title: Acerca de Nosotros");
+      expect(fileContent).toContain("/media/pages/about/hero-es.jpg");
+      expect(fileContent).not.toContain("/api/media/");
+    });
+
+    it("should handle draft content with preview slugs", async () => {
+      const { saveContentFile } = require("../src/lib/content-transformation");
+
+      // Mock the config
+      process.env.LEADCMS_DEFAULT_LANGUAGE = "en";
+
+      const content = { ...mockPullData.content[0] };
+      const typeMap = { article: "MDX" };
+
+      const filePath = await saveContentFile({
+        content,
+        typeMap,
+        contentDir,
+        previewSlug: "draft-preview-article",
+      });
+
+      expect(filePath).toBe(path.join(contentDir, "draft-preview-article.mdx"));
+      expect(fs.existsSync(filePath!)).toBe(true);
+
+      const fileContent = fs.readFileSync(filePath!, "utf-8");
+      expect(fileContent).toContain("draft: true");
+      expect(fileContent).toContain("/media/blog/covers/test-article.jpg");
+      expect(fileContent).not.toContain("/api/media/");
     });
   });
 
-  describe('Content Comparison for Updates', () => {
-    it('should transform remote content for accurate comparison with local files', async () => {
-      const { transformRemoteForComparison } = require('../src/lib/content-transformation');
+  describe("Content Comparison for Updates", () => {
+    it("should transform remote content for accurate comparison with local files", async () => {
+      const { transformRemoteForComparison } = require("../src/lib/content-transformation");
 
       // Create a mock local file content that has only some fields
       const localContent = `---
@@ -398,36 +398,39 @@ This is the content with ![image](/media/inline/test.jpg).`;
       const remoteContent = {
         ...mockPullData.content[0],
         // Remote might have additional fields that local doesn't have
-        extraField: 'extra value',
-        anotherField: 'another value'
+        extraField: "extra value",
+        anotherField: "another value",
       };
 
-      const typeMap = { 'article': 'MDX' };
+      const typeMap = { article: "MDX" };
 
       const result = await transformRemoteForComparison(remoteContent, localContent, typeMap);
 
       // Should include standard fields from both local and remote
-      expect(result).toContain('title: Test Article');
-      expect(result).toContain('coverImageUrl: /media/blog/covers/test-article.jpg');
-      expect(result).toContain('publishedAt: \'2024-01-01T00:00:00Z\'');
+      expect(result).toContain("title: Test Article");
+      expect(result).toContain("coverImageUrl: /media/blog/covers/test-article.jpg");
+      expect(result).toContain("publishedAt: '2024-01-01T00:00:00Z'");
 
       // Should include additional remote fields so that field removals can be detected.
       // False positive protection for truly new remote fields comes from the
       // timestamp check in matchContent (remote newer -> conflict), not from
       // filtering here.
-      expect(result).toContain('extraField');
-      expect(result).toContain('anotherField');
+      expect(result).toContain("extraField");
+      expect(result).toContain("anotherField");
 
       // System fields should still be excluded
-      expect(result).not.toContain('isLocal');
+      expect(result).not.toContain("isLocal");
 
       // URLs should still be transformed
-      expect(result).toContain('/media/inline/test.jpg');
-      expect(result).not.toContain('/api/media/');
+      expect(result).toContain("/media/inline/test.jpg");
+      expect(result).not.toContain("/api/media/");
     });
 
-    it('should handle content normalization for comparison', async () => {
-      const { normalizeContentForComparison, hasContentDifferences } = require('../src/lib/content-transformation');
+    it("should handle content normalization for comparison", async () => {
+      const {
+        normalizeContentForComparison,
+        hasContentDifferences,
+      } = require("../src/lib/content-transformation");
 
       const content1 = `---
 title: Test
@@ -458,8 +461,8 @@ Another paragraph.`;
       expect(normalized1).toBe(normalized2);
     });
 
-    it('should detect actual content differences after normalization', async () => {
-      const { hasContentDifferences } = require('../src/lib/content-transformation');
+    it("should detect actual content differences after normalization", async () => {
+      const { hasContentDifferences } = require("../src/lib/content-transformation");
 
       const content1 = `---
 title: Test Article
@@ -481,8 +484,11 @@ This is the updated content.`;
       expect(hasContentDifferences(content1, content2)).toBe(true);
     });
 
-    it('should not detect differences when only createdAt/updatedAt differ in MDX frontmatter', () => {
-      const { hasContentDifferences, stripTimestampMetadata } = require('../src/lib/content-transformation');
+    it("should not detect differences when only createdAt/updatedAt differ in MDX frontmatter", () => {
+      const {
+        hasContentDifferences,
+        stripTimestampMetadata,
+      } = require("../src/lib/content-transformation");
 
       const content1 = `---
 title: Test
@@ -506,11 +512,16 @@ slug: test
       expect(hasContentDifferences(content1, content2)).toBe(true);
 
       // After stripping, no differences
-      expect(hasContentDifferences(stripTimestampMetadata(content1), stripTimestampMetadata(content2))).toBe(false);
+      expect(
+        hasContentDifferences(stripTimestampMetadata(content1), stripTimestampMetadata(content2))
+      ).toBe(false);
     });
 
-    it('should still detect real content changes after stripping timestamps from MDX', () => {
-      const { hasContentDifferences, stripTimestampMetadata } = require('../src/lib/content-transformation');
+    it("should still detect real content changes after stripping timestamps from MDX", () => {
+      const {
+        hasContentDifferences,
+        stripTimestampMetadata,
+      } = require("../src/lib/content-transformation");
 
       const content1 = `---
 title: Original Title
@@ -528,57 +539,85 @@ slug: test
 
 # Content`;
 
-      expect(hasContentDifferences(stripTimestampMetadata(content1), stripTimestampMetadata(content2))).toBe(true);
+      expect(
+        hasContentDifferences(stripTimestampMetadata(content1), stripTimestampMetadata(content2))
+      ).toBe(true);
     });
 
-    it('should not detect differences when only id/createdAt/updatedAt differ in JSON content', () => {
-      const { hasContentDifferences, stripTimestampMetadata } = require('../src/lib/content-transformation');
+    it("should not detect differences when only id/createdAt/updatedAt differ in JSON content", () => {
+      const {
+        hasContentDifferences,
+        stripTimestampMetadata,
+      } = require("../src/lib/content-transformation");
 
-      const content1 = JSON.stringify({
-        id: 155,
-        createdAt: '2026-03-17T08:45:53.314064Z',
-        updatedAt: '2026-03-17T09:00:00Z',
-        slug: 'navigation',
-        type: 'component',
-        title: 'Navigation',
-        language: 'ru-RU',
-      }, null, 2);
+      const content1 = JSON.stringify(
+        {
+          id: 155,
+          createdAt: "2026-03-17T08:45:53.314064Z",
+          updatedAt: "2026-03-17T09:00:00Z",
+          slug: "navigation",
+          type: "component",
+          title: "Navigation",
+          language: "ru-RU",
+        },
+        null,
+        2
+      );
 
-      const content2 = JSON.stringify({
-        slug: 'navigation',
-        type: 'component',
-        title: 'Navigation',
-        language: 'ru-RU',
-      }, null, 2);
+      const content2 = JSON.stringify(
+        {
+          slug: "navigation",
+          type: "component",
+          title: "Navigation",
+          language: "ru-RU",
+        },
+        null,
+        2
+      );
 
       // Without stripping, the fields differ
       expect(hasContentDifferences(content1, content2)).toBe(true);
 
       // After stripping, no differences
-      expect(hasContentDifferences(stripTimestampMetadata(content1), stripTimestampMetadata(content2))).toBe(false);
+      expect(
+        hasContentDifferences(stripTimestampMetadata(content1), stripTimestampMetadata(content2))
+      ).toBe(false);
     });
 
-    it('should still detect real content changes after stripping timestamps from JSON', () => {
-      const { hasContentDifferences, stripTimestampMetadata } = require('../src/lib/content-transformation');
+    it("should still detect real content changes after stripping timestamps from JSON", () => {
+      const {
+        hasContentDifferences,
+        stripTimestampMetadata,
+      } = require("../src/lib/content-transformation");
 
-      const content1 = JSON.stringify({
-        id: 155,
-        createdAt: '2026-03-17T08:45:53.314064Z',
-        slug: 'navigation',
-        type: 'component',
-        title: 'Navigation',
-      }, null, 2);
+      const content1 = JSON.stringify(
+        {
+          id: 155,
+          createdAt: "2026-03-17T08:45:53.314064Z",
+          slug: "navigation",
+          type: "component",
+          title: "Navigation",
+        },
+        null,
+        2
+      );
 
-      const content2 = JSON.stringify({
-        id: 200,
-        createdAt: '2026-03-18T10:00:00Z',
-        slug: 'navigation',
-        type: 'component',
-        title: 'Updated Navigation',
-      }, null, 2);
+      const content2 = JSON.stringify(
+        {
+          id: 200,
+          createdAt: "2026-03-18T10:00:00Z",
+          slug: "navigation",
+          type: "component",
+          title: "Updated Navigation",
+        },
+        null,
+        2
+      );
 
       // After stripping, the title change should still be detected
-      expect(hasContentDifferences(stripTimestampMetadata(content1), stripTimestampMetadata(content2))).toBe(true);
+      expect(
+        hasContentDifferences(stripTimestampMetadata(content1), stripTimestampMetadata(content2))
+      ).toBe(true);
     });
   });
 });

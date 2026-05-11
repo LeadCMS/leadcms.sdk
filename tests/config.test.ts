@@ -2,19 +2,19 @@
  * Tests for Config module
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from "fs";
+import * as path from "path";
 
 // Unmock config module for these tests
-jest.unmock('../src/lib/config');
+jest.unmock("../src/lib/config");
 
 // Import after unmocking
-import { getConfig } from '../src/lib/config';
+import { getConfig } from "../src/lib/config";
 
-describe('Config Module', () => {
+describe("Config Module", () => {
   const originalEnv = process.env;
-  const testConfigPath = path.join(process.cwd(), 'leadcms.config.json');
-  const testRcPath = path.join(process.cwd(), '.leadcmsrc.json');
+  const testConfigPath = path.join(process.cwd(), "leadcms.config.json");
+  const testRcPath = path.join(process.cwd(), ".leadcmsrc.json");
 
   beforeEach(() => {
     // Clear module cache to ensure fresh config loading
@@ -50,176 +50,176 @@ describe('Config Module', () => {
     }
   });
 
-  describe('Environment Variables', () => {
-    it('should load config from LEADCMS_* environment variables', () => {
-      process.env.LEADCMS_URL = 'https://test.leadcms.ai';
-      process.env.LEADCMS_API_KEY = 'test-api-key';
-      process.env.LEADCMS_DEFAULT_LANGUAGE = 'en';
+  describe("Environment Variables", () => {
+    it("should load config from LEADCMS_* environment variables", () => {
+      process.env.LEADCMS_URL = "https://test.leadcms.ai";
+      process.env.LEADCMS_API_KEY = "test-api-key";
+      process.env.LEADCMS_DEFAULT_LANGUAGE = "en";
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
-      expect(config.url).toBe('https://test.leadcms.ai');
-      expect(config.apiKey).toBe('test-api-key');
-      expect(config.defaultLanguage).toBe('en');
+      expect(config.url).toBe("https://test.leadcms.ai");
+      expect(config.apiKey).toBe("test-api-key");
+      expect(config.defaultLanguage).toBe("en");
     });
 
-    it('should load config from NEXT_PUBLIC_* environment variables', () => {
-      process.env.NEXT_PUBLIC_LEADCMS_URL = 'https://nextjs.leadcms.ai';
-      process.env.NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE = 'es';
+    it("should load config from NEXT_PUBLIC_* environment variables", () => {
+      process.env.NEXT_PUBLIC_LEADCMS_URL = "https://nextjs.leadcms.ai";
+      process.env.NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE = "es";
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
-      expect(config.url).toBe('https://nextjs.leadcms.ai');
-      expect(config.defaultLanguage).toBe('es');
+      expect(config.url).toBe("https://nextjs.leadcms.ai");
+      expect(config.defaultLanguage).toBe("es");
     });
 
-    it('should prefer LEADCMS_* over NEXT_PUBLIC_* variables', () => {
-      process.env.LEADCMS_URL = 'https://leadcms.ai';
-      process.env.NEXT_PUBLIC_LEADCMS_URL = 'https://nextjs.io';
-      process.env.LEADCMS_DEFAULT_LANGUAGE = 'en';
-      process.env.NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE = 'es';
+    it("should prefer LEADCMS_* over NEXT_PUBLIC_* variables", () => {
+      process.env.LEADCMS_URL = "https://leadcms.ai";
+      process.env.NEXT_PUBLIC_LEADCMS_URL = "https://nextjs.io";
+      process.env.LEADCMS_DEFAULT_LANGUAGE = "en";
+      process.env.NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE = "es";
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
-      expect(config.url).toBe('https://leadcms.ai');
-      expect(config.defaultLanguage).toBe('en');
+      expect(config.url).toBe("https://leadcms.ai");
+      expect(config.defaultLanguage).toBe("en");
     });
 
-    it('should apply default values when optional env vars are missing', () => {
-      process.env.LEADCMS_URL = 'https://test.leadcms.ai'; // URL is required
+    it("should apply default values when optional env vars are missing", () => {
+      process.env.LEADCMS_URL = "https://test.leadcms.ai"; // URL is required
       delete process.env.LEADCMS_DEFAULT_LANGUAGE;
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
-      expect(config.url).toBe('https://test.leadcms.ai');
-      expect(config.defaultLanguage).toBe('en');
-      expect(config.contentDir).toBe('.leadcms/content');
-      expect(config.mediaDir).toBe('public/media');
+      expect(config.url).toBe("https://test.leadcms.ai");
+      expect(config.defaultLanguage).toBe("en");
+      expect(config.contentDir).toBe(".leadcms/content");
+      expect(config.mediaDir).toBe("public/media");
     });
 
-    it('should strip trailing slash from LEADCMS_URL', () => {
-      process.env.LEADCMS_URL = 'https://cms.dev.example.com/';
+    it("should strip trailing slash from LEADCMS_URL", () => {
+      process.env.LEADCMS_URL = "https://cms.dev.example.com/";
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
-      expect(config.url).toBe('https://cms.dev.example.com');
+      expect(config.url).toBe("https://cms.dev.example.com");
     });
 
-    it('should strip multiple trailing slashes from URL', () => {
-      process.env.LEADCMS_URL = 'https://cms.dev.example.com///';
+    it("should strip multiple trailing slashes from URL", () => {
+      process.env.LEADCMS_URL = "https://cms.dev.example.com///";
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
-      expect(config.url).toBe('https://cms.dev.example.com');
+      expect(config.url).toBe("https://cms.dev.example.com");
     });
 
-    it('should strip trailing slash from NEXT_PUBLIC_LEADCMS_URL', () => {
-      process.env.NEXT_PUBLIC_LEADCMS_URL = 'https://cms.dev.example.com/';
+    it("should strip trailing slash from NEXT_PUBLIC_LEADCMS_URL", () => {
+      process.env.NEXT_PUBLIC_LEADCMS_URL = "https://cms.dev.example.com/";
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
-      expect(config.url).toBe('https://cms.dev.example.com');
+      expect(config.url).toBe("https://cms.dev.example.com");
     });
 
-    it('should not modify URL without trailing slash', () => {
-      process.env.LEADCMS_URL = 'https://cms.dev.example.com';
+    it("should not modify URL without trailing slash", () => {
+      process.env.LEADCMS_URL = "https://cms.dev.example.com";
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
-      expect(config.url).toBe('https://cms.dev.example.com');
+      expect(config.url).toBe("https://cms.dev.example.com");
     });
   });
 
-  describe('Config File Loading', () => {
-    it('should load config from leadcms.config.json', () => {
+  describe("Config File Loading", () => {
+    it("should load config from leadcms.config.json", () => {
       const testConfig = {
-        url: 'https://file.leadcms.ai',
-        apiKey: 'file-api-key',
-        defaultLanguage: 'fr',
-        contentDir: 'custom/content',
+        url: "https://file.leadcms.ai",
+        apiKey: "file-api-key",
+        defaultLanguage: "fr",
+        contentDir: "custom/content",
       };
 
       fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
-      expect(config.url).toBe('https://file.leadcms.ai');
-      expect(config.apiKey).toBe('file-api-key');
-      expect(config.defaultLanguage).toBe('fr');
-      expect(config.contentDir).toBe('custom/content');
+      expect(config.url).toBe("https://file.leadcms.ai");
+      expect(config.apiKey).toBe("file-api-key");
+      expect(config.defaultLanguage).toBe("fr");
+      expect(config.contentDir).toBe("custom/content");
     });
 
-    it('should strip trailing slash from URL in config file', () => {
+    it("should strip trailing slash from URL in config file", () => {
       const testConfig = {
-        url: 'https://file.leadcms.ai/',
-        apiKey: 'file-api-key',
+        url: "https://file.leadcms.ai/",
+        apiKey: "file-api-key",
       };
 
       fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
-      expect(config.url).toBe('https://file.leadcms.ai');
+      expect(config.url).toBe("https://file.leadcms.ai");
     });
 
-    it('should load config from .leadcmsrc.json', () => {
+    it("should load config from .leadcmsrc.json", () => {
       const testConfig = {
-        url: 'https://rc.leadcms.ai',
-        defaultLanguage: 'de',
+        url: "https://rc.leadcms.ai",
+        defaultLanguage: "de",
       };
 
       fs.writeFileSync(testRcPath, JSON.stringify(testConfig, null, 2));
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
-      expect(config.url).toBe('https://rc.leadcms.ai');
-      expect(config.defaultLanguage).toBe('de');
+      expect(config.url).toBe("https://rc.leadcms.ai");
+      expect(config.defaultLanguage).toBe("de");
     });
 
-    it('should prefer environment variables over config file', () => {
+    it("should prefer environment variables over config file", () => {
       const testConfig = {
-        url: 'https://file.leadcms.ai',
-        defaultLanguage: 'fr',
+        url: "https://file.leadcms.ai",
+        defaultLanguage: "fr",
       };
 
       fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
 
-      process.env.LEADCMS_URL = 'https://env.leadcms.ai';
-      process.env.LEADCMS_DEFAULT_LANGUAGE = 'en';
+      process.env.LEADCMS_URL = "https://env.leadcms.ai";
+      process.env.LEADCMS_DEFAULT_LANGUAGE = "en";
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
       // Environment variables should override file config
-      expect(config.url).toBe('https://env.leadcms.ai');
-      expect(config.defaultLanguage).toBe('en');
+      expect(config.url).toBe("https://env.leadcms.ai");
+      expect(config.defaultLanguage).toBe("en");
     });
 
-    it('should throw when config file missing and no URL provided', () => {
+    it("should throw when config file missing and no URL provided", () => {
       // No config file exists and no URL env var
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
 
-      expect(() => getConfigFresh()).toThrow('Missing required configuration: url');
+      expect(() => getConfigFresh()).toThrow("Missing required configuration: url");
     });
 
-    it('should throw for malformed JSON config', () => {
-      fs.writeFileSync(testConfigPath, '{ invalid json }');
+    it("should throw for malformed JSON config", () => {
+      fs.writeFileSync(testConfigPath, "{ invalid json }");
 
       // Suppress expected warning during this test
-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
 
       // Should throw due to invalid JSON
       expect(() => getConfigFresh()).toThrow();
@@ -229,148 +229,148 @@ describe('Config Module', () => {
     });
   });
 
-  describe('Config Validation', () => {
-    it('should throw error when required URL is missing', () => {
+  describe("Config Validation", () => {
+    it("should throw error when required URL is missing", () => {
       delete process.env.LEADCMS_URL;
       delete process.env.NEXT_PUBLIC_LEADCMS_URL;
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
 
-      expect(() => getConfigFresh()).toThrow('Missing required configuration: url');
+      expect(() => getConfigFresh()).toThrow("Missing required configuration: url");
     });
 
-    it('should merge config from multiple sources', () => {
+    it("should merge config from multiple sources", () => {
       // Config file
       const testConfig = {
-        url: 'https://file.leadcms.ai',
-        contentDir: 'custom/content',
+        url: "https://file.leadcms.ai",
+        contentDir: "custom/content",
       };
       fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
 
       // Environment variables
-      process.env.LEADCMS_API_KEY = 'env-api-key';
-      process.env.LEADCMS_DEFAULT_LANGUAGE = 'en';
+      process.env.LEADCMS_API_KEY = "env-api-key";
+      process.env.LEADCMS_DEFAULT_LANGUAGE = "en";
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
       // Should have values from both sources
-      expect(config.url).toBe('https://file.leadcms.ai');
-      expect(config.apiKey).toBe('env-api-key');
-      expect(config.defaultLanguage).toBe('en');
-      expect(config.contentDir).toBe('custom/content');
+      expect(config.url).toBe("https://file.leadcms.ai");
+      expect(config.apiKey).toBe("env-api-key");
+      expect(config.defaultLanguage).toBe("en");
+      expect(config.contentDir).toBe("custom/content");
     });
 
-    it('should NOT require flat url when remotes block is configured', () => {
+    it("should NOT require flat url when remotes block is configured", () => {
       delete process.env.LEADCMS_URL;
       delete process.env.NEXT_PUBLIC_LEADCMS_URL;
 
       const testConfig = {
         remotes: {
-          production: { url: 'https://prod.leadcms.ai' },
+          production: { url: "https://prod.leadcms.ai" },
         },
-        defaultRemote: 'production',
+        defaultRemote: "production",
       };
       fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       // Should not throw — url is optional in multi-remote mode
       expect(() => getConfigFresh()).not.toThrow();
     });
 
-    it('should throw when remote name has invalid characters', () => {
+    it("should throw when remote name has invalid characters", () => {
       delete process.env.LEADCMS_URL;
 
       const testConfig = {
         remotes: {
-          'PROD_SERVER': { url: 'https://prod.leadcms.ai' },
+          PROD_SERVER: { url: "https://prod.leadcms.ai" },
         },
-        defaultRemote: 'PROD_SERVER',
+        defaultRemote: "PROD_SERVER",
       };
       fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       expect(() => getConfigFresh()).toThrow(/Invalid remote name/);
     });
 
-    it('should throw when remote is missing url', () => {
+    it("should throw when remote is missing url", () => {
       delete process.env.LEADCMS_URL;
 
       const testConfig = {
         remotes: {
           production: {},
         },
-        defaultRemote: 'production',
+        defaultRemote: "production",
       };
       fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       expect(() => getConfigFresh()).toThrow(/missing required "url" field/);
     });
 
-    it('should throw when defaultRemote references unknown remote', () => {
+    it("should throw when defaultRemote references unknown remote", () => {
       delete process.env.LEADCMS_URL;
 
       const testConfig = {
         remotes: {
-          production: { url: 'https://prod.leadcms.ai' },
+          production: { url: "https://prod.leadcms.ai" },
         },
-        defaultRemote: 'staging',
+        defaultRemote: "staging",
       };
       fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       expect(() => getConfigFresh()).toThrow(/defaultRemote.*references.*staging/);
     });
 
-    it('should throw when remotes is configured but defaultRemote is not set', () => {
+    it("should throw when remotes is configured but defaultRemote is not set", () => {
       delete process.env.LEADCMS_URL;
 
       const testConfig = {
         remotes: {
-          production: { url: 'https://prod.leadcms.ai' },
+          production: { url: "https://prod.leadcms.ai" },
         },
       };
       fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       expect(() => getConfigFresh()).toThrow(/defaultRemote.*is not set/);
     });
 
-    it('should load config with valid remotes block', () => {
+    it("should load config with valid remotes block", () => {
       delete process.env.LEADCMS_URL;
 
       const testConfig = {
         remotes: {
-          production: { url: 'https://prod.leadcms.ai' },
-          develop: { url: 'https://dev.leadcms.ai' },
+          production: { url: "https://prod.leadcms.ai" },
+          develop: { url: "https://dev.leadcms.ai" },
         },
-        defaultRemote: 'production',
+        defaultRemote: "production",
       };
       fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
       expect(config.remotes).toBeDefined();
-      expect(config.remotes!.production.url).toBe('https://prod.leadcms.ai');
-      expect(config.defaultRemote).toBe('production');
+      expect(config.remotes!.production.url).toBe("https://prod.leadcms.ai");
+      expect(config.defaultRemote).toBe("production");
     });
 
-    it('should not warn when remotes are configured and a flat url is also present', () => {
-      process.env.LEADCMS_URL = 'https://legacy.leadcms.ai';
+    it("should not warn when remotes are configured and a flat url is also present", () => {
+      process.env.LEADCMS_URL = "https://legacy.leadcms.ai";
 
       const testConfig = {
         remotes: {
-          production: { url: 'https://prod.leadcms.ai' },
+          production: { url: "https://prod.leadcms.ai" },
         },
-        defaultRemote: 'production',
+        defaultRemote: "production",
       };
       fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
 
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { });
+      const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       expect(() => getConfigFresh()).not.toThrow();
       expect(warnSpy).not.toHaveBeenCalledWith(
         expect.stringContaining('Both "remotes" and flat "url" are configured')
@@ -380,101 +380,107 @@ describe('Config Module', () => {
     });
   });
 
-  describe('Default Values', () => {
-    it('should apply default directory values', () => {
-      process.env.LEADCMS_URL = 'https://test.leadcms.ai'; // URL is required
+  describe("Default Values", () => {
+    it("should apply default directory values", () => {
+      process.env.LEADCMS_URL = "https://test.leadcms.ai"; // URL is required
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
-      expect(config.url).toBe('https://test.leadcms.ai');
-      expect(config.defaultLanguage).toBe('en');
-      expect(config.contentDir).toBe('.leadcms/content');
-      expect(config.mediaDir).toBe('public/media');
-      expect(config.commentsDir).toBe('.leadcms/comments');
+      expect(config.url).toBe("https://test.leadcms.ai");
+      expect(config.defaultLanguage).toBe("en");
+      expect(config.contentDir).toBe(".leadcms/content");
+      expect(config.mediaDir).toBe("public/media");
+      expect(config.commentsDir).toBe(".leadcms/comments");
     });
 
-    it('should allow overriding default directories', () => {
+    it("should allow overriding default directories", () => {
       const testConfig = {
-        url: 'https://test.leadcms.ai',
-        contentDir: 'src/content',
-        mediaDir: 'assets/media',
-        commentsDir: 'data/comments',
+        url: "https://test.leadcms.ai",
+        contentDir: "src/content",
+        mediaDir: "assets/media",
+        commentsDir: "data/comments",
       };
 
       fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
-      expect(config.contentDir).toBe('src/content');
-      expect(config.mediaDir).toBe('assets/media');
-      expect(config.commentsDir).toBe('data/comments');
+      expect(config.contentDir).toBe("src/content");
+      expect(config.mediaDir).toBe("assets/media");
+      expect(config.commentsDir).toBe("data/comments");
     });
   });
 
-  describe('Config Priority', () => {
-    it('should follow priority: env vars > config file > defaults', () => {
+  describe("Config Priority", () => {
+    it("should follow priority: env vars > config file > defaults", () => {
       // Start with file config
       const testConfig = {
-        url: 'https://file.leadcms.ai',
-        defaultLanguage: 'fr',
-        contentDir: 'file/content',
+        url: "https://file.leadcms.ai",
+        defaultLanguage: "fr",
+        contentDir: "file/content",
       };
       fs.writeFileSync(testConfigPath, JSON.stringify(testConfig, null, 2));
 
       // Override some with env vars
-      process.env.LEADCMS_URL = 'https://env.leadcms.ai';
-      process.env.LEADCMS_CONTENT_DIR = 'env/content';
+      process.env.LEADCMS_URL = "https://env.leadcms.ai";
+      process.env.LEADCMS_CONTENT_DIR = "env/content";
       // Leave defaultLanguage to file (no env var set)
 
-      const { getConfig: getConfigFresh } = require('../src/lib/config');
+      const { getConfig: getConfigFresh } = require("../src/lib/config");
       const config = getConfigFresh();
 
-      expect(config.url).toBe('https://env.leadcms.ai'); // From env
-      expect(config.contentDir).toBe('env/content'); // From env
-      expect(config.mediaDir).toBe('public/media'); // From defaults
+      expect(config.url).toBe("https://env.leadcms.ai"); // From env
+      expect(config.contentDir).toBe("env/content"); // From env
+      expect(config.mediaDir).toBe("public/media"); // From defaults
       // defaultLanguage might get overridden if there's a default in the code
     });
   });
 
-  describe('Preview Configuration', () => {
-    it('should load preview setting from environment variables', () => {
-      process.env.LEADCMS_URL = 'https://test.leadcms.com';
-      process.env.LEADCMS_PREVIEW = 'true';
+  describe("Preview Configuration", () => {
+    it("should load preview setting from environment variables", () => {
+      process.env.LEADCMS_URL = "https://test.leadcms.com";
+      process.env.LEADCMS_PREVIEW = "true";
 
       const config = getConfig();
 
       expect(config.preview).toBe(true);
     });
 
-    it('should handle LEADCMS_PREVIEW=false', () => {
-      process.env.LEADCMS_URL = 'https://test.leadcms.com';
-      process.env.LEADCMS_PREVIEW = 'false';
+    it("should handle LEADCMS_PREVIEW=false", () => {
+      process.env.LEADCMS_URL = "https://test.leadcms.com";
+      process.env.LEADCMS_PREVIEW = "false";
 
       const config = getConfig();
 
       expect(config.preview).toBe(false);
     });
 
-    it('should load preview setting from config file', () => {
-      fs.writeFileSync(testConfigPath, JSON.stringify({
-        url: 'https://test.leadcms.com',
-        preview: true
-      }));
+    it("should load preview setting from config file", () => {
+      fs.writeFileSync(
+        testConfigPath,
+        JSON.stringify({
+          url: "https://test.leadcms.com",
+          preview: true,
+        })
+      );
 
       const config = getConfig();
 
       expect(config.preview).toBe(true);
     });
 
-    it('should prioritize environment over config file for preview setting', () => {
-      fs.writeFileSync(testConfigPath, JSON.stringify({
-        url: 'https://test.leadcms.com',
-        preview: false
-      }));
+    it("should prioritize environment over config file for preview setting", () => {
+      fs.writeFileSync(
+        testConfigPath,
+        JSON.stringify({
+          url: "https://test.leadcms.com",
+          preview: false,
+        })
+      );
 
-      process.env.LEADCMS_PREVIEW = 'true';
+      process.env.LEADCMS_PREVIEW = "true";
 
       const config = getConfig();
 

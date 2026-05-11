@@ -8,11 +8,7 @@ import "dotenv/config";
 import fs from "fs/promises";
 import path from "path";
 import axios, { AxiosResponse } from "axios";
-import {
-  leadCMSUrl,
-  leadCMSApiKey,
-  SEQUENCES_DIR,
-} from "./leadcms-helpers.js";
+import { leadCMSUrl, leadCMSApiKey, SEQUENCES_DIR } from "./leadcms-helpers.js";
 import { leadCMSDataService } from "../lib/data-service.js";
 import { syncTokenPath, type RemoteContext } from "../lib/remote-context.js";
 import type { MetadataMap } from "../lib/remote-context.js";
@@ -145,7 +141,9 @@ async function buildSequenceIdIndex(dir: string): Promise<Map<string, string>> {
       if (id != null) {
         index.set(String(id), fullPath);
       }
-    } catch { /* skip unreadable */ }
+    } catch {
+      /* skip unreadable */
+    }
   }
 
   return index;
@@ -160,7 +158,10 @@ function getSequenceFilePath(sequence: SequenceDetailsDto | LocalSequenceDto): s
 }
 
 /** Build segment ID→name and email template ID→name lookup maps. */
-async function buildLookupMaps(): Promise<{ segmentMap: SegmentIdNameMap; templateMap: EmailTemplateIdNameMap }> {
+async function buildLookupMaps(): Promise<{
+  segmentMap: SegmentIdNameMap;
+  templateMap: EmailTemplateIdNameMap;
+}> {
   const [segments, templates] = await Promise.all([
     leadCMSDataService.getAllSegments(),
     leadCMSDataService.getAllEmailTemplates(),
@@ -186,11 +187,13 @@ interface PullSequencesOptions {
   remoteContext?: RemoteContext;
 }
 
-export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOptions | RemoteContext): Promise<void> {
+export async function pullLeadCMSSequences(
+  optionsOrRemoteCtx?: PullSequencesOptions | RemoteContext
+): Promise<void> {
   // Support both old signature (RemoteContext) and new options object
   let reset: boolean | undefined;
   let remoteCtx: RemoteContext | undefined;
-  if (optionsOrRemoteCtx && 'name' in optionsOrRemoteCtx && 'url' in optionsOrRemoteCtx) {
+  if (optionsOrRemoteCtx && "name" in optionsOrRemoteCtx && "url" in optionsOrRemoteCtx) {
     remoteCtx = optionsOrRemoteCtx;
   } else if (optionsOrRemoteCtx) {
     const opts = optionsOrRemoteCtx as PullSequencesOptions;
@@ -221,7 +224,7 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
       const defaultStateDir = path.join(path.dirname(remoteCtx.stateDir), cfg.defaultRemote);
       const defaultCtx: import("../lib/remote-context.js").RemoteContext = {
         name: cfg.defaultRemote,
-        url: cfg.remotes?.[cfg.defaultRemote]?.url || '',
+        url: cfg.remotes?.[cfg.defaultRemote]?.url || "",
         isDefault: true,
         stateDir: defaultStateDir,
       };
@@ -229,9 +232,10 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
     }
   }
 
-  const idIndex = (items.length > 0 || deleted.length > 0)
-    ? await buildSequenceIdIndex(SEQUENCES_DIR)
-    : new Map<string, string>();
+  const idIndex =
+    items.length > 0 || deleted.length > 0
+      ? await buildSequenceIdIndex(SEQUENCES_DIR)
+      : new Map<string, string>();
 
   // Build lookup maps for ID→name transformations
   let segmentMap: SegmentIdNameMap = new Map();
@@ -249,20 +253,25 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
     const idStr = sequence.id != null ? String(sequence.id) : undefined;
     const stepCount = sequence.steps?.length ?? 0;
 
-    logger.verbose(`[PULL] Sequence "${sequence.name}" (${sequence.language}, id:${sequence.id ?? '?'}) — ${stepCount} step(s)`);
+    logger.verbose(
+      `[PULL] Sequence "${sequence.name}" (${sequence.language}, id:${sequence.id ?? "?"}) — ${stepCount} step(s)`
+    );
     if (stepCount > 0) {
-      logger.verbose(`[PULL]   Step order: ${sequence.steps!.map(s => `${s.name} (id:${s.id})`).join(' → ')}`);
+      logger.verbose(
+        `[PULL]   Step order: ${sequence.steps!.map((s) => `${s.name} (id:${s.id})`).join(" → ")}`
+      );
     }
 
     // Capture old entry BEFORE updating metadata so we can detect renames
     // using the correct remote's IDs (not the default remote's file IDs).
-    const oldEntry = (remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap && idStr)
-      ? rcModule.findSequenceByRemoteId(metadataMap, idStr)
-      : undefined;
+    const oldEntry =
+      remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap && idStr
+        ? rcModule.findSequenceByRemoteId(metadataMap, idStr)
+        : undefined;
 
     // Update per-remote metadata
     if (remoteCtx && rcModule && metadataMap && sequence.id != null) {
-      const lang = sequence.language || 'en';
+      const lang = sequence.language || "en";
       rcModule.setSequenceRemoteId(metadataMap, lang, sequence.name, sequence.id);
       rcModule.setMetadataForSequence(metadataMap, lang, sequence.name, {
         id: sequence.id,
@@ -279,12 +288,17 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
         const oldSlug = slugify(oldEntry.name) || `sequence-${idStr}`;
         const cfg = getConfig();
         const oldLang = oldEntry.language || cfg.defaultLanguage;
-        const oldDir = oldLang === cfg.defaultLanguage ? SEQUENCES_DIR : path.join(SEQUENCES_DIR, oldLang);
+        const oldDir =
+          oldLang === cfg.defaultLanguage ? SEQUENCES_DIR : path.join(SEQUENCES_DIR, oldLang);
         const oldPath = path.join(oldDir, `${oldSlug}.json`);
         const newPath = getSequenceFilePath(sequence);
         if (oldPath !== newPath) {
           console.log(`   🗑️  ${path.basename(oldPath)} → ${path.basename(newPath)} (renamed)`);
-          try { await fs.unlink(oldPath); } catch { /* ignore */ }
+          try {
+            await fs.unlink(oldPath);
+          } catch {
+            /* ignore */
+          }
         }
       }
     } else if (idStr && idIndex.has(idStr)) {
@@ -292,7 +306,11 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
       const newPath = getSequenceFilePath(sequence);
       if (oldPath !== newPath) {
         console.log(`   🗑️  ${path.basename(oldPath)} → ${path.basename(newPath)} (renamed)`);
-        try { await fs.unlink(oldPath); } catch { /* ignore */ }
+        try {
+          await fs.unlink(oldPath);
+        } catch {
+          /* ignore */
+        }
       }
     }
 
@@ -305,7 +323,7 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
     let localToSave = localDto;
     if (remoteCtx && !remoteCtx.isDefault) {
       const { id: _id, createdAt: _ca, updatedAt: _ua, ...rest } = localDto;
-      const lang = sequence.language || 'en';
+      const lang = sequence.language || "en";
       const name = sequence.name;
       const defaultMeta = defaultMetadataMap?.sequences?.[lang]?.[name];
       localToSave = orderLocalSequenceFields({
@@ -321,13 +339,14 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
     await fs.mkdir(path.dirname(filePath), { recursive: true });
 
     if (localToSave.steps?.length) {
-      logger.verbose(`[PULL]   Saved step order: ${localToSave.steps.map(s => s.name).join(' → ')}`);
+      logger.verbose(
+        `[PULL]   Saved step order: ${localToSave.steps.map((s) => s.name).join(" → ")}`
+      );
     }
     logger.verbose(`[PULL]   → ${filePath}`);
 
-    const existed = (remoteCtx && !remoteCtx.isDefault)
-      ? !!oldEntry
-      : (idStr ? idIndex.has(idStr) : false);
+    const existed =
+      remoteCtx && !remoteCtx.isDefault ? !!oldEntry : idStr ? idIndex.has(idStr) : false;
     await fs.writeFile(filePath, content, "utf8");
 
     if (existed) {
@@ -349,7 +368,11 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
         const dir = lang === cfg.defaultLanguage ? SEQUENCES_DIR : path.join(SEQUENCES_DIR, lang);
         const filePath = path.join(dir, `${slug}.json`);
         console.log(`   🗑️  ${path.basename(filePath)} (deleted on remote)`);
-        try { await fs.unlink(filePath); } catch { /* ignore */ }
+        try {
+          await fs.unlink(filePath);
+        } catch {
+          /* ignore */
+        }
         // Clean up metadata entry
         if (metadataMap.sequences?.[entry.language]?.[entry.name]) {
           delete metadataMap.sequences[entry.language][entry.name];
@@ -359,7 +382,11 @@ export async function pullLeadCMSSequences(optionsOrRemoteCtx?: PullSequencesOpt
       const filePath = idIndex.get(String(id));
       if (filePath) {
         console.log(`   🗑️  ${path.basename(filePath)} (deleted on remote)`);
-        try { await fs.unlink(filePath); } catch { /* ignore */ }
+        try {
+          await fs.unlink(filePath);
+        } catch {
+          /* ignore */
+        }
       }
     }
   }

@@ -6,18 +6,18 @@
  * - MOCKED remote API via dependency injection
  * - SDK functions (statusMedia, pushMedia) exactly as CLI uses them
  */
-import * as path from 'path';
-import { MediaItem } from '../src/lib/data-service';
+import * as path from "path";
+import { MediaItem } from "../src/lib/data-service";
 import {
   statusMedia,
   pushMedia,
   MediaStatusResult,
   MediaPushResult,
   MediaDependencies,
-} from '../src/scripts/push-media';
+} from "../src/scripts/push-media";
 
 // Path to test fixtures
-const FIXTURES_MEDIA_DIR = path.join(__dirname, 'fixtures/public/media');
+const FIXTURES_MEDIA_DIR = path.join(__dirname, "fixtures/public/media");
 
 // Mock console.log to suppress output during tests
 const originalConsoleLog = console.log;
@@ -36,19 +36,16 @@ const silentDeps: Partial<MediaDependencies> = {
   logSuccess: jest.fn(),
 };
 
-describe('statusMedia - SDK top-level function', () => {
-  describe('when remote is empty (all files are new)', () => {
-    it('should detect all local files as creates', async () => {
+describe("statusMedia - SDK top-level function", () => {
+  describe("when remote is empty (all files are new)", () => {
+    it("should detect all local files as creates", async () => {
       // Mock remote API returns empty array
       const deps: Partial<MediaDependencies> = {
         ...silentDeps,
         fetchRemoteMedia: async () => [],
       };
 
-      const result: MediaStatusResult = await statusMedia(
-        { mediaDir: FIXTURES_MEDIA_DIR },
-        deps
-      );
+      const result: MediaStatusResult = await statusMedia({ mediaDir: FIXTURES_MEDIA_DIR }, deps);
 
       // We have 4 fixture files
       expect(result.localFiles.length).toBe(4);
@@ -61,14 +58,14 @@ describe('statusMedia - SDK top-level function', () => {
       expect(result.summary.skips).toBe(0);
 
       // Verify specific files were found
-      const filePaths = result.localFiles.map(f => f.filePath);
-      expect(filePaths).toContain('blog/post-456/cover.png');
-      expect(filePaths).toContain('news/article-123/hero.jpg');
-      expect(filePaths).toContain('news/article-123/thumb.jpg');
-      expect(filePaths).toContain('pages/about/team.jpg');
+      const filePaths = result.localFiles.map((f) => f.filePath);
+      expect(filePaths).toContain("blog/post-456/cover.png");
+      expect(filePaths).toContain("news/article-123/hero.jpg");
+      expect(filePaths).toContain("news/article-123/thumb.jpg");
+      expect(filePaths).toContain("pages/about/team.jpg");
     });
 
-    it('should correctly identify file metadata', async () => {
+    it("should correctly identify file metadata", async () => {
       const deps: Partial<MediaDependencies> = {
         ...silentDeps,
         fetchRemoteMedia: async () => [],
@@ -77,65 +74,65 @@ describe('statusMedia - SDK top-level function', () => {
       const result = await statusMedia({ mediaDir: FIXTURES_MEDIA_DIR }, deps);
 
       // Find the cover.png file
-      const coverFile = result.localFiles.find(f => f.name === 'cover.png');
+      const coverFile = result.localFiles.find((f) => f.name === "cover.png");
       expect(coverFile).toBeDefined();
-      expect(coverFile!.scopeUid).toBe('blog/post-456');
-      expect(coverFile!.extension).toBe('.png');
-      expect(coverFile!.mimeType).toBe('image/png');
+      expect(coverFile!.scopeUid).toBe("blog/post-456");
+      expect(coverFile!.extension).toBe(".png");
+      expect(coverFile!.mimeType).toBe("image/png");
       expect(coverFile!.size).toBe(16); // 16 bytes in fixture
     });
   });
 
-  describe('when remote matches local (all files in sync)', () => {
-    it('should detect all files as skips', async () => {
+  describe("when remote matches local (all files in sync)", () => {
+    it("should detect all files as skips", async () => {
       // Mock remote with matching files
       const mockRemote: MediaItem[] = [
         {
           id: 1,
-          location: '/api/media/blog/post-456/cover.png',
-          scopeUid: 'blog/post-456',
-          name: 'cover.png',
+          location: "/api/media/blog/post-456/cover.png",
+          scopeUid: "blog/post-456",
+          name: "cover.png",
           description: null,
           size: 16, // Same size as local
-          extension: '.png',
-          mimeType: 'image/png',
-          createdAt: '2024-01-01T00:00:00Z',
+          extension: ".png",
+          mimeType: "image/png",
+          createdAt: "2024-01-01T00:00:00Z",
           updatedAt: null,
         },
         {
           id: 2,
-          location: '/api/media/news/article-123/hero.jpg',
-          scopeUid: 'news/article-123',
-          name: 'hero.jpg',
+          location: "/api/media/news/article-123/hero.jpg",
+          scopeUid: "news/article-123",
+          name: "hero.jpg",
           description: null,
           size: 16,
-          extension: '.jpg',
-          mimeType: 'image/jpeg',
-          createdAt: '2024-01-01T00:00:00Z',
+          extension: ".jpg",
+          mimeType: "image/jpeg",
+          createdAt: "2024-01-01T00:00:00Z",
           updatedAt: null,
         },
         {
           id: 3,
-          location: '/api/media/news/article-123/thumb.jpg',
-          scopeUid: 'news/article-123',
-          name: 'thumb.jpg',
+          location: "/api/media/news/article-123/thumb.jpg",
+          scopeUid: "news/article-123",
+          name: "thumb.jpg",
           description: null,
           size: 15,
-          extension: '.jpg',
-          mimeType: 'image/jpeg',
-          createdAt: '2024-01-01T00:00:00Z',
+          extension: ".jpg",
+          mimeType: "image/jpeg",
+          createdAt: "2024-01-01T00:00:00Z",
           updatedAt: null,
         },
         {
           id: 4,
-          location: '/api/media/pages/about/team.jpg',
-          scopeUid: 'pages/about',
-          name: 'team.jpg',
+          location: "/api/media/pages/about/team.jpg",
+          scopeUid: "pages/about",
+          name: "team.jpg",
           description: null,
           size: 17,
-          extension: '.jpg',
-          mimeType: 'image/jpeg',
-          createdAt: '2024-01-01T00:00:00Z',
+          extension: ".jpg",
+          mimeType: "image/jpeg",
+          createdAt: "2024-01-01T00:00:00Z",
           updatedAt: null,
         },
       ];
@@ -154,32 +151,32 @@ describe('statusMedia - SDK top-level function', () => {
     });
   });
 
-  describe('when remote has different file sizes (updates needed)', () => {
-    it('should detect files with different sizes as updates', async () => {
+  describe("when remote has different file sizes (updates needed)", () => {
+    it("should detect files with different sizes as updates", async () => {
       // Mock remote with different file sizes
       const mockRemote: MediaItem[] = [
         {
           id: 1,
-          location: '/api/media/blog/post-456/cover.png',
-          scopeUid: 'blog/post-456',
-          name: 'cover.png',
+          location: "/api/media/blog/post-456/cover.png",
+          scopeUid: "blog/post-456",
+          name: "cover.png",
           description: null,
           size: 1000, // Different size - should trigger update
-          extension: '.png',
-          mimeType: 'image/png',
-          createdAt: '2024-01-01T00:00:00Z',
+          extension: ".png",
+          mimeType: "image/png",
+          createdAt: "2024-01-01T00:00:00Z",
           updatedAt: null,
         },
         {
           id: 2,
-          location: '/api/media/news/article-123/hero.jpg',
-          scopeUid: 'news/article-123',
-          name: 'hero.jpg',
+          location: "/api/media/news/article-123/hero.jpg",
+          scopeUid: "news/article-123",
+          name: "hero.jpg",
           description: null,
           size: 16, // Same size - should skip
-          extension: '.jpg',
-          mimeType: 'image/jpeg',
-          createdAt: '2024-01-01T00:00:00Z',
+          extension: ".jpg",
+          mimeType: "image/jpeg",
+          createdAt: "2024-01-01T00:00:00Z",
           updatedAt: null,
         },
       ];
@@ -192,49 +189,49 @@ describe('statusMedia - SDK top-level function', () => {
       const result = await statusMedia({ mediaDir: FIXTURES_MEDIA_DIR }, deps);
 
       expect(result.summary.updates).toBe(1); // cover.png has different size
-      expect(result.summary.skips).toBe(1);   // hero.jpg matches
+      expect(result.summary.skips).toBe(1); // hero.jpg matches
       expect(result.summary.creates).toBe(2); // thumb.jpg and team.jpg not in remote
     });
   });
 
-  describe('when --delete flag is used', () => {
-    it('should detect remote-only files as deletes when showDelete=true', async () => {
+  describe("when --delete flag is used", () => {
+    it("should detect remote-only files as deletes when showDelete=true", async () => {
       // Mock remote with files that don't exist locally
       const mockRemote: MediaItem[] = [
         {
           id: 1,
-          location: '/api/media/blog/post-456/cover.png',
-          scopeUid: 'blog/post-456',
-          name: 'cover.png',
+          location: "/api/media/blog/post-456/cover.png",
+          scopeUid: "blog/post-456",
+          name: "cover.png",
           description: null,
           size: 16,
-          extension: '.png',
-          mimeType: 'image/png',
-          createdAt: '2024-01-01T00:00:00Z',
+          extension: ".png",
+          mimeType: "image/png",
+          createdAt: "2024-01-01T00:00:00Z",
           updatedAt: null,
         },
         {
           id: 99,
-          location: '/api/media/old-folder/deleted-image.jpg',
-          scopeUid: 'old-folder',
-          name: 'deleted-image.jpg',
+          location: "/api/media/old-folder/deleted-image.jpg",
+          scopeUid: "old-folder",
+          name: "deleted-image.jpg",
           description: null,
           size: 5000,
-          extension: '.jpg',
-          mimeType: 'image/jpeg',
-          createdAt: '2024-01-01T00:00:00Z',
+          extension: ".jpg",
+          mimeType: "image/jpeg",
+          createdAt: "2024-01-01T00:00:00Z",
           updatedAt: null,
         },
         {
           id: 100,
-          location: '/api/media/archive/old-photo.png',
-          scopeUid: 'archive',
-          name: 'old-photo.png',
+          location: "/api/media/archive/old-photo.png",
+          scopeUid: "archive",
+          name: "old-photo.png",
           description: null,
           size: 3000,
-          extension: '.png',
-          mimeType: 'image/png',
-          createdAt: '2024-01-01T00:00:00Z',
+          extension: ".png",
+          mimeType: "image/png",
+          createdAt: "2024-01-01T00:00:00Z",
           updatedAt: null,
         },
       ];
@@ -256,35 +253,35 @@ describe('statusMedia - SDK top-level function', () => {
       expect(resultWith.summary.deletes).toBe(2); // deleted-image.jpg and old-photo.png
 
       // Verify the delete operations
-      const deleteOps = resultWith.operations.filter(op => op.type === 'delete');
+      const deleteOps = resultWith.operations.filter((op) => op.type === "delete");
       expect(deleteOps.length).toBe(2);
-      expect(deleteOps.map(op => op.remote!.name)).toContain('deleted-image.jpg');
-      expect(deleteOps.map(op => op.remote!.name)).toContain('old-photo.png');
+      expect(deleteOps.map((op) => op.remote!.name)).toContain("deleted-image.jpg");
+      expect(deleteOps.map((op) => op.remote!.name)).toContain("old-photo.png");
     });
   });
 
-  describe('with scopeUid filter', () => {
-    it('should only process files matching the scope', async () => {
+  describe("with scopeUid filter", () => {
+    it("should only process files matching the scope", async () => {
       const deps: Partial<MediaDependencies> = {
         ...silentDeps,
         fetchRemoteMedia: async () => [],
       };
 
       const result = await statusMedia(
-        { mediaDir: FIXTURES_MEDIA_DIR, scopeUid: 'news/article-123' },
+        { mediaDir: FIXTURES_MEDIA_DIR, scopeUid: "news/article-123" },
         deps
       );
 
       // Should only find files in news/article-123
       expect(result.localFiles.length).toBe(2);
-      expect(result.localFiles.every(f => f.scopeUid === 'news/article-123')).toBe(true);
+      expect(result.localFiles.every((f) => f.scopeUid === "news/article-123")).toBe(true);
     });
   });
 });
 
-describe('pushMedia - SDK top-level function', () => {
-  describe('dry run mode', () => {
-    it('should not execute any operations', async () => {
+describe("pushMedia - SDK top-level function", () => {
+  describe("dry run mode", () => {
+    it("should not execute any operations", async () => {
       const uploadMock = jest.fn();
       const updateMock = jest.fn();
       const deleteMock = jest.fn();
@@ -314,8 +311,8 @@ describe('pushMedia - SDK top-level function', () => {
     });
   });
 
-  describe('force mode (no confirmation)', () => {
-    it('should execute uploads for new files', async () => {
+  describe("force mode (no confirmation)", () => {
+    it("should execute uploads for new files", async () => {
       const uploadMock = jest.fn().mockResolvedValue({ id: 1 });
 
       const deps: Partial<MediaDependencies> = {
@@ -324,10 +321,7 @@ describe('pushMedia - SDK top-level function', () => {
         uploadMedia: uploadMock,
       };
 
-      const result = await pushMedia(
-        { mediaDir: FIXTURES_MEDIA_DIR, force: true },
-        deps
-      );
+      const result = await pushMedia({ mediaDir: FIXTURES_MEDIA_DIR, force: true }, deps);
 
       // All 4 files should be uploaded
       expect(uploadMock).toHaveBeenCalledTimes(4);
@@ -335,7 +329,7 @@ describe('pushMedia - SDK top-level function', () => {
       expect(result.executed.failed).toBe(0);
     });
 
-    it('should execute updates for changed files', async () => {
+    it("should execute updates for changed files", async () => {
       const updateMock = jest.fn().mockResolvedValue({ id: 1 });
       const uploadMock = jest.fn().mockResolvedValue({ id: 2 });
 
@@ -343,14 +337,14 @@ describe('pushMedia - SDK top-level function', () => {
       const mockRemote: MediaItem[] = [
         {
           id: 1,
-          location: '/api/media/blog/post-456/cover.png',
-          scopeUid: 'blog/post-456',
-          name: 'cover.png',
+          location: "/api/media/blog/post-456/cover.png",
+          scopeUid: "blog/post-456",
+          name: "cover.png",
           description: null,
           size: 1000, // Different size
-          extension: '.png',
-          mimeType: 'image/png',
-          createdAt: '2024-01-01T00:00:00Z',
+          extension: ".png",
+          mimeType: "image/png",
+          createdAt: "2024-01-01T00:00:00Z",
           updatedAt: null,
         },
       ];
@@ -362,10 +356,7 @@ describe('pushMedia - SDK top-level function', () => {
         updateMedia: updateMock,
       };
 
-      const result = await pushMedia(
-        { mediaDir: FIXTURES_MEDIA_DIR, force: true },
-        deps
-      );
+      const result = await pushMedia({ mediaDir: FIXTURES_MEDIA_DIR, force: true }, deps);
 
       // 1 update + 3 uploads
       expect(updateMock).toHaveBeenCalledTimes(1);
@@ -373,7 +364,7 @@ describe('pushMedia - SDK top-level function', () => {
       expect(result.executed.successful).toBe(4);
     });
 
-    it('should execute deletes when allowDelete is true', async () => {
+    it("should execute deletes when allowDelete is true", async () => {
       const deleteMock = jest.fn().mockResolvedValue(undefined);
       const uploadMock = jest.fn().mockResolvedValue({ id: 1 });
 
@@ -381,26 +372,26 @@ describe('pushMedia - SDK top-level function', () => {
       const mockRemote: MediaItem[] = [
         {
           id: 1,
-          location: '/api/media/blog/post-456/cover.png',
-          scopeUid: 'blog/post-456',
-          name: 'cover.png',
+          location: "/api/media/blog/post-456/cover.png",
+          scopeUid: "blog/post-456",
+          name: "cover.png",
           description: null,
           size: 16,
-          extension: '.png',
-          mimeType: 'image/png',
-          createdAt: '2024-01-01T00:00:00Z',
+          extension: ".png",
+          mimeType: "image/png",
+          createdAt: "2024-01-01T00:00:00Z",
           updatedAt: null,
         },
         {
           id: 99,
-          location: '/api/media/old/deleted.jpg',
-          scopeUid: 'old',
-          name: 'deleted.jpg',
+          location: "/api/media/old/deleted.jpg",
+          scopeUid: "old",
+          name: "deleted.jpg",
           description: null,
           size: 5000,
-          extension: '.jpg',
-          mimeType: 'image/jpeg',
-          createdAt: '2024-01-01T00:00:00Z',
+          extension: ".jpg",
+          mimeType: "image/jpeg",
+          createdAt: "2024-01-01T00:00:00Z",
           updatedAt: null,
         },
       ];
@@ -412,18 +403,18 @@ describe('pushMedia - SDK top-level function', () => {
         deleteMedia: deleteMock,
       };
 
-      const result = await pushMedia(
+      const _result = await pushMedia(
         { mediaDir: FIXTURES_MEDIA_DIR, force: true, allowDelete: true },
         deps
       );
 
       expect(deleteMock).toHaveBeenCalledTimes(1);
-      expect(deleteMock).toHaveBeenCalledWith('old/deleted.jpg');
+      expect(deleteMock).toHaveBeenCalledWith("old/deleted.jpg");
     });
   });
 
-  describe('confirmation prompt', () => {
-    it('should cancel when user declines', async () => {
+  describe("confirmation prompt", () => {
+    it("should cancel when user declines", async () => {
       const uploadMock = jest.fn();
 
       const deps: Partial<MediaDependencies> = {
@@ -439,7 +430,7 @@ describe('pushMedia - SDK top-level function', () => {
       expect(result.executed.skipped).toBe(4);
     });
 
-    it('should proceed when user confirms', async () => {
+    it("should proceed when user confirms", async () => {
       const uploadMock = jest.fn().mockResolvedValue({ id: 1 });
 
       const deps: Partial<MediaDependencies> = {
@@ -456,13 +447,14 @@ describe('pushMedia - SDK top-level function', () => {
     });
   });
 
-  describe('error handling', () => {
-    it('should track failed operations', async () => {
-      const uploadMock = jest.fn()
+  describe("error handling", () => {
+    it("should track failed operations", async () => {
+      const uploadMock = jest
+        .fn()
         .mockResolvedValueOnce({ id: 1 }) // First succeeds
-        .mockRejectedValueOnce(new Error('Network error')) // Second fails
+        .mockRejectedValueOnce(new Error("Network error")) // Second fails
         .mockResolvedValueOnce({ id: 3 }) // Third succeeds
-        .mockRejectedValueOnce(new Error('Server error')); // Fourth fails
+        .mockRejectedValueOnce(new Error("Server error")); // Fourth fails
 
       const deps: Partial<MediaDependencies> = {
         ...silentDeps,
@@ -470,21 +462,18 @@ describe('pushMedia - SDK top-level function', () => {
         uploadMedia: uploadMock,
       };
 
-      const result = await pushMedia(
-        { mediaDir: FIXTURES_MEDIA_DIR, force: true },
-        deps
-      );
+      const result = await pushMedia({ mediaDir: FIXTURES_MEDIA_DIR, force: true }, deps);
 
       expect(result.executed.successful).toBe(2);
       expect(result.executed.failed).toBe(2);
       expect(result.errors.length).toBe(2);
-      expect(result.errors[0].error).toBe('Network error');
-      expect(result.errors[1].error).toBe('Server error');
+      expect(result.errors[0].error).toBe("Network error");
+      expect(result.errors[1].error).toBe("Server error");
     });
   });
 
-  describe('silent mode', () => {
-    it('should return results without calling display functions when silent is true', async () => {
+  describe("silent mode", () => {
+    it("should return results without calling display functions when silent is true", async () => {
       const deps: Partial<MediaDependencies> = {
         ...silentDeps,
         fetchRemoteMedia: async () => [],
@@ -508,16 +497,60 @@ describe('pushMedia - SDK top-level function', () => {
     });
   });
 
-  describe('when all files are in sync', () => {
-    it('should skip all operations and return early', async () => {
+  describe("when all files are in sync", () => {
+    it("should skip all operations and return early", async () => {
       const uploadMock = jest.fn();
 
       // Mock remote matching all local files
       const mockRemote: MediaItem[] = [
-        { id: 1, location: '', scopeUid: 'blog/post-456', name: 'cover.png', description: null, size: 16, extension: '.png', mimeType: 'image/png', createdAt: '', updatedAt: null },
-        { id: 2, location: '', scopeUid: 'news/article-123', name: 'hero.jpg', description: null, size: 16, extension: '.jpg', mimeType: 'image/jpeg', createdAt: '', updatedAt: null },
-        { id: 3, location: '', scopeUid: 'news/article-123', name: 'thumb.jpg', description: null, size: 15, extension: '.jpg', mimeType: 'image/jpeg', createdAt: '', updatedAt: null },
-        { id: 4, location: '', scopeUid: 'pages/about', name: 'team.jpg', description: null, size: 17, extension: '.jpg', mimeType: 'image/jpeg', createdAt: '', updatedAt: null },
+        {
+          id: 1,
+          location: "",
+          scopeUid: "blog/post-456",
+          name: "cover.png",
+          description: null,
+          size: 16,
+          extension: ".png",
+          mimeType: "image/png",
+          createdAt: "",
+          updatedAt: null,
+        },
+        {
+          id: 2,
+          location: "",
+          scopeUid: "news/article-123",
+          name: "hero.jpg",
+          description: null,
+          size: 16,
+          extension: ".jpg",
+          mimeType: "image/jpeg",
+          createdAt: "",
+          updatedAt: null,
+        },
+        {
+          id: 3,
+          location: "",
+          scopeUid: "news/article-123",
+          name: "thumb.jpg",
+          description: null,
+          size: 15,
+          extension: ".jpg",
+          mimeType: "image/jpeg",
+          createdAt: "",
+          updatedAt: null,
+        },
+        {
+          id: 4,
+          location: "",
+          scopeUid: "pages/about",
+          name: "team.jpg",
+          description: null,
+          size: 17,
+          extension: ".jpg",
+          mimeType: "image/jpeg",
+          createdAt: "",
+          updatedAt: null,
+        },
       ];
 
       const deps: Partial<MediaDependencies> = {
@@ -526,14 +559,11 @@ describe('pushMedia - SDK top-level function', () => {
         uploadMedia: uploadMock,
       };
 
-      const result = await pushMedia(
-        { mediaDir: FIXTURES_MEDIA_DIR, force: true },
-        deps
-      );
+      const result = await pushMedia({ mediaDir: FIXTURES_MEDIA_DIR, force: true }, deps);
 
       expect(uploadMock).not.toHaveBeenCalled();
       expect(result.executed.skipped).toBe(4);
-      expect(result.operations.every(op => op.type === 'skip')).toBe(true);
+      expect(result.operations.every((op) => op.type === "skip")).toBe(true);
     });
   });
 });

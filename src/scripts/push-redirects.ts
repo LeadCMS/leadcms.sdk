@@ -62,20 +62,27 @@ async function readLocalRedirects(): Promise<LocalRedirect[]> {
   try {
     const raw = await fs.readFile(filePath, "utf8");
     const parsed = yaml.load(raw) as LocalRedirectsFile | null;
-    if (parsed && typeof parsed === 'object') {
+    if (parsed && typeof parsed === "object") {
       const flat = flattenRedirectsFile(parsed);
       return singleLanguage ? injectDefaultLanguage(flat, singleLanguage) : flat;
     }
-  } catch { /* file doesn't exist */ }
+  } catch {
+    /* file doesn't exist */
+  }
   return [];
 }
 
 async function writeLocalRedirects(redirects: LocalRedirect[]): Promise<void> {
   await fs.mkdir(REDIRECTS_DIR, { recursive: true });
   // Strip any legacy server-managed fields and sort by surrogate key within each section
-  const cleaned = redirects.map(r => {
-    const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = r as any;
-    return rest as LocalRedirect;
+  const cleaned = redirects.map((r) => {
+    const {
+      id: _id,
+      createdAt: _c,
+      updatedAt: _u,
+      ...rest
+    } = r as unknown as Record<string, unknown>;
+    return rest as unknown as LocalRedirect;
   });
   const sorted = [...cleaned].sort((a, b) =>
     redirectSurrogateKey(a).localeCompare(redirectSurrogateKey(b))
@@ -134,11 +141,11 @@ function remotePayloadKey(r: RedirectDetailsDto): string {
 function planOperations(
   locals: LocalRedirect[],
   remotes: RedirectDetailsDto[],
-  allowDelete: boolean,
+  allowDelete: boolean
 ): RedirectOperation[] {
   const ops: RedirectOperation[] = [];
   const remoteByKey = new Map<string, RedirectDetailsDto>(
-    remotes.map(r => [redirectSurrogateKey(r), r])
+    remotes.map((r) => [redirectSurrogateKey(r), r])
   );
   const localKeys = new Set<string>();
 
@@ -187,17 +194,18 @@ export async function pushRedirects(options: PushRedirectsOptions = {}): Promise
   let remotes: RedirectDetailsDto[];
   try {
     remotes = await leadCMSDataService.getAllRedirects();
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as Error;
     console.error(`   ❌ Failed to fetch remote redirects: ${error.message}`);
     throw error;
   }
 
   const ops = planOperations(locals, remotes, allowDelete);
 
-  const creates = ops.filter(o => o.type === "create");
-  const updates = ops.filter(o => o.type === "update");
-  const deletes = ops.filter(o => o.type === "delete");
-  const skips = ops.filter(o => o.type === "skip");
+  const creates = ops.filter((o) => o.type === "create");
+  const updates = ops.filter((o) => o.type === "update");
+  const deletes = ops.filter((o) => o.type === "delete");
+  const skips = ops.filter((o) => o.type === "skip");
 
   console.log(`\n   📊 Redirect sync plan:`);
   console.log(`      Create:  ${creates.length}`);
@@ -216,7 +224,8 @@ export async function pushRedirects(options: PushRedirectsOptions = {}): Promise
     try {
       const created = await leadCMSDataService.createRedirect(dto);
       colorConsole.success(`   + Created redirect #${created.id} (${created.kind})`);
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as Error;
       colorConsole.error(`   ❌ Failed to create redirect: ${error.message}`);
     }
   }
@@ -227,7 +236,8 @@ export async function pushRedirects(options: PushRedirectsOptions = {}): Promise
     try {
       const updated = await leadCMSDataService.updateRedirect(op.remote!.id, dto);
       colorConsole.info(`   ~ Updated redirect #${updated.id} (${updated.kind})`);
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as Error;
       colorConsole.error(`   ❌ Failed to update redirect #${op.remote!.id}: ${error.message}`);
     }
   }
@@ -237,7 +247,8 @@ export async function pushRedirects(options: PushRedirectsOptions = {}): Promise
     try {
       await leadCMSDataService.deleteRedirect(op.remote!.id);
       colorConsole.warn(`   - Deleted redirect #${op.remote!.id}`);
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as Error;
       colorConsole.error(`   ❌ Failed to delete redirect #${op.remote!.id}: ${error.message}`);
     }
   }
@@ -266,7 +277,7 @@ function labelRedirect(local?: LocalRedirect, remote?: RedirectDetailsDto): stri
     (local?.fromContentId != null ? `ContentId:${local.fromContentId}` : null) ??
     remote?.fromPath ??
     fmtSlug(remote?.fromLanguage, remote?.fromSlug) ??
-    'unknown';
+    "unknown";
   const to =
     local?.toPath ??
     local?.toUrl ??
@@ -275,8 +286,8 @@ function labelRedirect(local?: LocalRedirect, remote?: RedirectDetailsDto): stri
     remote?.toPath ??
     remote?.toUrl ??
     fmtSlug(remote?.toLanguage, remote?.toSlug) ??
-    'unknown';
-  const kindCode = (local?.kind ?? remote?.kind) === 'Permanent' ? '301' : '302';
+    "unknown";
+  const kindCode = (local?.kind ?? remote?.kind) === "Permanent" ? "301" : "302";
   return `[${kindCode}] ${from} → ${to}`;
 }
 
@@ -291,7 +302,7 @@ export async function buildRedirectStatus(
   const remotes = await leadCMSDataService.getAllRedirects();
   const ops = planOperations(locals, remotes, showDelete);
   return {
-    operations: ops.filter(o => o.type !== 'skip'),
+    operations: ops.filter((o) => o.type !== "skip"),
     totalLocal: locals.length,
   };
 }
@@ -300,34 +311,40 @@ export async function statusRedirects(
   options: { showDelete?: boolean; remoteContext?: RemoteContext } = {}
 ): Promise<void> {
   if (!leadCMSDataService.isApiKeyConfigured()) {
-    colorConsole.important('\n📊 LeadCMS Redirect Status');
-    colorConsole.log('');
-    colorConsole.warn('⏭️  Redirects require authentication — no API key configured, skipping');
+    colorConsole.important("\n📊 LeadCMS Redirect Status");
+    colorConsole.log("");
+    colorConsole.warn("⏭️  Redirects require authentication — no API key configured, skipping");
     return;
   }
   const result = await buildRedirectStatus(options);
   const { operations } = result;
-  colorConsole.important('\n📊 LeadCMS Redirect Status');
-  colorConsole.log('');
+  colorConsole.important("\n📊 LeadCMS Redirect Status");
+  colorConsole.log("");
   if (operations.length === 0) {
-    colorConsole.success('✅ All redirects are in sync!');
-    colorConsole.log('');
+    colorConsole.success("✅ All redirects are in sync!");
+    colorConsole.log("");
     return;
   }
   for (const op of operations) {
     const label = labelRedirect(op.local, op.remote);
-    const idLabel = op.remote?.id ? colorConsole.gray(`(ID: ${op.remote.id})`) : '';
+    const idLabel = op.remote?.id ? colorConsole.gray(`(ID: ${op.remote.id})`) : "";
     switch (op.type) {
-      case 'create':
-        colorConsole.log(`   ${statusColors.created('new:      ')} ${colorConsole.highlight(label)}`);
+      case "create":
+        colorConsole.log(
+          `   ${statusColors.created("new:      ")} ${colorConsole.highlight(label)}`
+        );
         break;
-      case 'update':
-        colorConsole.log(`   ${statusColors.modified('modified: ')} ${colorConsole.highlight(label)} ${idLabel}`);
+      case "update":
+        colorConsole.log(
+          `   ${statusColors.modified("modified: ")} ${colorConsole.highlight(label)} ${idLabel}`
+        );
         break;
-      case 'delete':
-        colorConsole.log(`   ${statusColors.conflict('deleted:  ')} ${colorConsole.highlight(label)} ${idLabel}`);
+      case "delete":
+        colorConsole.log(
+          `   ${statusColors.conflict("deleted:  ")} ${colorConsole.highlight(label)} ${idLabel}`
+        );
         break;
     }
   }
-  colorConsole.log('');
+  colorConsole.log("");
 }

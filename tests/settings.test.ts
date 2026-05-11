@@ -22,7 +22,7 @@ import {
   settingKeyToRelativePath,
   relativePathToSettingKey,
   getFileSettingTopLevelDirs,
-} from '../src/lib/settings-types';
+} from "../src/lib/settings-types";
 
 import {
   fetchRemoteSettings,
@@ -31,126 +31,134 @@ import {
   readLocalSettings,
   buildSettingsStatus,
   buildSettingsPushOperations,
-} from '../src/scripts/settings-manager';
+} from "../src/scripts/settings-manager";
 
 import {
   formatSettingValue,
   formatSettingDiff,
   renderSettingDiffPreview,
   selectOperationsForPush,
-} from '../src/scripts/push-settings';
+} from "../src/scripts/push-settings";
 
-import axios from 'axios';
-jest.mock('axios');
+import axios from "axios";
+jest.mock("axios");
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
-import fs from 'fs/promises';
-import path from 'path';
-import os from 'os';
+import fs from "fs/promises";
+import path from "path";
+import os from "os";
 
 // ── Settings types tests ────────────────────────────────────────────────────
 
-describe('settings-types', () => {
-  describe('TRACKED_SETTING_KEYS', () => {
-    it('contains all expected AI.SiteProfile keys', () => {
-      expect(TRACKED_SETTING_KEYS).toContain('AI.SiteProfile.Audience');
-      expect(TRACKED_SETTING_KEYS).toContain('AI.SiteProfile.AvoidTerms');
-      expect(TRACKED_SETTING_KEYS).toContain('AI.SiteProfile.BlogCover.Instructions');
-      expect(TRACKED_SETTING_KEYS).toContain('AI.SiteProfile.BrandVoice');
-      expect(TRACKED_SETTING_KEYS).toContain('AI.SiteProfile.EmailTemplate.Instructions');
-      expect(TRACKED_SETTING_KEYS).toContain('AI.SiteProfile.PreferredTerms');
-      expect(TRACKED_SETTING_KEYS).toContain('AI.SiteProfile.StyleExamples');
-      expect(TRACKED_SETTING_KEYS).toContain('AI.SiteProfile.Topic');
+describe("settings-types", () => {
+  describe("TRACKED_SETTING_KEYS", () => {
+    it("contains all expected AI.SiteProfile keys", () => {
+      expect(TRACKED_SETTING_KEYS).toContain("AI.SiteProfile.Audience");
+      expect(TRACKED_SETTING_KEYS).toContain("AI.SiteProfile.AvoidTerms");
+      expect(TRACKED_SETTING_KEYS).toContain("AI.SiteProfile.BlogCover.Instructions");
+      expect(TRACKED_SETTING_KEYS).toContain("AI.SiteProfile.BrandVoice");
+      expect(TRACKED_SETTING_KEYS).toContain("AI.SiteProfile.EmailTemplate.Instructions");
+      expect(TRACKED_SETTING_KEYS).toContain("AI.SiteProfile.PreferredTerms");
+      expect(TRACKED_SETTING_KEYS).toContain("AI.SiteProfile.StyleExamples");
+      expect(TRACKED_SETTING_KEYS).toContain("AI.SiteProfile.Topic");
     });
 
-    it('contains all expected Content keys', () => {
-      expect(TRACKED_SETTING_KEYS).toContain('Content.MaxDescriptionLength');
-      expect(TRACKED_SETTING_KEYS).toContain('Content.MaxTitleLength');
-      expect(TRACKED_SETTING_KEYS).toContain('Content.MinDescriptionLength');
-      expect(TRACKED_SETTING_KEYS).toContain('Content.MinTitleLength');
+    it("contains all expected Content keys", () => {
+      expect(TRACKED_SETTING_KEYS).toContain("Content.MaxDescriptionLength");
+      expect(TRACKED_SETTING_KEYS).toContain("Content.MaxTitleLength");
+      expect(TRACKED_SETTING_KEYS).toContain("Content.MinDescriptionLength");
+      expect(TRACKED_SETTING_KEYS).toContain("Content.MinTitleLength");
     });
 
-    it('contains all expected Media keys', () => {
-      expect(TRACKED_SETTING_KEYS).toContain('Media.Cover.Dimensions');
-      expect(TRACKED_SETTING_KEYS).toContain('Media.EnableCoverResize');
-      expect(TRACKED_SETTING_KEYS).toContain('Media.EnableOptimisation');
-      expect(TRACKED_SETTING_KEYS).toContain('Media.Max.Dimensions');
-      expect(TRACKED_SETTING_KEYS).toContain('Media.Max.FileSize');
-      expect(TRACKED_SETTING_KEYS).toContain('Media.PreferredFormat');
-      expect(TRACKED_SETTING_KEYS).toContain('Media.Quality');
+    it("contains all expected Media keys", () => {
+      expect(TRACKED_SETTING_KEYS).toContain("Media.Cover.Dimensions");
+      expect(TRACKED_SETTING_KEYS).toContain("Media.EnableCoverResize");
+      expect(TRACKED_SETTING_KEYS).toContain("Media.EnableOptimisation");
+      expect(TRACKED_SETTING_KEYS).toContain("Media.Max.Dimensions");
+      expect(TRACKED_SETTING_KEYS).toContain("Media.Max.FileSize");
+      expect(TRACKED_SETTING_KEYS).toContain("Media.PreferredFormat");
+      expect(TRACKED_SETTING_KEYS).toContain("Media.Quality");
     });
 
-    it('contains all expected LeadCapture.Telegram keys', () => {
-      expect(TRACKED_SETTING_KEYS).toContain('LeadCapture.Telegram.MessageTemplate');
+    it("contains all expected LeadCapture.Telegram keys", () => {
+      expect(TRACKED_SETTING_KEYS).toContain("LeadCapture.Telegram.MessageTemplate");
     });
 
-    it('contains all expected General keys', () => {
-      expect(TRACKED_SETTING_KEYS).toContain('General.PrivacyUrl');
-      expect(TRACKED_SETTING_KEYS).toContain('General.SiteUrl');
-      expect(TRACKED_SETTING_KEYS).toContain('General.UnsubscribeUrl');
+    it("contains all expected General keys", () => {
+      expect(TRACKED_SETTING_KEYS).toContain("General.PrivacyUrl");
+      expect(TRACKED_SETTING_KEYS).toContain("General.SiteUrl");
+      expect(TRACKED_SETTING_KEYS).toContain("General.UnsubscribeUrl");
     });
 
-    it('has exactly 23 tracked keys', () => {
+    it("has exactly 23 tracked keys", () => {
       expect(TRACKED_SETTING_KEYS).toHaveLength(23);
     });
   });
 
-  describe('aiSiteProfileKeyToFileName', () => {
-    it('converts simple key to lowercase', () => {
-      expect(aiSiteProfileKeyToFileName('AI.SiteProfile.Audience')).toBe('audience');
+  describe("aiSiteProfileKeyToFileName", () => {
+    it("converts simple key to lowercase", () => {
+      expect(aiSiteProfileKeyToFileName("AI.SiteProfile.Audience")).toBe("audience");
     });
 
-    it('converts camelCase to kebab-case', () => {
-      expect(aiSiteProfileKeyToFileName('AI.SiteProfile.BrandVoice')).toBe('brand-voice');
+    it("converts camelCase to kebab-case", () => {
+      expect(aiSiteProfileKeyToFileName("AI.SiteProfile.BrandVoice")).toBe("brand-voice");
     });
 
-    it('converts dotted subkeys to dashes', () => {
-      expect(aiSiteProfileKeyToFileName('AI.SiteProfile.BlogCover.Instructions')).toBe('blog-cover-instructions');
+    it("converts dotted subkeys to dashes", () => {
+      expect(aiSiteProfileKeyToFileName("AI.SiteProfile.BlogCover.Instructions")).toBe(
+        "blog-cover-instructions"
+      );
     });
 
-    it('converts compound dotted keys correctly', () => {
-      expect(aiSiteProfileKeyToFileName('AI.SiteProfile.EmailTemplate.Instructions')).toBe('email-template-instructions');
+    it("converts compound dotted keys correctly", () => {
+      expect(aiSiteProfileKeyToFileName("AI.SiteProfile.EmailTemplate.Instructions")).toBe(
+        "email-template-instructions"
+      );
     });
 
-    it('converts AvoidTerms correctly', () => {
-      expect(aiSiteProfileKeyToFileName('AI.SiteProfile.AvoidTerms')).toBe('avoid-terms');
+    it("converts AvoidTerms correctly", () => {
+      expect(aiSiteProfileKeyToFileName("AI.SiteProfile.AvoidTerms")).toBe("avoid-terms");
     });
 
-    it('converts PreferredTerms correctly', () => {
-      expect(aiSiteProfileKeyToFileName('AI.SiteProfile.PreferredTerms')).toBe('preferred-terms');
+    it("converts PreferredTerms correctly", () => {
+      expect(aiSiteProfileKeyToFileName("AI.SiteProfile.PreferredTerms")).toBe("preferred-terms");
     });
 
-    it('converts StyleExamples correctly', () => {
-      expect(aiSiteProfileKeyToFileName('AI.SiteProfile.StyleExamples')).toBe('style-examples');
+    it("converts StyleExamples correctly", () => {
+      expect(aiSiteProfileKeyToFileName("AI.SiteProfile.StyleExamples")).toBe("style-examples");
     });
 
-    it('converts Topic correctly', () => {
-      expect(aiSiteProfileKeyToFileName('AI.SiteProfile.Topic')).toBe('topic');
+    it("converts Topic correctly", () => {
+      expect(aiSiteProfileKeyToFileName("AI.SiteProfile.Topic")).toBe("topic");
     });
   });
 
-  describe('fileNameToAiSiteProfileKey', () => {
-    it('maps audience back to key', () => {
-      expect(fileNameToAiSiteProfileKey('audience')).toBe('AI.SiteProfile.Audience');
+  describe("fileNameToAiSiteProfileKey", () => {
+    it("maps audience back to key", () => {
+      expect(fileNameToAiSiteProfileKey("audience")).toBe("AI.SiteProfile.Audience");
     });
 
-    it('maps brand-voice back to key', () => {
-      expect(fileNameToAiSiteProfileKey('brand-voice')).toBe('AI.SiteProfile.BrandVoice');
+    it("maps brand-voice back to key", () => {
+      expect(fileNameToAiSiteProfileKey("brand-voice")).toBe("AI.SiteProfile.BrandVoice");
     });
 
-    it('maps blog-cover-instructions back to key', () => {
-      expect(fileNameToAiSiteProfileKey('blog-cover-instructions')).toBe('AI.SiteProfile.BlogCover.Instructions');
+    it("maps blog-cover-instructions back to key", () => {
+      expect(fileNameToAiSiteProfileKey("blog-cover-instructions")).toBe(
+        "AI.SiteProfile.BlogCover.Instructions"
+      );
     });
 
-    it('maps email-template-instructions back to key', () => {
-      expect(fileNameToAiSiteProfileKey('email-template-instructions')).toBe('AI.SiteProfile.EmailTemplate.Instructions');
+    it("maps email-template-instructions back to key", () => {
+      expect(fileNameToAiSiteProfileKey("email-template-instructions")).toBe(
+        "AI.SiteProfile.EmailTemplate.Instructions"
+      );
     });
 
-    it('returns undefined for unknown file name', () => {
-      expect(fileNameToAiSiteProfileKey('unknown-file')).toBeUndefined();
+    it("returns undefined for unknown file name", () => {
+      expect(fileNameToAiSiteProfileKey("unknown-file")).toBeUndefined();
     });
 
-    it('round-trips all AI.SiteProfile keys', () => {
+    it("round-trips all AI.SiteProfile keys", () => {
       for (const key of TRACKED_SETTING_KEYS) {
         if (key.startsWith(AI_SITEPROFILE_PREFIX)) {
           const fileName = aiSiteProfileKeyToFileName(key);
@@ -161,84 +169,88 @@ describe('settings-types', () => {
     });
   });
 
-  describe('isAiSiteProfileKey', () => {
-    it('returns true for tracked AI.SiteProfile keys', () => {
-      expect(isAiSiteProfileKey('AI.SiteProfile.Audience')).toBe(true);
-      expect(isAiSiteProfileKey('AI.SiteProfile.Topic')).toBe(true);
+  describe("isAiSiteProfileKey", () => {
+    it("returns true for tracked AI.SiteProfile keys", () => {
+      expect(isAiSiteProfileKey("AI.SiteProfile.Audience")).toBe(true);
+      expect(isAiSiteProfileKey("AI.SiteProfile.Topic")).toBe(true);
     });
 
-    it('returns false for untracked AI.SiteProfile keys', () => {
-      expect(isAiSiteProfileKey('AI.SiteProfile.Unknown')).toBe(false);
+    it("returns false for untracked AI.SiteProfile keys", () => {
+      expect(isAiSiteProfileKey("AI.SiteProfile.Unknown")).toBe(false);
     });
 
-    it('returns false for non-AI keys', () => {
-      expect(isAiSiteProfileKey('Content.MinTitleLength')).toBe(false);
-    });
-  });
-
-  describe('isContentSettingKey', () => {
-    it('returns true for tracked Content keys', () => {
-      expect(isContentSettingKey('Content.MinTitleLength')).toBe(true);
-      expect(isContentSettingKey('Content.MaxDescriptionLength')).toBe(true);
-    });
-
-    it('returns false for untracked Content keys', () => {
-      expect(isContentSettingKey('Content.EnableRealtimeSyntaxValidation')).toBe(false);
-    });
-
-    it('returns false for non-Content keys', () => {
-      expect(isContentSettingKey('Media.Quality')).toBe(false);
+    it("returns false for non-AI keys", () => {
+      expect(isAiSiteProfileKey("Content.MinTitleLength")).toBe(false);
     });
   });
 
-  describe('isMediaSettingKey', () => {
-    it('returns true for tracked Media keys', () => {
-      expect(isMediaSettingKey('Media.Quality')).toBe(true);
-      expect(isMediaSettingKey('Media.Max.FileSize')).toBe(true);
+  describe("isContentSettingKey", () => {
+    it("returns true for tracked Content keys", () => {
+      expect(isContentSettingKey("Content.MinTitleLength")).toBe(true);
+      expect(isContentSettingKey("Content.MaxDescriptionLength")).toBe(true);
     });
 
-    it('returns false for untracked Media keys', () => {
-      expect(isMediaSettingKey('Media.SomeUnknown')).toBe(false);
+    it("returns false for untracked Content keys", () => {
+      expect(isContentSettingKey("Content.EnableRealtimeSyntaxValidation")).toBe(false);
     });
 
-    it('returns false for non-Media keys', () => {
-      expect(isMediaSettingKey('Content.MinTitleLength')).toBe(false);
-    });
-  });
-
-  describe('isGeneralSettingKey', () => {
-    it('returns true for tracked General keys', () => {
-      expect(isGeneralSettingKey('General.PrivacyUrl')).toBe(true);
-      expect(isGeneralSettingKey('General.SiteUrl')).toBe(true);
-      expect(isGeneralSettingKey('General.UnsubscribeUrl')).toBe(true);
-    });
-
-    it('returns false for untracked General keys', () => {
-      expect(isGeneralSettingKey('General.SomeUnknown')).toBe(false);
-    });
-
-    it('returns false for non-General keys', () => {
-      expect(isGeneralSettingKey('Content.MinTitleLength')).toBe(false);
-      expect(isGeneralSettingKey('Media.Quality')).toBe(false);
+    it("returns false for non-Content keys", () => {
+      expect(isContentSettingKey("Media.Quality")).toBe(false);
     });
   });
 
-  describe('leadCaptureTelegramKeyToFileName', () => {
-    it('converts MessageTemplate to kebab-case', () => {
-      expect(leadCaptureTelegramKeyToFileName('LeadCapture.Telegram.MessageTemplate')).toBe('message-template');
+  describe("isMediaSettingKey", () => {
+    it("returns true for tracked Media keys", () => {
+      expect(isMediaSettingKey("Media.Quality")).toBe(true);
+      expect(isMediaSettingKey("Media.Max.FileSize")).toBe(true);
+    });
+
+    it("returns false for untracked Media keys", () => {
+      expect(isMediaSettingKey("Media.SomeUnknown")).toBe(false);
+    });
+
+    it("returns false for non-Media keys", () => {
+      expect(isMediaSettingKey("Content.MinTitleLength")).toBe(false);
     });
   });
 
-  describe('fileNameToLeadCaptureTelegramKey', () => {
-    it('maps message-template back to key', () => {
-      expect(fileNameToLeadCaptureTelegramKey('message-template')).toBe('LeadCapture.Telegram.MessageTemplate');
+  describe("isGeneralSettingKey", () => {
+    it("returns true for tracked General keys", () => {
+      expect(isGeneralSettingKey("General.PrivacyUrl")).toBe(true);
+      expect(isGeneralSettingKey("General.SiteUrl")).toBe(true);
+      expect(isGeneralSettingKey("General.UnsubscribeUrl")).toBe(true);
     });
 
-    it('returns undefined for unknown file name', () => {
-      expect(fileNameToLeadCaptureTelegramKey('unknown-file')).toBeUndefined();
+    it("returns false for untracked General keys", () => {
+      expect(isGeneralSettingKey("General.SomeUnknown")).toBe(false);
     });
 
-    it('round-trips all LeadCapture.Telegram keys', () => {
+    it("returns false for non-General keys", () => {
+      expect(isGeneralSettingKey("Content.MinTitleLength")).toBe(false);
+      expect(isGeneralSettingKey("Media.Quality")).toBe(false);
+    });
+  });
+
+  describe("leadCaptureTelegramKeyToFileName", () => {
+    it("converts MessageTemplate to kebab-case", () => {
+      expect(leadCaptureTelegramKeyToFileName("LeadCapture.Telegram.MessageTemplate")).toBe(
+        "message-template"
+      );
+    });
+  });
+
+  describe("fileNameToLeadCaptureTelegramKey", () => {
+    it("maps message-template back to key", () => {
+      expect(fileNameToLeadCaptureTelegramKey("message-template")).toBe(
+        "LeadCapture.Telegram.MessageTemplate"
+      );
+    });
+
+    it("returns undefined for unknown file name", () => {
+      expect(fileNameToLeadCaptureTelegramKey("unknown-file")).toBeUndefined();
+    });
+
+    it("round-trips all LeadCapture.Telegram keys", () => {
       for (const key of TRACKED_SETTING_KEYS) {
         if (key.startsWith(LEADCAPTURE_TELEGRAM_PREFIX)) {
           const fileName = leadCaptureTelegramKeyToFileName(key);
@@ -249,92 +261,100 @@ describe('settings-types', () => {
     });
   });
 
-  describe('isLeadCaptureTelegramKey', () => {
-    it('returns true for tracked LeadCapture.Telegram keys', () => {
-      expect(isLeadCaptureTelegramKey('LeadCapture.Telegram.MessageTemplate')).toBe(true);
+  describe("isLeadCaptureTelegramKey", () => {
+    it("returns true for tracked LeadCapture.Telegram keys", () => {
+      expect(isLeadCaptureTelegramKey("LeadCapture.Telegram.MessageTemplate")).toBe(true);
     });
 
-    it('returns false for untracked LeadCapture.Telegram keys', () => {
-      expect(isLeadCaptureTelegramKey('LeadCapture.Telegram.Unknown')).toBe(false);
+    it("returns false for untracked LeadCapture.Telegram keys", () => {
+      expect(isLeadCaptureTelegramKey("LeadCapture.Telegram.Unknown")).toBe(false);
     });
 
-    it('returns false for non-LeadCapture keys', () => {
-      expect(isLeadCaptureTelegramKey('Content.MinTitleLength')).toBe(false);
-    });
-  });
-
-  describe('isMarkdownSettingKey (deprecated alias)', () => {
-    it('returns true for AI.SiteProfile keys', () => {
-      expect(isMarkdownSettingKey('AI.SiteProfile.Topic')).toBe(true);
-    });
-
-    it('returns true for LeadCapture.Telegram keys', () => {
-      expect(isMarkdownSettingKey('LeadCapture.Telegram.MessageTemplate')).toBe(true);
-    });
-
-    it('returns false for Content keys', () => {
-      expect(isMarkdownSettingKey('Content.MinTitleLength')).toBe(false);
-    });
-
-    it('returns false for Media keys', () => {
-      expect(isMarkdownSettingKey('Media.Quality')).toBe(false);
+    it("returns false for non-LeadCapture keys", () => {
+      expect(isLeadCaptureTelegramKey("Content.MinTitleLength")).toBe(false);
     });
   });
 
-  describe('isFileSettingKey', () => {
-    it('returns true for AI.SiteProfile keys', () => {
-      expect(isFileSettingKey('AI.SiteProfile.Topic')).toBe(true);
+  describe("isMarkdownSettingKey (deprecated alias)", () => {
+    it("returns true for AI.SiteProfile keys", () => {
+      expect(isMarkdownSettingKey("AI.SiteProfile.Topic")).toBe(true);
     });
 
-    it('returns true for LeadCapture.Telegram keys', () => {
-      expect(isFileSettingKey('LeadCapture.Telegram.MessageTemplate')).toBe(true);
+    it("returns true for LeadCapture.Telegram keys", () => {
+      expect(isMarkdownSettingKey("LeadCapture.Telegram.MessageTemplate")).toBe(true);
     });
 
-    it('returns false for Content keys', () => {
-      expect(isFileSettingKey('Content.MinTitleLength')).toBe(false);
+    it("returns false for Content keys", () => {
+      expect(isMarkdownSettingKey("Content.MinTitleLength")).toBe(false);
     });
 
-    it('returns false for Media keys', () => {
-      expect(isFileSettingKey('Media.Quality')).toBe(false);
-    });
-  });
-
-  describe('getSettingFileExtension', () => {
-    it('returns .md for AI.SiteProfile keys', () => {
-      expect(getSettingFileExtension('AI.SiteProfile.Topic')).toBe('.md');
-    });
-
-    it('returns .txt for LeadCapture.Telegram.MessageTemplate', () => {
-      expect(getSettingFileExtension('LeadCapture.Telegram.MessageTemplate')).toBe('.txt');
-    });
-
-    it('returns .md as default for unmapped keys', () => {
-      expect(getSettingFileExtension('Some.Unknown.Key')).toBe('.md');
+    it("returns false for Media keys", () => {
+      expect(isMarkdownSettingKey("Media.Quality")).toBe(false);
     });
   });
 
-  describe('settingKeyToRelativePath', () => {
-    it('converts AI.SiteProfile.Topic to ai/site-profile/topic.md', () => {
-      expect(settingKeyToRelativePath('AI.SiteProfile.Topic')).toBe('ai/site-profile/topic.md');
+  describe("isFileSettingKey", () => {
+    it("returns true for AI.SiteProfile keys", () => {
+      expect(isFileSettingKey("AI.SiteProfile.Topic")).toBe(true);
     });
 
-    it('converts AI.SiteProfile.BlogCover.Instructions to nested path', () => {
-      expect(settingKeyToRelativePath('AI.SiteProfile.BlogCover.Instructions')).toBe('ai/site-profile/blog-cover/instructions.md');
+    it("returns true for LeadCapture.Telegram keys", () => {
+      expect(isFileSettingKey("LeadCapture.Telegram.MessageTemplate")).toBe(true);
     });
 
-    it('converts AI.SiteProfile.BrandVoice to ai/site-profile/brand-voice.md', () => {
-      expect(settingKeyToRelativePath('AI.SiteProfile.BrandVoice')).toBe('ai/site-profile/brand-voice.md');
+    it("returns false for Content keys", () => {
+      expect(isFileSettingKey("Content.MinTitleLength")).toBe(false);
     });
 
-    it('converts AI.SiteProfile.EmailTemplate.Instructions to nested path', () => {
-      expect(settingKeyToRelativePath('AI.SiteProfile.EmailTemplate.Instructions')).toBe('ai/site-profile/email-template/instructions.md');
+    it("returns false for Media keys", () => {
+      expect(isFileSettingKey("Media.Quality")).toBe(false);
+    });
+  });
+
+  describe("getSettingFileExtension", () => {
+    it("returns .md for AI.SiteProfile keys", () => {
+      expect(getSettingFileExtension("AI.SiteProfile.Topic")).toBe(".md");
     });
 
-    it('converts LeadCapture.Telegram.MessageTemplate to .txt file', () => {
-      expect(settingKeyToRelativePath('LeadCapture.Telegram.MessageTemplate')).toBe('lead-capture/telegram/message-template.txt');
+    it("returns .txt for LeadCapture.Telegram.MessageTemplate", () => {
+      expect(getSettingFileExtension("LeadCapture.Telegram.MessageTemplate")).toBe(".txt");
     });
 
-    it('round-trips all file-based tracked keys', () => {
+    it("returns .md as default for unmapped keys", () => {
+      expect(getSettingFileExtension("Some.Unknown.Key")).toBe(".md");
+    });
+  });
+
+  describe("settingKeyToRelativePath", () => {
+    it("converts AI.SiteProfile.Topic to ai/site-profile/topic.md", () => {
+      expect(settingKeyToRelativePath("AI.SiteProfile.Topic")).toBe("ai/site-profile/topic.md");
+    });
+
+    it("converts AI.SiteProfile.BlogCover.Instructions to nested path", () => {
+      expect(settingKeyToRelativePath("AI.SiteProfile.BlogCover.Instructions")).toBe(
+        "ai/site-profile/blog-cover/instructions.md"
+      );
+    });
+
+    it("converts AI.SiteProfile.BrandVoice to ai/site-profile/brand-voice.md", () => {
+      expect(settingKeyToRelativePath("AI.SiteProfile.BrandVoice")).toBe(
+        "ai/site-profile/brand-voice.md"
+      );
+    });
+
+    it("converts AI.SiteProfile.EmailTemplate.Instructions to nested path", () => {
+      expect(settingKeyToRelativePath("AI.SiteProfile.EmailTemplate.Instructions")).toBe(
+        "ai/site-profile/email-template/instructions.md"
+      );
+    });
+
+    it("converts LeadCapture.Telegram.MessageTemplate to .txt file", () => {
+      expect(settingKeyToRelativePath("LeadCapture.Telegram.MessageTemplate")).toBe(
+        "lead-capture/telegram/message-template.txt"
+      );
+    });
+
+    it("round-trips all file-based tracked keys", () => {
       for (const key of TRACKED_SETTING_KEYS) {
         if (!isFileSettingKey(key)) continue;
         const relPath = settingKeyToRelativePath(key);
@@ -344,131 +364,142 @@ describe('settings-types', () => {
     });
   });
 
-  describe('relativePathToSettingKey', () => {
-    it('resolves ai/site-profile/topic.md to AI.SiteProfile.Topic', () => {
-      expect(relativePathToSettingKey('ai/site-profile/topic.md')).toBe('AI.SiteProfile.Topic');
+  describe("relativePathToSettingKey", () => {
+    it("resolves ai/site-profile/topic.md to AI.SiteProfile.Topic", () => {
+      expect(relativePathToSettingKey("ai/site-profile/topic.md")).toBe("AI.SiteProfile.Topic");
     });
 
-    it('resolves lead-capture/telegram/message-template.txt to LeadCapture.Telegram.MessageTemplate', () => {
-      expect(relativePathToSettingKey('lead-capture/telegram/message-template.txt')).toBe('LeadCapture.Telegram.MessageTemplate');
+    it("resolves lead-capture/telegram/message-template.txt to LeadCapture.Telegram.MessageTemplate", () => {
+      expect(relativePathToSettingKey("lead-capture/telegram/message-template.txt")).toBe(
+        "LeadCapture.Telegram.MessageTemplate"
+      );
     });
 
-    it('returns undefined for unknown path', () => {
-      expect(relativePathToSettingKey('unknown/path/file.md')).toBeUndefined();
+    it("returns undefined for unknown path", () => {
+      expect(relativePathToSettingKey("unknown/path/file.md")).toBeUndefined();
     });
   });
 
-  describe('getFileSettingTopLevelDirs', () => {
-    it('returns the correct top-level directories', () => {
+  describe("getFileSettingTopLevelDirs", () => {
+    it("returns the correct top-level directories", () => {
       const dirs = getFileSettingTopLevelDirs();
-      expect(dirs.has('ai')).toBe(true);
-      expect(dirs.has('lead-capture')).toBe(true);
+      expect(dirs.has("ai")).toBe(true);
+      expect(dirs.has("lead-capture")).toBe(true);
       expect(dirs.size).toBe(2);
     });
 
-    it('does not include content or media dirs', () => {
+    it("does not include content or media dirs", () => {
       const dirs = getFileSettingTopLevelDirs();
-      expect(dirs.has('content')).toBe(false);
-      expect(dirs.has('media')).toBe(false);
+      expect(dirs.has("content")).toBe(false);
+      expect(dirs.has("media")).toBe(false);
     });
   });
 
-  describe('SETTING_FILE_EXTENSIONS', () => {
-    it('defines .txt for LeadCapture.Telegram.MessageTemplate', () => {
-      expect(SETTING_FILE_EXTENSIONS['LeadCapture.Telegram.MessageTemplate']).toBe('.txt');
+  describe("SETTING_FILE_EXTENSIONS", () => {
+    it("defines .txt for LeadCapture.Telegram.MessageTemplate", () => {
+      expect(SETTING_FILE_EXTENSIONS["LeadCapture.Telegram.MessageTemplate"]).toBe(".txt");
     });
 
-    it('does not define overrides for AI.SiteProfile keys', () => {
-      expect(SETTING_FILE_EXTENSIONS['AI.SiteProfile.Topic']).toBeUndefined();
+    it("does not define overrides for AI.SiteProfile keys", () => {
+      expect(SETTING_FILE_EXTENSIONS["AI.SiteProfile.Topic"]).toBeUndefined();
     });
   });
 });
 
 // ── Settings manager tests ──────────────────────────────────────────────────
 
-describe('settings-manager', () => {
-  describe('fetchRemoteSettings', () => {
+describe("settings-manager", () => {
+  describe("fetchRemoteSettings", () => {
     afterEach(() => {
       jest.resetAllMocks();
     });
 
-    it('returns settings array from API response', async () => {
+    it("returns settings array from API response", async () => {
       const mockSettings = [
-        { id: 1, key: 'Content.MinTitleLength', value: '9', createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'Media.Quality', value: '99', createdAt: '2024-01-01T00:00:00Z' },
+        { id: 1, key: "Content.MinTitleLength", value: "9", createdAt: "2024-01-01T00:00:00Z" },
+        { id: 2, key: "Media.Quality", value: "99", createdAt: "2024-01-01T00:00:00Z" },
       ];
       mockedAxios.get.mockResolvedValue({ data: mockSettings });
 
-      const result = await fetchRemoteSettings('https://test.leadcms.com', 'test-key');
+      const result = await fetchRemoteSettings("https://test.leadcms.com", "test-key");
       expect(result).toHaveLength(2);
-      expect(result[0].key).toBe('Content.MinTitleLength');
-      expect(result[1].key).toBe('Media.Quality');
+      expect(result[0].key).toBe("Content.MinTitleLength");
+      expect(result[1].key).toBe("Media.Quality");
     });
 
-    it('sends Accept: text/json header', async () => {
+    it("sends Accept: text/json header", async () => {
       mockedAxios.get.mockResolvedValue({ data: [] });
 
-      await fetchRemoteSettings('https://test.leadcms.com', 'test-key');
+      await fetchRemoteSettings("https://test.leadcms.com", "test-key");
       expect(mockedAxios.get).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
           headers: expect.objectContaining({
-            Accept: 'text/json',
+            Accept: "text/json",
           }),
-        }),
+        })
       );
     });
 
-    it('returns empty array when API returns null', async () => {
+    it("returns empty array when API returns null", async () => {
       mockedAxios.get.mockResolvedValue({ data: null });
 
-      const result = await fetchRemoteSettings('https://test.leadcms.com', 'test-key');
+      const result = await fetchRemoteSettings("https://test.leadcms.com", "test-key");
       expect(result).toHaveLength(0);
     });
 
-    it('throws when URL is not configured', async () => {
-      await expect(fetchRemoteSettings('', 'test-key')).rejects.toThrow('LeadCMS URL is not configured');
+    it("throws when URL is not configured", async () => {
+      await expect(fetchRemoteSettings("", "test-key")).rejects.toThrow(
+        "LeadCMS URL is not configured"
+      );
     });
 
-    it('throws when API key is missing', async () => {
-      await expect(fetchRemoteSettings('https://test.leadcms.com', '')).rejects.toThrow('LeadCMS API key is required');
+    it("throws when API key is missing", async () => {
+      await expect(fetchRemoteSettings("https://test.leadcms.com", "")).rejects.toThrow(
+        "LeadCMS API key is required"
+      );
     });
   });
 
-  describe('filterTrackedSettings', () => {
-    it('filters to only tracked keys', () => {
+  describe("filterTrackedSettings", () => {
+    it("filters to only tracked keys", () => {
       const settings = [
-        { id: 1, key: 'LivePreviewUrlTemplate', value: '', createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'Content.MinTitleLength', value: '9', createdAt: '2024-01-01T00:00:00Z' },
-        { id: 3, key: 'Media.Quality', value: '99', createdAt: '2024-01-01T00:00:00Z' },
-        { id: 4, key: 'Identity.RequireDigit', value: 'true', createdAt: '2024-01-01T00:00:00Z' },
-        { id: 5, key: 'AI.SiteProfile.Topic', value: 'Technology', createdAt: '2024-01-01T00:00:00Z' },
+        { id: 1, key: "LivePreviewUrlTemplate", value: "", createdAt: "2024-01-01T00:00:00Z" },
+        { id: 2, key: "Content.MinTitleLength", value: "9", createdAt: "2024-01-01T00:00:00Z" },
+        { id: 3, key: "Media.Quality", value: "99", createdAt: "2024-01-01T00:00:00Z" },
+        { id: 4, key: "Identity.RequireDigit", value: "true", createdAt: "2024-01-01T00:00:00Z" },
+        {
+          id: 5,
+          key: "AI.SiteProfile.Topic",
+          value: "Technology",
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
       const filtered = filterTrackedSettings(settings);
       expect(filtered).toHaveLength(3);
-      expect(filtered.map(s => s.key)).toEqual([
-        'Content.MinTitleLength',
-        'Media.Quality',
-        'AI.SiteProfile.Topic',
+      expect(filtered.map((s) => s.key)).toEqual([
+        "Content.MinTitleLength",
+        "Media.Quality",
+        "AI.SiteProfile.Topic",
       ]);
     });
 
-    it('excludes settings with null or empty values', () => {
+    it("excludes settings with null or empty values", () => {
       const settings = [
-        { id: 1, key: 'Content.MinTitleLength', value: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'Content.MaxTitleLength', value: '', createdAt: '2024-01-01T00:00:00Z' },
-        { id: 3, key: 'Media.Quality', value: '99', createdAt: '2024-01-01T00:00:00Z' },
+        { id: 1, key: "Content.MinTitleLength", value: null, createdAt: "2024-01-01T00:00:00Z" },
+        { id: 2, key: "Content.MaxTitleLength", value: "", createdAt: "2024-01-01T00:00:00Z" },
+        { id: 3, key: "Media.Quality", value: "99", createdAt: "2024-01-01T00:00:00Z" },
       ];
 
       const filtered = filterTrackedSettings(settings);
       expect(filtered).toHaveLength(1);
-      expect(filtered[0].key).toBe('Media.Quality');
+      expect(filtered[0].key).toBe("Media.Quality");
     });
 
-    it('returns empty array when no tracked settings exist', () => {
+    it("returns empty array when no tracked settings exist", () => {
       const settings = [
-        { id: 1, key: 'Identity.RequireDigit', value: 'true', createdAt: '2024-01-01T00:00:00Z' },
+        { id: 1, key: "Identity.RequireDigit", value: "true", createdAt: "2024-01-01T00:00:00Z" },
       ];
 
       const filtered = filterTrackedSettings(settings);
@@ -476,556 +507,882 @@ describe('settings-manager', () => {
     });
   });
 
-  describe('saveSettingsLocally + readLocalSettings', () => {
+  describe("saveSettingsLocally + readLocalSettings", () => {
     let tmpDir: string;
 
     beforeEach(async () => {
-      tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'leadcms-settings-test-'));
+      tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "leadcms-settings-test-"));
     });
 
     afterEach(async () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
     });
 
-    it('saves and reads AI.SiteProfile settings as .md files', async () => {
+    it("saves and reads AI.SiteProfile settings as .md files", async () => {
       const settings = [
-        { id: 1, key: 'AI.SiteProfile.Topic', value: 'Technology Blog', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'AI.SiteProfile.Audience', value: 'Developers and engineers', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "AI.SiteProfile.Topic",
+          value: "Technology Blog",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 2,
+          key: "AI.SiteProfile.Audience",
+          value: "Developers and engineers",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(settings, tmpDir, 'en');
-      const localSettings = await readLocalSettings(tmpDir, 'en');
+      await saveSettingsLocally(settings, tmpDir, "en");
+      const localSettings = await readLocalSettings(tmpDir, "en");
 
       expect(localSettings).toHaveLength(2);
-      const topic = localSettings.find(s => s.key === 'AI.SiteProfile.Topic');
+      const topic = localSettings.find((s) => s.key === "AI.SiteProfile.Topic");
       expect(topic).toBeDefined();
-      expect(topic!.value).toBe('Technology Blog');
+      expect(topic!.value).toBe("Technology Blog");
       expect(topic!.language).toBeNull();
 
-      const audience = localSettings.find(s => s.key === 'AI.SiteProfile.Audience');
+      const audience = localSettings.find((s) => s.key === "AI.SiteProfile.Audience");
       expect(audience).toBeDefined();
-      expect(audience!.value).toBe('Developers and engineers');
+      expect(audience!.value).toBe("Developers and engineers");
 
       // Verify file is at the correct nested path
-      const topicContent = await fs.readFile(path.join(tmpDir, 'ai', 'site-profile', 'topic.md'), 'utf8');
-      expect(topicContent).toBe('Technology Blog');
+      const topicContent = await fs.readFile(
+        path.join(tmpDir, "ai", "site-profile", "topic.md"),
+        "utf8"
+      );
+      expect(topicContent).toBe("Technology Blog");
     });
 
-    it('saves and reads Content settings as content.json', async () => {
+    it("saves and reads Content settings as content.json", async () => {
       const settings = [
-        { id: 1, key: 'Content.MinTitleLength', value: '9', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'Content.MaxTitleLength', value: '66', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "Content.MinTitleLength",
+          value: "9",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 2,
+          key: "Content.MaxTitleLength",
+          value: "66",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(settings, tmpDir, 'en');
+      await saveSettingsLocally(settings, tmpDir, "en");
 
       // Verify file content
-      const contentJson = JSON.parse(await fs.readFile(path.join(tmpDir, 'content.json'), 'utf8'));
+      const contentJson = JSON.parse(await fs.readFile(path.join(tmpDir, "content.json"), "utf8"));
       expect(contentJson).toEqual({
-        MinTitleLength: '9',
-        MaxTitleLength: '66',
+        MinTitleLength: "9",
+        MaxTitleLength: "66",
       });
 
       // Verify round-trip
-      const localSettings = await readLocalSettings(tmpDir, 'en');
+      const localSettings = await readLocalSettings(tmpDir, "en");
       expect(localSettings).toHaveLength(2);
-      expect(localSettings.find(s => s.key === 'Content.MinTitleLength')!.value).toBe('9');
-      expect(localSettings.find(s => s.key === 'Content.MaxTitleLength')!.value).toBe('66');
+      expect(localSettings.find((s) => s.key === "Content.MinTitleLength")!.value).toBe("9");
+      expect(localSettings.find((s) => s.key === "Content.MaxTitleLength")!.value).toBe("66");
     });
 
-    it('saves and reads Media settings as media.json', async () => {
+    it("saves and reads Media settings as media.json", async () => {
       const settings = [
-        { id: 1, key: 'Media.Quality', value: '99', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'Media.PreferredFormat', value: 'jpeg', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 3, key: 'Media.Max.FileSize', value: '1020', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "Media.Quality",
+          value: "99",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 2,
+          key: "Media.PreferredFormat",
+          value: "jpeg",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 3,
+          key: "Media.Max.FileSize",
+          value: "1020",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(settings, tmpDir, 'en');
+      await saveSettingsLocally(settings, tmpDir, "en");
 
-      const mediaJson = JSON.parse(await fs.readFile(path.join(tmpDir, 'media.json'), 'utf8'));
+      const mediaJson = JSON.parse(await fs.readFile(path.join(tmpDir, "media.json"), "utf8"));
       expect(mediaJson).toEqual({
-        Quality: '99',
-        PreferredFormat: 'jpeg',
-        'Max.FileSize': '1020',
+        Quality: "99",
+        PreferredFormat: "jpeg",
+        "Max.FileSize": "1020",
       });
 
-      const localSettings = await readLocalSettings(tmpDir, 'en');
+      const localSettings = await readLocalSettings(tmpDir, "en");
       expect(localSettings).toHaveLength(3);
-      expect(localSettings.find(s => s.key === 'Media.Quality')!.value).toBe('99');
-      expect(localSettings.find(s => s.key === 'Media.Max.FileSize')!.value).toBe('1020');
+      expect(localSettings.find((s) => s.key === "Media.Quality")!.value).toBe("99");
+      expect(localSettings.find((s) => s.key === "Media.Max.FileSize")!.value).toBe("1020");
     });
 
-    it('saves and reads General settings as general.json', async () => {
+    it("saves and reads General settings as general.json", async () => {
       const settings = [
-        { id: 1, key: 'General.PrivacyUrl', value: 'https://example.com/privacy', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'General.SiteUrl', value: 'https://example.com', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 3, key: 'General.UnsubscribeUrl', value: 'https://example.com/unsubscribe', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "General.PrivacyUrl",
+          value: "https://example.com/privacy",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 2,
+          key: "General.SiteUrl",
+          value: "https://example.com",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 3,
+          key: "General.UnsubscribeUrl",
+          value: "https://example.com/unsubscribe",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(settings, tmpDir, 'en');
+      await saveSettingsLocally(settings, tmpDir, "en");
 
-      const generalJson = JSON.parse(await fs.readFile(path.join(tmpDir, 'general.json'), 'utf8'));
+      const generalJson = JSON.parse(await fs.readFile(path.join(tmpDir, "general.json"), "utf8"));
       expect(generalJson).toEqual({
-        PrivacyUrl: 'https://example.com/privacy',
-        SiteUrl: 'https://example.com',
-        UnsubscribeUrl: 'https://example.com/unsubscribe',
+        PrivacyUrl: "https://example.com/privacy",
+        SiteUrl: "https://example.com",
+        UnsubscribeUrl: "https://example.com/unsubscribe",
       });
 
-      const localSettings = await readLocalSettings(tmpDir, 'en');
+      const localSettings = await readLocalSettings(tmpDir, "en");
       expect(localSettings).toHaveLength(3);
-      expect(localSettings.find(s => s.key === 'General.PrivacyUrl')!.value).toBe('https://example.com/privacy');
-      expect(localSettings.find(s => s.key === 'General.SiteUrl')!.value).toBe('https://example.com');
-      expect(localSettings.find(s => s.key === 'General.UnsubscribeUrl')!.value).toBe('https://example.com/unsubscribe');
+      expect(localSettings.find((s) => s.key === "General.PrivacyUrl")!.value).toBe(
+        "https://example.com/privacy"
+      );
+      expect(localSettings.find((s) => s.key === "General.SiteUrl")!.value).toBe(
+        "https://example.com"
+      );
+      expect(localSettings.find((s) => s.key === "General.UnsubscribeUrl")!.value).toBe(
+        "https://example.com/unsubscribe"
+      );
     });
 
-    it('handles language-specific settings in locale subdirectories', async () => {
+    it("handles language-specific settings in locale subdirectories", async () => {
       const settings = [
-        { id: 1, key: 'AI.SiteProfile.Topic', value: 'Topic - Generic', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'AI.SiteProfile.Topic', value: 'Topic - RU', language: 'ru-RU', createdAt: '2024-01-01T00:00:00Z' },
-        { id: 3, key: 'Media.Max.FileSize', value: '1020', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 4, key: 'Media.Max.FileSize', value: '2048', language: 'ru-RU', createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "AI.SiteProfile.Topic",
+          value: "Topic - Generic",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 2,
+          key: "AI.SiteProfile.Topic",
+          value: "Topic - RU",
+          language: "ru-RU",
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 3,
+          key: "Media.Max.FileSize",
+          value: "1020",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 4,
+          key: "Media.Max.FileSize",
+          value: "2048",
+          language: "ru-RU",
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(settings, tmpDir, 'en');
+      await saveSettingsLocally(settings, tmpDir, "en");
 
       // Default language files
-      const defaultTopic = await fs.readFile(path.join(tmpDir, 'ai', 'site-profile', 'topic.md'), 'utf8');
-      expect(defaultTopic).toBe('Topic - Generic');
+      const defaultTopic = await fs.readFile(
+        path.join(tmpDir, "ai", "site-profile", "topic.md"),
+        "utf8"
+      );
+      expect(defaultTopic).toBe("Topic - Generic");
 
       // Russian language files
-      const ruTopic = await fs.readFile(path.join(tmpDir, 'ru-RU', 'ai', 'site-profile', 'topic.md'), 'utf8');
-      expect(ruTopic).toBe('Topic - RU');
+      const ruTopic = await fs.readFile(
+        path.join(tmpDir, "ru-RU", "ai", "site-profile", "topic.md"),
+        "utf8"
+      );
+      expect(ruTopic).toBe("Topic - RU");
 
-      const ruMedia = JSON.parse(await fs.readFile(path.join(tmpDir, 'ru-RU', 'media.json'), 'utf8'));
-      expect(ruMedia['Max.FileSize']).toBe('2048');
+      const ruMedia = JSON.parse(
+        await fs.readFile(path.join(tmpDir, "ru-RU", "media.json"), "utf8")
+      );
+      expect(ruMedia["Max.FileSize"]).toBe("2048");
 
       // Read all back
-      const localSettings = await readLocalSettings(tmpDir, 'en');
+      const localSettings = await readLocalSettings(tmpDir, "en");
       expect(localSettings).toHaveLength(4);
 
-      const ruTopicLocal = localSettings.find(s => s.key === 'AI.SiteProfile.Topic' && s.language === 'ru-RU');
+      const ruTopicLocal = localSettings.find(
+        (s) => s.key === "AI.SiteProfile.Topic" && s.language === "ru-RU"
+      );
       expect(ruTopicLocal).toBeDefined();
-      expect(ruTopicLocal!.value).toBe('Topic - RU');
+      expect(ruTopicLocal!.value).toBe("Topic - RU");
 
-      const defaultTopicLocal = localSettings.find(s => s.key === 'AI.SiteProfile.Topic' && s.language === null);
+      const defaultTopicLocal = localSettings.find(
+        (s) => s.key === "AI.SiteProfile.Topic" && s.language === null
+      );
       expect(defaultTopicLocal).toBeDefined();
-      expect(defaultTopicLocal!.value).toBe('Topic - Generic');
+      expect(defaultTopicLocal!.value).toBe("Topic - Generic");
     });
 
-    it('filters by targetName when saving', async () => {
+    it("filters by targetName when saving", async () => {
       const settings = [
-        { id: 1, key: 'AI.SiteProfile.Topic', value: 'Technology', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'AI.SiteProfile.Audience', value: 'Developers', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "AI.SiteProfile.Topic",
+          value: "Technology",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 2,
+          key: "AI.SiteProfile.Audience",
+          value: "Developers",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(settings, tmpDir, 'en', 'AI.SiteProfile.Topic');
+      await saveSettingsLocally(settings, tmpDir, "en", "AI.SiteProfile.Topic");
 
-      const localSettings = await readLocalSettings(tmpDir, 'en');
+      const localSettings = await readLocalSettings(tmpDir, "en");
       expect(localSettings).toHaveLength(1);
-      expect(localSettings[0].key).toBe('AI.SiteProfile.Topic');
+      expect(localSettings[0].key).toBe("AI.SiteProfile.Topic");
     });
 
-    it('returns empty array when settings directory does not exist', async () => {
-      const nonExistent = path.join(tmpDir, 'does-not-exist');
-      const localSettings = await readLocalSettings(nonExistent, 'en');
+    it("returns empty array when settings directory does not exist", async () => {
+      const nonExistent = path.join(tmpDir, "does-not-exist");
+      const localSettings = await readLocalSettings(nonExistent, "en");
       expect(localSettings).toHaveLength(0);
     });
 
-    it('skips unknown files in ai/site-profile folder', async () => {
-      const aiDir = path.join(tmpDir, 'ai', 'site-profile');
+    it("skips unknown files in ai/site-profile folder", async () => {
+      const aiDir = path.join(tmpDir, "ai", "site-profile");
       await fs.mkdir(aiDir, { recursive: true });
-      await fs.writeFile(path.join(aiDir, 'unknown-file.md'), 'content', 'utf8');
+      await fs.writeFile(path.join(aiDir, "unknown-file.md"), "content", "utf8");
 
-      const localSettings = await readLocalSettings(tmpDir, 'en');
+      const localSettings = await readLocalSettings(tmpDir, "en");
       expect(localSettings).toHaveLength(0);
     });
 
-    it('saves and reads LeadCapture.Telegram settings as .txt files', async () => {
+    it("saves and reads LeadCapture.Telegram settings as .txt files", async () => {
       const settings = [
-        { id: 1, key: 'LeadCapture.Telegram.MessageTemplate', value: '# Welcome\nHello {{name}}!', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "LeadCapture.Telegram.MessageTemplate",
+          value: "# Welcome\nHello {{name}}!",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(settings, tmpDir, 'en');
+      await saveSettingsLocally(settings, tmpDir, "en");
 
       // Verify file is created as .txt in the correct nested directory
-      const content = await fs.readFile(path.join(tmpDir, 'lead-capture', 'telegram', 'message-template.txt'), 'utf8');
-      expect(content).toBe('# Welcome\nHello {{name}}!');
+      const content = await fs.readFile(
+        path.join(tmpDir, "lead-capture", "telegram", "message-template.txt"),
+        "utf8"
+      );
+      expect(content).toBe("# Welcome\nHello {{name}}!");
 
       // Verify round-trip
-      const localSettings = await readLocalSettings(tmpDir, 'en');
-      const telegram = localSettings.find(s => s.key === 'LeadCapture.Telegram.MessageTemplate');
+      const localSettings = await readLocalSettings(tmpDir, "en");
+      const telegram = localSettings.find((s) => s.key === "LeadCapture.Telegram.MessageTemplate");
       expect(telegram).toBeDefined();
-      expect(telegram!.value).toBe('# Welcome\nHello {{name}}!');
+      expect(telegram!.value).toBe("# Welcome\nHello {{name}}!");
       expect(telegram!.language).toBeNull();
     });
 
-    it('saves LeadCapture.Telegram settings alongside AI.SiteProfile settings', async () => {
+    it("saves LeadCapture.Telegram settings alongside AI.SiteProfile settings", async () => {
       const settings = [
-        { id: 1, key: 'AI.SiteProfile.Topic', value: 'Technology', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'LeadCapture.Telegram.MessageTemplate', value: 'Hello!', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "AI.SiteProfile.Topic",
+          value: "Technology",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 2,
+          key: "LeadCapture.Telegram.MessageTemplate",
+          value: "Hello!",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(settings, tmpDir, 'en');
-      const localSettings = await readLocalSettings(tmpDir, 'en');
+      await saveSettingsLocally(settings, tmpDir, "en");
+      const localSettings = await readLocalSettings(tmpDir, "en");
 
       expect(localSettings).toHaveLength(2);
-      expect(localSettings.find(s => s.key === 'AI.SiteProfile.Topic')!.value).toBe('Technology');
-      expect(localSettings.find(s => s.key === 'LeadCapture.Telegram.MessageTemplate')!.value).toBe('Hello!');
+      expect(localSettings.find((s) => s.key === "AI.SiteProfile.Topic")!.value).toBe("Technology");
+      expect(
+        localSettings.find((s) => s.key === "LeadCapture.Telegram.MessageTemplate")!.value
+      ).toBe("Hello!");
     });
 
-    it('handles language-specific LeadCapture.Telegram settings', async () => {
+    it("handles language-specific LeadCapture.Telegram settings", async () => {
       const settings = [
-        { id: 1, key: 'LeadCapture.Telegram.MessageTemplate', value: 'Hello!', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'LeadCapture.Telegram.MessageTemplate', value: 'Привет!', language: 'ru-RU', createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "LeadCapture.Telegram.MessageTemplate",
+          value: "Hello!",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 2,
+          key: "LeadCapture.Telegram.MessageTemplate",
+          value: "Привет!",
+          language: "ru-RU",
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(settings, tmpDir, 'en');
+      await saveSettingsLocally(settings, tmpDir, "en");
 
-      const defaultContent = await fs.readFile(path.join(tmpDir, 'lead-capture', 'telegram', 'message-template.txt'), 'utf8');
-      expect(defaultContent).toBe('Hello!');
+      const defaultContent = await fs.readFile(
+        path.join(tmpDir, "lead-capture", "telegram", "message-template.txt"),
+        "utf8"
+      );
+      expect(defaultContent).toBe("Hello!");
 
-      const ruContent = await fs.readFile(path.join(tmpDir, 'ru-RU', 'lead-capture', 'telegram', 'message-template.txt'), 'utf8');
-      expect(ruContent).toBe('Привет!');
+      const ruContent = await fs.readFile(
+        path.join(tmpDir, "ru-RU", "lead-capture", "telegram", "message-template.txt"),
+        "utf8"
+      );
+      expect(ruContent).toBe("Привет!");
 
-      const localSettings = await readLocalSettings(tmpDir, 'en');
+      const localSettings = await readLocalSettings(tmpDir, "en");
       expect(localSettings).toHaveLength(2);
-      const ruSetting = localSettings.find(s => s.key === 'LeadCapture.Telegram.MessageTemplate' && s.language === 'ru-RU');
-      expect(ruSetting!.value).toBe('Привет!');
+      const ruSetting = localSettings.find(
+        (s) => s.key === "LeadCapture.Telegram.MessageTemplate" && s.language === "ru-RU"
+      );
+      expect(ruSetting!.value).toBe("Привет!");
     });
 
-    it('skips unknown files in lead-capture/telegram folder', async () => {
-      const telegramDir = path.join(tmpDir, 'lead-capture', 'telegram');
+    it("skips unknown files in lead-capture/telegram folder", async () => {
+      const telegramDir = path.join(tmpDir, "lead-capture", "telegram");
       await fs.mkdir(telegramDir, { recursive: true });
-      await fs.writeFile(path.join(telegramDir, 'unknown-file.txt'), 'content', 'utf8');
+      await fs.writeFile(path.join(telegramDir, "unknown-file.txt"), "content", "utf8");
 
-      const localSettings = await readLocalSettings(tmpDir, 'en');
+      const localSettings = await readLocalSettings(tmpDir, "en");
       expect(localSettings).toHaveLength(0);
     });
 
-    it('reconciles removed LeadCapture.Telegram files and deletes empty folders', async () => {
+    it("reconciles removed LeadCapture.Telegram files and deletes empty folders", async () => {
       const initial = [
-        { id: 1, key: 'LeadCapture.Telegram.MessageTemplate', value: 'Hello!', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "LeadCapture.Telegram.MessageTemplate",
+          value: "Hello!",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(initial, tmpDir, 'en');
-      await fs.access(path.join(tmpDir, 'lead-capture', 'telegram', 'message-template.txt'));
+      await saveSettingsLocally(initial, tmpDir, "en");
+      await fs.access(path.join(tmpDir, "lead-capture", "telegram", "message-template.txt"));
 
       const next = [
-        { id: 2, key: 'Content.MinTitleLength', value: '9', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 2,
+          key: "Content.MinTitleLength",
+          value: "9",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(next, tmpDir, 'en');
+      await saveSettingsLocally(next, tmpDir, "en");
 
-      await expect(fs.access(path.join(tmpDir, 'lead-capture', 'telegram', 'message-template.txt'))).rejects.toThrow();
-      await expect(fs.access(path.join(tmpDir, 'lead-capture'))).rejects.toThrow();
+      await expect(
+        fs.access(path.join(tmpDir, "lead-capture", "telegram", "message-template.txt"))
+      ).rejects.toThrow();
+      await expect(fs.access(path.join(tmpDir, "lead-capture"))).rejects.toThrow();
     });
 
-    it('does not create files for null/empty values', async () => {
+    it("does not create files for null/empty values", async () => {
       // filterTrackedSettings already handles this, but let's confirm empty arrays
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const settings: any[] = [];
-      await saveSettingsLocally(settings, tmpDir, 'en');
+      await saveSettingsLocally(settings, tmpDir, "en");
 
       // The directory should still not exist
       try {
-        await fs.access(path.join(tmpDir, 'ai'));
-        fail('Should not have created ai directory');
+        await fs.access(path.join(tmpDir, "ai"));
+        fail("Should not have created ai directory");
       } catch {
         // Expected
       }
     });
 
-    it('reconciles removed AI.SiteProfile files and deletes empty folders', async () => {
+    it("reconciles removed AI.SiteProfile files and deletes empty folders", async () => {
       const initial = [
-        { id: 1, key: 'AI.SiteProfile.Topic', value: 'Initial topic', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "AI.SiteProfile.Topic",
+          value: "Initial topic",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(initial, tmpDir, 'en');
-      await fs.access(path.join(tmpDir, 'ai', 'site-profile', 'topic.md'));
+      await saveSettingsLocally(initial, tmpDir, "en");
+      await fs.access(path.join(tmpDir, "ai", "site-profile", "topic.md"));
 
       const next = [
-        { id: 2, key: 'Content.MinTitleLength', value: '9', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 2,
+          key: "Content.MinTitleLength",
+          value: "9",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(next, tmpDir, 'en');
+      await saveSettingsLocally(next, tmpDir, "en");
 
-      await expect(fs.access(path.join(tmpDir, 'ai', 'site-profile', 'topic.md'))).rejects.toThrow();
-      await expect(fs.access(path.join(tmpDir, 'ai'))).rejects.toThrow();
+      await expect(
+        fs.access(path.join(tmpDir, "ai", "site-profile", "topic.md"))
+      ).rejects.toThrow();
+      await expect(fs.access(path.join(tmpDir, "ai"))).rejects.toThrow();
     });
 
-    it('reconciles removed JSON setting categories by deleting empty content/media json files', async () => {
+    it("reconciles removed JSON setting categories by deleting empty content/media json files", async () => {
       const initial = [
-        { id: 1, key: 'Content.MinTitleLength', value: '9', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'Media.Quality', value: '99', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "Content.MinTitleLength",
+          value: "9",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 2,
+          key: "Media.Quality",
+          value: "99",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(initial, tmpDir, 'en');
-      await fs.access(path.join(tmpDir, 'content.json'));
-      await fs.access(path.join(tmpDir, 'media.json'));
+      await saveSettingsLocally(initial, tmpDir, "en");
+      await fs.access(path.join(tmpDir, "content.json"));
+      await fs.access(path.join(tmpDir, "media.json"));
 
       const next = [
-        { id: 3, key: 'AI.SiteProfile.Topic', value: 'Kept AI setting', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 3,
+          key: "AI.SiteProfile.Topic",
+          value: "Kept AI setting",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(next, tmpDir, 'en');
+      await saveSettingsLocally(next, tmpDir, "en");
 
-      await expect(fs.access(path.join(tmpDir, 'content.json'))).rejects.toThrow();
-      await expect(fs.access(path.join(tmpDir, 'media.json'))).rejects.toThrow();
-      await fs.access(path.join(tmpDir, 'ai', 'site-profile', 'topic.md'));
+      await expect(fs.access(path.join(tmpDir, "content.json"))).rejects.toThrow();
+      await expect(fs.access(path.join(tmpDir, "media.json"))).rejects.toThrow();
+      await fs.access(path.join(tmpDir, "ai", "site-profile", "topic.md"));
     });
 
-    it('reconciles to empty local state when remote tracked settings become empty', async () => {
+    it("reconciles to empty local state when remote tracked settings become empty", async () => {
       const initial = [
-        { id: 1, key: 'AI.SiteProfile.Topic', value: 'Initial topic', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'Content.MinTitleLength', value: '9', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 3, key: 'Media.Quality', value: '99', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "AI.SiteProfile.Topic",
+          value: "Initial topic",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 2,
+          key: "Content.MinTitleLength",
+          value: "9",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 3,
+          key: "Media.Quality",
+          value: "99",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(initial, tmpDir, 'en');
-      let localSettings = await readLocalSettings(tmpDir, 'en');
+      await saveSettingsLocally(initial, tmpDir, "en");
+      let localSettings = await readLocalSettings(tmpDir, "en");
       expect(localSettings.length).toBeGreaterThan(0);
 
-      await saveSettingsLocally([], tmpDir, 'en');
+      await saveSettingsLocally([], tmpDir, "en");
 
-      localSettings = await readLocalSettings(tmpDir, 'en');
+      localSettings = await readLocalSettings(tmpDir, "en");
       expect(localSettings).toHaveLength(0);
     });
   });
 
-  describe('buildSettingsStatus', () => {
-    it('detects settings in sync', () => {
-      const local = [
-        { key: 'Content.MinTitleLength', value: '9', language: null },
-      ];
+  describe("buildSettingsStatus", () => {
+    it("detects settings in sync", () => {
+      const local = [{ key: "Content.MinTitleLength", value: "9", language: null }];
       const remote = [
-        { id: 1, key: 'Content.MinTitleLength', value: '9', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "Content.MinTitleLength",
+          value: "9",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
       const result = buildSettingsStatus(local, remote);
       expect(result.comparisons).toHaveLength(1);
-      expect(result.comparisons[0].status).toBe('in-sync');
+      expect(result.comparisons[0].status).toBe("in-sync");
     });
 
-    it('detects modified settings', () => {
-      const local = [
-        { key: 'Content.MinTitleLength', value: '10', language: null },
-      ];
+    it("detects modified settings", () => {
+      const local = [{ key: "Content.MinTitleLength", value: "10", language: null }];
       const remote = [
-        { id: 1, key: 'Content.MinTitleLength', value: '9', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "Content.MinTitleLength",
+          value: "9",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
       const result = buildSettingsStatus(local, remote);
       expect(result.comparisons).toHaveLength(1);
-      expect(result.comparisons[0].status).toBe('modified');
-      expect(result.comparisons[0].localValue).toBe('10');
-      expect(result.comparisons[0].remoteValue).toBe('9');
+      expect(result.comparisons[0].status).toBe("modified");
+      expect(result.comparisons[0].localValue).toBe("10");
+      expect(result.comparisons[0].remoteValue).toBe("9");
     });
 
-    it('detects local-only settings', () => {
-      const local = [
-        { key: 'Content.MinTitleLength', value: '9', language: null },
-      ];
+    it("detects local-only settings", () => {
+      const local = [{ key: "Content.MinTitleLength", value: "9", language: null }];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const remote: any[] = [];
 
       const result = buildSettingsStatus(local, remote);
       expect(result.comparisons).toHaveLength(1);
-      expect(result.comparisons[0].status).toBe('local-only');
+      expect(result.comparisons[0].status).toBe("local-only");
     });
 
-    it('detects remote-only settings', () => {
+    it("detects remote-only settings", () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const local: any[] = [];
       const remote = [
-        { id: 1, key: 'Content.MinTitleLength', value: '9', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "Content.MinTitleLength",
+          value: "9",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
       const result = buildSettingsStatus(local, remote);
       expect(result.comparisons).toHaveLength(1);
-      expect(result.comparisons[0].status).toBe('remote-only');
+      expect(result.comparisons[0].status).toBe("remote-only");
     });
 
-    it('filters out remote settings with null/empty values from remote-only status', () => {
+    it("filters out remote settings with null/empty values from remote-only status", () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const local: any[] = [];
       const remote = [
-        { id: 1, key: 'Content.MinTitleLength', value: null, language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'Content.MaxTitleLength', value: '', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 3, key: 'AI.SiteProfile.Topic', value: null, language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 4, key: 'Media.Quality', value: '99', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "Content.MinTitleLength",
+          value: null,
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 2,
+          key: "Content.MaxTitleLength",
+          value: "",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 3,
+          key: "AI.SiteProfile.Topic",
+          value: null,
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 4,
+          key: "Media.Quality",
+          value: "99",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
       const result = buildSettingsStatus(local, remote);
       expect(result.comparisons).toHaveLength(1);
-      expect(result.comparisons[0].status).toBe('remote-only');
-      expect(result.comparisons[0].key).toBe('Media.Quality');
-      expect(result.comparisons[0].remoteValue).toBe('99');
+      expect(result.comparisons[0].status).toBe("remote-only");
+      expect(result.comparisons[0].key).toBe("Media.Quality");
+      expect(result.comparisons[0].remoteValue).toBe("99");
     });
 
-    it('handles language-specific settings separately', () => {
+    it("handles language-specific settings separately", () => {
       const local = [
-        { key: 'AI.SiteProfile.Topic', value: 'Tech', language: null },
-        { key: 'AI.SiteProfile.Topic', value: 'Технологии', language: 'ru-RU' },
+        { key: "AI.SiteProfile.Topic", value: "Tech", language: null },
+        { key: "AI.SiteProfile.Topic", value: "Технологии", language: "ru-RU" },
       ];
       const remote = [
-        { id: 1, key: 'AI.SiteProfile.Topic', value: 'Tech', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'AI.SiteProfile.Topic', value: 'Технологии - обновлено', language: 'ru-RU', createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "AI.SiteProfile.Topic",
+          value: "Tech",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 2,
+          key: "AI.SiteProfile.Topic",
+          value: "Технологии - обновлено",
+          language: "ru-RU",
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
       const result = buildSettingsStatus(local, remote);
       expect(result.comparisons).toHaveLength(2);
 
-      const defaultLang = result.comparisons.find(c => c.language === null);
-      expect(defaultLang!.status).toBe('in-sync');
+      const defaultLang = result.comparisons.find((c) => c.language === null);
+      expect(defaultLang!.status).toBe("in-sync");
 
-      const ruLang = result.comparisons.find(c => c.language === 'ru-RU');
-      expect(ruLang!.status).toBe('modified');
+      const ruLang = result.comparisons.find((c) => c.language === "ru-RU");
+      expect(ruLang!.status).toBe("modified");
     });
 
-    it('only includes tracked keys in comparison', () => {
-      const local = [
-        { key: 'Content.MinTitleLength', value: '9', language: null },
-      ];
+    it("only includes tracked keys in comparison", () => {
+      const local = [{ key: "Content.MinTitleLength", value: "9", language: null }];
       const remote = [
-        { id: 1, key: 'Content.MinTitleLength', value: '9', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'Identity.RequireDigit', value: 'true', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "Content.MinTitleLength",
+          value: "9",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 2,
+          key: "Identity.RequireDigit",
+          value: "true",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
       const result = buildSettingsStatus(local, remote);
       expect(result.comparisons).toHaveLength(1);
-      expect(result.comparisons[0].key).toBe('Content.MinTitleLength');
+      expect(result.comparisons[0].key).toBe("Content.MinTitleLength");
     });
 
-    it('sorts comparisons by key then language', () => {
+    it("sorts comparisons by key then language", () => {
       const local = [
-        { key: 'Media.Quality', value: '99', language: null },
-        { key: 'Content.MinTitleLength', value: '9', language: null },
-        { key: 'AI.SiteProfile.Topic', value: 'Tech', language: 'ru-RU' },
-        { key: 'AI.SiteProfile.Topic', value: 'Tech', language: null },
+        { key: "Media.Quality", value: "99", language: null },
+        { key: "Content.MinTitleLength", value: "9", language: null },
+        { key: "AI.SiteProfile.Topic", value: "Tech", language: "ru-RU" },
+        { key: "AI.SiteProfile.Topic", value: "Tech", language: null },
       ];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const remote: any[] = [];
 
       const result = buildSettingsStatus(local, remote);
-      expect(result.comparisons.map(c => c.key)).toEqual([
-        'AI.SiteProfile.Topic',
-        'AI.SiteProfile.Topic',
-        'Content.MinTitleLength',
-        'Media.Quality',
+      expect(result.comparisons.map((c) => c.key)).toEqual([
+        "AI.SiteProfile.Topic",
+        "AI.SiteProfile.Topic",
+        "Content.MinTitleLength",
+        "Media.Quality",
       ]);
       // Within same key, null language comes before 'ru-RU'
       expect(result.comparisons[0].language).toBeNull();
-      expect(result.comparisons[1].language).toBe('ru-RU');
+      expect(result.comparisons[1].language).toBe("ru-RU");
     });
   });
 
-  describe('buildSettingsPushOperations', () => {
-    it('returns create operations for new settings', () => {
-      const local = [
-        { key: 'Content.MinTitleLength', value: '9', language: null },
-      ];
+  describe("buildSettingsPushOperations", () => {
+    it("returns create operations for new settings", () => {
+      const local = [{ key: "Content.MinTitleLength", value: "9", language: null }];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const remote: any[] = [];
 
       const operations = buildSettingsPushOperations(local, remote);
       expect(operations).toHaveLength(1);
-      expect(operations[0].type).toBe('create');
-      expect(operations[0].key).toBe('Content.MinTitleLength');
-      expect(operations[0].localValue).toBe('9');
+      expect(operations[0].type).toBe("create");
+      expect(operations[0].key).toBe("Content.MinTitleLength");
+      expect(operations[0].localValue).toBe("9");
     });
 
-    it('returns update operations for modified settings', () => {
-      const local = [
-        { key: 'Content.MinTitleLength', value: '10', language: null },
-      ];
+    it("returns update operations for modified settings", () => {
+      const local = [{ key: "Content.MinTitleLength", value: "10", language: null }];
       const remote = [
-        { id: 1, key: 'Content.MinTitleLength', value: '9', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "Content.MinTitleLength",
+          value: "9",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
       const operations = buildSettingsPushOperations(local, remote);
       expect(operations).toHaveLength(1);
-      expect(operations[0].type).toBe('update');
-      expect(operations[0].localValue).toBe('10');
-      expect(operations[0].remoteValue).toBe('9');
+      expect(operations[0].type).toBe("update");
+      expect(operations[0].localValue).toBe("10");
+      expect(operations[0].remoteValue).toBe("9");
       expect(operations[0].remoteId).toBe(1);
     });
 
-    it('returns unchanged operations for in-sync settings', () => {
-      const local = [
-        { key: 'Content.MinTitleLength', value: '9', language: null },
-      ];
+    it("returns unchanged operations for in-sync settings", () => {
+      const local = [{ key: "Content.MinTitleLength", value: "9", language: null }];
       const remote = [
-        { id: 1, key: 'Content.MinTitleLength', value: '9', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "Content.MinTitleLength",
+          value: "9",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
       const operations = buildSettingsPushOperations(local, remote);
       expect(operations).toHaveLength(1);
-      expect(operations[0].type).toBe('unchanged');
+      expect(operations[0].type).toBe("unchanged");
     });
 
-    it('handles language-specific operations', () => {
+    it("handles language-specific operations", () => {
       const local = [
-        { key: 'Media.Max.FileSize', value: '1020', language: null },
-        { key: 'Media.Max.FileSize', value: '2048', language: 'ru-RU' },
+        { key: "Media.Max.FileSize", value: "1020", language: null },
+        { key: "Media.Max.FileSize", value: "2048", language: "ru-RU" },
       ];
       const remote = [
-        { id: 1, key: 'Media.Max.FileSize', value: '1020', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "Media.Max.FileSize",
+          value: "1020",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
       const operations = buildSettingsPushOperations(local, remote);
       expect(operations).toHaveLength(2);
 
-      const defaultOp = operations.find(op => op.language === null);
-      expect(defaultOp!.type).toBe('unchanged');
+      const defaultOp = operations.find((op) => op.language === null);
+      expect(defaultOp!.type).toBe("unchanged");
 
-      const ruOp = operations.find(op => op.language === 'ru-RU');
-      expect(ruOp!.type).toBe('create');
-      expect(ruOp!.localValue).toBe('2048');
+      const ruOp = operations.find((op) => op.language === "ru-RU");
+      expect(ruOp!.type).toBe("create");
+      expect(ruOp!.localValue).toBe("2048");
     });
 
-    it('skips non-tracked keys from local settings', () => {
+    it("skips non-tracked keys from local settings", () => {
       const local = [
-        { key: 'Identity.RequireDigit', value: 'true', language: null },
-        { key: 'Content.MinTitleLength', value: '9', language: null },
+        { key: "Identity.RequireDigit", value: "true", language: null },
+        { key: "Content.MinTitleLength", value: "9", language: null },
       ];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const remote: any[] = [];
 
       const operations = buildSettingsPushOperations(local, remote);
       expect(operations).toHaveLength(1);
-      expect(operations[0].key).toBe('Content.MinTitleLength');
+      expect(operations[0].key).toBe("Content.MinTitleLength");
     });
 
-    it('returns delete operations for remote-only settings', () => {
-      const local: any[] = [
-        { key: 'Media.Cover.Dimensions', value: '512x350', language: null },
-      ];
+    it("returns delete operations for remote-only settings", () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const local: any[] = [{ key: "Media.Cover.Dimensions", value: "512x350", language: null }];
       const remote = [
-        { id: 1, key: 'Media.Cover.Dimensions', value: '512x350', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'Media.Cover.Dimensions', value: '360x300', language: 'en-US', createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "Media.Cover.Dimensions",
+          value: "512x350",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 2,
+          key: "Media.Cover.Dimensions",
+          value: "360x300",
+          language: "en-US",
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
       const operations = buildSettingsPushOperations(local, remote);
       expect(operations).toHaveLength(2);
 
-      const unchangedOp = operations.find(op => op.language === null);
-      expect(unchangedOp!.type).toBe('unchanged');
+      const unchangedOp = operations.find((op) => op.language === null);
+      expect(unchangedOp!.type).toBe("unchanged");
 
-      const deleteOp = operations.find(op => op.language === 'en-US');
+      const deleteOp = operations.find((op) => op.language === "en-US");
       expect(deleteOp).toBeDefined();
-      expect(deleteOp!.type).toBe('delete');
-      expect(deleteOp!.key).toBe('Media.Cover.Dimensions');
-      expect(deleteOp!.remoteValue).toBe('360x300');
+      expect(deleteOp!.type).toBe("delete");
+      expect(deleteOp!.key).toBe("Media.Cover.Dimensions");
+      expect(deleteOp!.remoteValue).toBe("360x300");
       expect(deleteOp!.remoteId).toBe(2);
     });
 
-    it('does not return delete for remote-only settings with empty values', () => {
+    it("does not return delete for remote-only settings with empty values", () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const local: any[] = [];
       const remote = [
-        { id: 1, key: 'Content.MinTitleLength', value: '', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "Content.MinTitleLength",
+          value: "",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
       const operations = buildSettingsPushOperations(local, remote);
       expect(operations).toHaveLength(0);
     });
 
-    it('skips non-tracked keys from remote settings in delete operations', () => {
+    it("skips non-tracked keys from remote settings in delete operations", () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const local: any[] = [];
       const remote = [
-        { id: 1, key: 'Identity.RequireDigit', value: 'true', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "Identity.RequireDigit",
+          value: "true",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
       const operations = buildSettingsPushOperations(local, remote);
@@ -1033,140 +1390,299 @@ describe('settings-manager', () => {
     });
   });
 
-  describe('full round-trip test', () => {
+  describe("full round-trip test", () => {
     let tmpDir: string;
 
     beforeEach(async () => {
-      tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'leadcms-settings-roundtrip-'));
+      tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "leadcms-settings-roundtrip-"));
     });
 
     afterEach(async () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
     });
 
-    it('saves remote settings, reads them back, and compares correctly', async () => {
+    it("saves remote settings, reads them back, and compares correctly", async () => {
       const remoteSettings = [
-        { id: 1, key: 'AI.SiteProfile.Topic', value: 'Technology', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'AI.SiteProfile.Audience', value: 'Developers', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 3, key: 'Content.MinTitleLength', value: '9', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 4, key: 'Content.MaxTitleLength', value: '66', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 5, key: 'Media.Quality', value: '99', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 6, key: 'Media.PreferredFormat', value: 'jpeg', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 7, key: 'AI.SiteProfile.Topic', value: 'Технологии', language: 'ru-RU', createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "AI.SiteProfile.Topic",
+          value: "Technology",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 2,
+          key: "AI.SiteProfile.Audience",
+          value: "Developers",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 3,
+          key: "Content.MinTitleLength",
+          value: "9",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 4,
+          key: "Content.MaxTitleLength",
+          value: "66",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 5,
+          key: "Media.Quality",
+          value: "99",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 6,
+          key: "Media.PreferredFormat",
+          value: "jpeg",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 7,
+          key: "AI.SiteProfile.Topic",
+          value: "Технологии",
+          language: "ru-RU",
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
       // Save
-      await saveSettingsLocally(remoteSettings, tmpDir, 'en');
+      await saveSettingsLocally(remoteSettings, tmpDir, "en");
 
       // Read back
-      const localSettings = await readLocalSettings(tmpDir, 'en');
+      const localSettings = await readLocalSettings(tmpDir, "en");
       expect(localSettings).toHaveLength(7);
 
       // Compare — should all be in sync
       const status = buildSettingsStatus(localSettings, remoteSettings);
-      const inSync = status.comparisons.filter(c => c.status === 'in-sync');
+      const inSync = status.comparisons.filter((c) => c.status === "in-sync");
       expect(inSync).toHaveLength(7);
-      expect(status.comparisons.filter(c => c.status !== 'in-sync')).toHaveLength(0);
+      expect(status.comparisons.filter((c) => c.status !== "in-sync")).toHaveLength(0);
     });
 
-    it('detects changes after modifying local files', async () => {
+    it("detects changes after modifying local files", async () => {
       const remoteSettings = [
-        { id: 1, key: 'Content.MinTitleLength', value: '9', language: null, createdAt: '2024-01-01T00:00:00Z' },
-        { id: 2, key: 'Media.Quality', value: '99', language: null, createdAt: '2024-01-01T00:00:00Z' },
+        {
+          id: 1,
+          key: "Content.MinTitleLength",
+          value: "9",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: 2,
+          key: "Media.Quality",
+          value: "99",
+          language: null,
+          createdAt: "2024-01-01T00:00:00Z",
+        },
       ];
 
-      await saveSettingsLocally(remoteSettings, tmpDir, 'en');
+      await saveSettingsLocally(remoteSettings, tmpDir, "en");
 
       // Modify content.json locally
-      const contentPath = path.join(tmpDir, 'content.json');
-      const contentJson = JSON.parse(await fs.readFile(contentPath, 'utf8'));
-      contentJson.MinTitleLength = '15';
-      await fs.writeFile(contentPath, JSON.stringify(contentJson, null, 2) + '\n', 'utf8');
+      const contentPath = path.join(tmpDir, "content.json");
+      const contentJson = JSON.parse(await fs.readFile(contentPath, "utf8"));
+      contentJson.MinTitleLength = "15";
+      await fs.writeFile(contentPath, JSON.stringify(contentJson, null, 2) + "\n", "utf8");
 
       // Read back and compare
-      const localSettings = await readLocalSettings(tmpDir, 'en');
+      const localSettings = await readLocalSettings(tmpDir, "en");
       const status = buildSettingsStatus(localSettings, remoteSettings);
 
-      const modified = status.comparisons.find(c => c.status === 'modified');
+      const modified = status.comparisons.find((c) => c.status === "modified");
       expect(modified).toBeDefined();
-      expect(modified!.key).toBe('Content.MinTitleLength');
-      expect(modified!.localValue).toBe('15');
-      expect(modified!.remoteValue).toBe('9');
+      expect(modified!.key).toBe("Content.MinTitleLength");
+      expect(modified!.localValue).toBe("15");
+      expect(modified!.remoteValue).toBe("9");
 
       // Build push operations
       const ops = buildSettingsPushOperations(localSettings, remoteSettings);
-      const updateOp = ops.find(op => op.type === 'update');
+      const updateOp = ops.find((op) => op.type === "update");
       expect(updateOp).toBeDefined();
-      expect(updateOp!.key).toBe('Content.MinTitleLength');
-      expect(updateOp!.localValue).toBe('15');
+      expect(updateOp!.key).toBe("Content.MinTitleLength");
+      expect(updateOp!.localValue).toBe("15");
     });
   });
 
-  describe('real API response', () => {
+  describe("real API response", () => {
     const realApiResponse = [
-      { "id": 22, "key": "AI.SiteProfile.Topic", "value": "Topic - Generic", "userId": null, "language": null, "required": false, "type": "textarea", "description": "Main site topic", "createdAt": "2026-03-01T08:36:39.040411Z", "updatedAt": "2026-03-01T08:36:39.179649Z", "createdById": "45420d35", "updatedById": "45420d35" },
-      { "id": 23, "key": "AI.SiteProfile.Audience", "value": "Audience - Generic", "userId": null, "language": null, "required": false, "type": "textarea", "description": "Target audience", "createdAt": "2026-03-01T08:36:39.040413Z", "updatedAt": "2026-03-01T08:36:39.179651Z", "createdById": "45420d35", "updatedById": "45420d35" },
-      { "id": 24, "key": "AI.SiteProfile.BrandVoice", "value": "Brand Voice - Generic", "userId": null, "language": null, "required": false, "type": "textarea", "description": "Brand voice", "createdAt": "2026-03-01T08:36:39.040415Z", "updatedAt": "2026-03-01T08:36:39.179652Z", "createdById": "45420d35", "updatedById": "45420d35" },
-      { "id": 3, "key": "Content.MinTitleLength", "value": "9", "userId": null, "language": null, "required": false, "type": "int", "description": "Min title length", "createdAt": "2026-03-01T08:36:39.040369Z", "updatedAt": "2026-03-01T08:36:39.179611Z", "createdById": "45420d35", "updatedById": "45420d35" },
-      { "id": 20, "key": "Media.Quality", "value": "99", "userId": null, "language": null, "required": false, "type": "int", "description": "Output quality", "createdAt": "2026-03-01T08:36:39.040407Z", "updatedAt": "2026-03-01T08:36:39.179641Z", "createdById": "45420d35", "updatedById": "45420d35" },
-      { "id": 58, "key": "AI.SiteProfile.Topic", "value": "Topic - RU", "userId": null, "language": "ru-RU", "required": false, "type": "textarea", "description": "Main site topic", "createdAt": "2026-03-01T08:38:10.004784Z", "updatedAt": "2026-03-01T08:38:10.257592Z", "createdById": "45420d35", "updatedById": "45420d35" },
-      { "id": 90, "key": "Media.Max.FileSize", "value": "2048", "userId": null, "language": "ru-RU", "required": false, "type": "int", "description": "Max file size", "createdAt": "2026-03-01T08:38:28.54967Z", "updatedAt": "2026-03-01T08:38:28.970678Z", "createdById": "45420d35", "updatedById": "45420d35" },
-      { "id": 1, "key": "LivePreviewUrlTemplate", "value": "", "userId": null, "language": null, "required": false, "type": "text", "description": "Live preview URL", "createdAt": "2026-03-01T08:36:39.04012Z", "updatedAt": "2026-03-01T08:36:39.179463Z", "createdById": "45420d35", "updatedById": "45420d35" },
+      {
+        id: 22,
+        key: "AI.SiteProfile.Topic",
+        value: "Topic - Generic",
+        userId: null,
+        language: null,
+        required: false,
+        type: "textarea",
+        description: "Main site topic",
+        createdAt: "2026-03-01T08:36:39.040411Z",
+        updatedAt: "2026-03-01T08:36:39.179649Z",
+        createdById: "45420d35",
+        updatedById: "45420d35",
+      },
+      {
+        id: 23,
+        key: "AI.SiteProfile.Audience",
+        value: "Audience - Generic",
+        userId: null,
+        language: null,
+        required: false,
+        type: "textarea",
+        description: "Target audience",
+        createdAt: "2026-03-01T08:36:39.040413Z",
+        updatedAt: "2026-03-01T08:36:39.179651Z",
+        createdById: "45420d35",
+        updatedById: "45420d35",
+      },
+      {
+        id: 24,
+        key: "AI.SiteProfile.BrandVoice",
+        value: "Brand Voice - Generic",
+        userId: null,
+        language: null,
+        required: false,
+        type: "textarea",
+        description: "Brand voice",
+        createdAt: "2026-03-01T08:36:39.040415Z",
+        updatedAt: "2026-03-01T08:36:39.179652Z",
+        createdById: "45420d35",
+        updatedById: "45420d35",
+      },
+      {
+        id: 3,
+        key: "Content.MinTitleLength",
+        value: "9",
+        userId: null,
+        language: null,
+        required: false,
+        type: "int",
+        description: "Min title length",
+        createdAt: "2026-03-01T08:36:39.040369Z",
+        updatedAt: "2026-03-01T08:36:39.179611Z",
+        createdById: "45420d35",
+        updatedById: "45420d35",
+      },
+      {
+        id: 20,
+        key: "Media.Quality",
+        value: "99",
+        userId: null,
+        language: null,
+        required: false,
+        type: "int",
+        description: "Output quality",
+        createdAt: "2026-03-01T08:36:39.040407Z",
+        updatedAt: "2026-03-01T08:36:39.179641Z",
+        createdById: "45420d35",
+        updatedById: "45420d35",
+      },
+      {
+        id: 58,
+        key: "AI.SiteProfile.Topic",
+        value: "Topic - RU",
+        userId: null,
+        language: "ru-RU",
+        required: false,
+        type: "textarea",
+        description: "Main site topic",
+        createdAt: "2026-03-01T08:38:10.004784Z",
+        updatedAt: "2026-03-01T08:38:10.257592Z",
+        createdById: "45420d35",
+        updatedById: "45420d35",
+      },
+      {
+        id: 90,
+        key: "Media.Max.FileSize",
+        value: "2048",
+        userId: null,
+        language: "ru-RU",
+        required: false,
+        type: "int",
+        description: "Max file size",
+        createdAt: "2026-03-01T08:38:28.54967Z",
+        updatedAt: "2026-03-01T08:38:28.970678Z",
+        createdById: "45420d35",
+        updatedById: "45420d35",
+      },
+      {
+        id: 1,
+        key: "LivePreviewUrlTemplate",
+        value: "",
+        userId: null,
+        language: null,
+        required: false,
+        type: "text",
+        description: "Live preview URL",
+        createdAt: "2026-03-01T08:36:39.04012Z",
+        updatedAt: "2026-03-01T08:36:39.179463Z",
+        createdById: "45420d35",
+        updatedById: "45420d35",
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ] as any[];
 
-    it('filterTrackedSettings includes AI.SiteProfile settings', () => {
+    it("filterTrackedSettings includes AI.SiteProfile settings", () => {
       const tracked = filterTrackedSettings(realApiResponse);
-      const aiKeys = tracked.filter(s => s.key.startsWith('AI.SiteProfile.'));
+      const aiKeys = tracked.filter((s) => s.key.startsWith("AI.SiteProfile."));
       expect(aiKeys.length).toBeGreaterThan(0);
-      expect(aiKeys.map(s => s.key)).toContain('AI.SiteProfile.Topic');
-      expect(aiKeys.map(s => s.key)).toContain('AI.SiteProfile.Audience');
-      expect(aiKeys.map(s => s.key)).toContain('AI.SiteProfile.BrandVoice');
+      expect(aiKeys.map((s) => s.key)).toContain("AI.SiteProfile.Topic");
+      expect(aiKeys.map((s) => s.key)).toContain("AI.SiteProfile.Audience");
+      expect(aiKeys.map((s) => s.key)).toContain("AI.SiteProfile.BrandVoice");
     });
 
-    it('filterTrackedSettings includes language-specific settings', () => {
+    it("filterTrackedSettings includes language-specific settings", () => {
       const tracked = filterTrackedSettings(realApiResponse);
-      const langSpecific = tracked.filter(s => s.language === 'ru-RU');
+      const langSpecific = tracked.filter((s) => s.language === "ru-RU");
       expect(langSpecific.length).toBeGreaterThan(0);
-      expect(langSpecific.map(s => s.key)).toContain('AI.SiteProfile.Topic');
-      expect(langSpecific.map(s => s.key)).toContain('Media.Max.FileSize');
+      expect(langSpecific.map((s) => s.key)).toContain("AI.SiteProfile.Topic");
+      expect(langSpecific.map((s) => s.key)).toContain("Media.Max.FileSize");
     });
 
-    it('buildSettingsStatus shows AI.SiteProfile as remote-only when no local', () => {
+    it("buildSettingsStatus shows AI.SiteProfile as remote-only when no local", () => {
       const status = buildSettingsStatus([], realApiResponse);
-      const aiComparisons = status.comparisons.filter(c => c.key.startsWith('AI.SiteProfile.'));
+      const aiComparisons = status.comparisons.filter((c) => c.key.startsWith("AI.SiteProfile."));
       expect(aiComparisons.length).toBeGreaterThan(0);
-      expect(aiComparisons.every(c => c.status === 'remote-only')).toBe(true);
+      expect(aiComparisons.every((c) => c.status === "remote-only")).toBe(true);
     });
 
-    it('buildSettingsStatus shows language-specific remote settings', () => {
+    it("buildSettingsStatus shows language-specific remote settings", () => {
       const status = buildSettingsStatus([], realApiResponse);
-      const ruComparisons = status.comparisons.filter(c => c.language === 'ru-RU');
+      const ruComparisons = status.comparisons.filter((c) => c.language === "ru-RU");
       expect(ruComparisons.length).toBeGreaterThan(0);
     });
 
-    it('full flow: pull and status round-trip with real data', async () => {
-      const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'leadcms-real-api-test-'));
+    it("full flow: pull and status round-trip with real data", async () => {
+      const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "leadcms-real-api-test-"));
 
       try {
         const tracked = filterTrackedSettings(realApiResponse);
 
         // Save
-        await saveSettingsLocally(tracked, tmpDir, 'en');
+        await saveSettingsLocally(tracked, tmpDir, "en");
 
         // Read back
-        const localSettings = await readLocalSettings(tmpDir, 'en');
+        const localSettings = await readLocalSettings(tmpDir, "en");
 
         // Verify AI.SiteProfile .md files were created
-        const aiSettings = localSettings.filter(s => s.key.startsWith('AI.SiteProfile.'));
+        const aiSettings = localSettings.filter((s) => s.key.startsWith("AI.SiteProfile."));
         expect(aiSettings.length).toBeGreaterThanOrEqual(3);
 
         // Verify language-specific files were created
-        const ruSettings = localSettings.filter(s => s.language === 'ru-RU');
+        const ruSettings = localSettings.filter((s) => s.language === "ru-RU");
         expect(ruSettings.length).toBeGreaterThan(0);
 
         // Status should show all in sync
         const status = buildSettingsStatus(localSettings, realApiResponse);
-        const inSync = status.comparisons.filter(c => c.status === 'in-sync');
+        const inSync = status.comparisons.filter((c) => c.status === "in-sync");
         expect(inSync.length).toBe(tracked.length);
       } finally {
         await fs.rm(tmpDir, { recursive: true, force: true });
@@ -1177,213 +1693,262 @@ describe('settings-manager', () => {
 
 // ── formatSettingValue / formatSettingDiff tests ─────────────────────────────
 
-describe('formatSettingValue', () => {
+describe("formatSettingValue", () => {
   it('returns "(not set)" for null/undefined', () => {
-    expect(formatSettingValue('Content.MaxTitleLength', null)).toBe('(not set)');
-    expect(formatSettingValue('Content.MaxTitleLength', undefined)).toBe('(not set)');
+    expect(formatSettingValue("Content.MaxTitleLength", null)).toBe("(not set)");
+    expect(formatSettingValue("Content.MaxTitleLength", undefined)).toBe("(not set)");
   });
 
   it('returns "(empty)" for empty string', () => {
-    expect(formatSettingValue('Content.MaxTitleLength', '')).toBe('(empty)');
+    expect(formatSettingValue("Content.MaxTitleLength", "")).toBe("(empty)");
   });
 
-  it('truncates non-AI setting values normally', () => {
-    expect(formatSettingValue('Content.MaxTitleLength', '100')).toBe('100');
-    expect(formatSettingValue('Media.Quality', '85')).toBe('85');
+  it("truncates non-AI setting values normally", () => {
+    expect(formatSettingValue("Content.MaxTitleLength", "100")).toBe("100");
+    expect(formatSettingValue("Media.Quality", "85")).toBe("85");
   });
 
-  it('truncates long non-AI values with ellipsis', () => {
-    const longValue = 'a'.repeat(60);
-    const result = formatSettingValue('Content.MaxTitleLength', longValue);
+  it("truncates long non-AI values with ellipsis", () => {
+    const longValue = "a".repeat(60);
+    const result = formatSettingValue("Content.MaxTitleLength", longValue);
     expect(result.length).toBeLessThanOrEqual(40);
-    expect(result).toContain('...');
+    expect(result).toContain("...");
   });
 
-  it('summarises single-line AI.SiteProfile value', () => {
-    const result = formatSettingValue('AI.SiteProfile.Topic', 'Tech & Development');
-    expect(result).toBe('Tech & Development');
+  it("summarises single-line AI.SiteProfile value", () => {
+    const result = formatSettingValue("AI.SiteProfile.Topic", "Tech & Development");
+    expect(result).toBe("Tech & Development");
   });
 
-  it('summarises multi-line AI.SiteProfile value with line count', () => {
-    const multiLine = 'First line\nSecond line\nThird line';
-    const result = formatSettingValue('AI.SiteProfile.Audience', multiLine);
-    expect(result).toContain('(3 lines)');
-    expect(result).toContain('First line');
+  it("summarises multi-line AI.SiteProfile value with line count", () => {
+    const multiLine = "First line\nSecond line\nThird line";
+    const result = formatSettingValue("AI.SiteProfile.Audience", multiLine);
+    expect(result).toContain("(3 lines)");
+    expect(result).toContain("First line");
   });
 
-  it('shows first non-heading line for markdown AI.SiteProfile values', () => {
-    const markdown = '# Heading\nActual content here\nMore content';
-    const result = formatSettingValue('AI.SiteProfile.BrandVoice', markdown);
-    expect(result).toContain('Actual content here');
-    expect(result).toContain('(3 lines)');
+  it("shows first non-heading line for markdown AI.SiteProfile values", () => {
+    const markdown = "# Heading\nActual content here\nMore content";
+    const result = formatSettingValue("AI.SiteProfile.BrandVoice", markdown);
+    expect(result).toContain("Actual content here");
+    expect(result).toContain("(3 lines)");
   });
 
-  it('handles large AI.SiteProfile values without flooding output', () => {
-    const bigValue = Array.from({ length: 100 }, (_, i) => `Line ${i + 1}`).join('\n');
-    const result = formatSettingValue('AI.SiteProfile.StyleExamples', bigValue);
-    expect(result).toContain('(100 lines)');
+  it("handles large AI.SiteProfile values without flooding output", () => {
+    const bigValue = Array.from({ length: 100 }, (_, i) => `Line ${i + 1}`).join("\n");
+    const result = formatSettingValue("AI.SiteProfile.StyleExamples", bigValue);
+    expect(result).toContain("(100 lines)");
     expect(result.length).toBeLessThan(80);
   });
 
-  it('truncates long first-line preview in AI.SiteProfile values', () => {
-    const longFirstLine = 'A'.repeat(60) + '\nSecond line';
-    const result = formatSettingValue('AI.SiteProfile.Topic', longFirstLine);
-    expect(result).toContain('...');
-    expect(result).toContain('(2 lines)');
+  it("truncates long first-line preview in AI.SiteProfile values", () => {
+    const longFirstLine = "A".repeat(60) + "\nSecond line";
+    const result = formatSettingValue("AI.SiteProfile.Topic", longFirstLine);
+    expect(result).toContain("...");
+    expect(result).toContain("(2 lines)");
   });
 
-  it('summarises LeadCapture.Telegram single-line value', () => {
-    const result = formatSettingValue('LeadCapture.Telegram.MessageTemplate', 'Hello {{name}}!');
-    expect(result).toBe('Hello {{name}}!');
+  it("summarises LeadCapture.Telegram single-line value", () => {
+    const result = formatSettingValue("LeadCapture.Telegram.MessageTemplate", "Hello {{name}}!");
+    expect(result).toBe("Hello {{name}}!");
   });
 
-  it('summarises LeadCapture.Telegram multi-line value with line count', () => {
-    const multiLine = '# Welcome\nHello {{name}}!\nWe are glad to see you.';
-    const result = formatSettingValue('LeadCapture.Telegram.MessageTemplate', multiLine);
-    expect(result).toContain('(3 lines)');
-    expect(result).toContain('Hello {{name}}!');
+  it("summarises LeadCapture.Telegram multi-line value with line count", () => {
+    const multiLine = "# Welcome\nHello {{name}}!\nWe are glad to see you.";
+    const result = formatSettingValue("LeadCapture.Telegram.MessageTemplate", multiLine);
+    expect(result).toContain("(3 lines)");
+    expect(result).toContain("Hello {{name}}!");
   });
 });
 
-describe('formatSettingDiff', () => {
-  it('shows normal quoted diff for non-AI settings', () => {
-    const result = formatSettingDiff('Content.MaxTitleLength', '60', '80');
+describe("formatSettingDiff", () => {
+  it("shows normal quoted diff for non-AI settings", () => {
+    const result = formatSettingDiff("Content.MaxTitleLength", "60", "80");
     expect(result).toBe('"60" → "80"');
   });
 
-  it('shows line count change for AI.SiteProfile settings', () => {
-    const remote = 'Line 1\nLine 2\nLine 3';
-    const local = 'Line 1\nLine 2\nLine 3\nLine 4\nLine 5';
-    const result = formatSettingDiff('AI.SiteProfile.Audience', remote, local);
-    expect(result).toBe('3 lines → 5 lines');
+  it("shows line count change for AI.SiteProfile settings", () => {
+    const remote = "Line 1\nLine 2\nLine 3";
+    const local = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5";
+    const result = formatSettingDiff("AI.SiteProfile.Audience", remote, local);
+    expect(result).toBe("3 lines → 5 lines");
   });
 
   it('shows "content changed" when AI.SiteProfile line count is the same', () => {
-    const remote = 'Old content\nOld line 2';
-    const local = 'New content\nNew line 2';
-    const result = formatSettingDiff('AI.SiteProfile.Topic', remote, local);
-    expect(result).toBe('content changed (2 lines)');
+    const remote = "Old content\nOld line 2";
+    const local = "New content\nNew line 2";
+    const result = formatSettingDiff("AI.SiteProfile.Topic", remote, local);
+    expect(result).toBe("content changed (2 lines)");
   });
 
-  it('handles single line AI.SiteProfile diff', () => {
-    const result = formatSettingDiff('AI.SiteProfile.Topic', 'Old topic', 'New topic');
-    expect(result).toBe('content changed (1 line)');
+  it("handles single line AI.SiteProfile diff", () => {
+    const result = formatSettingDiff("AI.SiteProfile.Topic", "Old topic", "New topic");
+    expect(result).toBe("content changed (1 line)");
   });
 
-  it('shows line count change for LeadCapture.Telegram settings', () => {
-    const remote = 'Hello!';
-    const local = 'Hello!\nWelcome to our service.\nEnjoy!';
-    const result = formatSettingDiff('LeadCapture.Telegram.MessageTemplate', remote, local);
-    expect(result).toBe('1 line → 3 lines');
+  it("shows line count change for LeadCapture.Telegram settings", () => {
+    const remote = "Hello!";
+    const local = "Hello!\nWelcome to our service.\nEnjoy!";
+    const result = formatSettingDiff("LeadCapture.Telegram.MessageTemplate", remote, local);
+    expect(result).toBe("1 line → 3 lines");
   });
 });
 
-describe('renderSettingDiffPreview', () => {
+describe("renderSettingDiffPreview", () => {
   let consoleSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    consoleSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    consoleSpy = jest.spyOn(process.stdout, "write").mockImplementation(() => true);
   });
 
   afterEach(() => {
     consoleSpy.mockRestore();
   });
 
-  it('returns false for non-AI settings (no diff rendered)', () => {
-    const result = renderSettingDiffPreview('Content.MaxTitleLength', '60', '80');
+  it("returns false for non-AI settings (no diff rendered)", () => {
+    const result = renderSettingDiffPreview("Content.MaxTitleLength", "60", "80");
     expect(result).toBe(false);
   });
 
-  it('returns true for AI.SiteProfile settings', () => {
+  it("returns true for AI.SiteProfile settings", () => {
     const result = renderSettingDiffPreview(
-      'AI.SiteProfile.Audience',
-      'Old audience text',
-      'New audience text',
+      "AI.SiteProfile.Audience",
+      "Old audience text",
+      "New audience text"
     );
     expect(result).toBe(true);
   });
 
-  it('returns true for multi-line AI.SiteProfile diffs', () => {
-    const remote = 'Line 1\nLine 2\nLine 3';
-    const local = 'Line 1\nModified Line 2\nLine 3\nLine 4';
-    const result = renderSettingDiffPreview('AI.SiteProfile.BrandVoice', remote, local);
+  it("returns true for multi-line AI.SiteProfile diffs", () => {
+    const remote = "Line 1\nLine 2\nLine 3";
+    const local = "Line 1\nModified Line 2\nLine 3\nLine 4";
+    const result = renderSettingDiffPreview("AI.SiteProfile.BrandVoice", remote, local);
     expect(result).toBe(true);
   });
 
-  it('handles null remote value (new AI.SiteProfile setting)', () => {
+  it("handles null remote value (new AI.SiteProfile setting)", () => {
     const result = renderSettingDiffPreview(
-      'AI.SiteProfile.Topic',
+      "AI.SiteProfile.Topic",
       null,
-      '# My Topic\nSome content here',
+      "# My Topic\nSome content here"
     );
     expect(result).toBe(true);
   });
 
-  it('handles null local value (deleted AI.SiteProfile setting)', () => {
+  it("handles null local value (deleted AI.SiteProfile setting)", () => {
     const result = renderSettingDiffPreview(
-      'AI.SiteProfile.Topic',
-      '# My Topic\nSome content here',
-      null,
+      "AI.SiteProfile.Topic",
+      "# My Topic\nSome content here",
+      null
     );
     expect(result).toBe(true);
   });
 
-  it('returns true for LeadCapture.Telegram settings', () => {
+  it("returns true for LeadCapture.Telegram settings", () => {
     const result = renderSettingDiffPreview(
-      'LeadCapture.Telegram.MessageTemplate',
-      'Old template',
-      'New template',
+      "LeadCapture.Telegram.MessageTemplate",
+      "Old template",
+      "New template"
     );
     expect(result).toBe(true);
   });
 });
 
-describe('selectOperationsForPush', () => {
-  it('filters out unchanged operations when force=false', () => {
+describe("selectOperationsForPush", () => {
+  it("filters out unchanged operations when force=false", () => {
     const ops = [
-      { type: 'unchanged' as const, key: 'Content.MinTitleLength', language: null, localValue: '9', remoteValue: '9', remoteId: 1 },
-      { type: 'update' as const, key: 'Media.Quality', language: null, localValue: '90', remoteValue: '80', remoteId: 2 },
-      { type: 'create' as const, key: 'AI.SiteProfile.Topic', language: null, localValue: 'Tech' },
+      {
+        type: "unchanged" as const,
+        key: "Content.MinTitleLength",
+        language: null,
+        localValue: "9",
+        remoteValue: "9",
+        remoteId: 1,
+      },
+      {
+        type: "update" as const,
+        key: "Media.Quality",
+        language: null,
+        localValue: "90",
+        remoteValue: "80",
+        remoteId: 2,
+      },
+      { type: "create" as const, key: "AI.SiteProfile.Topic", language: null, localValue: "Tech" },
     ];
 
     const selected = selectOperationsForPush(ops, false);
     expect(selected).toHaveLength(2);
-    expect(selected.map(op => op.type)).toEqual(['update', 'create']);
+    expect(selected.map((op) => op.type)).toEqual(["update", "create"]);
   });
 
-  it('converts unchanged operations to update when force=true', () => {
+  it("converts unchanged operations to update when force=true", () => {
     const ops = [
-      { type: 'unchanged' as const, key: 'Content.MinTitleLength', language: null, localValue: '9', remoteValue: '9', remoteId: 1 },
-      { type: 'create' as const, key: 'AI.SiteProfile.Topic', language: null, localValue: 'Tech' },
+      {
+        type: "unchanged" as const,
+        key: "Content.MinTitleLength",
+        language: null,
+        localValue: "9",
+        remoteValue: "9",
+        remoteId: 1,
+      },
+      { type: "create" as const, key: "AI.SiteProfile.Topic", language: null, localValue: "Tech" },
     ];
 
     const selected = selectOperationsForPush(ops, true);
     expect(selected).toHaveLength(2);
-    expect(selected[0].type).toBe('update');
-    expect(selected[0].key).toBe('Content.MinTitleLength');
-    expect(selected[1].type).toBe('create');
+    expect(selected[0].type).toBe("update");
+    expect(selected[0].key).toBe("Content.MinTitleLength");
+    expect(selected[1].type).toBe("create");
   });
 
-  it('includes delete operations when force=false', () => {
+  it("includes delete operations when force=false", () => {
     const ops = [
-      { type: 'unchanged' as const, key: 'Content.MinTitleLength', language: null, localValue: '9', remoteValue: '9', remoteId: 1 },
-      { type: 'delete' as const, key: 'Media.Cover.Dimensions', language: 'en-US', localValue: '', remoteValue: '360x300', remoteId: 2 },
+      {
+        type: "unchanged" as const,
+        key: "Content.MinTitleLength",
+        language: null,
+        localValue: "9",
+        remoteValue: "9",
+        remoteId: 1,
+      },
+      {
+        type: "delete" as const,
+        key: "Media.Cover.Dimensions",
+        language: "en-US",
+        localValue: "",
+        remoteValue: "360x300",
+        remoteId: 2,
+      },
     ];
 
     const selected = selectOperationsForPush(ops, false);
     expect(selected).toHaveLength(1);
-    expect(selected[0].type).toBe('delete');
-    expect(selected[0].key).toBe('Media.Cover.Dimensions');
+    expect(selected[0].type).toBe("delete");
+    expect(selected[0].key).toBe("Media.Cover.Dimensions");
   });
 
-  it('includes delete operations when force=true', () => {
+  it("includes delete operations when force=true", () => {
     const ops = [
-      { type: 'unchanged' as const, key: 'Content.MinTitleLength', language: null, localValue: '9', remoteValue: '9', remoteId: 1 },
-      { type: 'delete' as const, key: 'Media.Cover.Dimensions', language: 'en-US', localValue: '', remoteValue: '360x300', remoteId: 2 },
+      {
+        type: "unchanged" as const,
+        key: "Content.MinTitleLength",
+        language: null,
+        localValue: "9",
+        remoteValue: "9",
+        remoteId: 1,
+      },
+      {
+        type: "delete" as const,
+        key: "Media.Cover.Dimensions",
+        language: "en-US",
+        localValue: "",
+        remoteValue: "360x300",
+        remoteId: 2,
+      },
     ];
 
     const selected = selectOperationsForPush(ops, true);
     expect(selected).toHaveLength(2);
-    expect(selected.find(op => op.type === 'delete')).toBeDefined();
+    expect(selected.find((op) => op.type === "delete")).toBeDefined();
   });
 });

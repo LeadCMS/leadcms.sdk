@@ -2,9 +2,9 @@
  * Shared --remote / -r flag parsing for CLI bin scripts.
  */
 
-import { resolveRemote, type RemoteContext } from '../../lib/remote-context.js';
-import { configureDataServiceForRemote } from '../../scripts/leadcms-helpers.js';
-import { getConfig } from '../../lib/config.js';
+import { resolveRemote, type RemoteContext } from "../../lib/remote-context.js";
+import { configureDataServiceForRemote } from "../../scripts/leadcms-helpers.js";
+import { getConfig } from "../../lib/config.js";
 
 /**
  * Parse --remote <name> or -r <name> from CLI args and resolve the
@@ -18,11 +18,11 @@ import { getConfig } from '../../lib/config.js';
  * Returns undefined only in single-remote mode without --remote flag.
  */
 export function parseRemoteFlag(args: string[]): RemoteContext | undefined {
-  const idx = args.findIndex(arg => arg === '--remote' || arg === '-r');
+  const idx = args.findIndex((arg) => arg === "--remote" || arg === "-r");
 
   if (idx !== -1) {
     const name = args[idx + 1];
-    if (!name || name.startsWith('-')) {
+    if (!name || name.startsWith("-")) {
       console.error(`❌ --remote requires a remote name (e.g. --remote production)`);
       process.exit(1);
     }

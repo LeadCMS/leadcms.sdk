@@ -68,7 +68,8 @@ const configCache = new Map<string, ConfigCache>();
 const CACHE_TTL = 60000; // 1 minute cache TTL
 
 // Debug logging control
-const DEBUG_LOGGING = process.env.LEADCMS_DEBUG === 'true' || process.env.NODE_ENV === 'development';
+const DEBUG_LOGGING =
+  process.env.LEADCMS_DEBUG === "true" || process.env.NODE_ENV === "development";
 
 /**
  * Default configuration values
@@ -106,9 +107,9 @@ export function loadConfig(): LeadCMSConfig {
   // Environment variables override config file (for security-sensitive data)
   const mergedConfig = {
     ...DEFAULT_CONFIG,
-    ...configFromFile,     // Config file settings
-    ...configFromEnv,      // Environment variables override config file
-    ...globalConfig,       // Programmatic config takes precedence
+    ...configFromFile, // Config file settings
+    ...configFromEnv, // Environment variables override config file
+    ...globalConfig, // Programmatic config takes precedence
   };
 
   // Remove undefined values and ensure required fields
@@ -167,8 +168,6 @@ export function isPreviewMode(): boolean {
   return process.env.NODE_ENV === "development";
 }
 
-
-
 /**
  * Get current configuration
  */
@@ -197,7 +196,7 @@ function loadConfigFile(cwd: string = process.cwd()): Partial<LeadCMSConfig> {
       const cached = configCache.get(cacheKey);
       const now = Date.now();
 
-      if (cached && (now - cached.timestamp) < CACHE_TTL) {
+      if (cached && now - cached.timestamp < CACHE_TTL) {
         // Return cached config without logging to reduce noise
         return cached.config;
       }
@@ -213,7 +212,9 @@ function loadConfigFile(cwd: string = process.cwd()): Partial<LeadCMSConfig> {
         // JavaScript config (require won't work in ESM, but this is a starting point)
         try {
           // For now, we'll handle JS configs in the CLI layer
-          console.warn(`[LeadCMS] JavaScript config files not yet supported in browser environments: ${configFilePath}`);
+          console.warn(
+            `[LeadCMS] JavaScript config files not yet supported in browser environments: ${configFilePath}`
+          );
           continue;
         } catch (error) {
           console.warn(`[LeadCMS] Failed to load JS config: ${configFilePath}`, error);
@@ -261,7 +262,8 @@ function loadConfigFromEnv(): Partial<LeadCMSConfig> {
   }
 
   if (process.env.LEADCMS_DEFAULT_LANGUAGE || process.env.NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE) {
-    config.defaultLanguage = process.env.LEADCMS_DEFAULT_LANGUAGE || process.env.NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE;
+    config.defaultLanguage =
+      process.env.LEADCMS_DEFAULT_LANGUAGE || process.env.NEXT_PUBLIC_LEADCMS_DEFAULT_LANGUAGE;
   }
 
   if (process.env.LEADCMS_CONTENT_DIR) {
@@ -318,7 +320,9 @@ function validateConfig(config: LeadCMSConfig): void {
     // Validate remotes
     for (const [name, remote] of Object.entries(config.remotes)) {
       if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) {
-        errors.push(`Invalid remote name "${name}": must be lowercase alphanumeric with hyphens, starting with a letter or digit`);
+        errors.push(
+          `Invalid remote name "${name}": must be lowercase alphanumeric with hyphens, starting with a letter or digit`
+        );
       }
       if (!remote.url) {
         errors.push(`Remote "${name}" is missing required "url" field`);
@@ -330,12 +334,15 @@ function validateConfig(config: LeadCMSConfig): void {
     // Validate defaultRemote
     if (config.defaultRemote) {
       if (!config.remotes[config.defaultRemote]) {
-        errors.push(`"defaultRemote" references "${config.defaultRemote}" but no such remote is configured`);
+        errors.push(
+          `"defaultRemote" references "${config.defaultRemote}" but no such remote is configured`
+        );
       }
     } else {
-      errors.push(`"remotes" is configured but "defaultRemote" is not set. Add "defaultRemote" to your config.`);
+      errors.push(
+        `"remotes" is configured but "defaultRemote" is not set. Add "defaultRemote" to your config.`
+      );
     }
-
   } else {
     // Single-remote mode — url is required
     if (!config.url) {
@@ -363,5 +370,3 @@ function isValidUrl(url: string): boolean {
     return false;
   }
 }
-
-

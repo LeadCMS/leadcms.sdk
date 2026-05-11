@@ -14,10 +14,27 @@ import path from "path";
 import axios, { AxiosResponse } from "axios";
 import yaml from "js-yaml";
 import { leadCMSUrl, leadCMSApiKey, REDIRECTS_DIR, singleLanguage } from "./leadcms-helpers.js";
-import { syncTokenPath, resolveRemote, readMetadataMap, writeMetadataMap, type RemoteContext } from "../lib/remote-context.js";
+import {
+  syncTokenPath,
+  resolveRemote,
+  readMetadataMap,
+  writeMetadataMap,
+  type RemoteContext,
+} from "../lib/remote-context.js";
 import { logger } from "../lib/logger.js";
-import type { RedirectDetailsDto, LocalRedirect, LocalRedirectsFile } from "../lib/automation-types.js";
-import { toLocalRedirect, redirectSurrogateKey, flattenRedirectsFile, buildRedirectsFile, stripDefaultLanguage, injectDefaultLanguage } from "../lib/automation-types.js";
+import type {
+  RedirectDetailsDto,
+  LocalRedirect,
+  LocalRedirectsFile,
+} from "../lib/automation-types.js";
+import {
+  toLocalRedirect,
+  redirectSurrogateKey,
+  flattenRedirectsFile,
+  buildRedirectsFile,
+  stripDefaultLanguage,
+  injectDefaultLanguage,
+} from "../lib/automation-types.js";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -77,10 +94,12 @@ async function readLocalRedirectsFile(): Promise<LocalRedirectsFile> {
   try {
     const raw = await fs.readFile(filePath, "utf8");
     const parsed = yaml.load(raw) as LocalRedirectsFile | null;
-    if (parsed && typeof parsed === 'object') {
+    if (parsed && typeof parsed === "object") {
       return parsed;
     }
-  } catch { /* file doesn't exist or is invalid */ }
+  } catch {
+    /* file doesn't exist or is invalid */
+  }
   return {};
 }
 
@@ -88,9 +107,14 @@ async function writeLocalRedirectsFile(redirects: LocalRedirect[]): Promise<void
   await fs.mkdir(REDIRECTS_DIR, { recursive: true });
   const filePath = getRedirectsFilePath();
   // Strip any legacy server-managed fields and sort by surrogate key within each section
-  const cleaned = redirects.map(r => {
-    const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = r as any;
-    return rest as LocalRedirect;
+  const cleaned = redirects.map((r) => {
+    const {
+      id: _id,
+      createdAt: _c,
+      updatedAt: _u,
+      ...rest
+    } = r as unknown as Record<string, unknown>;
+    return rest as unknown as LocalRedirect;
   });
   const sorted = [...cleaned].sort((a, b) =>
     redirectSurrogateKey(a).localeCompare(redirectSurrogateKey(b))
@@ -121,7 +145,8 @@ async function triggerDiscover(): Promise<void> {
     await axios.post(`${leadCMSUrl}/api/redirects/discover`, null, {
       headers: { Authorization: `Bearer ${leadCMSApiKey}` },
     });
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as Error;
     // Discovery trigger is best-effort — warn but don't abort
     logger.verbose(`[API] Redirect discovery returned an error (continuing): ${error.message}`);
   }
@@ -198,11 +223,9 @@ function mergeRedirects(
   existing: LocalRedirect[],
   incoming: RedirectDetailsDto[],
   deleted: number[],
-  idMap: RedirectIdMap,
+  idMap: RedirectIdMap
 ): LocalRedirect[] {
-  const byKey = new Map<string, LocalRedirect>(
-    existing.map(r => [redirectSurrogateKey(r), r])
-  );
+  const byKey = new Map<string, LocalRedirect>(existing.map((r) => [redirectSurrogateKey(r), r]));
 
   // Build reverse id→key map from the id-map for deletion lookups
   const idToKey = new Map<number, string>(
@@ -271,7 +294,9 @@ export async function pullLeadCMSRedirects(
   if (changed) {
     await writeLocalRedirectsFile(merged);
     await writeIdMap(idMap, metadataCtx);
-    console.log(`   ✅ ${items.length} redirect(s) updated, ${deleted.length} deleted. Total: ${merged.length}`);
+    console.log(
+      `   ✅ ${items.length} redirect(s) updated, ${deleted.length} deleted. Total: ${merged.length}`
+    );
   } else {
     // Still write id-map if it doesn't exist yet (first run against existing YAML)
     await writeIdMap(idMap, metadataCtx);

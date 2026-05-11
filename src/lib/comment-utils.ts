@@ -3,7 +3,7 @@
  * Advanced comment processing, tree building, sorting, and filtering
  */
 
-import type { StoredComment } from './comment-types.js';
+import type { StoredComment } from "./comment-types.js";
 
 /**
  * Comment node in a tree structure with children
@@ -19,11 +19,11 @@ export interface CommentTreeNode extends StoredComment {
  * Sort order for comment threads
  */
 export type CommentSortOrder =
-  | 'default'      // Oldest first (createdAt ascending)
-  | 'newest'       // Newest first (createdAt descending)
-  | 'oldest'       // Explicitly oldest first (same as default)
-  | 'most-replies' // Threads with most replies first
-  | 'least-replies'; // Threads with least replies first
+  | "default" // Oldest first (createdAt ascending)
+  | "newest" // Newest first (createdAt descending)
+  | "oldest" // Explicitly oldest first (same as default)
+  | "most-replies" // Threads with most replies first
+  | "least-replies"; // Threads with least replies first
 
 /**
  * Options for building comment trees
@@ -98,13 +98,13 @@ export function buildCommentTree(
   options: CommentTreeOptions = {}
 ): CommentTreeNode[] {
   const {
-    sortOrder = 'default',
-    replySortOrder = 'oldest',
+    sortOrder = "default",
+    replySortOrder = "oldest",
     maxDepth = 0,
     language,
     tags,
     since,
-    until
+    until,
   } = options;
 
   // Filter comments based on criteria
@@ -114,20 +114,20 @@ export function buildCommentTree(
   const commentMap = new Map<number, CommentTreeNode>();
 
   // Initialize all comments as tree nodes
-  filtered.forEach(comment => {
+  filtered.forEach((comment) => {
     commentMap.set(comment.id, {
       ...comment,
       children: [],
       depth: 0,
       isLeaf: true,
-      threadCount: 1
+      threadCount: 1,
     });
   });
 
   // Build parent-child relationships
   const rootNodes: CommentTreeNode[] = [];
 
-  commentMap.forEach(node => {
+  commentMap.forEach((node) => {
     if (node.parentId && commentMap.has(node.parentId)) {
       // This is a reply
       const parent = commentMap.get(node.parentId)!;
@@ -156,7 +156,7 @@ export function buildCommentTree(
     sortCommentNodes(node.children, replySortOrder);
 
     // Recursively process children
-    node.children.forEach(child => {
+    node.children.forEach((child) => {
       totalCount += calculateDepthAndCount(child, depth + 1);
     });
 
@@ -164,7 +164,7 @@ export function buildCommentTree(
     return totalCount;
   }
 
-  rootNodes.forEach(node => calculateDepthAndCount(node, 0));
+  rootNodes.forEach((node) => calculateDepthAndCount(node, 0));
 
   // Sort root nodes
   sortCommentNodes(rootNodes, sortOrder);
@@ -182,7 +182,7 @@ export function flattenCommentTree(tree: CommentTreeNode[]): CommentTreeNode[] {
   const result: CommentTreeNode[] = [];
 
   function traverse(nodes: CommentTreeNode[]) {
-    nodes.forEach(node => {
+    nodes.forEach((node) => {
       result.push(node);
       if (node.children.length > 0) {
         traverse(node.children);
@@ -237,7 +237,7 @@ export function getCommentStatistics(comments: StoredComment[]): CommentStatisti
       languages: [],
       tags: [],
       dateRange: { earliest: null, latest: null },
-      topAuthors: []
+      topAuthors: [],
     };
   }
 
@@ -245,7 +245,7 @@ export function getCommentStatistics(comments: StoredComment[]): CommentStatisti
   const flat = flattenCommentTree(tree);
 
   // Calculate depths
-  const depths = flat.map(c => c.depth);
+  const depths = flat.map((c) => c.depth);
   const maxDepth = Math.max(...depths);
   const averageDepth = depths.reduce((a, b) => a + b, 0) / depths.length;
 
@@ -254,32 +254,32 @@ export function getCommentStatistics(comments: StoredComment[]): CommentStatisti
   const replies = comments.length - threads;
 
   // Unique authors
-  const authorSet = new Set(comments.map(c => c.authorName));
+  const authorSet = new Set(comments.map((c) => c.authorName));
   const authors = authorSet.size;
 
   // Languages
-  const languageSet = new Set(comments.map(c => c.language));
+  const languageSet = new Set(comments.map((c) => c.language));
   const languages = Array.from(languageSet);
 
   // Tags
   const tagSet = new Set<string>();
-  comments.forEach(c => {
+  comments.forEach((c) => {
     if (c.tags) {
-      c.tags.forEach(tag => tagSet.add(tag));
+      c.tags.forEach((tag) => tagSet.add(tag));
     }
   });
   const tags = Array.from(tagSet);
 
   // Date range
-  const dates = comments.map(c => new Date(c.createdAt).getTime()).sort((a, b) => a - b);
+  const dates = comments.map((c) => new Date(c.createdAt).getTime()).sort((a, b) => a - b);
   const dateRange = {
     earliest: new Date(dates[0]).toISOString(),
-    latest: new Date(dates[dates.length - 1]).toISOString()
+    latest: new Date(dates[dates.length - 1]).toISOString(),
   };
 
   // Top authors
   const authorCounts = new Map<string, number>();
-  comments.forEach(c => {
+  comments.forEach((c) => {
     authorCounts.set(c.authorName, (authorCounts.get(c.authorName) || 0) + 1);
   });
   const topAuthors = Array.from(authorCounts.entries())
@@ -297,7 +297,7 @@ export function getCommentStatistics(comments: StoredComment[]): CommentStatisti
     languages,
     tags,
     dateRange,
-    topAuthors
+    topAuthors,
   };
 }
 
@@ -318,7 +318,7 @@ export function filterComments(
     searchText?: string;
   } = {}
 ): StoredComment[] {
-  return comments.filter(comment => {
+  return comments.filter((comment) => {
     // Language filter
     if (filters.language && comment.language !== filters.language) {
       return false;
@@ -326,7 +326,7 @@ export function filterComments(
 
     // Tags filter (must have ALL specified tags)
     if (filters.tags && filters.tags.length > 0) {
-      if (!comment.tags || !filters.tags.every(tag => comment.tags!.includes(tag))) {
+      if (!comment.tags || !filters.tags.every((tag) => comment.tags!.includes(tag))) {
         return false;
       }
     }
@@ -335,14 +335,14 @@ export function filterComments(
     const commentDate = new Date(comment.createdAt);
 
     if (filters.since) {
-      const sinceDate = typeof filters.since === 'string' ? new Date(filters.since) : filters.since;
+      const sinceDate = typeof filters.since === "string" ? new Date(filters.since) : filters.since;
       if (commentDate < sinceDate) {
         return false;
       }
     }
 
     if (filters.until) {
-      const untilDate = typeof filters.until === 'string' ? new Date(filters.until) : filters.until;
+      const untilDate = typeof filters.until === "string" ? new Date(filters.until) : filters.until;
       if (commentDate > untilDate) {
         return false;
       }
@@ -379,7 +379,7 @@ export function groupComments<K extends keyof StoredComment>(
 ): Map<StoredComment[K], StoredComment[]> {
   const groups = new Map<StoredComment[K], StoredComment[]>();
 
-  comments.forEach(comment => {
+  comments.forEach((comment) => {
     const key = comment[groupBy];
     if (!groups.has(key)) {
       groups.set(key, []);
@@ -409,10 +409,7 @@ export function findCommentsByAuthor(
  * @param searchText - Text to search for
  * @returns Matching comments
  */
-export function searchComments(
-  comments: StoredComment[],
-  searchText: string
-): StoredComment[] {
+export function searchComments(comments: StoredComment[], searchText: string): StoredComment[] {
   return filterComments(comments, { searchText });
 }
 
@@ -422,10 +419,7 @@ export function searchComments(
  * @param count - Number of recent comments to return
  * @returns Most recent comments
  */
-export function getRecentComments(
-  comments: StoredComment[],
-  count: number = 10
-): StoredComment[] {
+export function getRecentComments(comments: StoredComment[], count: number = 10): StoredComment[] {
   return [...comments]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, count);
@@ -436,12 +430,10 @@ export function getRecentComments(
  * @param comments - Array of comments
  * @returns Map of author names to comment counts
  */
-export function getCommentCountByAuthor(
-  comments: StoredComment[]
-): Map<string, number> {
+export function getCommentCountByAuthor(comments: StoredComment[]): Map<string, number> {
   const counts = new Map<string, number>();
 
-  comments.forEach(comment => {
+  comments.forEach((comment) => {
     counts.set(comment.authorName, (counts.get(comment.authorName) || 0) + 1);
   });
 
@@ -455,7 +447,7 @@ export function getCommentCountByAuthor(
  * @returns True if the comment has replies
  */
 export function hasReplies(comments: StoredComment[], commentId: number): boolean {
-  return comments.some(c => c.parentId === commentId);
+  return comments.some((c) => c.parentId === commentId);
 }
 
 /**
@@ -464,11 +456,8 @@ export function hasReplies(comments: StoredComment[], commentId: number): boolea
  * @param parentId - Parent comment ID
  * @returns Direct child comments
  */
-export function getReplies(
-  comments: StoredComment[],
-  parentId: number
-): StoredComment[] {
-  return comments.filter(c => c.parentId === parentId);
+export function getReplies(comments: StoredComment[], parentId: number): StoredComment[] {
+  return comments.filter((c) => c.parentId === parentId);
 }
 
 /**
@@ -477,11 +466,8 @@ export function getReplies(
  * @param commentId - Target comment ID
  * @returns Array of comments from root to target
  */
-export function getCommentPath(
-  comments: StoredComment[],
-  commentId: number
-): StoredComment[] {
-  const commentMap = new Map(comments.map(c => [c.id, c]));
+export function getCommentPath(comments: StoredComment[], commentId: number): StoredComment[] {
+  const commentMap = new Map(comments.map((c) => [c.id, c]));
   const path: StoredComment[] = [];
 
   let current = commentMap.get(commentId);
@@ -502,17 +488,17 @@ export function getCommentPath(
 function sortCommentNodes(nodes: CommentTreeNode[], sortOrder: CommentSortOrder): void {
   nodes.sort((a, b) => {
     switch (sortOrder) {
-      case 'newest':
+      case "newest":
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
 
-      case 'oldest':
-      case 'default':
+      case "oldest":
+      case "default":
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
 
-      case 'most-replies':
+      case "most-replies":
         return b.threadCount - a.threadCount;
 
-      case 'least-replies':
+      case "least-replies":
         return a.threadCount - b.threadCount;
 
       default:

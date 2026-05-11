@@ -50,68 +50,68 @@ export interface SettingImportResult {
  * Only these keys are pulled/saved/pushed.
  */
 export const TRACKED_SETTING_KEYS: readonly string[] = [
-  'AI.SiteProfile.Audience',
-  'AI.SiteProfile.AvoidTerms',
-  'AI.SiteProfile.BlogCover.Instructions',
-  'AI.SiteProfile.BrandVoice',
-  'AI.SiteProfile.EmailTemplate.Instructions',
-  'AI.SiteProfile.PreferredTerms',
-  'AI.SiteProfile.StyleExamples',
-  'AI.SiteProfile.Topic',
-  'LeadCapture.Telegram.MessageTemplate',
-  'Content.MaxDescriptionLength',
-  'Content.MaxTitleLength',
-  'Content.MinDescriptionLength',
-  'Content.MinTitleLength',
-  'General.PrivacyUrl',
-  'General.SiteUrl',
-  'General.UnsubscribeUrl',
-  'Media.Cover.Dimensions',
-  'Media.EnableCoverResize',
-  'Media.EnableOptimisation',
-  'Media.Max.Dimensions',
-  'Media.Max.FileSize',
-  'Media.PreferredFormat',
-  'Media.Quality',
+  "AI.SiteProfile.Audience",
+  "AI.SiteProfile.AvoidTerms",
+  "AI.SiteProfile.BlogCover.Instructions",
+  "AI.SiteProfile.BrandVoice",
+  "AI.SiteProfile.EmailTemplate.Instructions",
+  "AI.SiteProfile.PreferredTerms",
+  "AI.SiteProfile.StyleExamples",
+  "AI.SiteProfile.Topic",
+  "LeadCapture.Telegram.MessageTemplate",
+  "Content.MaxDescriptionLength",
+  "Content.MaxTitleLength",
+  "Content.MinDescriptionLength",
+  "Content.MinTitleLength",
+  "General.PrivacyUrl",
+  "General.SiteUrl",
+  "General.UnsubscribeUrl",
+  "Media.Cover.Dimensions",
+  "Media.EnableCoverResize",
+  "Media.EnableOptimisation",
+  "Media.Max.Dimensions",
+  "Media.Max.FileSize",
+  "Media.PreferredFormat",
+  "Media.Quality",
 ] as const;
 
 /**
  * Keys that are stored as individual files under ai/site-profile/
  */
-export const AI_SITEPROFILE_PREFIX = 'AI.SiteProfile.';
+export const AI_SITEPROFILE_PREFIX = "AI.SiteProfile.";
 
 /**
  * Keys that are stored as individual files under lead-capture/telegram/
  */
-export const LEADCAPTURE_TELEGRAM_PREFIX = 'LeadCapture.Telegram.';
+export const LEADCAPTURE_TELEGRAM_PREFIX = "LeadCapture.Telegram.";
 
 /**
  * Keys that are grouped into general.json
  */
-export const GENERAL_SETTING_PREFIX = 'General.';
+export const GENERAL_SETTING_PREFIX = "General.";
 
 /**
  * Keys that are grouped into content.json
  */
-export const CONTENT_SETTING_PREFIX = 'Content.';
+export const CONTENT_SETTING_PREFIX = "Content.";
 
 /**
  * Keys that are grouped into media.json
  */
-export const MEDIA_SETTING_PREFIX = 'Media.';
+export const MEDIA_SETTING_PREFIX = "Media.";
 
 /**
  * File extension overrides for specific setting keys.
  * Keys not in this map default to '.md'.
  */
 export const SETTING_FILE_EXTENSIONS: Record<string, string> = {
-  'LeadCapture.Telegram.MessageTemplate': '.txt',
+  "LeadCapture.Telegram.MessageTemplate": ".txt",
 };
 
 /**
  * Default file extension for file-based settings.
  */
-const DEFAULT_SETTING_EXTENSION = '.md';
+const DEFAULT_SETTING_EXTENSION = ".md";
 
 /**
  * Get the file extension for a setting key.
@@ -124,9 +124,7 @@ export function getSettingFileExtension(key: string): string {
  * Convert a PascalCase segment to kebab-case.
  */
 function pascalToKebab(str: string): string {
-  return str
-    .replace(/([a-z])([A-Z])/g, '$1-$2')
-    .toLowerCase();
+  return str.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
 }
 
 /**
@@ -137,10 +135,10 @@ function pascalToKebab(str: string): string {
  * Example: 'LeadCapture.Telegram.MessageTemplate' → 'lead-capture/telegram/message-template.txt'
  */
 export function settingKeyToRelativePath(key: string): string {
-  const segments = key.split('.');
+  const segments = key.split(".");
   const kebabSegments = segments.map(pascalToKebab);
   const ext = getSettingFileExtension(key);
-  return kebabSegments.join('/') + ext;
+  return kebabSegments.join("/") + ext;
 }
 
 /**
@@ -166,7 +164,7 @@ export function getFileSettingTopLevelDirs(): Set<string> {
   for (const key of TRACKED_SETTING_KEYS) {
     if (!isFileSettingKey(key)) continue;
     const relPath = settingKeyToRelativePath(key);
-    const topDir = relPath.split('/')[0];
+    const topDir = relPath.split("/")[0];
     dirs.add(topDir);
   }
   return dirs;
@@ -179,8 +177,8 @@ export function aiSiteProfileKeyToFileName(key: string): string {
   // e.g. 'AI.SiteProfile.BlogCover.Instructions' → 'blogcover-instructions'
   const suffix = key.slice(AI_SITEPROFILE_PREFIX.length);
   return suffix
-    .replace(/\./g, '-')
-    .replace(/([a-z])([A-Z])/g, '$1-$2')
+    .replace(/\./g, "-")
+    .replace(/([a-z])([A-Z])/g, "$1-$2")
     .toLowerCase();
 }
 
@@ -212,8 +210,8 @@ export function isAiSiteProfileKey(key: string): boolean {
 export function leadCaptureTelegramKeyToFileName(key: string): string {
   const suffix = key.slice(LEADCAPTURE_TELEGRAM_PREFIX.length);
   return suffix
-    .replace(/\./g, '-')
-    .replace(/([a-z])([A-Z])/g, '$1-$2')
+    .replace(/\./g, "-")
+    .replace(/([a-z])([A-Z])/g, "$1-$2")
     .toLowerCase();
 }
 
@@ -291,7 +289,7 @@ export interface SettingComparisonEntry {
   language: string | null;
   localValue: string | null;
   remoteValue: string | null;
-  status: 'in-sync' | 'local-only' | 'remote-only' | 'modified';
+  status: "in-sync" | "local-only" | "remote-only" | "modified";
 }
 
 /**
@@ -306,7 +304,7 @@ export interface SettingsStatusResult {
  * Operation type for push
  */
 export interface SettingPushOperation {
-  type: 'create' | 'update' | 'unchanged' | 'delete';
+  type: "create" | "update" | "unchanged" | "delete";
   key: string;
   language: string | null;
   localValue: string;

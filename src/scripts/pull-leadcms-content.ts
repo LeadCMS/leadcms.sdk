@@ -4,18 +4,30 @@ import path from "path";
 import axios, { AxiosResponse } from "axios";
 import {
   leadCMSUrl,
-  leadCMSApiKey,
   defaultLanguage,
   CONTENT_DIR,
   fetchContentTypes,
   ContentItem,
 } from "./leadcms-helpers.js";
-import { saveContentFile, transformRemoteToLocalFormat, type ContentTypeMap } from "../lib/content-transformation.js";
+import {
+  saveContentFile,
+  transformRemoteToLocalFormat,
+  type ContentTypeMap,
+} from "../lib/content-transformation.js";
 import { threeWayMerge, threeWayMergeJson, isLocallyModified } from "../lib/content-merge.js";
 import { getConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
 import type { RemoteContext } from "../lib/remote-context.js";
 import { syncTokenPath } from "../lib/remote-context.js";
+
+interface ScriptError extends Error {
+  code?: string;
+  response?: {
+    status?: number;
+    data?: { detail?: string; title?: string; message?: string; [key: string]: unknown } | null;
+  };
+  status?: number;
+}
 
 /**
  * Options for pullLeadCMSContent.
@@ -77,14 +89,18 @@ async function readFileOrUndefined(filePath: string): Promise<string | undefined
 async function unlinkSafe(filePath: string): Promise<void> {
   try {
     await fs.unlink(filePath);
-  } catch { /* not found — ok */ }
+  } catch {
+    /* not found — ok */
+  }
 }
 
 /**
  * Read content sync token. Checks new location first, then falls back to legacy.
  * When remoteCtx is provided, reads from the remote-specific state directory.
  */
-async function readSyncToken(remoteCtx?: RemoteContext): Promise<{ token: string | undefined; migrated: boolean }> {
+async function readSyncToken(
+  remoteCtx?: RemoteContext
+): Promise<{ token: string | undefined; migrated: boolean }> {
   if (remoteCtx) {
     const tokenPath = syncTokenPath(remoteCtx, "content");
     const token = await readFileOrUndefined(tokenPath);
@@ -173,9 +189,11 @@ async function pullContentSync(syncToken?: string, baseUrl?: string): Promise<Co
       }
 
       // Collect base items for three-way merge support
-      if (data.baseItems && typeof data.baseItems === 'object') {
+      if (data.baseItems && typeof data.baseItems === "object") {
         Object.assign(allBaseItems, data.baseItems);
-        logger.verbose(`[PULL_CONTENT_SYNC] Page ${page} - Got ${Object.keys(data.baseItems).length} base items for merge`);
+        logger.verbose(
+          `[PULL_CONTENT_SYNC] Page ${page} - Got ${Object.keys(data.baseItems).length} base items for merge`
+        );
       }
 
       const newSyncToken = res.headers["x-next-sync-token"] || token;
@@ -190,7 +208,8 @@ async function pullContentSync(syncToken?: string, baseUrl?: string): Promise<Co
       nextSyncToken = newSyncToken;
       token = newSyncToken;
       page++;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ScriptError;
       console.error(`[PULL_CONTENT_SYNC] Failed on page ${page}:`, error.message);
       throw error;
     }
@@ -224,8 +243,9 @@ async function buildContentIdIndex(dir: string): Promise<ContentIdIndex> {
     let entries;
     try {
       entries = await fs.readdir(currentDir, { withFileTypes: true });
-    } catch (err: any) {
-      if (err.code !== 'ENOENT') {
+    } catch (_err: unknown) {
+      const err = _err as ScriptError;
+      if (err.code !== "ENOENT") {
         console.warn(`Warning: Could not read directory ${currentDir}:`, err.message);
       }
       return;
@@ -247,7 +267,9 @@ async function buildContentIdIndex(dir: string): Promise<ContentIdIndex> {
               index.set(id, [fullPath]);
             }
           }
-        } catch { /* skip unreadable files */ }
+        } catch {
+          /* skip unreadable files */
+        }
       }
     }
   }
@@ -285,8 +307,9 @@ async function deleteContentFilesById(index: ContentIdIndex, idStr: string): Pro
     try {
       await fs.unlink(filePath);
       logger.verbose(`Deleted: ${filePath}`);
-    } catch (err: any) {
-      if (err.code !== 'ENOENT') {
+    } catch (_err: unknown) {
+      const err = _err as ScriptError;
+      if (err.code !== "ENOENT") {
         console.warn(`Warning: Could not delete ${filePath}:`, err.message);
       }
     }
@@ -304,16 +327,17 @@ async function deleteContentFilesBySlug(
   contentDir: string,
   slug: string,
   language: string,
-  cfgDefaultLanguage: string,
+  cfgDefaultLanguage: string
 ): Promise<void> {
   const dir = language === cfgDefaultLanguage ? contentDir : path.join(contentDir, language);
-  for (const ext of ['.mdx', '.json']) {
+  for (const ext of [".mdx", ".json"]) {
     const filePath = path.join(dir, `${slug}${ext}`);
     try {
       await fs.unlink(filePath);
       logger.verbose(`Deleted: ${filePath}`);
-    } catch (err: any) {
-      if (err.code !== 'ENOENT') {
+    } catch (_err: unknown) {
+      const err = _err as ScriptError;
+      if (err.code !== "ENOENT") {
         console.warn(`Warning: Could not delete ${filePath}:`, err.message);
       }
     }
@@ -345,11 +369,12 @@ async function findAndDeleteContentFile(dir: string, idStr: string): Promise<voi
             await fs.unlink(fullPath);
             logger.verbose(`Deleted: ${fullPath}`);
           }
-        } catch { }
+        } catch {}
       }
     }
-  } catch (err: any) {
-    if (err.code !== 'ENOENT') {
+  } catch (_err: unknown) {
+    const err = _err as ScriptError;
+    if (err.code !== "ENOENT") {
       console.warn(`Warning: Could not read directory ${dir}:`, err.message);
     }
   }
@@ -381,12 +406,19 @@ async function main(options: PullContentOptions = {}): Promise<void> {
   try {
     if (lastSyncToken) {
       logger.verbose(`Syncing content from LeadCMS using sync token: ${lastSyncToken}`);
-      ({ items, deleted, baseItems, nextSyncToken } = await pullContentSync(lastSyncToken, effectiveUrl));
+      ({ items, deleted, baseItems, nextSyncToken } = await pullContentSync(
+        lastSyncToken,
+        effectiveUrl
+      ));
     } else {
       logger.verbose("No content sync token found. Doing full pull from LeadCMS...");
-      ({ items, deleted, baseItems, nextSyncToken } = await pullContentSync(undefined, effectiveUrl));
+      ({ items, deleted, baseItems, nextSyncToken } = await pullContentSync(
+        undefined,
+        effectiveUrl
+      ));
     }
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as ScriptError;
     console.error(`[MAIN] Failed to pull content:`, error.message);
     if (error.response?.status === 401) {
       console.error(`[MAIN] Authentication failed - check your LEADCMS_API_KEY`);
@@ -398,9 +430,10 @@ async function main(options: PullContentOptions = {}): Promise<void> {
 
   // Build an ID→filepath index once instead of walking the tree per item.
   // This turns O(items × files) disk reads into O(files + items).
-  const contentIdIndex = (items.length > 0 || deleted.length > 0)
-    ? await buildContentIdIndex(CONTENT_DIR)
-    : new Map<string, string[]>();
+  const contentIdIndex =
+    items.length > 0 || deleted.length > 0
+      ? await buildContentIdIndex(CONTENT_DIR)
+      : new Map<string, string[]>();
 
   // Save content files (with three-way merge support)
   const hasBaseItems = Object.keys(baseItems).length > 0;
@@ -412,14 +445,16 @@ async function main(options: PullContentOptions = {}): Promise<void> {
   // Build a ContentTypeMap for transformation
   const contentTypeMap: ContentTypeMap = {};
   for (const [key, value] of Object.entries(typeMap)) {
-    contentTypeMap[key] = value === 'JSON' ? 'JSON' : 'MDX';
+    contentTypeMap[key] = value === "JSON" ? "JSON" : "MDX";
   }
 
-  console.log(`📄 Processing content sync (${items.length} updates, ${deleted.length} deletions)...`);
+  console.log(
+    `📄 Processing content sync (${items.length} updates, ${deleted.length} deletions)...`
+  );
 
   // Load per-remote metadata for multi-remote support
-  let metadataMap: import('../lib/remote-context.js').MetadataMap | undefined;
-  const rcModule = remoteCtx ? await import('../lib/remote-context.js') : undefined;
+  let metadataMap: import("../lib/remote-context.js").MetadataMap | undefined;
+  const rcModule = remoteCtx ? await import("../lib/remote-context.js") : undefined;
   if (remoteCtx && rcModule) {
     metadataMap = await rcModule.readMetadataMap(remoteCtx);
   }
@@ -428,14 +463,14 @@ async function main(options: PullContentOptions = {}): Promise<void> {
   // remote's ids and timestamps, even when pulling from another remote.
   // Derive defaultRemote stateDir from the current remote's stateDir (sibling
   // directory) so it works regardless of process.cwd().
-  let defaultMetadataMap: import('../lib/remote-context.js').MetadataMap | undefined;
+  let defaultMetadataMap: import("../lib/remote-context.js").MetadataMap | undefined;
   if (remoteCtx && !remoteCtx.isDefault && rcModule) {
     const cfg = getConfig();
     if (cfg.defaultRemote) {
       const defaultStateDir = path.join(path.dirname(remoteCtx.stateDir), cfg.defaultRemote);
-      const defaultCtx: import('../lib/remote-context.js').RemoteContext = {
+      const defaultCtx: import("../lib/remote-context.js").RemoteContext = {
         name: cfg.defaultRemote,
-        url: cfg.remotes?.[cfg.defaultRemote]?.url || '',
+        url: cfg.remotes?.[cfg.defaultRemote]?.url || "",
         isDefault: true,
         stateDir: defaultStateDir,
       };
@@ -460,12 +495,22 @@ async function main(options: PullContentOptions = {}): Promise<void> {
       // Update per-remote metadata with this content item's data
       if (remoteCtx && rcModule && metadataMap && content.slug && content.language) {
         if (content.id != null) {
-          rcModule.setRemoteId(metadataMap, content.language || defaultLanguage, content.slug, content.id);
+          rcModule.setRemoteId(
+            metadataMap,
+            content.language || defaultLanguage,
+            content.slug,
+            content.id
+          );
         }
-        rcModule.setMetadataForContent(metadataMap, content.language || defaultLanguage, content.slug, {
-          createdAt: content.createdAt,
-          updatedAt: content.updatedAt,
-        });
+        rcModule.setMetadataForContent(
+          metadataMap,
+          content.language || defaultLanguage,
+          content.slug,
+          {
+            createdAt: content.createdAt,
+            updatedAt: content.updatedAt,
+          }
+        );
       }
 
       // For non-default remotes, replace server-generated fields with the
@@ -473,7 +518,7 @@ async function main(options: PullContentOptions = {}): Promise<void> {
       // The current remote's values are already stored in its per-remote maps.
       let contentToSave = content;
       if (remoteCtx && !remoteCtx.isDefault) {
-        const { id, createdAt, updatedAt, ...rest } = content;
+        const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = content;
         const lang = content.language || defaultLanguage;
         const defaultId = defaultMetadataMap?.content[lang]?.[content.slug]?.id;
         const defaultMeta = defaultMetadataMap?.content[lang]?.[content.slug];
@@ -492,14 +537,14 @@ async function main(options: PullContentOptions = {}): Promise<void> {
       if (contentLanguage !== contentConfig.defaultLanguage) {
         targetContentDir = path.join(CONTENT_DIR, contentLanguage);
       }
-      const contentType = contentTypeMap[content.type] || 'MDX';
-      const extension = contentType === 'MDX' ? '.mdx' : '.json';
+      const contentType = contentTypeMap[content.type] || "MDX";
+      const extension = contentType === "MDX" ? ".mdx" : ".json";
       const expectedPath = path.join(targetContentDir, `${content.slug}${extension}`);
 
       // Check if local file exists before deleting old paths
       let localContent: string | null = null;
       try {
-        localContent = await fs.readFile(expectedPath, 'utf8');
+        localContent = await fs.readFile(expectedPath, "utf8");
       } catch {
         // File does not exist — this is new content
       }
@@ -516,18 +561,22 @@ async function main(options: PullContentOptions = {}): Promise<void> {
           const oldSlugChanged = oldContentEntry.slug !== content.slug;
           const oldLangChanged = oldContentEntry.language !== (content.language || defaultLanguage);
           if (oldSlugChanged || oldLangChanged) {
-            console.log(`   🗑️  Removing old content file: ${oldContentEntry.language}/${oldContentEntry.slug} (renamed to ${content.language || defaultLanguage}/${content.slug})`);
+            console.log(
+              `   🗑️  Removing old content file: ${oldContentEntry.language}/${oldContentEntry.slug} (renamed to ${content.language || defaultLanguage}/${content.slug})`
+            );
           }
           await deleteContentFilesBySlug(
             CONTENT_DIR,
             oldContentEntry.slug,
             oldContentEntry.language,
-            getConfig().defaultLanguage,
+            getConfig().defaultLanguage
           );
         } else if (!remoteCtx || remoteCtx.isDefault) {
           const oldPaths = contentIdIndex.get(idStr);
-          if (oldPaths && oldPaths.length > 0 && !oldPaths.some(p => p === expectedPath)) {
-            console.log(`   🗑️  Removing old content file: ${oldPaths.map(p => path.relative(CONTENT_DIR, p)).join(', ')} (slug, type, or language changed)`);
+          if (oldPaths && oldPaths.length > 0 && !oldPaths.some((p) => p === expectedPath)) {
+            console.log(
+              `   🗑️  Removing old content file: ${oldPaths.map((p) => path.relative(CONTENT_DIR, p)).join(", ")} (slug, type, or language changed)`
+            );
           }
           await deleteContentFilesById(contentIdIndex, idStr);
         }
@@ -552,21 +601,24 @@ async function main(options: PullContentOptions = {}): Promise<void> {
           // Local file was modified — perform three-way merge
           // Use structural merge for JSON (avoids false conflicts from adjacent lines)
           // and line-based merge for MDX
-          const mergeResult = contentType === 'JSON'
-            ? threeWayMergeJson(baseTransformed, localContent, remoteTransformed)
-            : threeWayMerge(baseTransformed, localContent, remoteTransformed);
+          const mergeResult =
+            contentType === "JSON"
+              ? threeWayMergeJson(baseTransformed, localContent, remoteTransformed)
+              : threeWayMerge(baseTransformed, localContent, remoteTransformed);
 
           if (mergeResult.success) {
             // Clean merge — write the merged result
             await fs.mkdir(path.dirname(expectedPath), { recursive: true });
-            await fs.writeFile(expectedPath, mergeResult.merged, 'utf8');
+            await fs.writeFile(expectedPath, mergeResult.merged, "utf8");
             console.log(`🔀 Auto-merged: ${content.slug} (local + remote changes combined)`);
             mergedCount++;
           } else {
             // Conflicts — write merged content with conflict markers
             await fs.mkdir(path.dirname(expectedPath), { recursive: true });
-            await fs.writeFile(expectedPath, mergeResult.merged, 'utf8');
-            console.warn(`⚠️  Conflict in: ${content.slug} (${mergeResult.conflictCount} conflict(s) — manual resolution needed)`);
+            await fs.writeFile(expectedPath, mergeResult.merged, "utf8");
+            console.warn(
+              `⚠️  Conflict in: ${content.slug} (${mergeResult.conflictCount} conflict(s) — manual resolution needed)`
+            );
             conflictCount++;
           }
         }
@@ -582,8 +634,9 @@ async function main(options: PullContentOptions = {}): Promise<void> {
 
       processedContent++;
       if (
-        items.length > CONTENT_PROGRESS_LOG_INTERVAL
-        && (processedContent % CONTENT_PROGRESS_LOG_INTERVAL === 0 || processedContent === items.length)
+        items.length > CONTENT_PROGRESS_LOG_INTERVAL &&
+        (processedContent % CONTENT_PROGRESS_LOG_INTERVAL === 0 ||
+          processedContent === items.length)
       ) {
         console.log(`   📄 Content processed: ${processedContent}/${items.length}`);
       }
@@ -596,7 +649,8 @@ async function main(options: PullContentOptions = {}): Promise<void> {
     if (newCount > 0) console.log(`   ✨ New: ${newCount}`);
     if (overwrittenCount > 0) console.log(`   📝 Updated (no local changes): ${overwrittenCount}`);
     if (mergedCount > 0) console.log(`   🔀 Auto-merged: ${mergedCount}`);
-    if (conflictCount > 0) console.log(`   ⚠️  Conflicts (need manual resolution): ${conflictCount}`);
+    if (conflictCount > 0)
+      console.log(`   ⚠️  Conflicts (need manual resolution): ${conflictCount}`);
   }
 
   // Remove deleted content files from all language directories
@@ -611,7 +665,12 @@ async function main(options: PullContentOptions = {}): Promise<void> {
       const entry = rcModule.findContentByRemoteId(metadataMap, id);
       if (entry) {
         console.log(`   🗑️  ${entry.language}/${entry.slug} (deleted on remote)`);
-        await deleteContentFilesBySlug(CONTENT_DIR, entry.slug, entry.language, getConfig().defaultLanguage);
+        await deleteContentFilesBySlug(
+          CONTENT_DIR,
+          entry.slug,
+          entry.language,
+          getConfig().defaultLanguage
+        );
         // Clean up the metadata entry for this deleted content
         if (metadataMap.content[entry.language]) {
           delete metadataMap.content[entry.language][entry.slug];
@@ -624,7 +683,9 @@ async function main(options: PullContentOptions = {}): Promise<void> {
     } else {
       const paths = contentIdIndex.get(String(id));
       if (paths && paths.length > 0) {
-        console.log(`   🗑️  ${paths.map(p => path.relative(CONTENT_DIR, p)).join(', ')} (deleted on remote)`);
+        console.log(
+          `   🗑️  ${paths.map((p) => path.relative(CONTENT_DIR, p)).join(", ")} (deleted on remote)`
+        );
       }
       await deleteContentFilesById(contentIdIndex, String(id));
     }

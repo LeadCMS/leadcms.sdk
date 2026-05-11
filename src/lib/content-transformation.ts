@@ -4,11 +4,11 @@
  * remote API format and local file format (MDX/JSON)
  */
 
-import matter from 'gray-matter';
-import fs from 'fs/promises';
-import path from 'path';
-import { getConfig } from './config.js';
-import { apiSeoToFrontmatter, type SeoMetadataDto, type SeoDefaultSources } from './seo-utils.js';
+import matter from "gray-matter";
+import fs from "fs/promises";
+import path from "path";
+import { getConfig } from "./config.js";
+import { apiSeoToFrontmatter, type SeoMetadataDto, type SeoDefaultSources } from "./seo-utils.js";
 
 export interface RemoteContentData {
   id?: number | string;
@@ -21,11 +21,11 @@ export interface RemoteContentData {
   createdAt?: string;
   updatedAt?: string;
   publishedAt?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface ContentTypeMap {
-  [contentType: string]: 'MDX' | 'JSON';
+  [contentType: string]: "MDX" | "JSON";
 }
 
 /**
@@ -44,11 +44,11 @@ export async function transformRemoteToLocalFormat(
     throw new Error("Invalid remote content");
   }
 
-  const contentType = typeMap[remote.type] || 'MDX';
+  const contentType = typeMap[remote.type] || "MDX";
 
-  if (contentType === 'MDX') {
+  if (contentType === "MDX") {
     return transformToMDXFormat(remote);
-  } else if (contentType === 'JSON') {
+  } else if (contentType === "JSON") {
     return transformToJSONFormat(remote);
   } else {
     throw new Error(`Unsupported content type: ${contentType}`);
@@ -74,11 +74,11 @@ export async function transformRemoteForComparison(
     throw new Error("Invalid remote content");
   }
 
-  const contentType = typeMap[remote.type] || 'MDX';
+  const contentType = typeMap[remote.type] || "MDX";
 
-  if (contentType === 'MDX') {
+  if (contentType === "MDX") {
     return transformToMDXFormatForComparison(remote, localContent);
-  } else if (contentType === 'JSON') {
+  } else if (contentType === "JSON") {
     return transformToJSONFormatForComparison(remote, localContent);
   } else {
     throw new Error(`Unsupported content type: ${contentType}`);
@@ -90,16 +90,19 @@ export async function transformRemoteForComparison(
  * Includes ALL non-system remote fields so that field removals in local content
  * are properly detected as changes.
  */
-function transformToMDXFormatForComparison(remote: RemoteContentData, localContent: string): string {
+function transformToMDXFormatForComparison(
+  remote: RemoteContentData,
+  localContent: string
+): string {
   // Validate that local content is parseable MDX, fall back to full transform if not
   try {
     matter(localContent);
-  } catch (error) {
+  } catch {
     return transformToMDXFormat(remote);
   }
 
   let body = remote.body || "";
-  let bodyFrontmatter: Record<string, any> = {};
+  let bodyFrontmatter: Record<string, unknown> = {};
   let bodyContent = body;
 
   // Extract frontmatter from body if present
@@ -109,7 +112,8 @@ function transformToMDXFormatForComparison(remote: RemoteContentData, localConte
       // Use matter() to parse YAML by wrapping in delimiters
       const yamlWithDelimiters = `---\n${fmMatch[1]}\n---\n`;
       bodyFrontmatter = matter(yamlWithDelimiters).data || {};
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as Error;
       console.warn(`Failed to parse frontmatter:`, error.message);
     }
     bodyContent = body.slice(fmMatch[0].length);
@@ -119,8 +123,8 @@ function transformToMDXFormatForComparison(remote: RemoteContentData, localConte
   const mergedFrontmatter = { ...remote, ...bodyFrontmatter };
 
   // Exclude system/internal fields that should not appear in local files
-  const systemFields = ['body', 'isLocal'];
-  systemFields.forEach(field => delete mergedFrontmatter[field]);
+  const systemFields = ["body", "isLocal"];
+  systemFields.forEach((field) => delete mergedFrontmatter[field]);
 
   // Include ALL non-system remote fields so that field removals are detected.
   // The timestamp check in matchContent already prevents false positives from
@@ -151,15 +155,18 @@ function transformToMDXFormatForComparison(remote: RemoteContentData, localConte
  * Includes ALL non-system remote fields so that field removals in local content
  * are properly detected as changes.
  */
-function transformToJSONFormatForComparison(remote: RemoteContentData, localContent: string): string {
+function transformToJSONFormatForComparison(
+  remote: RemoteContentData,
+  localContent: string
+): string {
   // Validate that local content is parseable JSON, fall back to full transform if not
   try {
     JSON.parse(localContent);
-  } catch (error) {
+  } catch {
     return transformToJSONFormat(remote);
   }
 
-  let bodyObj: Record<string, any> = {};
+  let bodyObj: Record<string, unknown> = {};
 
   try {
     bodyObj = remote.body ? JSON.parse(remote.body) : {};
@@ -172,7 +179,7 @@ function transformToJSONFormatForComparison(remote: RemoteContentData, localCont
   const merged = { ...transformedBodyObj };
 
   // Exclude system/internal fields that should not appear in local files
-  const systemFields = ['body', 'isLocal'];
+  const systemFields = ["body", "isLocal"];
 
   // Include ALL non-system remote fields so that field removals are detected.
   // The timestamp check in matchContent already prevents false positives from
@@ -197,7 +204,7 @@ function transformToJSONFormatForComparison(remote: RemoteContentData, localCont
  */
 function transformToMDXFormat(remote: RemoteContentData): string {
   let body = remote.body || "";
-  let bodyFrontmatter: Record<string, any> = {};
+  let bodyFrontmatter: Record<string, unknown> = {};
   let bodyContent = body;
 
   // Extract frontmatter from body if present
@@ -207,7 +214,8 @@ function transformToMDXFormat(remote: RemoteContentData): string {
       // Use matter() to parse YAML by wrapping in delimiters
       const yamlWithDelimiters = `---\n${fmMatch[1]}\n---\n`;
       bodyFrontmatter = matter(yamlWithDelimiters).data || {};
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as Error;
       console.warn(`Failed to parse frontmatter:`, error.message);
     }
     bodyContent = body.slice(fmMatch[0].length);
@@ -218,8 +226,8 @@ function transformToMDXFormat(remote: RemoteContentData): string {
 
   // Exclude system/internal fields that should not appear in local files
   // Only exclude truly internal fields, not user content fields like timestamps
-  const systemFields = ['body', 'isLocal'];
-  systemFields.forEach(field => delete mergedFrontmatter[field]);
+  const systemFields = ["body", "isLocal"];
+  systemFields.forEach((field) => delete mergedFrontmatter[field]);
 
   // Convert API SEO metadata to frontmatter format, stripping default values
   processSeoForFrontmatter(mergedFrontmatter);
@@ -245,7 +253,7 @@ function transformToMDXFormat(remote: RemoteContentData): string {
  * Transform remote content to JSON format
  */
 function transformToJSONFormat(remote: RemoteContentData): string {
-  let bodyObj: Record<string, any> = {};
+  let bodyObj: Record<string, unknown> = {};
 
   try {
     bodyObj = remote.body ? JSON.parse(remote.body) : {};
@@ -259,7 +267,7 @@ function transformToJSONFormat(remote: RemoteContentData): string {
 
   // Exclude system/internal fields that should not appear in local files
   // Only exclude truly internal fields, not user content fields like timestamps
-  const systemFields = ['body', 'isLocal'];
+  const systemFields = ["body", "isLocal"];
 
   for (const [k, v] of Object.entries(remote)) {
     if (!systemFields.includes(k)) {
@@ -281,7 +289,11 @@ function transformToJSONFormat(remote: RemoteContentData): string {
  * Converts /api/media/ paths to /media/ paths
  * Only transforms paths that start with /api/media/ (not in the middle of URLs)
  */
-export function replaceApiMediaPaths(obj: any): any {
+export function replaceApiMediaPaths(obj: string): string;
+export function replaceApiMediaPaths(obj: Record<string, unknown>): Record<string, unknown>;
+export function replaceApiMediaPaths(obj: unknown[]): unknown[];
+export function replaceApiMediaPaths(obj: unknown): unknown;
+export function replaceApiMediaPaths(obj: unknown): unknown {
   if (typeof obj === "string") {
     // Only replace /api/media/ that appears at the start of a path or after whitespace/quotes
     // This prevents replacing /api/media/ inside external URLs like https://example.com/api/media/
@@ -289,7 +301,7 @@ export function replaceApiMediaPaths(obj: any): any {
   } else if (Array.isArray(obj)) {
     return obj.map(replaceApiMediaPaths);
   } else if (typeof obj === "object" && obj !== null) {
-    const out: Record<string, any> = {};
+    const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(obj)) {
       out[k] = replaceApiMediaPaths(v);
     }
@@ -303,7 +315,11 @@ export function replaceApiMediaPaths(obj: any): any {
  * Converts /media/ paths to /api/media/ paths
  * Only transforms paths that start with /media/ (not in the middle of URLs)
  */
-export function replaceLocalMediaPaths(obj: any): any {
+export function replaceLocalMediaPaths(obj: string): string;
+export function replaceLocalMediaPaths(obj: Record<string, unknown>): Record<string, unknown>;
+export function replaceLocalMediaPaths(obj: unknown[]): unknown[];
+export function replaceLocalMediaPaths(obj: unknown): unknown;
+export function replaceLocalMediaPaths(obj: unknown): unknown {
   if (typeof obj === "string") {
     // Only replace /media/ that appears at the start of a path or after whitespace/quotes
     // This prevents replacing /media/ inside external URLs like https://example.com/media/
@@ -311,7 +327,7 @@ export function replaceLocalMediaPaths(obj: any): any {
   } else if (Array.isArray(obj)) {
     return obj.map(replaceLocalMediaPaths);
   } else if (typeof obj === "object" && obj !== null) {
-    const out: Record<string, any> = {};
+    const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(obj)) {
       out[k] = replaceLocalMediaPaths(v);
     }
@@ -324,17 +340,19 @@ export function replaceLocalMediaPaths(obj: any): any {
  * Normalize content for comparison by handling whitespace and timestamp precision differences
  */
 export function normalizeContentForComparison(content: string): string {
-  return content
-    .trim()
-    .replace(/\r\n/g, '\n')  // Normalize line endings
-    .replace(/\s+\n/g, '\n') // Remove trailing whitespace on lines
-    .replace(/\n\n+/g, '\n\n') // Normalize multiple newlines to double newlines
-    // Normalize ISO timestamp precision: truncate fractional seconds to 6 decimal
-    // places (microsecond precision) then strip trailing zeros.
-    // e.g. "2026-02-19T16:57:53.0635946Z" → "2026-02-19T16:57:53.063594Z"
-    // Prevents false diffs when server returns 7-digit precision but local has 6.
-    .replace(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{1,6})\d*Z/g, '$1Z')
-    .replace(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+?)0+Z/g, '$1Z');
+  return (
+    content
+      .trim()
+      .replace(/\r\n/g, "\n") // Normalize line endings
+      .replace(/\s+\n/g, "\n") // Remove trailing whitespace on lines
+      .replace(/\n\n+/g, "\n\n") // Normalize multiple newlines to double newlines
+      // Normalize ISO timestamp precision: truncate fractional seconds to 6 decimal
+      // places (microsecond precision) then strip trailing zeros.
+      // e.g. "2026-02-19T16:57:53.0635946Z" → "2026-02-19T16:57:53.063594Z"
+      // Prevents false diffs when server returns 7-digit precision but local has 6.
+      .replace(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{1,6})\d*Z/g, "$1Z")
+      .replace(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+?)0+Z/g, "$1Z")
+  );
 }
 
 /**
@@ -353,7 +371,9 @@ export function hasContentDifferences(content1: string, content2: string): boole
  * Handles both YAML frontmatter (`id: 155`) and JSON (`"id": 155,`) formats.
  */
 export function stripTimestampMetadata(content: string): string {
-  return content.replace(/^\s*"?(id|createdAt|updatedAt)"?\s*:.*$/gm, '').replace(/\n{3,}/g, '\n\n');
+  return content
+    .replace(/^\s*"?(id|createdAt|updatedAt)"?\s*:.*$/gm, "")
+    .replace(/\n{3,}/g, "\n\n");
 }
 
 /**
@@ -362,17 +382,17 @@ export function stripTimestampMetadata(content: string): string {
  * stripping values that match computed defaults from content fields.
  * Mutates the object: replaces or removes the `seo` key.
  */
-function processSeoForFrontmatter(frontmatter: Record<string, any>): void {
-  const apiSeo: SeoMetadataDto | null | undefined = frontmatter.seo;
+function processSeoForFrontmatter(frontmatter: Record<string, unknown>): void {
+  const apiSeo = frontmatter.seo as SeoMetadataDto | null | undefined;
   // Always remove the raw API seo object; we'll re-add the cleaned version if needed
   delete frontmatter.seo;
 
-  if (!apiSeo || typeof apiSeo !== 'object') return;
+  if (!apiSeo || typeof apiSeo !== "object") return;
 
   const sources: SeoDefaultSources = {
-    title: frontmatter.title,
-    description: frontmatter.description,
-    coverImageUrl: frontmatter.coverImageUrl,
+    title: frontmatter.title as string | undefined,
+    description: frontmatter.description as string | undefined,
+    coverImageUrl: frontmatter.coverImageUrl as string | undefined,
   };
 
   const fmSeo = apiSeoToFrontmatter(apiSeo, sources);
@@ -385,8 +405,8 @@ function processSeoForFrontmatter(frontmatter: Record<string, any>): void {
  * Filter out null and undefined values from an object
  * This prevents empty/null fields from appearing in frontmatter
  */
-function filterNullValues(obj: Record<string, any>): Record<string, any> {
-  const filtered: Record<string, any> = {};
+function filterNullValues(obj: Record<string, unknown>): Record<string, unknown> {
+  const filtered: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (value !== null && value !== undefined) {
       filtered[key] = value;
@@ -399,8 +419,8 @@ function filterNullValues(obj: Record<string, any>): Record<string, any> {
  * Remove empty arrays from an object so they don't clutter frontmatter
  * (e.g. tags: [] adds no useful information).
  */
-function filterEmptyArrays(obj: Record<string, any>): Record<string, any> {
-  const filtered: Record<string, any> = {};
+function filterEmptyArrays(obj: Record<string, unknown>): Record<string, unknown> {
+  const filtered: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (Array.isArray(value) && value.length === 0) continue;
     filtered[key] = value;
@@ -412,9 +432,9 @@ function filterEmptyArrays(obj: Record<string, any>): Record<string, any> {
  * Reorder an object so that `id`, `createdAt` and `updatedAt` come first.
  * This keeps frontmatter stable regardless of the order the API returns fields.
  */
-function hoistMetadataFields(obj: Record<string, any>): Record<string, any> {
-  const hoisted: Record<string, any> = {};
-  const priorityKeys = ['id', 'createdAt', 'updatedAt'];
+function hoistMetadataFields(obj: Record<string, unknown>): Record<string, unknown> {
+  const hoisted: Record<string, unknown> = {};
+  const priorityKeys = ["id", "createdAt", "updatedAt"];
   for (const key of priorityKeys) {
     if (key in obj) {
       hoisted[key] = obj[key];
@@ -449,7 +469,7 @@ export async function saveContentFile({
   content,
   typeMap = {},
   contentDir,
-  previewSlug
+  previewSlug,
 }: SaveContentFileOptions): Promise<string | undefined> {
   if (!content || typeof content !== "object") {
     console.warn("[LeadCMS] Skipping undefined or invalid content:", content);
@@ -468,7 +488,7 @@ export async function saveContentFile({
   // Convert typeMap to the format expected by shared transformation
   const contentTypeMap: ContentTypeMap = {};
   for (const [key, value] of Object.entries(typeMap)) {
-    contentTypeMap[key] = value === 'JSON' ? 'JSON' : 'MDX';
+    contentTypeMap[key] = value === "JSON" ? "JSON" : "MDX";
   }
 
   // Use shared transformation logic
@@ -485,8 +505,8 @@ export async function saveContentFile({
   }
 
   // Determine file extension based on content type
-  const contentType = contentTypeMap[content.type] || 'MDX';
-  const extension = contentType === 'MDX' ? '.mdx' : '.json';
+  const contentType = contentTypeMap[content.type] || "MDX";
+  const extension = contentType === "MDX" ? ".mdx" : ".json";
   const filePath = path.join(targetContentDir, `${slug}${extension}`);
 
   // Ensure directory exists and write the file

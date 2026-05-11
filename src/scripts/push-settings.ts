@@ -16,6 +16,15 @@ import type { SettingsStatusResult } from "../lib/settings-types.js";
 import { isMarkdownSettingKey } from "../lib/settings-types.js";
 import * as Diff from "diff";
 
+interface ScriptError extends Error {
+  code?: string;
+  response?: {
+    status?: number;
+    data?: { detail?: string; title?: string; message?: string; [key: string]: unknown } | null;
+  };
+  status?: number;
+}
+
 export interface PushSettingsOptions {
   /** Only push a specific setting by key name */
   targetName?: string;
@@ -29,7 +38,7 @@ export interface PushSettingsOptions {
 
 export function selectOperationsForPush(
   operations: ReturnType<typeof buildSettingsPushOperations>,
-  force: boolean,
+  force: boolean
 ): ReturnType<typeof buildSettingsPushOperations> {
   if (!force) {
     return operations.filter((op) => op.type !== "unchanged");
@@ -101,7 +110,7 @@ export async function pushSettings(options: PushSettingsOptions = {}): Promise<v
     const result = await pushSettingsToRemote(toPush, leadCMSUrl, leadCMSApiKey, dryRun || false);
 
     if (result) {
-      const deleted = toPush.filter(op => op.type === "delete").length;
+      const deleted = toPush.filter((op) => op.type === "delete").length;
       const parts = [`${result.added} added`, `${result.updated} updated`];
       if (deleted > 0) parts.push(`${deleted} deleted`);
       parts.push(`${result.failed} failed`, `${result.skipped} skipped`);
@@ -112,7 +121,8 @@ export async function pushSettings(options: PushSettingsOptions = {}): Promise<v
         }
       }
     }
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as ScriptError;
     if (error.response?.status === 401) {
       console.error("   ❌ Authentication failed while pushing settings");
       throw error;
@@ -139,7 +149,8 @@ export async function statusSettings(options: { targetName?: string } = {}): Pro
     if (!statusResult) return;
 
     renderSettingsStatus(statusResult, targetName);
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as ScriptError;
     console.error(`   ❌ Failed to check settings status: ${error.message}`);
     throw error;
   }
@@ -149,7 +160,7 @@ export async function statusSettings(options: { targetName?: string } = {}): Pro
  * Get settings status data without rendering (for unified status view).
  */
 export async function getSettingsStatusData(
-  options: { targetName?: string } = {},
+  options: { targetName?: string } = {}
 ): Promise<SettingsStatusResult | null> {
   const { targetName } = options;
 
@@ -178,7 +189,7 @@ export async function getSettingsStatusData(
  */
 export function renderSettingsStatus(
   statusResult: SettingsStatusResult,
-  targetName?: string,
+  targetName?: string
 ): void {
   const { comparisons } = statusResult;
 
@@ -214,24 +225,34 @@ export function renderSettingsStatus(
 
     switch (entry.status) {
       case "in-sync":
-        console.log(`  ${colorConsole.gray("✓")} ${label.padEnd(50)} ${colorConsole.gray(formatSettingValue(entry.key, entry.localValue))}`);
+        console.log(
+          `  ${colorConsole.gray("✓")} ${label.padEnd(50)} ${colorConsole.gray(formatSettingValue(entry.key, entry.localValue))}`
+        );
         break;
       case "modified":
-        console.log(`  ${statusColors.modified("M")} ${label.padEnd(50)} ${colorConsole.gray(formatSettingDiff(entry.key, entry.remoteValue, entry.localValue))}`);
+        console.log(
+          `  ${statusColors.modified("M")} ${label.padEnd(50)} ${colorConsole.gray(formatSettingDiff(entry.key, entry.remoteValue, entry.localValue))}`
+        );
         renderSettingDiffPreview(entry.key, entry.remoteValue, entry.localValue, "      ");
         break;
       case "local-only":
-        console.log(`  ${statusColors.created("+")} ${label.padEnd(50)} ${colorConsole.highlight(formatSettingValue(entry.key, entry.localValue))} ${colorConsole.gray("(local only)")}`);
+        console.log(
+          `  ${statusColors.created("+")} ${label.padEnd(50)} ${colorConsole.highlight(formatSettingValue(entry.key, entry.localValue))} ${colorConsole.gray("(local only)")}`
+        );
         break;
       case "remote-only":
-        console.log(`  ${statusColors.conflict("-")} ${label.padEnd(50)} ${colorConsole.gray(formatSettingValue(entry.key, entry.remoteValue))} ${colorConsole.gray("(remote only)")}`);
+        console.log(
+          `  ${statusColors.conflict("-")} ${label.padEnd(50)} ${colorConsole.gray(formatSettingValue(entry.key, entry.remoteValue))} ${colorConsole.gray("(remote only)")}`
+        );
         break;
     }
   }
 
   console.log("");
   console.log("─".repeat(80));
-  console.log(`  ${inSync.length} in sync, ${modified.length} modified, ${localOnly.length} local only, ${remoteOnly.length} remote only`);
+  console.log(
+    `  ${inSync.length} in sync, ${modified.length} modified, ${localOnly.length} local only, ${remoteOnly.length} remote only`
+  );
   console.log("");
 }
 
@@ -276,10 +297,10 @@ export function formatSettingValue(key: string, value: string | null | undefined
 export function formatSettingDiff(
   key: string,
   remoteValue: string | null | undefined,
-  localValue: string | null | undefined,
+  localValue: string | null | undefined
 ): string {
   if (!isMarkdownSettingKey(key)) {
-    return `"${truncateValue(remoteValue || '')}" → "${truncateValue(localValue || '')}"`;
+    return `"${truncateValue(remoteValue || "")}" → "${truncateValue(localValue || "")}"`;
   }
 
   const remoteLines = (remoteValue || "").split(/\r?\n/).length;
@@ -302,7 +323,7 @@ export function renderSettingDiffPreview(
   key: string,
   remoteValue: string | null | undefined,
   localValue: string | null | undefined,
-  indent: string = "        ",
+  indent: string = "        "
 ): boolean {
   if (!isMarkdownSettingKey(key)) return false;
 
@@ -344,11 +365,13 @@ export function renderSettingDiffPreview(
 
   const remaining = addedLines + removedLines - previewLines;
   if (remaining > 0) {
-    colorConsole.log(`${indent}${colorConsole.gray(`... (${remaining} more change${remaining !== 1 ? "s" : ""})`)}`);
+    colorConsole.log(
+      `${indent}${colorConsole.gray(`... (${remaining} more change${remaining !== 1 ? "s" : ""})`)}`
+    );
   }
 
   colorConsole.log(
-    `${indent}${colorConsole.green(`+${addedLines}`)} added, ${colorConsole.red(`-${removedLines}`)} removed, ${unchangedLines} unchanged`,
+    `${indent}${colorConsole.green(`+${addedLines}`)} added, ${colorConsole.red(`-${removedLines}`)} removed, ${unchangedLines} unchanged`
   );
 
   return true;

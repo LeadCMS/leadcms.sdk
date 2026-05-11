@@ -7,10 +7,24 @@ import "dotenv/config";
 import axios from "axios";
 import { leadCMSUrl, leadCMSApiKey, EMAIL_TEMPLATES_DIR } from "./leadcms-helpers.js";
 import { setCMSConfig, isEmailTemplatesSupported } from "../lib/cms-config-types.js";
-import { pullLeadCMSEmailTemplates, buildEmailTemplateIdIndex, deleteEmailTemplateFilesById, saveEmailTemplateFile } from "./pull-leadcms-email-templates.js";
+import {
+  pullLeadCMSEmailTemplates,
+  buildEmailTemplateIdIndex,
+  deleteEmailTemplateFilesById,
+  saveEmailTemplateFile,
+} from "./pull-leadcms-email-templates.js";
 import { resetEmailTemplatesState } from "./pull-all.js";
 import { logger } from "../lib/logger.js";
 import type { RemoteContext } from "../lib/remote-context.js";
+
+interface ScriptError extends Error {
+  code?: string;
+  response?: {
+    status?: number;
+    data?: { detail?: string; title?: string; message?: string; [key: string]: unknown } | null;
+  };
+  status?: number;
+}
 
 interface PullEmailTemplatesOptions {
   targetId?: string;
@@ -60,7 +74,8 @@ async function main(options: PullEmailTemplatesOptions = {}): Promise<void> {
       console.log(`✅ Email template saved: ${filePath}`);
       console.log(`\n✨ Email templates pull completed!\n`);
       return;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ScriptError;
       if (error.response?.status === 404) {
         console.log(`⚠️  Email template not found: ID ${id}`);
         return;
@@ -75,7 +90,7 @@ async function main(options: PullEmailTemplatesOptions = {}): Promise<void> {
 
   try {
     logger.verbose(`🔍 Checking CMS configuration...`);
-    const configUrl = new URL('/api/config', leadCMSUrl).toString();
+    const configUrl = new URL("/api/config", leadCMSUrl).toString();
     const response = await axios.get(configUrl, { timeout: 10000 });
 
     if (response.data) {
@@ -88,7 +103,8 @@ async function main(options: PullEmailTemplatesOptions = {}): Promise<void> {
 
       logger.verbose(`✅ Email templates entity supported\n`);
     }
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as ScriptError;
     console.warn(`⚠️  Could not fetch CMS config: ${error.message}`);
     console.warn(`⚠️  Assuming email templates are supported (backward compatibility)\n`);
   }

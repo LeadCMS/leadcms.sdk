@@ -83,61 +83,61 @@ export function isEntitySupported(entityType: string): boolean {
 
   // Case-insensitive comparison
   const entityLower = entityType.toLowerCase();
-  return config.entities.some(e => e.toLowerCase() === entityLower);
+  return config.entities.some((e) => e.toLowerCase() === entityLower);
 }
 
 /**
  * Check if comments are supported
  */
 export function isCommentsSupported(): boolean {
-  return isEntitySupported('Comment');
+  return isEntitySupported("Comment");
 }
 
 /**
  * Check if content is supported
  */
 export function isContentSupported(): boolean {
-  return isEntitySupported('Content');
+  return isEntitySupported("Content");
 }
 
 /**
  * Check if media is supported
  */
 export function isMediaSupported(): boolean {
-  return isEntitySupported('Media');
+  return isEntitySupported("Media");
 }
 
 /**
  * Check if email templates are supported
  */
 export function isEmailTemplatesSupported(): boolean {
-  return isEntitySupported('EmailTemplate') || isEntitySupported('EmailTemplates');
+  return isEntitySupported("EmailTemplate") || isEntitySupported("EmailTemplates");
 }
 
 /**
  * Check if settings are supported
  */
 export function isSettingsSupported(): boolean {
-  return isEntitySupported('Setting') || isEntitySupported('Settings');
+  return isEntitySupported("Setting") || isEntitySupported("Settings");
 }
 
 /**
  * Check if segments are supported
  */
 export function isSegmentsSupported(): boolean {
-  return isEntitySupported('Segment') || isEntitySupported('Segments');
+  return isEntitySupported("Segment") || isEntitySupported("Segments");
 }
 
 /**
  * Check if sequences are supported
  */
 export function isSequencesSupported(): boolean {
-  return isEntitySupported('Sequence') || isEntitySupported('Sequences');
+  return isEntitySupported("Sequence") || isEntitySupported("Sequences");
 }
 
 /**
  * Check if redirects are supported
  */
 export function isRedirectsSupported(): boolean {
-  return isEntitySupported('Redirect') || isEntitySupported('Redirects');
+  return isEntitySupported("Redirect") || isEntitySupported("Redirects");
 }

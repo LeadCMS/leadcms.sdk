@@ -2,17 +2,18 @@ import "dotenv/config";
 import fs from "fs/promises";
 import path from "path";
 import * as Diff from "diff";
-import {
-  EMAIL_TEMPLATES_DIR,
-  defaultLanguage,
-} from "./leadcms-helpers.js";
+import { EMAIL_TEMPLATES_DIR, defaultLanguage } from "./leadcms-helpers.js";
 import {
   parseEmailTemplateFileContent,
   transformEmailTemplateRemoteToLocalFormat,
   formatEmailTemplateForApi,
   type EmailTemplateRemoteData,
 } from "../lib/email-template-transformation.js";
-import { hasContentDifferences, normalizeContentForComparison, stripTimestampMetadata } from "../lib/content-transformation.js";
+import {
+  hasContentDifferences,
+  normalizeContentForComparison,
+  stripTimestampMetadata,
+} from "../lib/content-transformation.js";
 import { threeWayMerge, isLocallyModified } from "../lib/content-merge.js";
 import { leadCMSDataService } from "../lib/data-service.js";
 import { pullEmailTemplateSync } from "./pull-leadcms-email-templates.js";
@@ -24,6 +25,7 @@ interface LocalEmailTemplateItem {
   filePath: string;
   locale: string;
   groupFolder: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata: Record<string, any>;
   body: string;
 }
@@ -40,6 +42,7 @@ interface RemoteEmailTemplateItem {
   emailGroupId?: number | null;
   createdAt?: string;
   updatedAt?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   emailGroup?: Record<string, any> | null;
 }
 
@@ -68,7 +71,7 @@ interface StatusOptions {
 }
 
 interface EmailTemplateOperation {
-  type: 'create' | 'update' | 'delete' | 'conflict';
+  type: "create" | "update" | "delete" | "conflict";
   local?: LocalEmailTemplateItem;
   remote?: RemoteEmailTemplateItem;
   reason?: string;
@@ -79,10 +82,8 @@ function combineOperationReasons(...reasons: Array<string | undefined>): string 
   if (definedReasons.length === 0) {
     return undefined;
   }
-  return definedReasons.join('; ');
+  return definedReasons.join("; ");
 }
-
-
 
 async function isLocaleDirectory(dirPath: string, parentDir: string): Promise<boolean> {
   if (parentDir !== EMAIL_TEMPLATES_DIR) {
@@ -96,27 +97,31 @@ async function isLocaleDirectory(dirPath: string, parentDir: string): Promise<bo
 async function readLocalEmailTemplates(): Promise<LocalEmailTemplateItem[]> {
   const localTemplates: LocalEmailTemplateItem[] = [];
 
-  async function walkDirectory(dir: string, locale: string = defaultLanguage, baseDir: string = EMAIL_TEMPLATES_DIR): Promise<void> {
+  async function walkDirectory(
+    dir: string,
+    locale: string = defaultLanguage,
+    baseDir: string = EMAIL_TEMPLATES_DIR
+  ): Promise<void> {
     const entries = await fs.readdir(dir, { withFileTypes: true });
 
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
 
       if (entry.isDirectory()) {
-        if (entry.name !== defaultLanguage && await isLocaleDirectory(fullPath, dir)) {
+        if (entry.name !== defaultLanguage && (await isLocaleDirectory(fullPath, dir))) {
           await walkDirectory(fullPath, entry.name, fullPath);
         } else {
           await walkDirectory(fullPath, locale, baseDir);
         }
-      } else if (entry.isFile() && entry.name.endsWith('.html')) {
-        const content = await fs.readFile(fullPath, 'utf8');
+      } else if (entry.isFile() && entry.name.endsWith(".html")) {
+        const content = await fs.readFile(fullPath, "utf8");
         const parsed = parseEmailTemplateFileContent(content);
 
         const relativePath = path.relative(baseDir, fullPath);
         const relativeDir = path.dirname(relativePath);
-        const groupFolder = relativeDir === '.' ? 'ungrouped' : relativeDir.split(path.sep)[0];
+        const groupFolder = relativeDir === "." ? "ungrouped" : relativeDir.split(path.sep)[0];
 
-        const baseName = path.basename(fullPath, '.html');
+        const baseName = path.basename(fullPath, ".html");
         const metadata = { ...parsed.metadata };
 
         if (!metadata.name) {
@@ -140,8 +145,9 @@ async function readLocalEmailTemplates(): Promise<LocalEmailTemplateItem[]> {
 
   try {
     await walkDirectory(EMAIL_TEMPLATES_DIR);
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
+  } catch (_error: unknown) {
+    const error = _error as NodeJS.ErrnoException;
+    if (error.code === "ENOENT") {
       return [];
     }
     throw error;
@@ -155,8 +161,8 @@ function normalizeGroupKey(name: string): string {
   const normalized = name
     .toLowerCase()
     .trim()
-    .replace(/[\s_]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/[\s_]+/g, "-")
+    .replace(/^-+|-+$/g, "");
   return normalized;
 }
 
@@ -176,7 +182,7 @@ function resolveEmailGroupId(
     const groupKey = normalizeGroupKey(groupName);
     if (groupKey) {
       const candidates = groupIndex.get(groupKey) || [];
-      const localeMatch = candidates.find(group => group.language === template.locale);
+      const localeMatch = candidates.find((group) => group.language === template.locale);
       const match = localeMatch || candidates[0];
       if (match?.id != null) {
         return Number(match.id);
@@ -192,7 +198,7 @@ function resolveEmailGroupId(
   }
 
   const candidates = groupIndex.get(groupKey) || [];
-  const localeMatch = candidates.find(group => group.language === template.locale);
+  const localeMatch = candidates.find((group) => group.language === template.locale);
   const match = localeMatch || candidates[0];
 
   return match?.id != null ? Number(match.id) : null;
@@ -202,7 +208,7 @@ function buildGroupIndex(groups: EmailGroupItem[]): Map<string, EmailGroupItem[]
   const index = new Map<string, EmailGroupItem[]>();
 
   for (const group of groups) {
-    const name = group.name || '';
+    const name = group.name || "";
     const key = normalizeGroupKey(name);
     if (!key) {
       continue;
@@ -225,7 +231,7 @@ function getEffectiveGroupName(template: LocalEmailTemplateItem): string | null 
   if (template.metadata.groupName) {
     return template.metadata.groupName;
   }
-  if (template.groupFolder && template.groupFolder !== 'ungrouped') {
+  if (template.groupFolder && template.groupFolder !== "ungrouped") {
     return template.groupFolder;
   }
   return null;
@@ -263,24 +269,31 @@ async function createMissingEmailGroups(
 
   const created: EmailGroupItem[] = [];
 
-  colorConsole.warn(`\n⚠️  Missing email groups in remote LeadCMS: ${[...missingGroups.values()].map(g => colorConsole.highlight(g.name)).join(', ')}`);
+  colorConsole.warn(
+    `\n⚠️  Missing email groups in remote LeadCMS: ${[...missingGroups.values()].map((g) => colorConsole.highlight(g.name)).join(", ")}`
+  );
 
   for (const [key, { name, language }] of missingGroups) {
     if (dryRun) {
-      colorConsole.progress(`🟡 [DRY RUN] Would create email group: ${colorConsole.highlight(name)} (${language})`);
+      colorConsole.progress(
+        `🟡 [DRY RUN] Would create email group: ${colorConsole.highlight(name)} (${language})`
+      );
       continue;
     }
 
     try {
       const newGroup = await leadCMSDataService.createEmailGroup({ name, language });
-      colorConsole.success(`✅ Created email group: ${colorConsole.highlight(name)} (ID: ${newGroup.id})`);
+      colorConsole.success(
+        `✅ Created email group: ${colorConsole.highlight(name)} (ID: ${newGroup.id})`
+      );
       created.push(newGroup);
 
       // Add to the index so subsequent templates can resolve
       const existing = groupIndex.get(key) || [];
       existing.push(newGroup);
       groupIndex.set(key, existing);
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as Error;
       colorConsole.error(`❌ Failed to create email group '${name}': ${error.message}`);
     }
   }
@@ -291,16 +304,15 @@ async function createMissingEmailGroups(
 function getRemoteMatch(
   local: LocalEmailTemplateItem,
   remoteTemplates: RemoteEmailTemplateItem[],
-  metadataMap?: MetadataMap,
+  metadataMap?: MetadataMap
 ): RemoteEmailTemplateItem | undefined {
   // Priority 1: Match by name + language (name is the "slug" equivalent for templates)
   const name = local.metadata.name;
   const language = local.metadata.language || local.locale;
 
   if (name) {
-    const nameMatch = remoteTemplates.find(template =>
-      template.name === name &&
-      (template.language || defaultLanguage) === language
+    const nameMatch = remoteTemplates.find(
+      (template) => template.name === name && (template.language || defaultLanguage) === language
     );
     if (nameMatch) return nameMatch;
   }
@@ -308,11 +320,11 @@ function getRemoteMatch(
   // Priority 2: Use remote-specific id-map when available,
   // falling back to frontmatter ID for single-remote backward compatibility
   const remoteId = metadataMap
-    ? (lookupEmailTemplateRemoteIdSync(metadataMap, language, name))
+    ? lookupEmailTemplateRemoteIdSync(metadataMap, language, name)
     : undefined;
   const matchId = remoteId ?? (local.metadata.id != null ? Number(local.metadata.id) : undefined);
   if (matchId != null) {
-    return remoteTemplates.find(template => template.id === matchId);
+    return remoteTemplates.find((template) => template.id === matchId);
   }
 
   return undefined;
@@ -322,13 +334,15 @@ function getRemoteMatch(
 function lookupEmailTemplateRemoteIdSync(
   map: MetadataMap,
   language: string,
-  name: string | undefined,
+  name: string | undefined
 ): number | string | undefined {
   if (!name || !map.emailTemplates) return undefined;
   return map.emailTemplates[language]?.[name]?.id;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function filterUndefinedValues(obj: Record<string, any>): Record<string, any> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const output: Record<string, any> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (value !== undefined) {
@@ -338,9 +352,14 @@ function filterUndefinedValues(obj: Record<string, any>): Record<string, any> {
   return output;
 }
 
-async function hasTemplateChanges(local: LocalEmailTemplateItem, remote: RemoteEmailTemplateItem): Promise<boolean> {
-  const localContent = stripTimestampMetadata(await fs.readFile(local.filePath, 'utf8'));
-  const remoteTransformed = stripTimestampMetadata(transformEmailTemplateRemoteToLocalFormat(remote));
+async function hasTemplateChanges(
+  local: LocalEmailTemplateItem,
+  remote: RemoteEmailTemplateItem
+): Promise<boolean> {
+  const localContent = stripTimestampMetadata(await fs.readFile(local.filePath, "utf8"));
+  const remoteTransformed = stripTimestampMetadata(
+    transformEmailTemplateRemoteToLocalFormat(remote)
+  );
   return hasContentDifferences(localContent, remoteTransformed);
 }
 
@@ -352,12 +371,12 @@ async function updateLocalFileFromResponse(
   local: LocalEmailTemplateItem,
   response: RemoteEmailTemplateItem,
   emailGroups: EmailGroupItem[],
-  remoteCtx?: RemoteContext,
+  remoteCtx?: RemoteContext
 ): Promise<void> {
   // Per-remote map updates
   if (remoteCtx) {
     try {
-      const rc = await import('../lib/remote-context.js');
+      const rc = await import("../lib/remote-context.js");
       const metaMap = await rc.readMetadataMap(remoteCtx);
       const language = response.language || local.locale;
       const name = response.name || local.metadata.name;
@@ -371,7 +390,8 @@ async function updateLocalFileFromResponse(
         });
       }
       await rc.writeMetadataMap(remoteCtx, metaMap);
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as Error;
       console.warn(`Failed to update remote map files for ${local.filePath}:`, error.message);
     }
   }
@@ -384,16 +404,17 @@ async function updateLocalFileFromResponse(
   try {
     // Enrich the response with group name if missing
     if (response.emailGroupId != null && !response.emailGroup?.name) {
-      const group = emailGroups.find(g => Number(g.id) === Number(response.emailGroupId));
+      const group = emailGroups.find((g) => Number(g.id) === Number(response.emailGroupId));
       if (group) {
         response.emailGroup = { id: group.id, name: group.name, language: group.language };
       }
     }
 
     const transformed = transformEmailTemplateRemoteToLocalFormat(response);
-    await fs.writeFile(local.filePath, transformed, 'utf8');
+    await fs.writeFile(local.filePath, transformed, "utf8");
     logger.verbose(`[PUSH] Updated local file: ${local.filePath}`);
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as Error;
     logger.verbose(`[PUSH] Failed to update local file ${local.filePath}: ${error.message}`);
   }
 }
@@ -406,7 +427,7 @@ function enrichRemoteTemplatesWithGroups(
   remoteTemplates: RemoteEmailTemplateItem[],
   emailGroups: EmailGroupItem[]
 ): void {
-  const groupById = new Map(emailGroups.map(g => [Number(g.id), g]));
+  const groupById = new Map(emailGroups.map((g) => [Number(g.id), g]));
   for (const template of remoteTemplates) {
     if (template.emailGroupId != null && !template.emailGroup?.name) {
       const group = groupById.get(Number(template.emailGroupId));
@@ -434,10 +455,10 @@ async function fetchBaseItemsForMerge(
   emailGroups: EmailGroupItem[]
 ): Promise<Record<string, EmailTemplateRemoteData>> {
   try {
-    const syncTokenPath = path.join(EMAIL_TEMPLATES_DIR, '.sync-token');
+    const syncTokenPath = path.join(EMAIL_TEMPLATES_DIR, ".sync-token");
     let syncToken: string | undefined;
     try {
-      syncToken = (await fs.readFile(syncTokenPath, 'utf8')).trim() || undefined;
+      syncToken = (await fs.readFile(syncTokenPath, "utf8")).trim() || undefined;
     } catch {
       return {};
     }
@@ -447,7 +468,7 @@ async function fetchBaseItemsForMerge(
     const { baseItems } = await pullEmailTemplateSync(syncToken);
 
     // Enrich base items with email group data
-    const groupById = new Map(emailGroups.map(g => [Number(g.id), g]));
+    const groupById = new Map(emailGroups.map((g) => [Number(g.id), g]));
     for (const base of Object.values(baseItems)) {
       if (base.emailGroupId != null && !base.emailGroup) {
         const group = groupById.get(Number(base.emailGroupId));
@@ -458,7 +479,8 @@ async function fetchBaseItemsForMerge(
     }
 
     return baseItems;
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as Error;
     logger.verbose(`[PUSH] Could not fetch base items for merge: ${error.message}`);
     return {};
   }
@@ -487,12 +509,14 @@ async function attemptAutoMerge(
 
   let localContent: string;
   try {
-    localContent = await fs.readFile(local.filePath, 'utf8');
+    localContent = await fs.readFile(local.filePath, "utf8");
   } catch {
     return { canMerge: false };
   }
 
-  const remoteTransformed = transformEmailTemplateRemoteToLocalFormat(remote as unknown as EmailTemplateRemoteData);
+  const remoteTransformed = transformEmailTemplateRemoteToLocalFormat(
+    remote as unknown as EmailTemplateRemoteData
+  );
 
   if (!isLocallyModified(baseTransformed, localContent)) {
     // Local file is identical to what was pulled — no local edits to merge
@@ -514,7 +538,9 @@ export interface EmailTemplateStatusResult {
   totalRemote: number;
 }
 
-async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<EmailTemplateStatusResult> {
+async function buildEmailTemplateStatus(
+  options: StatusOptions = {}
+): Promise<EmailTemplateStatusResult> {
   const { showDelete, remoteContext: remoteCtx } = options;
   const operations: EmailTemplateOperation[] = [];
 
@@ -532,7 +558,7 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
   // Load per-remote metadata-map for multi-remote support
   let metadataMap: MetadataMap | undefined;
   if (remoteCtx) {
-    const rc = await import('../lib/remote-context.js');
+    const rc = await import("../lib/remote-context.js");
     metadataMap = await rc.readMetadataMap(remoteCtx);
   }
 
@@ -551,29 +577,31 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
 
     const match = getRemoteMatch(local, remoteTemplates, metadataMap);
 
-    const payload = filterUndefinedValues(formatEmailTemplateForApi({
-      metadata: local.metadata,
-      body: local.body,
-    }));
+    const payload = filterUndefinedValues(
+      formatEmailTemplateForApi({
+        metadata: local.metadata,
+        body: local.body,
+      })
+    );
 
-    const requiredFields = ['name', 'subject', 'fromEmail', 'fromName', 'language', 'emailGroupId'];
-    const missingFields = requiredFields.filter(field => {
-      if (field === 'emailGroupId' && pendingGroupCreationReason) {
+    const requiredFields = ["name", "subject", "fromEmail", "fromName", "language", "emailGroupId"];
+    const missingFields = requiredFields.filter((field) => {
+      if (field === "emailGroupId" && pendingGroupCreationReason) {
         return false;
       }
-      return payload[field] === undefined || payload[field] === null || payload[field] === '';
+      return payload[field] === undefined || payload[field] === null || payload[field] === "";
     });
     if (missingFields.length > 0) {
       operations.push({
-        type: 'conflict',
+        type: "conflict",
         local,
-        reason: `Missing required fields: ${missingFields.join(', ')}`,
+        reason: `Missing required fields: ${missingFields.join(", ")}`,
       });
       continue;
     }
 
     if (!match) {
-      operations.push({ type: 'create', local, reason: pendingGroupCreationReason });
+      operations.push({ type: "create", local, reason: pendingGroupCreationReason });
       continue;
     }
 
@@ -582,7 +610,7 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
     const name = local.metadata.name;
     let localUpdatedStr: string | undefined;
     if (metadataMap && name) {
-      const rc = await import('../lib/remote-context.js');
+      const rc = await import("../lib/remote-context.js");
       localUpdatedStr = rc.getMetadataForEmailTemplate(metadataMap, language, name)?.updatedAt;
     }
     if (!localUpdatedStr) {
@@ -601,24 +629,24 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
       } else if (mergeAttempt.canMerge && !mergeAttempt.hasConflicts) {
         // Auto-merge would succeed — show as update
         operations.push({
-          type: 'update',
+          type: "update",
           local,
           remote: match,
-          reason: combineOperationReasons('auto-merged', pendingGroupCreationReason),
+          reason: combineOperationReasons("auto-merged", pendingGroupCreationReason),
         });
       } else if (mergeAttempt.canMerge && mergeAttempt.hasConflicts) {
         operations.push({
-          type: 'conflict',
+          type: "conflict",
           local,
           remote: match,
           reason: `Auto-merge has ${mergeAttempt.conflictCount} conflict(s) — resolve manually`,
         });
       } else {
         operations.push({
-          type: 'conflict',
+          type: "conflict",
           local,
           remote: match,
-          reason: 'Remote email template updated after local changes',
+          reason: "Remote email template updated after local changes",
         });
       }
       continue;
@@ -626,20 +654,20 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
 
     const hasChanges = await hasTemplateChanges(local, match);
     if (hasChanges) {
-      operations.push({ type: 'update', local, remote: match, reason: pendingGroupCreationReason });
+      operations.push({ type: "update", local, remote: match, reason: pendingGroupCreationReason });
     }
   }
 
   if (showDelete) {
     const localIds = new Set(
       localTemplates
-        .map(template => template.metadata.id)
-        .filter(id => id != null)
-        .map(id => Number(id))
+        .map((template) => template.metadata.id)
+        .filter((id) => id != null)
+        .map((id) => Number(id))
     );
     // Build a set of local name+language keys for matching (like slug+locale in content)
     const localNameKeys = new Set(
-      localTemplates.map(template => {
+      localTemplates.map((template) => {
         const name = template.metadata.name;
         const lang = template.metadata.language || template.locale;
         return `${name}::${lang}`;
@@ -656,7 +684,7 @@ async function buildEmailTemplateStatus(options: StatusOptions = {}): Promise<Em
       const isMatchedByName = localNameKeys.has(remoteNameKey);
 
       if (!isMatchedById && !isMatchedByName) {
-        operations.push({ type: 'delete', remote });
+        operations.push({ type: "delete", remote });
       }
     }
   }
@@ -672,14 +700,14 @@ function getRemoteGroupLabel(remote: RemoteEmailTemplateItem): string {
   if (remote.emailGroup?.name) {
     return normalizeGroupKey(remote.emailGroup.name) || remote.emailGroup.name;
   }
-  return 'ungrouped';
+  return "ungrouped";
 }
 
 export async function statusEmailTemplates(options: StatusOptions = {}): Promise<void> {
   if (!leadCMSDataService.isApiKeyConfigured()) {
-    console.log('\n📊 LeadCMS Email Template Status');
-    console.log('');
-    console.log('⏭️  Email templates require authentication — no API key configured, skipping');
+    console.log("\n📊 LeadCMS Email Template Status");
+    console.log("");
+    console.log("⏭️  Email templates require authentication — no API key configured, skipping");
     return;
   }
 
@@ -689,32 +717,34 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
 
   // Filter by target ID if specified
   if (targetId) {
-    operations = operations.filter(op => {
+    operations = operations.filter((op) => {
       const localId = op.local?.metadata?.id?.toString();
       const remoteId = op.remote?.id?.toString();
       return localId === targetId || remoteId === targetId;
     });
 
     if (operations.length === 0) {
-      colorConsole.important('\n📊 LeadCMS Email Template Status');
-      colorConsole.log('');
+      colorConsole.important("\n📊 LeadCMS Email Template Status");
+      colorConsole.log("");
       colorConsole.log(`❌ No email template found with ID ${targetId}`);
       return;
     }
   }
 
-  colorConsole.important('\n📊 LeadCMS Email Template Status');
-  colorConsole.log('');
+  colorConsole.important("\n📊 LeadCMS Email Template Status");
+  colorConsole.log("");
 
   const syncableChanges = operations.length;
   if (syncableChanges === 0) {
-    colorConsole.success('✅ No changes detected. Email templates are in sync!');
+    colorConsole.success("✅ No changes detected. Email templates are in sync!");
     return;
   }
 
-  const label = targetId ? `Status for template ID ${targetId}:` : `Changes to be synced (${syncableChanges} files):`;
+  const label = targetId
+    ? `Status for template ID ${targetId}:`
+    : `Changes to be synced (${syncableChanges} files):`;
   console.log(label);
-  console.log('');
+  console.log("");
 
   const sortOps = (ops: EmailTemplateOperation[]) => {
     return ops.sort((a, b) => {
@@ -723,30 +753,30 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
       if (aLocale !== bLocale) {
         return aLocale.localeCompare(bLocale);
       }
-      const aName = a.local?.metadata?.name || a.remote?.name || '';
-      const bName = b.local?.metadata?.name || b.remote?.name || '';
+      const aName = a.local?.metadata?.name || a.remote?.name || "";
+      const bName = b.local?.metadata?.name || b.remote?.name || "";
       return aName.localeCompare(bName);
     });
   };
 
-  const createOps = sortOps(operations.filter(op => op.type === 'create'));
-  const updateOps = sortOps(operations.filter(op => op.type === 'update'));
-  const conflictOps = sortOps(operations.filter(op => op.type === 'conflict'));
-  const deleteOps = sortOps(operations.filter(op => op.type === 'delete'));
+  const createOps = sortOps(operations.filter((op) => op.type === "create"));
+  const updateOps = sortOps(operations.filter((op) => op.type === "update"));
+  const conflictOps = sortOps(operations.filter((op) => op.type === "conflict"));
+  const deleteOps = sortOps(operations.filter((op) => op.type === "delete"));
 
   async function printDiffPreview(op: EmailTemplateOperation): Promise<void> {
     if (!showDetailedPreview && !targetId) return;
     if (!op.local?.filePath) return;
 
     try {
-      const localContent = stripTimestampMetadata(await fs.readFile(op.local.filePath, 'utf8'));
+      const localContent = stripTimestampMetadata(await fs.readFile(op.local.filePath, "utf8"));
       const remoteTransformed = op.remote
         ? stripTimestampMetadata(transformEmailTemplateRemoteToLocalFormat(op.remote))
-        : '';
+        : "";
 
       if (!hasContentDifferences(localContent, remoteTransformed)) {
-        colorConsole.log('          No content changes detected');
-        colorConsole.log('');
+        colorConsole.log("          No content changes detected");
+        colorConsole.log("");
         return;
       }
 
@@ -757,17 +787,20 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
       let addedLines = 0;
       let removedLines = 0;
 
-      colorConsole.info('          Content diff preview:');
+      colorConsole.info("          Content diff preview:");
       let previewLines = 0;
       const maxPreviewLines = 10;
 
       for (const part of diff) {
-        const lines = part.value.split('\n').filter((line: string) => line.trim() !== '');
+        const lines = part.value.split("\n").filter((line: string) => line.trim() !== "");
 
         if (part.added) {
           addedLines += lines.length;
           if (previewLines < maxPreviewLines) {
-            for (const line of lines.slice(0, Math.min(lines.length, maxPreviewLines - previewLines))) {
+            for (const line of lines.slice(
+              0,
+              Math.min(lines.length, maxPreviewLines - previewLines)
+            )) {
               colorConsole.log(`          ${diffColors.added(`+ ${line}`)}`);
               previewLines++;
             }
@@ -775,7 +808,10 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
         } else if (part.removed) {
           removedLines += lines.length;
           if (previewLines < maxPreviewLines) {
-            for (const line of lines.slice(0, Math.min(lines.length, maxPreviewLines - previewLines))) {
+            for (const line of lines.slice(
+              0,
+              Math.min(lines.length, maxPreviewLines - previewLines)
+            )) {
               colorConsole.log(`          ${diffColors.removed(`- ${line}`)}`);
               previewLines++;
             }
@@ -785,52 +821,70 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
         if (previewLines >= maxPreviewLines) break;
       }
 
-      if (previewLines >= maxPreviewLines && (addedLines + removedLines > previewLines)) {
-        colorConsole.gray(`          ... (${addedLines + removedLines - previewLines} more changes)`);
+      if (previewLines >= maxPreviewLines && addedLines + removedLines > previewLines) {
+        colorConsole.gray(
+          `          ... (${addedLines + removedLines - previewLines} more changes)`
+        );
       }
 
-      colorConsole.log(`          ${colorConsole.green(`+${addedLines}`)} / ${colorConsole.red(`-${removedLines}`)} lines`);
-      colorConsole.log('');
-    } catch (error: any) {
-      logger.verbose(`[DIFF] Failed to generate diff for ${op.local?.metadata?.name}: ${error.message}`);
+      colorConsole.log(
+        `          ${colorConsole.green(`+${addedLines}`)} / ${colorConsole.red(`-${removedLines}`)} lines`
+      );
+      colorConsole.log("");
+    } catch (_error: unknown) {
+      const error = _error as Error;
+      logger.verbose(
+        `[DIFF] Failed to generate diff for ${op.local?.metadata?.name}: ${error.message}`
+      );
     }
   }
 
   for (const op of createOps) {
-    const groupLabel = (op.local?.groupFolder || 'ungrouped').padEnd(12);
+    const groupLabel = (op.local?.groupFolder || "ungrouped").padEnd(12);
     const localeLabel = `[${op.local?.locale || defaultLanguage}]`.padEnd(6);
-    const nameLabel = op.local?.metadata?.name || 'unknown';
-    const reason = op.reason ? ` ${colorConsole.gray(`(${op.reason})`)}` : '';
-    colorConsole.log(`        ${statusColors.created('new:     ')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)}${reason}`);
+    const nameLabel = op.local?.metadata?.name || "unknown";
+    const reason = op.reason ? ` ${colorConsole.gray(`(${op.reason})`)}` : "";
+    colorConsole.log(
+      `        ${statusColors.created("new:     ")}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)}${reason}`
+    );
     await printDiffPreview(op);
   }
 
   for (const op of updateOps) {
-    const groupLabel = (op.local?.groupFolder || 'ungrouped').padEnd(12);
+    const groupLabel = (op.local?.groupFolder || "ungrouped").padEnd(12);
     const localeLabel = `[${op.local?.locale || defaultLanguage}]`.padEnd(6);
-    const nameLabel = op.local?.metadata?.name || op.remote?.name || 'unknown';
-    const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
-    const mergeHint = op.reason?.includes('auto-merged') ? colorConsole.gray('(auto-merged) ') : '';
-    const note = op.reason && !op.reason.includes('auto-merged') ? ` ${colorConsole.gray(`(${op.reason})`)}` : '';
-    colorConsole.log(`        ${statusColors.modified('modified:')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${mergeHint}${colorConsole.gray(idLabel)}${note}`);
+    const nameLabel = op.local?.metadata?.name || op.remote?.name || "unknown";
+    const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
+    const mergeHint = op.reason?.includes("auto-merged") ? colorConsole.gray("(auto-merged) ") : "";
+    const note =
+      op.reason && !op.reason.includes("auto-merged")
+        ? ` ${colorConsole.gray(`(${op.reason})`)}`
+        : "";
+    colorConsole.log(
+      `        ${statusColors.modified("modified:")}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${mergeHint}${colorConsole.gray(idLabel)}${note}`
+    );
     await printDiffPreview(op);
   }
 
   for (const op of conflictOps) {
     const groupLabel = (op.local?.groupFolder || getRemoteGroupLabel(op.remote || {})).padEnd(12);
     const localeLabel = `[${op.local?.locale || op.remote?.language || defaultLanguage}]`.padEnd(6);
-    const nameLabel = op.local?.metadata?.name || op.remote?.name || 'unknown';
-    const reason = op.reason ? `(${op.reason})` : '';
-    colorConsole.log(`        ${statusColors.conflict('conflict:')}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(reason)}`);
+    const nameLabel = op.local?.metadata?.name || op.remote?.name || "unknown";
+    const reason = op.reason ? `(${op.reason})` : "";
+    colorConsole.log(
+      `        ${statusColors.conflict("conflict:")}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(reason)}`
+    );
     await printDiffPreview(op);
   }
 
   for (const op of deleteOps) {
     const groupLabel = getRemoteGroupLabel(op.remote || {}).padEnd(12);
     const localeLabel = `[${op.remote?.language || defaultLanguage}]`.padEnd(6);
-    const nameLabel = op.remote?.name || 'unknown';
-    const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
-    colorConsole.log(`        ${statusColors.conflict('deleted:')}    ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`);
+    const nameLabel = op.remote?.name || "unknown";
+    const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
+    colorConsole.log(
+      `        ${statusColors.conflict("deleted:")}    ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+    );
     await printDiffPreview(op);
   }
 
@@ -843,7 +897,12 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
   );
 
   console.log(`\n📊 Email Templates Summary:`);
-  if (summary.create === 0 && summary.update === 0 && summary.conflict === 0 && summary.delete === 0) {
+  if (
+    summary.create === 0 &&
+    summary.update === 0 &&
+    summary.conflict === 0 &&
+    summary.delete === 0
+  ) {
     console.log(`\n✅ No changes detected. Email templates are in sync!`);
     return;
   }
@@ -855,9 +914,11 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
   if (summary.skip > 0) console.log(`   ✓ Unchanged: ${summary.skip}`);
 
   if (summary.conflict > 0) {
-    const conflicts = operations.filter(op => op.type === 'conflict');
+    const conflicts = operations.filter((op) => op.type === "conflict");
     for (const conflict of conflicts) {
-      console.warn(`   - ${conflict.local?.metadata?.name || conflict.remote?.id}: ${conflict.reason || 'Conflict'}`);
+      console.warn(
+        `   - ${conflict.local?.metadata?.name || conflict.remote?.id}: ${conflict.reason || "Conflict"}`
+      );
     }
   }
 }
@@ -867,12 +928,19 @@ export { buildEmailTemplateStatus, getRemoteGroupLabel };
 export type { EmailTemplateOperation, LocalEmailTemplateItem, RemoteEmailTemplateItem };
 
 // Export internal functions for testing
-export { normalizeGroupKey, resolveEmailGroupId, buildGroupIndex, createMissingEmailGroups, getEffectiveGroupName, getRemoteMatch };
+export {
+  normalizeGroupKey,
+  resolveEmailGroupId,
+  buildGroupIndex,
+  createMissingEmailGroups,
+  getEffectiveGroupName,
+  getRemoteMatch,
+};
 export type { EmailGroupItem };
 
 export async function pushEmailTemplates(options: PushOptions = {}): Promise<void> {
   if (!leadCMSDataService.isApiKeyConfigured()) {
-    console.log('⏭️  Email templates require authentication — no API key configured, skipping');
+    console.log("⏭️  Email templates require authentication — no API key configured, skipping");
     return;
   }
 
@@ -887,7 +955,7 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
   // Load per-remote id-map and metadata-map for multi-remote support
   let metadataMap: MetadataMap | undefined;
   if (remoteCtx) {
-    const rc = await import('../lib/remote-context.js');
+    const rc = await import("../lib/remote-context.js");
     metadataMap = await rc.readMetadataMap(remoteCtx);
   }
 
@@ -895,7 +963,7 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
 
   // Filter to a single template when --id or --name is specified
   if (targetId) {
-    localTemplates = localTemplates.filter(t => {
+    localTemplates = localTemplates.filter((t) => {
       const localId = t.metadata.id != null ? String(t.metadata.id) : undefined;
       return localId === targetId;
     });
@@ -907,7 +975,7 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
 
     console.log(`🔍 Pushing email template with ID ${targetId}`);
   } else if (targetName) {
-    localTemplates = localTemplates.filter(t => {
+    localTemplates = localTemplates.filter((t) => {
       return t.metadata.name === targetName;
     });
 
@@ -945,7 +1013,7 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
     const name = local.metadata.name;
     let localUpdatedStr: string | undefined;
     if (metadataMap && name) {
-      const rc = await import('../lib/remote-context.js');
+      const rc = await import("../lib/remote-context.js");
       localUpdatedStr = rc.getMetadataForEmailTemplate(metadataMap, language, name)?.updatedAt;
     }
     if (!localUpdatedStr) {
@@ -971,23 +1039,33 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
         local.body = parsed.body;
         autoMerged = true;
       } else if (mergeAttempt.canMerge && mergeAttempt.hasConflicts) {
-        console.warn(`⚠️  Auto-merge has ${mergeAttempt.conflictCount} conflict(s): ${local.metadata.name || match.id} — skipping (use --force to override)`);
+        console.warn(
+          `⚠️  Auto-merge has ${mergeAttempt.conflictCount} conflict(s): ${local.metadata.name || match.id} — skipping (use --force to override)`
+        );
         continue;
       } else {
-        console.warn(`⚠️  Remote email template updated after local changes: ${local.metadata.name || match.id}`);
+        console.warn(
+          `⚠️  Remote email template updated after local changes: ${local.metadata.name || match.id}`
+        );
         continue;
       }
     }
 
-    const payload = filterUndefinedValues(formatEmailTemplateForApi({
-      metadata: local.metadata,
-      body: local.body,
-    }));
+    const payload = filterUndefinedValues(
+      formatEmailTemplateForApi({
+        metadata: local.metadata,
+        body: local.body,
+      })
+    );
 
-    const requiredFields = ['name', 'subject', 'fromEmail', 'fromName', 'language', 'emailGroupId'];
-    const missingFields = requiredFields.filter(field => payload[field] === undefined || payload[field] === null || payload[field] === '');
+    const requiredFields = ["name", "subject", "fromEmail", "fromName", "language", "emailGroupId"];
+    const missingFields = requiredFields.filter(
+      (field) => payload[field] === undefined || payload[field] === null || payload[field] === ""
+    );
     if (missingFields.length > 0) {
-      console.warn(`⚠️  Skipping ${local.filePath} - missing required fields: ${missingFields.join(', ')}`);
+      console.warn(
+        `⚠️  Skipping ${local.filePath} - missing required fields: ${missingFields.join(", ")}`
+      );
       continue;
     }
 
@@ -1012,13 +1090,13 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
     }
 
     if (dryRun) {
-      const label = autoMerged ? '[DRY RUN] Auto-merge + update' : '[DRY RUN] Update';
+      const label = autoMerged ? "[DRY RUN] Auto-merge + update" : "[DRY RUN] Update";
       console.log(`🟡 ${label} email template: ${payload.name} (ID ${match.id})`);
       continue;
     }
 
     const updated = await leadCMSDataService.updateEmailTemplate(Number(match.id), payload);
-    const label = autoMerged ? '🔀 Auto-merged and updated' : '✅ Updated';
+    const label = autoMerged ? "🔀 Auto-merged and updated" : "✅ Updated";
     console.log(`${label} email template: ${payload.name}`);
     await updateLocalFileFromResponse(local, updated, emailGroups, remoteCtx);
   }
@@ -1027,10 +1105,15 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
     return;
   }
 
-  const localIds = new Set(localTemplates.map(template => template.metadata.id).filter(id => id != null).map(id => Number(id)));
+  const localIds = new Set(
+    localTemplates
+      .map((template) => template.metadata.id)
+      .filter((id) => id != null)
+      .map((id) => Number(id))
+  );
   // Build a set of local name+language keys for matching (like slug+locale in content)
   const localNameKeys = new Set(
-    localTemplates.map(template => {
+    localTemplates.map((template) => {
       const name = template.metadata.name;
       const lang = template.metadata.language || template.locale;
       return `${name}::${lang}`;

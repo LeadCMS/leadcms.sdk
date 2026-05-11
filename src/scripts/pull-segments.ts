@@ -7,20 +7,13 @@ import "dotenv/config";
 import fs from "fs/promises";
 import path from "path";
 import axios, { AxiosResponse } from "axios";
-import {
-  leadCMSUrl,
-  leadCMSApiKey,
-  SEGMENTS_DIR,
-} from "./leadcms-helpers.js";
+import { leadCMSUrl, leadCMSApiKey, SEGMENTS_DIR } from "./leadcms-helpers.js";
 import { syncTokenPath, type RemoteContext } from "../lib/remote-context.js";
 import type { MetadataMap } from "../lib/remote-context.js";
 import { resetSegmentsState } from "./pull-all.js";
 import { logger } from "../lib/logger.js";
 import { slugify } from "../lib/slugify.js";
-import type {
-  SegmentDetailsDto,
-  SegmentSyncResponse,
-} from "../lib/automation-types.js";
+import type { SegmentDetailsDto, SegmentSyncResponse } from "../lib/automation-types.js";
 import { stripNullsAndEmptyArrays } from "../lib/automation-types.js";
 
 interface SegmentSyncResult {
@@ -29,8 +22,6 @@ interface SegmentSyncResult {
   baseItems: Record<string, SegmentDetailsDto>;
   nextSyncToken: string;
 }
-
-
 
 async function readFileOrUndefined(filePath: string): Promise<string | undefined> {
   try {
@@ -131,7 +122,9 @@ async function buildSegmentIdIndex(dir: string): Promise<Map<string, string>> {
       if (id != null) {
         index.set(String(id), fullPath);
       }
-    } catch { /* skip unreadable */ }
+    } catch {
+      /* skip unreadable */
+    }
   }
 
   return index;
@@ -144,7 +137,17 @@ function getSegmentFilePath(segment: SegmentDetailsDto): string {
 
 /** Strip runtime-only fields from a segment DTO for local persistence. */
 function toLocalSegment(segment: SegmentDetailsDto): SegmentDetailsDto {
-  const { contactCount, createdById, updatedById, createdByIp, createdByUserAgent, updatedByIp, updatedByUserAgent, contactIds, ...rest } = segment;
+  const {
+    contactCount: _contactCount,
+    createdById: _createdById,
+    updatedById: _updatedById,
+    createdByIp: _createdByIp,
+    createdByUserAgent: _createdByUserAgent,
+    updatedByIp: _updatedByIp,
+    updatedByUserAgent: _updatedByUserAgent,
+    contactIds: _contactIds,
+    ...rest
+  } = segment;
   return stripNullsAndEmptyArrays(rest);
 }
 
@@ -161,11 +164,13 @@ interface PullSegmentsOptions {
   remoteContext?: RemoteContext;
 }
 
-export async function pullLeadCMSSegments(optionsOrRemoteCtx?: PullSegmentsOptions | RemoteContext): Promise<void> {
+export async function pullLeadCMSSegments(
+  optionsOrRemoteCtx?: PullSegmentsOptions | RemoteContext
+): Promise<void> {
   // Support both old signature (RemoteContext) and new options object
   let reset: boolean | undefined;
   let remoteCtx: RemoteContext | undefined;
-  if (optionsOrRemoteCtx && 'name' in optionsOrRemoteCtx && 'url' in optionsOrRemoteCtx) {
+  if (optionsOrRemoteCtx && "name" in optionsOrRemoteCtx && "url" in optionsOrRemoteCtx) {
     remoteCtx = optionsOrRemoteCtx;
   } else if (optionsOrRemoteCtx) {
     const opts = optionsOrRemoteCtx as PullSegmentsOptions;
@@ -182,7 +187,7 @@ export async function pullLeadCMSSegments(optionsOrRemoteCtx?: PullSegmentsOptio
   const { items, deleted, nextSyncToken } = await pullSegmentSync(lastSyncToken);
 
   // Filter out Static segments
-  const dynamicItems = items.filter(s => s.type !== "Static");
+  const dynamicItems = items.filter((s) => s.type !== "Static");
 
   let metadataMap: MetadataMap | undefined;
   const rcModule = remoteCtx ? await import("../lib/remote-context.js") : undefined;
@@ -190,9 +195,10 @@ export async function pullLeadCMSSegments(optionsOrRemoteCtx?: PullSegmentsOptio
     metadataMap = await rcModule.readMetadataMap(remoteCtx);
   }
 
-  const idIndex = (dynamicItems.length > 0 || deleted.length > 0)
-    ? await buildSegmentIdIndex(SEGMENTS_DIR)
-    : new Map<string, string>();
+  const idIndex =
+    dynamicItems.length > 0 || deleted.length > 0
+      ? await buildSegmentIdIndex(SEGMENTS_DIR)
+      : new Map<string, string>();
 
   let newCount = 0;
   let updatedCount = 0;
@@ -202,9 +208,10 @@ export async function pullLeadCMSSegments(optionsOrRemoteCtx?: PullSegmentsOptio
 
     // Capture old entry BEFORE updating metadata so we can detect renames
     // using the correct remote's IDs (not the default remote's file IDs).
-    const oldEntry = (remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap && idStr)
-      ? rcModule.findSegmentByRemoteId(metadataMap, idStr)
-      : undefined;
+    const oldEntry =
+      remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap && idStr
+        ? rcModule.findSegmentByRemoteId(metadataMap, idStr)
+        : undefined;
 
     // Update per-remote metadata
     if (remoteCtx && rcModule && metadataMap && segment.id != null) {
@@ -226,7 +233,11 @@ export async function pullLeadCMSSegments(optionsOrRemoteCtx?: PullSegmentsOptio
         const newPath = getSegmentFilePath(segment);
         if (oldPath !== newPath) {
           console.log(`   🗑️  ${path.basename(oldPath)} → ${path.basename(newPath)} (renamed)`);
-          try { await fs.unlink(oldPath); } catch { /* ignore */ }
+          try {
+            await fs.unlink(oldPath);
+          } catch {
+            /* ignore */
+          }
         }
       }
     } else if (idStr && idIndex.has(idStr)) {
@@ -234,16 +245,19 @@ export async function pullLeadCMSSegments(optionsOrRemoteCtx?: PullSegmentsOptio
       const newPath = getSegmentFilePath(segment);
       if (oldPath !== newPath) {
         console.log(`   🗑️  ${path.basename(oldPath)} → ${path.basename(newPath)} (renamed)`);
-        try { await fs.unlink(oldPath); } catch { /* ignore */ }
+        try {
+          await fs.unlink(oldPath);
+        } catch {
+          /* ignore */
+        }
       }
     }
 
     const { filePath, content } = saveSegmentFile(segment);
     await fs.mkdir(path.dirname(filePath), { recursive: true });
 
-    const existed = (remoteCtx && !remoteCtx.isDefault)
-      ? !!oldEntry
-      : (idStr ? idIndex.has(idStr) : false);
+    const existed =
+      remoteCtx && !remoteCtx.isDefault ? !!oldEntry : idStr ? idIndex.has(idStr) : false;
     await fs.writeFile(filePath, content, "utf8");
 
     if (existed) {
@@ -262,7 +276,11 @@ export async function pullLeadCMSSegments(optionsOrRemoteCtx?: PullSegmentsOptio
         const slug = slugify(entry.name) || `segment-${id}`;
         const filePath = path.join(SEGMENTS_DIR, `${slug}.json`);
         console.log(`   🗑️  ${path.basename(filePath)} (deleted on remote)`);
-        try { await fs.unlink(filePath); } catch { /* ignore */ }
+        try {
+          await fs.unlink(filePath);
+        } catch {
+          /* ignore */
+        }
         // Clean up metadata entry
         if (metadataMap.segments?.[entry.name]) {
           delete metadataMap.segments[entry.name];
@@ -272,7 +290,11 @@ export async function pullLeadCMSSegments(optionsOrRemoteCtx?: PullSegmentsOptio
       const filePath = idIndex.get(String(id));
       if (filePath) {
         console.log(`   🗑️  ${path.basename(filePath)} (deleted on remote)`);
-        try { await fs.unlink(filePath); } catch { /* ignore */ }
+        try {
+          await fs.unlink(filePath);
+        } catch {
+          /* ignore */
+        }
       }
     }
   }
@@ -295,4 +317,10 @@ export async function pullLeadCMSSegments(optionsOrRemoteCtx?: PullSegmentsOptio
   }
 }
 
-export { pullSegmentSync, buildSegmentIdIndex, getSegmentFilePath, toLocalSegment, saveSegmentFile };
+export {
+  pullSegmentSync,
+  buildSegmentIdIndex,
+  getSegmentFilePath,
+  toLocalSegment,
+  saveSegmentFile,
+};

@@ -13,24 +13,21 @@
  * TDD: Tests written first to drive the implementation.
  */
 
-import fsPromises from 'fs/promises';
-import path from 'path';
-import os from 'os';
-import { jest } from '@jest/globals';
-import { createTestConfig, createDataServiceMock } from './test-helpers';
+import fsPromises from "fs/promises";
+import path from "path";
+import os from "os";
+import { createTestConfig, createDataServiceMock } from "./test-helpers";
 
 // ── Temp directories ───────────────────────────────────────────────────
-const tmpRoot = path.join(os.tmpdir(), 'leadcms-seq-lang-dirs');
-const sequencesDir = path.join(tmpRoot, 'sequences');
+const tmpRoot = path.join(os.tmpdir(), "leadcms-seq-lang-dirs");
+const sequencesDir = path.join(tmpRoot, "sequences");
 
 // ── Mocks ──────────────────────────────────────────────────────────────
-jest.mock('../src/lib/config.js', () => ({
-  getConfig: jest.fn(() =>
-    createTestConfig({ sequencesDir, defaultLanguage: 'en' }),
-  ),
+jest.mock("../src/lib/config.js", () => ({
+  getConfig: jest.fn(() => createTestConfig({ sequencesDir, defaultLanguage: "en" })),
 }));
 
-jest.mock('../src/lib/data-service.js', () => ({
+jest.mock("../src/lib/data-service.js", () => ({
   leadCMSDataService: createDataServiceMock({
     getAllSegments: jest.fn(() => Promise.resolve([])),
     getAllEmailTemplates: jest.fn(() => Promise.resolve([])),
@@ -40,20 +37,22 @@ jest.mock('../src/lib/data-service.js', () => ({
 }));
 
 // Sequence sync queue for the axios mock
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let sequenceSyncQueue: Array<{ items: any[]; deleted: number[]; token: string }> = [];
 
-jest.mock('axios', () => {
+jest.mock("axios", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mockGet = jest.fn((url: string, _opts?: any) => {
-    if (url.includes('/api/sequences/sync')) {
+    if (url.includes("/api/sequences/sync")) {
       const urlObj = new URL(url);
-      const sentToken = urlObj.searchParams.get('syncToken') || '';
+      const sentToken = urlObj.searchParams.get("syncToken") || "";
       const pending = sequenceSyncQueue[0];
 
       if (pending && sentToken !== pending.token) {
         return Promise.resolve({
           status: 200,
           data: { items: pending.items, deleted: pending.deleted },
-          headers: { 'x-next-sync-token': pending.token },
+          headers: { "x-next-sync-token": pending.token },
         });
       }
       if (pending && sentToken === pending.token) {
@@ -62,13 +61,14 @@ jest.mock('axios', () => {
       return Promise.resolve({
         status: 200,
         data: { items: [], deleted: [] },
-        headers: { 'x-next-sync-token': sentToken || 'done' },
+        headers: { "x-next-sync-token": sentToken || "done" },
       });
     }
 
     return Promise.resolve({ status: 200, data: {}, headers: {} });
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mockInstance: any = jest.fn(mockGet);
   mockInstance.get = mockGet;
   mockInstance.interceptors = {
@@ -92,17 +92,18 @@ afterEach(async () => {
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function makeSequence(overrides: Record<string, any> = {}) {
   return {
     id: 1,
-    name: 'Test Sequence',
+    name: "Test Sequence",
     description: null,
-    language: 'en',
+    language: "en",
     stopOnReply: true,
     useContactTimeZone: false,
     timeZone: 0,
-    status: 'Draft',
-    createdAt: '2026-03-01T00:00:00Z',
+    status: "Draft",
+    createdAt: "2026-03-01T00:00:00Z",
     updatedAt: null,
     steps: [],
     ...overrides,
@@ -119,11 +120,13 @@ async function listJsonFiles(dir: string, base?: string): Promise<string[]> {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         files.push(...(await listJsonFiles(fullPath, base)));
-      } else if (entry.name.endsWith('.json')) {
+      } else if (entry.name.endsWith(".json")) {
         files.push(path.relative(base, fullPath));
       }
     }
-  } catch { /* directory doesn't exist */ }
+  } catch {
+    /* directory doesn't exist */
+  }
   return files.sort();
 }
 
@@ -131,88 +134,88 @@ async function listJsonFiles(dir: string, base?: string): Promise<string[]> {
 //  Pull: language-based directory routing
 // ════════════════════════════════════════════════════════════════════════
 
-describe('pull-sequences language directory routing', () => {
-  it('should save default-language sequences in the root sequences directory', async () => {
+describe("pull-sequences language directory routing", () => {
+  it("should save default-language sequences in the root sequences directory", async () => {
     sequenceSyncQueue.push({
-      items: [makeSequence({ id: 1, name: 'Welcome Flow', language: 'en' })],
+      items: [makeSequence({ id: 1, name: "Welcome Flow", language: "en" })],
       deleted: [],
-      token: 'tok-1',
+      token: "tok-1",
     });
 
-    const { pullLeadCMSSequences } = await import('../src/scripts/pull-sequences');
+    const { pullLeadCMSSequences } = await import("../src/scripts/pull-sequences");
     await pullLeadCMSSequences({ reset: true });
 
     const files = await listJsonFiles(sequencesDir);
-    expect(files).toContain('welcome-flow.json');
+    expect(files).toContain("welcome-flow.json");
     // Should NOT be in a subdirectory
-    expect(files.find(f => f.includes('/'))).toBeUndefined();
+    expect(files.find((f) => f.includes("/"))).toBeUndefined();
   });
 
-  it('should save non-default-language sequences in language subdirectories', async () => {
+  it("should save non-default-language sequences in language subdirectories", async () => {
     sequenceSyncQueue.push({
       items: [
-        makeSequence({ id: 1, name: 'Welcome Flow', language: 'en-US' }),
-        makeSequence({ id: 2, name: 'Onboarding', language: 'ru-RU' }),
+        makeSequence({ id: 1, name: "Welcome Flow", language: "en-US" }),
+        makeSequence({ id: 2, name: "Onboarding", language: "ru-RU" }),
       ],
       deleted: [],
-      token: 'tok-2',
+      token: "tok-2",
     });
 
-    const { pullLeadCMSSequences } = await import('../src/scripts/pull-sequences');
+    const { pullLeadCMSSequences } = await import("../src/scripts/pull-sequences");
     await pullLeadCMSSequences({ reset: true });
 
     const files = await listJsonFiles(sequencesDir);
-    expect(files).toContain(path.join('en-US', 'welcome-flow.json'));
-    expect(files).toContain(path.join('ru-RU', 'onboarding.json'));
+    expect(files).toContain(path.join("en-US", "welcome-flow.json"));
+    expect(files).toContain(path.join("ru-RU", "onboarding.json"));
     // Should NOT be in the root
-    expect(files.find(f => !f.includes('/'))).toBeUndefined();
+    expect(files.find((f) => !f.includes("/"))).toBeUndefined();
   });
 
-  it('should handle mixed languages: default in root, others in subdirectories', async () => {
+  it("should handle mixed languages: default in root, others in subdirectories", async () => {
     sequenceSyncQueue.push({
       items: [
-        makeSequence({ id: 1, name: 'Welcome Flow', language: 'en' }),
-        makeSequence({ id: 2, name: 'Welcome Flow', language: 'ru-RU' }),
-        makeSequence({ id: 3, name: 'Onboarding', language: 'en-US' }),
+        makeSequence({ id: 1, name: "Welcome Flow", language: "en" }),
+        makeSequence({ id: 2, name: "Welcome Flow", language: "ru-RU" }),
+        makeSequence({ id: 3, name: "Onboarding", language: "en-US" }),
       ],
       deleted: [],
-      token: 'tok-3',
+      token: "tok-3",
     });
 
-    const { pullLeadCMSSequences } = await import('../src/scripts/pull-sequences');
+    const { pullLeadCMSSequences } = await import("../src/scripts/pull-sequences");
     await pullLeadCMSSequences({ reset: true });
 
     const files = await listJsonFiles(sequencesDir);
-    expect(files).toContain('welcome-flow.json');
-    expect(files).toContain(path.join('ru-RU', 'welcome-flow.json'));
-    expect(files).toContain(path.join('en-US', 'onboarding.json'));
+    expect(files).toContain("welcome-flow.json");
+    expect(files).toContain(path.join("ru-RU", "welcome-flow.json"));
+    expect(files).toContain(path.join("en-US", "onboarding.json"));
   });
 
-  it('should delete non-default-language sequence files in subdirectories', async () => {
+  it("should delete non-default-language sequence files in subdirectories", async () => {
     // First pull: create a sequence
     sequenceSyncQueue.push({
-      items: [makeSequence({ id: 1, name: 'Welcome Flow', language: 'ru-RU' })],
+      items: [makeSequence({ id: 1, name: "Welcome Flow", language: "ru-RU" })],
       deleted: [],
-      token: 'tok-4a',
+      token: "tok-4a",
     });
 
-    const { pullLeadCMSSequences } = await import('../src/scripts/pull-sequences');
+    const { pullLeadCMSSequences } = await import("../src/scripts/pull-sequences");
     await pullLeadCMSSequences({ reset: true });
 
     let files = await listJsonFiles(sequencesDir);
-    expect(files).toContain(path.join('ru-RU', 'welcome-flow.json'));
+    expect(files).toContain(path.join("ru-RU", "welcome-flow.json"));
 
     // Second pull: delete it
     sequenceSyncQueue.push({
       items: [],
       deleted: [1],
-      token: 'tok-4b',
+      token: "tok-4b",
     });
 
     await pullLeadCMSSequences();
 
     files = await listJsonFiles(sequencesDir);
-    expect(files.find(f => f.includes('welcome-flow.json'))).toBeUndefined();
+    expect(files.find((f) => f.includes("welcome-flow.json"))).toBeUndefined();
   });
 });
 
@@ -220,44 +223,44 @@ describe('pull-sequences language directory routing', () => {
 //  Push: reading sequences from language subdirectories
 // ════════════════════════════════════════════════════════════════════════
 
-describe('push-sequences reads from language subdirectories', () => {
-  it('should discover sequences in both root and language subdirectories', async () => {
+describe("push-sequences reads from language subdirectories", () => {
+  it("should discover sequences in both root and language subdirectories", async () => {
     // Create sequences in various locations
     const rootSeq = {
       id: 1,
-      name: 'Welcome Flow',
-      language: 'en',
+      name: "Welcome Flow",
+      language: "en",
       steps: [],
     };
     const ruSeq = {
       id: 2,
-      name: 'Welcome Flow',
-      language: 'ru-RU',
+      name: "Welcome Flow",
+      language: "ru-RU",
       steps: [],
     };
     const enUsSeq = {
       id: 3,
-      name: 'Onboarding',
-      language: 'en-US',
+      name: "Onboarding",
+      language: "en-US",
       steps: [],
     };
 
     await fsPromises.writeFile(
-      path.join(sequencesDir, 'welcome-flow.json'),
-      JSON.stringify(rootSeq, null, 2),
+      path.join(sequencesDir, "welcome-flow.json"),
+      JSON.stringify(rootSeq, null, 2)
     );
-    await fsPromises.mkdir(path.join(sequencesDir, 'ru-RU'), { recursive: true });
+    await fsPromises.mkdir(path.join(sequencesDir, "ru-RU"), { recursive: true });
     await fsPromises.writeFile(
-      path.join(sequencesDir, 'ru-RU', 'welcome-flow.json'),
-      JSON.stringify(ruSeq, null, 2),
+      path.join(sequencesDir, "ru-RU", "welcome-flow.json"),
+      JSON.stringify(ruSeq, null, 2)
     );
-    await fsPromises.mkdir(path.join(sequencesDir, 'en-US'), { recursive: true });
+    await fsPromises.mkdir(path.join(sequencesDir, "en-US"), { recursive: true });
     await fsPromises.writeFile(
-      path.join(sequencesDir, 'en-US', 'onboarding.json'),
-      JSON.stringify(enUsSeq, null, 2),
+      path.join(sequencesDir, "en-US", "onboarding.json"),
+      JSON.stringify(enUsSeq, null, 2)
     );
 
-    const { buildSequenceStatus } = await import('../src/scripts/push-sequences');
+    const { buildSequenceStatus } = await import("../src/scripts/push-sequences");
     const result = await buildSequenceStatus({});
 
     expect(result.totalLocal).toBe(3);
@@ -268,31 +271,34 @@ describe('push-sequences reads from language subdirectories', () => {
 //  getSequenceFilePath: exported function unit test
 // ════════════════════════════════════════════════════════════════════════
 
-describe('getSequenceFilePath language routing', () => {
-  it('should return root path for default language', async () => {
-    const { getSequenceFilePath } = await import('../src/scripts/pull-sequences');
+describe("getSequenceFilePath language routing", () => {
+  it("should return root path for default language", async () => {
+    const { getSequenceFilePath } = await import("../src/scripts/pull-sequences");
     const filePath = getSequenceFilePath({
-      name: 'My Sequence',
-      language: 'en',
+      name: "My Sequence",
+      language: "en",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
-    expect(filePath).toBe(path.join(sequencesDir, 'my-sequence.json'));
+    expect(filePath).toBe(path.join(sequencesDir, "my-sequence.json"));
   });
 
-  it('should return language subdirectory path for non-default language', async () => {
-    const { getSequenceFilePath } = await import('../src/scripts/pull-sequences');
+  it("should return language subdirectory path for non-default language", async () => {
+    const { getSequenceFilePath } = await import("../src/scripts/pull-sequences");
     const filePath = getSequenceFilePath({
-      name: 'My Sequence',
-      language: 'ru-RU',
+      name: "My Sequence",
+      language: "ru-RU",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
-    expect(filePath).toBe(path.join(sequencesDir, 'ru-RU', 'my-sequence.json'));
+    expect(filePath).toBe(path.join(sequencesDir, "ru-RU", "my-sequence.json"));
   });
 
-  it('should return language subdirectory path for en-US when default is en', async () => {
-    const { getSequenceFilePath } = await import('../src/scripts/pull-sequences');
+  it("should return language subdirectory path for en-US when default is en", async () => {
+    const { getSequenceFilePath } = await import("../src/scripts/pull-sequences");
     const filePath = getSequenceFilePath({
-      name: 'My Sequence',
-      language: 'en-US',
+      name: "My Sequence",
+      language: "en-US",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
-    expect(filePath).toBe(path.join(sequencesDir, 'en-US', 'my-sequence.json'));
+    expect(filePath).toBe(path.join(sequencesDir, "en-US", "my-sequence.json"));
   });
 });

@@ -12,6 +12,15 @@ import { logger } from "../lib/logger.js";
 import type { RemoteContext } from "../lib/remote-context.js";
 import { syncTokenPath } from "../lib/remote-context.js";
 
+interface ScriptError extends Error {
+  code?: string;
+  response?: {
+    status?: number;
+    data?: { detail?: string; title?: string; message?: string; [key: string]: unknown } | null;
+  };
+  status?: number;
+}
+
 /**
  * Options for pullLeadCMSMedia.
  */
@@ -27,7 +36,7 @@ export interface PullMediaOptions {
 // Type definitions
 export interface MediaItem {
   location?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface MediaDeletedItem {
@@ -72,14 +81,18 @@ async function readFileOrUndefined(filePath: string): Promise<string | undefined
 async function unlinkSafe(filePath: string): Promise<void> {
   try {
     await fs.unlink(filePath);
-  } catch { /* not found — ok */ }
+  } catch {
+    /* not found — ok */
+  }
 }
 
 /**
  * Read media sync token. Checks new location first, then falls back to legacy.
  * When remoteCtx is provided, reads from the remote-specific state directory.
  */
-async function readMediaSyncToken(remoteCtx?: RemoteContext): Promise<{ token: string | undefined; migrated: boolean }> {
+async function readMediaSyncToken(
+  remoteCtx?: RemoteContext
+): Promise<{ token: string | undefined; migrated: boolean }> {
   if (remoteCtx) {
     const tokenPath = syncTokenPath(remoteCtx, "media");
     const token = await readFileOrUndefined(tokenPath);
@@ -173,7 +186,8 @@ async function pullMediaSync(syncToken?: string, baseUrl?: string): Promise<Medi
       nextSyncToken = newSyncToken;
       token = newSyncToken;
       page++;
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as ScriptError;
       console.error(`[PULL_MEDIA_SYNC] Failed on page ${page}:`, error.message);
       throw error;
     }
@@ -205,7 +219,8 @@ async function main(options: PullMediaOptions = {}): Promise<void> {
 
   await fs.mkdir(MEDIA_DIR, { recursive: true });
 
-  const { token: lastMediaSyncToken, migrated: mediaTokenMigrated } = await readMediaSyncToken(remoteCtx);
+  const { token: lastMediaSyncToken, migrated: mediaTokenMigrated } =
+    await readMediaSyncToken(remoteCtx);
 
   let mediaItems: MediaItem[] = [];
   let mediaDeleted: MediaDeletedItem[] = [];
@@ -214,12 +229,21 @@ async function main(options: PullMediaOptions = {}): Promise<void> {
   try {
     if (lastMediaSyncToken) {
       logger.verbose(`Syncing media from LeadCMS using sync token: ${lastMediaSyncToken}`);
-      ({ items: mediaItems, deleted: mediaDeleted, nextSyncToken: nextMediaSyncToken } = await pullMediaSync(lastMediaSyncToken, effectiveUrl));
+      ({
+        items: mediaItems,
+        deleted: mediaDeleted,
+        nextSyncToken: nextMediaSyncToken,
+      } = await pullMediaSync(lastMediaSyncToken, effectiveUrl));
     } else {
       logger.verbose("No media sync token found. Doing full pull from LeadCMS...");
-      ({ items: mediaItems, deleted: mediaDeleted, nextSyncToken: nextMediaSyncToken } = await pullMediaSync(undefined, effectiveUrl));
+      ({
+        items: mediaItems,
+        deleted: mediaDeleted,
+        nextSyncToken: nextMediaSyncToken,
+      } = await pullMediaSync(undefined, effectiveUrl));
     }
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as ScriptError;
     console.error(`[PULL_MEDIA] Failed to pull media:`, error.message);
     if (error.response?.status === 401) {
       console.error(`[PULL_MEDIA] Authentication failed - check your LEADCMS_API_KEY`);
@@ -230,7 +254,9 @@ async function main(options: PullMediaOptions = {}): Promise<void> {
   logger.verbose(`Pulled ${mediaItems.length} media items, ${mediaDeleted.length} deleted.\x1b[0m`);
 
   // Download new/updated media files
-  console.log(`🖼️  Processing media sync (${mediaItems.length} downloads, ${mediaDeleted.length} deletions)...`);
+  console.log(
+    `🖼️  Processing media sync (${mediaItems.length} downloads, ${mediaDeleted.length} deletions)...`
+  );
   if (mediaItems.length > 0) {
     logger.verbose(`\nProcessing media changes...`);
 
@@ -240,16 +266,21 @@ async function main(options: PullMediaOptions = {}): Promise<void> {
       if (mediaItem.location) {
         attemptedDownloads++;
         if (
-          attemptedDownloads === 1
-          || attemptedDownloads % MEDIA_PROGRESS_LOG_INTERVAL === 0
-          || attemptedDownloads === mediaItems.length
+          attemptedDownloads === 1 ||
+          attemptedDownloads % MEDIA_PROGRESS_LOG_INTERVAL === 0 ||
+          attemptedDownloads === mediaItems.length
         ) {
           console.log(`   ⬇️  Media download progress: ${attemptedDownloads}/${mediaItems.length}`);
         }
 
         const relPath = mediaItem.location.replace(/^\/api\/media\//, "");
         const destPath = path.join(MEDIA_DIR, relPath);
-        const didDownload = await downloadMediaFileDirect(mediaItem.location, destPath, effectiveUrl || "", effectiveApiKey || "");
+        const didDownload = await downloadMediaFileDirect(
+          mediaItem.location,
+          destPath,
+          effectiveUrl || "",
+          effectiveApiKey || ""
+        );
         if (didDownload) {
           logger.verbose(`Downloaded: ${mediaItem.location} -> ${destPath}`);
           downloaded++;
@@ -274,8 +305,9 @@ async function main(options: PullMediaOptions = {}): Promise<void> {
         await fs.unlink(fullPath);
         console.log(`   🗑️  ${relPath} (deleted on remote)`);
         removedCount++;
-      } catch (err: any) {
-        if (err.code !== 'ENOENT') {
+      } catch (_err: unknown) {
+        const err = _err as ScriptError;
+        if (err.code !== "ENOENT") {
           console.warn(`Warning: Could not delete media file ${fullPath}:`, err.message);
         }
       }

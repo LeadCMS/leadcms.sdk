@@ -4,29 +4,26 @@ import path from "path";
 import readline from "readline";
 import matter from "gray-matter";
 import * as Diff from "diff";
-import {
-  defaultLanguage,
-  CONTENT_DIR,
-  ContentItem as BaseContentItem,
-} from "./leadcms-helpers.js";
+import { defaultLanguage, CONTENT_DIR, ContentItem as BaseContentItem } from "./leadcms-helpers.js";
 import { leadCMSDataService, ContentItem } from "../lib/data-service.js";
 import {
   transformRemoteToLocalFormat,
   transformRemoteForComparison,
   hasContentDifferences,
   stripTimestampMetadata,
-  type ContentTypeMap
+  type ContentTypeMap,
 } from "../lib/content-transformation.js";
-import { formatContentForAPI } from '../lib/content-api-formatting.js';
-import { colorConsole, statusColors, diffColors } from '../lib/console-colors.js';
-import { logger } from '../lib/logger.js';
-import type { RemoteContext, MetadataMap } from '../lib/remote-context.js';
-import { hasMergeConflictMarkers } from '../lib/merge-conflict-detector.js';
+import { formatContentForAPI } from "../lib/content-api-formatting.js";
+import { colorConsole, statusColors, diffColors } from "../lib/console-colors.js";
+import { logger } from "../lib/logger.js";
+import type { RemoteContext, MetadataMap } from "../lib/remote-context.js";
+import { hasMergeConflictMarkers } from "../lib/merge-conflict-detector.js";
 
 // Extended interfaces for local operations
 interface LocalContentItem extends BaseContentItem {
   filePath: string;
   locale: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata: Record<string, any>;
   isLocal: boolean;
 }
@@ -56,13 +53,13 @@ export interface ContentOperations {
 export interface PushOptions {
   statusOnly?: boolean;
   force?: boolean;
-  targetId?: string;      // Target specific content by ID
-  targetSlug?: string;    // Target specific content by slug
+  targetId?: string; // Target specific content by ID
+  targetSlug?: string; // Target specific content by slug
   statusFilter?: string[]; // Filter by operation/status buckets
-  showDetailedPreview?: boolean;  // Show detailed diff preview for all files
-  dryRun?: boolean;       // Show API calls without executing them
-  allowDelete?: boolean;  // Allow deletion of remote content not present locally
-  showDelete?: boolean;   // Show deletion operations in status output
+  showDetailedPreview?: boolean; // Show detailed diff preview for all files
+  dryRun?: boolean; // Show API calls without executing them
+  allowDelete?: boolean; // Allow deletion of remote content not present locally
+  showDelete?: boolean; // Show deletion operations in status output
   allowConflictMarkers?: boolean; // Allow pushing content with unresolved merge conflict markers
   /** Suppress status display and confirmation prompt (used by push-all orchestrator). */
   quiet?: boolean;
@@ -78,34 +75,39 @@ interface ExecutionOptions {
 type ContentOperationKey = keyof ContentOperations;
 
 const CONTENT_STATUS_ALIASES: Record<string, ContentOperationKey> = {
-  create: 'create',
-  created: 'create',
-  new: 'create',
-  update: 'update',
-  updated: 'update',
-  modify: 'update',
-  modified: 'update',
-  change: 'update',
-  changed: 'update',
-  rename: 'rename',
-  renamed: 'rename',
-  typechange: 'typeChange',
-  'type-change': 'typeChange',
-  typechanged: 'typeChange',
-  'type-changed': 'typeChange',
-  conflict: 'conflict',
-  conflicts: 'conflict',
-  delete: 'delete',
-  deleted: 'delete',
-  remove: 'delete',
-  removed: 'delete'
+  create: "create",
+  created: "create",
+  new: "create",
+  update: "update",
+  updated: "update",
+  modify: "update",
+  modified: "update",
+  change: "update",
+  changed: "update",
+  rename: "rename",
+  renamed: "rename",
+  typechange: "typeChange",
+  "type-change": "typeChange",
+  typechanged: "typeChange",
+  "type-changed": "typeChange",
+  conflict: "conflict",
+  conflicts: "conflict",
+  delete: "delete",
+  deleted: "delete",
+  remove: "delete",
+  removed: "delete",
 };
 
 function normalizeStatusAlias(value: string): string {
-  return value.trim().toLowerCase().replace(/[_\s]+/g, '-');
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s]+/g, "-");
 }
 
-export function normalizeContentStatusFilters(statusFilters?: string[]): ContentOperationKey[] | undefined {
+export function normalizeContentStatusFilters(
+  statusFilters?: string[]
+): ContentOperationKey[] | undefined {
   if (!statusFilters || statusFilters.length === 0) {
     return undefined;
   }
@@ -128,7 +130,7 @@ export function normalizeContentStatusFilters(statusFilters?: string[]): Content
   }
 
   if (invalid.length > 0) {
-    throw new Error(`Unsupported content status filter: ${invalid.join(', ')}`);
+    throw new Error(`Unsupported content status filter: ${invalid.join(", ")}`);
   }
 
   return normalized.size > 0 ? Array.from(normalized) : undefined;
@@ -141,7 +143,7 @@ function getReadlineInterface(): readline.Interface {
   if (!rl) {
     rl = readline.createInterface({
       input: process.stdin,
-      output: process.stdout
+      output: process.stdout,
     });
   }
   return rl;
@@ -175,14 +177,18 @@ async function isLocaleDirectory(dirPath: string, parentDir: string): Promise<bo
   } catch {
     return false;
   }
-}/**
+} /**
  * Read and parse all local content files
  */
 async function readLocalContent(): Promise<LocalContentItem[]> {
   logger.verbose(`[LOCAL] Reading content from: ${CONTENT_DIR}`);
   const localContent: LocalContentItem[] = [];
 
-  async function walkDirectory(dir: string, locale: string = defaultLanguage, baseContentDir: string = CONTENT_DIR): Promise<void> {
+  async function walkDirectory(
+    dir: string,
+    locale: string = defaultLanguage,
+    baseContentDir: string = CONTENT_DIR
+  ): Promise<void> {
     try {
       const entries = await fs.readdir(dir, { withFileTypes: true });
 
@@ -191,25 +197,30 @@ async function readLocalContent(): Promise<LocalContentItem[]> {
 
         if (entry.isDirectory()) {
           // Check if this is a locale directory (only immediate children of content dir)
-          if (entry.name !== defaultLanguage && await isLocaleDirectory(fullPath, dir)) {
+          if (entry.name !== defaultLanguage && (await isLocaleDirectory(fullPath, dir))) {
             // This is a language directory
             await walkDirectory(fullPath, entry.name, fullPath);
           } else {
             // Regular directory, keep current locale and baseContentDir
             await walkDirectory(fullPath, locale, baseContentDir);
           }
-        } else if (entry.isFile() && (entry.name.endsWith('.mdx') || entry.name.endsWith('.json'))) {
+        } else if (
+          entry.isFile() &&
+          (entry.name.endsWith(".mdx") || entry.name.endsWith(".json"))
+        ) {
           try {
             const content = await parseContentFile(fullPath, locale, baseContentDir);
             if (content) {
               localContent.push(content);
             }
-          } catch (error: any) {
+          } catch (_error: unknown) {
+            const error = _error as Error;
             logger.verbose(`[LOCAL] Failed to parse ${fullPath}: ${error.message}`);
           }
         }
       }
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as Error;
       logger.verbose(`[LOCAL] Failed to read directory ${dir}: ${error.message}`);
     }
   }
@@ -222,21 +233,26 @@ async function readLocalContent(): Promise<LocalContentItem[]> {
 /**
  * Parse a single content file (MDX or JSON)
  */
-async function parseContentFile(filePath: string, locale: string, baseContentDir: string = CONTENT_DIR): Promise<LocalContentItem | null> {
-  const fileContent = await fs.readFile(filePath, 'utf-8');
+async function parseContentFile(
+  filePath: string,
+  locale: string,
+  baseContentDir: string = CONTENT_DIR
+): Promise<LocalContentItem | null> {
+  const fileContent = await fs.readFile(filePath, "utf-8");
   const ext = path.extname(filePath);
   const basename = path.basename(filePath, ext);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let metadata: Record<string, any>;
-  let body = '';
+  let body = "";
 
-  if (ext === '.mdx') {
+  if (ext === ".mdx") {
     const parsed = matter(fileContent);
     metadata = parsed.data;
     body = parsed.content.trim();
-  } else if (ext === '.json') {
+  } else if (ext === ".json") {
     const jsonData = JSON.parse(fileContent);
-    body = jsonData.body || '';
+    body = jsonData.body || "";
     metadata = { ...jsonData };
     delete metadata.body;
   } else {
@@ -249,17 +265,19 @@ async function parseContentFile(filePath: string, locale: string, baseContentDir
   const relativeDir = path.dirname(relativePath);
 
   let slug: string;
-  if (relativeDir === '.' || relativeDir === '') {
+  if (relativeDir === "." || relativeDir === "") {
     // File is directly in the content/locale directory
     slug = basename;
   } else {
     // File is in a subdirectory, include the path
-    slug = path.join(relativeDir, basename).replace(/\\/g, '/'); // Normalize to forward slashes
+    slug = path.join(relativeDir, basename).replace(/\\/g, "/"); // Normalize to forward slashes
   }
 
   // Warn if type is missing
   if (!metadata.type) {
-    logger.verbose(`[LOCAL] Warning: Content file "${relativePath}" is missing a "type" property. It will be displayed as "unknown".`);
+    logger.verbose(
+      `[LOCAL] Warning: Content file "${relativePath}" is missing a "type" property. It will be displayed as "unknown".`
+    );
   }
 
   return {
@@ -269,7 +287,7 @@ async function parseContentFile(filePath: string, locale: string, baseContentDir
     type: metadata.type,
     metadata,
     body,
-    isLocal: true
+    isLocal: true,
   };
 }
 
@@ -277,11 +295,13 @@ async function parseContentFile(filePath: string, locale: string, baseContentDir
  * Check local content files for unresolved merge conflict markers.
  * Returns the list of items that contain conflicts.
  */
-async function validateMergeConflicts(localContent: LocalContentItem[]): Promise<LocalContentItem[]> {
+async function validateMergeConflicts(
+  localContent: LocalContentItem[]
+): Promise<LocalContentItem[]> {
   const conflicted: LocalContentItem[] = [];
   for (const item of localContent) {
     try {
-      const raw = await fs.readFile(item.filePath, 'utf-8');
+      const raw = await fs.readFile(item.filePath, "utf-8");
       if (hasMergeConflictMarkers(raw)) {
         conflicted.push(item);
       }
@@ -313,36 +333,45 @@ async function fetchRemoteContent(): Promise<RemoteContentItem[]> {
 
   // Ensure we have an array
   if (!Array.isArray(allItems)) {
-    logger.verbose(`[${leadCMSDataService.isMockMode() ? 'MOCK' : 'REMOTE'}] Retrieved invalid data (not an array): ${typeof allItems}`);
+    logger.verbose(
+      `[${leadCMSDataService.isMockMode() ? "MOCK" : "REMOTE"}] Retrieved invalid data (not an array): ${typeof allItems}`
+    );
     return [];
   }
 
-  logger.verbose(`[${leadCMSDataService.isMockMode() ? 'MOCK' : 'REMOTE'}] Retrieved ${allItems.length} content items`);
+  logger.verbose(
+    `[${leadCMSDataService.isMockMode() ? "MOCK" : "REMOTE"}] Retrieved ${allItems.length} content items`
+  );
 
-  return allItems.map(item => ({ ...item, isLocal: false })) as RemoteContentItem[];
+  return allItems.map((item) => ({ ...item, isLocal: false })) as RemoteContentItem[];
 }
-
-
 
 /**
  * Compare local and remote content by transforming remote to local format
  * Returns true if there are meaningful differences in content
  * This new approach compares normalized file content directly instead of parsed objects
  */
-async function hasActualContentChanges(local: LocalContentItem, remote: RemoteContentItem, typeMap?: Record<string, string>): Promise<boolean> {
+async function hasActualContentChanges(
+  local: LocalContentItem,
+  remote: RemoteContentItem,
+  typeMap?: Record<string, string>
+): Promise<boolean> {
   try {
     // Read the local file content as-is
-    const localFileContent = stripTimestampMetadata(await fs.readFile(local.filePath, 'utf-8'));
+    const localFileContent = stripTimestampMetadata(await fs.readFile(local.filePath, "utf-8"));
 
     // Transform remote content for comparison, only including fields that exist in local content
     // This prevents false positives when remote has additional fields like updatedAt
-    const transformedRemoteContent = stripTimestampMetadata(await transformRemoteForComparison(remote, localFileContent, typeMap as ContentTypeMap));
+    const transformedRemoteContent = stripTimestampMetadata(
+      await transformRemoteForComparison(remote, localFileContent, typeMap as ContentTypeMap)
+    );
 
     // Compare the raw file contents using shared normalization logic
     const hasFileContentChanges = hasContentDifferences(localFileContent, transformedRemoteContent);
 
     return hasFileContentChanges;
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as Error;
     logger.verbose(`[COMPARE] Failed to compare content for ${local.slug}: ${error.message}`);
     // Fallback to true to err on the side of showing changes
     return true;
@@ -357,16 +386,15 @@ async function matchContent(
   remoteContent: RemoteContentItem[],
   typeMap?: Record<string, string>,
   allowDelete: boolean = false,
-  metadataMap?: MetadataMap,
+  metadataMap?: MetadataMap
 ): Promise<ContentOperations> {
-
   const operations: ContentOperations = {
     create: [],
     update: [],
     rename: [],
     typeChange: [],
     conflict: [],
-    delete: []
+    delete: [],
   };
 
   // Track which remote items have already been claimed by a local item.
@@ -380,28 +408,36 @@ async function matchContent(
     // First try to match by ID — use remote-specific id-map when available,
     // falling back to frontmatter ID for single-remote backward compatibility
     const remoteId = metadataMap
-      ? (await import('../lib/remote-context.js')).lookupRemoteId(metadataMap, local.locale, local.slug)
+      ? (await import("../lib/remote-context.js")).lookupRemoteId(
+          metadataMap,
+          local.locale,
+          local.slug
+        )
       : undefined;
     const matchId = remoteId ?? local.metadata.id;
     if (matchId) {
-      match = remoteContent.find(remote => remote.id === matchId && !matchedRemoteIds.has(remote.id!));
+      match = remoteContent.find(
+        (remote) => remote.id === matchId && !matchedRemoteIds.has(remote.id!)
+      );
     }
 
     // If no ID match, try to match by current filename slug and locale
     if (!match) {
-      match = remoteContent.find(remote =>
-        remote.slug === local.slug &&
-        (remote.language || defaultLanguage) === local.locale &&
-        !matchedRemoteIds.has(remote.id!)
+      match = remoteContent.find(
+        (remote) =>
+          remote.slug === local.slug &&
+          (remote.language || defaultLanguage) === local.locale &&
+          !matchedRemoteIds.has(remote.id!)
       );
     }
 
     // If still no match, try by the slug in metadata (could be old slug for renames)
     if (!match && local.metadata.slug && local.metadata.slug !== local.slug) {
-      match = remoteContent.find(remote =>
-        remote.slug === local.metadata.slug &&
-        (remote.language || defaultLanguage) === local.locale &&
-        !matchedRemoteIds.has(remote.id!)
+      match = remoteContent.find(
+        (remote) =>
+          remote.slug === local.metadata.slug &&
+          (remote.language || defaultLanguage) === local.locale &&
+          !matchedRemoteIds.has(remote.id!)
       );
     }
 
@@ -410,11 +446,12 @@ async function matchContent(
     // items across different types (e.g., "about-us" page vs "home" page
     // that reuses the same title).
     if (!match && local.metadata.title) {
-      match = remoteContent.find(remote =>
-        remote.title === local.metadata.title &&
-        remote.type === local.type &&
-        (remote.language || defaultLanguage) === local.locale &&
-        !matchedRemoteIds.has(remote.id!)
+      match = remoteContent.find(
+        (remote) =>
+          remote.title === local.metadata.title &&
+          remote.type === local.type &&
+          (remote.language || defaultLanguage) === local.locale &&
+          !matchedRemoteIds.has(remote.id!)
       );
     }
 
@@ -430,11 +467,18 @@ async function matchContent(
       // under the OLD slug. Fall back to the remote's slug (the old slug) when
       // the primary lookup by the new local slug returns nothing.
       const localUpdatedStr = metadataMap
-        ? ((await import('../lib/remote-context.js')).getMetadataForContent(
-          metadataMap, local.locale, local.slug,
-        ) ?? (await import('../lib/remote-context.js')).getMetadataForContent(
-          metadataMap, local.locale, match.slug,
-        ))?.updatedAt
+        ? (
+            (await import("../lib/remote-context.js")).getMetadataForContent(
+              metadataMap,
+              local.locale,
+              local.slug
+            ) ??
+            (await import("../lib/remote-context.js")).getMetadataForContent(
+              metadataMap,
+              local.locale,
+              match.slug
+            )
+          )?.updatedAt
         : local.metadata.updatedAt;
       const localUpdated = localUpdatedStr ? new Date(localUpdatedStr) : new Date(0);
       const remoteUpdated = match.updatedAt ? new Date(match.updatedAt) : new Date(0);
@@ -444,19 +488,19 @@ async function matchContent(
       const typeChanged = match.type !== local.type;
 
       if (remoteUpdated > localUpdated) {
-        let conflictReason = 'Remote content was updated after local content';
+        let conflictReason = "Remote content was updated after local content";
         if (slugChanged && typeChanged) {
-          conflictReason = 'Both slug and content type changed remotely';
+          conflictReason = "Both slug and content type changed remotely";
         } else if (slugChanged) {
-          conflictReason = 'Slug changed remotely after local changes';
+          conflictReason = "Slug changed remotely after local changes";
         } else if (typeChanged) {
-          conflictReason = 'Content type changed remotely after local changes';
+          conflictReason = "Content type changed remotely after local changes";
         }
 
         operations.conflict.push({
           local,
           remote: match,
-          reason: conflictReason
+          reason: conflictReason,
         });
       } else if (slugChanged && typeChanged) {
         // Both slug and type changed - this is a complex update
@@ -465,14 +509,14 @@ async function matchContent(
           remote: match,
           oldSlug: match.slug,
           oldType: match.type,
-          newType: local.type
+          newType: local.type,
         });
       } else if (slugChanged) {
         // Slug changed - this is a rename
         operations.rename.push({
           local,
           remote: match,
-          oldSlug: match.slug
+          oldSlug: match.slug,
         });
       } else if (typeChanged) {
         // Content type changed
@@ -480,7 +524,7 @@ async function matchContent(
           local,
           remote: match,
           oldType: match.type,
-          newType: local.type
+          newType: local.type,
         });
       } else {
         // Check if content actually changed by comparing all fields
@@ -490,7 +534,7 @@ async function matchContent(
           // Regular update - content modified but slug and type same
           operations.update.push({
             local,
-            remote: match
+            remote: match,
           });
         }
         // If no content changes, don't add to any operation (content is in sync)
@@ -498,7 +542,7 @@ async function matchContent(
     } else {
       // No match found, this is a new content item
       operations.create.push({
-        local
+        local,
       });
     }
   }
@@ -542,16 +586,16 @@ async function matchContent(
         // This remote content doesn't exist locally anymore
         operations.delete.push({
           local: {
-            filePath: '',
+            filePath: "",
             slug: remote.slug,
             locale: remote.language || defaultLanguage,
             type: remote.type,
             metadata: {},
-            body: '',
-            isLocal: true
+            body: "",
+            isLocal: true,
           },
           remote,
-          reason: 'Content removed locally'
+          reason: "Content removed locally",
         });
       }
     }
@@ -560,29 +604,35 @@ async function matchContent(
   return operations;
 }
 
-function countPushChanges(operations: ContentOperations, includeConflicts: boolean = false, includeDeletes: boolean = false): number {
-  return operations.create.length +
+function countPushChanges(
+  operations: ContentOperations,
+  includeConflicts: boolean = false,
+  includeDeletes: boolean = false
+): number {
+  return (
+    operations.create.length +
     operations.update.length +
     operations.rename.length +
     operations.typeChange.length +
     (includeConflicts ? operations.conflict.length : 0) +
-    (includeDeletes ? operations.delete.length : 0);
+    (includeDeletes ? operations.delete.length : 0)
+  );
 }
 
 function filterLocalContentByTargetId(
   localContent: LocalContentItem[],
   targetId: string,
-  metadataMap?: MetadataMap,
+  metadataMap?: MetadataMap
 ): LocalContentItem[] {
   if (!metadataMap) {
-    return localContent.filter(content => content.metadata.id?.toString() === targetId);
+    return localContent.filter((content) => content.metadata.id?.toString() === targetId);
   }
 
   for (const [language, entries] of Object.entries(metadataMap.content)) {
     for (const [slug, entry] of Object.entries(entries)) {
       if (entry.id != null && String(entry.id) === targetId) {
-        return localContent.filter(content =>
-          content.locale === language && content.slug === slug,
+        return localContent.filter(
+          (content) => content.locale === language && content.slug === slug
         );
       }
     }
@@ -594,7 +644,7 @@ function filterLocalContentByTargetId(
 function hasLocalContentByTargetId(
   localContent: LocalContentItem[],
   targetId: string,
-  metadataMap?: MetadataMap,
+  metadataMap?: MetadataMap
 ): boolean {
   return filterLocalContentByTargetId(localContent, targetId, metadataMap).length > 0;
 }
@@ -603,7 +653,7 @@ function hasLocalContentByTargetId(
  * Auto-detected defaults for content type creation based on local content files
  */
 interface ContentTypeDefaults {
-  format: 'MDX' | 'JSON';
+  format: "MDX" | "JSON";
   supportsCoverImage: boolean;
   supportsComments: boolean;
   supportsSEO: boolean;
@@ -616,31 +666,34 @@ interface ContentTypeDefaults {
  * - supportsCoverImage: true if any file has a non-empty coverImageUrl
  * - supportsComments: false for JSON format; for MDX, true if any file has allowComments: true
  */
-function analyzeContentTypeFromFiles(localContent: LocalContentItem[], typeName: string): ContentTypeDefaults {
-  const filesOfType = localContent.filter(c => c.type === typeName);
+function analyzeContentTypeFromFiles(
+  localContent: LocalContentItem[],
+  typeName: string
+): ContentTypeDefaults {
+  const filesOfType = localContent.filter((c) => c.type === typeName);
 
   // Determine format from file extensions
-  const hasJson = filesOfType.some(c => c.filePath.endsWith('.json'));
-  const hasMdx = filesOfType.some(c => c.filePath.endsWith('.mdx'));
-  const format: 'MDX' | 'JSON' = (hasJson && !hasMdx) ? 'JSON' : 'MDX';
+  const hasJson = filesOfType.some((c) => c.filePath.endsWith(".json"));
+  const hasMdx = filesOfType.some((c) => c.filePath.endsWith(".mdx"));
+  const format: "MDX" | "JSON" = hasJson && !hasMdx ? "JSON" : "MDX";
 
   // Check if any file has a non-empty coverImageUrl
-  const supportsCoverImage = filesOfType.some(c => {
+  const supportsCoverImage = filesOfType.some((c) => {
     const url = c.metadata?.coverImageUrl;
-    return typeof url === 'string' && url.trim().length > 0;
+    return typeof url === "string" && url.trim().length > 0;
   });
 
   // For JSON format, default to no comments
   // For MDX format, check if any file has allowComments set to true
   let supportsComments = false;
-  if (format === 'MDX') {
-    supportsComments = filesOfType.some(c => c.metadata?.allowComments === true);
+  if (format === "MDX") {
+    supportsComments = filesOfType.some((c) => c.metadata?.allowComments === true);
   }
 
   // Check if any file has SEO metadata in frontmatter
-  const supportsSEO = filesOfType.some(c => {
+  const supportsSEO = filesOfType.some((c) => {
     const seo = c.metadata?.seo;
-    return seo && typeof seo === 'object' && Object.keys(seo).length > 0;
+    return seo && typeof seo === "object" && Object.keys(seo).length > 0;
   });
 
   return { format, supportsCoverImage, supportsComments, supportsSEO };
@@ -665,24 +718,32 @@ async function validateContentTypes(
   }
 
   if (missingTypes.length > 0) {
-    colorConsole.error(`\n❌ Missing content types in remote LeadCMS: ${colorConsole.highlight(missingTypes.join(', '))}`);
-    colorConsole.warn(`\nYou need to create these content types in your LeadCMS instance before pushing content.`);
+    colorConsole.error(
+      `\n❌ Missing content types in remote LeadCMS: ${colorConsole.highlight(missingTypes.join(", "))}`
+    );
+    colorConsole.warn(
+      `\nYou need to create these content types in your LeadCMS instance before pushing content.`
+    );
 
     if (dryRun) {
-      colorConsole.info('\n🧪 In dry run mode - showing what content type creation would look like:');
+      colorConsole.info(
+        "\n🧪 In dry run mode - showing what content type creation would look like:"
+      );
       for (const type of missingTypes) {
         const defaults = analyzeContentTypeFromFiles(localContent, type);
         colorConsole.progress(`\n📋 CREATE CONTENT TYPE (Dry Run):`);
-        colorConsole.log(`\n${colorConsole.cyan('POST')} ${colorConsole.highlight('/api/content-types')}`);
-        colorConsole.log(`${colorConsole.gray('Content-Type:')} application/json`);
-        colorConsole.log(`\n${colorConsole.gray('Request Body:')}`);
+        colorConsole.log(
+          `\n${colorConsole.cyan("POST")} ${colorConsole.highlight("/api/content-types")}`
+        );
+        colorConsole.log(`${colorConsole.gray("Content-Type:")} application/json`);
+        colorConsole.log(`\n${colorConsole.gray("Request Body:")}`);
         const sampleContentTypeData = {
           uid: type,
           name: type.charAt(0).toUpperCase() + type.slice(1),
           format: defaults.format,
           supportsCoverImage: defaults.supportsCoverImage,
           supportsComments: defaults.supportsComments,
-          supportsSEO: defaults.supportsSEO
+          supportsSEO: defaults.supportsSEO,
         };
         colorConsole.log(JSON.stringify(sampleContentTypeData, null, 2));
         colorConsole.success(`✅ Would create content type: ${colorConsole.highlight(type)}`);
@@ -691,24 +752,32 @@ async function validateContentTypes(
     }
 
     if (statusOnly) {
-      colorConsole.info('\nℹ️  Status mode only reports missing content types. Run an authenticated push to create them automatically.');
+      colorConsole.info(
+        "\nℹ️  Status mode only reports missing content types. Run an authenticated push to create them automatically."
+      );
       return;
     }
 
     if (!leadCMSDataService.isApiKeyConfigured()) {
-      colorConsole.error('\n❌ Automatic content type creation requires authentication.');
-      colorConsole.info('\n💡 Configure LEADCMS_API_KEY or run leadcms login, then try pushing again.');
+      colorConsole.error("\n❌ Automatic content type creation requires authentication.");
+      colorConsole.info(
+        "\n💡 Configure LEADCMS_API_KEY or run leadcms login, then try pushing again."
+      );
       process.exit(1);
     }
 
-    const createChoice = await question('\nWould you like me to create these content types automatically? (y/n) [y]: ');
+    const createChoice = await question(
+      "\nWould you like me to create these content types automatically? (y/n) [y]: "
+    );
 
-    if (createChoice.trim() === '' || isYes(createChoice)) {
+    if (createChoice.trim() === "" || isYes(createChoice)) {
       for (const type of missingTypes) {
         await createContentTypeInteractive(type, localContent, dryRun);
       }
     } else {
-      colorConsole.info('\nPlease create the missing content types manually in your LeadCMS instance and try again.');
+      colorConsole.info(
+        "\nPlease create the missing content types manually in your LeadCMS instance and try again."
+      );
       process.exit(1);
     }
   }
@@ -719,45 +788,61 @@ async function validateContentTypes(
  */
 function isYes(input: string): boolean {
   const trimmed = input.trim().toLowerCase();
-  return trimmed === 'y' || trimmed === 'yes';
+  return trimmed === "y" || trimmed === "yes";
 }
 
 /**
  * Normalize format input to 'MDX' or 'JSON' (case-insensitive)
  */
-function normalizeFormat(input: string, fallback: 'MDX' | 'JSON' = 'MDX'): 'MDX' | 'JSON' {
+function normalizeFormat(input: string, fallback: "MDX" | "JSON" = "MDX"): "MDX" | "JSON" {
   const trimmed = input.trim().toUpperCase();
-  if (trimmed === 'JSON') return 'JSON';
-  if (trimmed === 'MDX') return 'MDX';
-  if (trimmed === '') return fallback;
+  if (trimmed === "JSON") return "JSON";
+  if (trimmed === "MDX") return "MDX";
+  if (trimmed === "") return fallback;
   return fallback;
 }
 
 /**
  * Create a content type in remote LeadCMS
  */
-async function createContentTypeInteractive(typeName: string, localContent: LocalContentItem[], dryRun: boolean = false): Promise<void> {
+async function createContentTypeInteractive(
+  typeName: string,
+  localContent: LocalContentItem[],
+  dryRun: boolean = false
+): Promise<void> {
   const defaults = analyzeContentTypeFromFiles(localContent, typeName);
 
   colorConsole.progress(`\n📝 Creating content type: ${colorConsole.highlight(typeName)}`);
-  colorConsole.info(`   Auto-detected defaults: format=${defaults.format}, coverImage=${defaults.supportsCoverImage ? 'yes' : 'no'}, comments=${defaults.supportsComments ? 'yes' : 'no'}, seo=${defaults.supportsSEO ? 'yes' : 'no'}`);
+  colorConsole.info(
+    `   Auto-detected defaults: format=${defaults.format}, coverImage=${defaults.supportsCoverImage ? "yes" : "no"}, comments=${defaults.supportsComments ? "yes" : "no"}, seo=${defaults.supportsSEO ? "yes" : "no"}`
+  );
 
   const formatDefault = defaults.format;
-  const coverDefaultLabel = defaults.supportsCoverImage ? 'y' : 'n';
-  const commentsDefaultLabel = defaults.supportsComments ? 'y' : 'n';
-  const seoDefaultLabel = defaults.supportsSEO ? 'y' : 'n';
+  const coverDefaultLabel = defaults.supportsCoverImage ? "y" : "n";
+  const commentsDefaultLabel = defaults.supportsComments ? "y" : "n";
+  const seoDefaultLabel = defaults.supportsSEO ? "y" : "n";
 
-  const formatInput = await question(`What format should '${colorConsole.highlight(typeName)}' use? (MDX/JSON) [${formatDefault}]: `);
+  const formatInput = await question(
+    `What format should '${colorConsole.highlight(typeName)}' use? (MDX/JSON) [${formatDefault}]: `
+  );
   const format = normalizeFormat(formatInput, formatDefault);
 
-  const coverInput = await question(`Should '${colorConsole.highlight(typeName)}' support cover images? (y/n) [${coverDefaultLabel}]: `);
-  const supportsCoverImage = coverInput.trim() === '' ? defaults.supportsCoverImage : isYes(coverInput);
+  const coverInput = await question(
+    `Should '${colorConsole.highlight(typeName)}' support cover images? (y/n) [${coverDefaultLabel}]: `
+  );
+  const supportsCoverImage =
+    coverInput.trim() === "" ? defaults.supportsCoverImage : isYes(coverInput);
 
-  const commentsInput = await question(`Should '${colorConsole.highlight(typeName)}' support comments? (y/n) [${commentsDefaultLabel}]: `);
-  const supportsComments = commentsInput.trim() === '' ? defaults.supportsComments : isYes(commentsInput);
+  const commentsInput = await question(
+    `Should '${colorConsole.highlight(typeName)}' support comments? (y/n) [${commentsDefaultLabel}]: `
+  );
+  const supportsComments =
+    commentsInput.trim() === "" ? defaults.supportsComments : isYes(commentsInput);
 
-  const seoInput = await question(`Should '${colorConsole.highlight(typeName)}' support SEO metadata? (y/n) [${seoDefaultLabel}]: `);
-  const supportsSEO = seoInput.trim() === '' ? defaults.supportsSEO : isYes(seoInput);
+  const seoInput = await question(
+    `Should '${colorConsole.highlight(typeName)}' support SEO metadata? (y/n) [${seoDefaultLabel}]: `
+  );
+  const supportsSEO = seoInput.trim() === "" ? defaults.supportsSEO : isYes(seoInput);
 
   const contentTypeData = {
     uid: typeName,
@@ -765,22 +850,28 @@ async function createContentTypeInteractive(typeName: string, localContent: Loca
     format,
     supportsCoverImage,
     supportsComments,
-    supportsSEO
+    supportsSEO,
   };
 
   if (dryRun) {
     colorConsole.progress(`\n📋 CREATE CONTENT TYPE (Dry Run):`);
-    colorConsole.log(`\n${colorConsole.cyan('POST')} ${colorConsole.highlight('/api/content-types')}`);
-    colorConsole.log(`${colorConsole.gray('Content-Type:')} application/json`);
-    colorConsole.log(`\n${colorConsole.gray('Request Body:')}`);
+    colorConsole.log(
+      `\n${colorConsole.cyan("POST")} ${colorConsole.highlight("/api/content-types")}`
+    );
+    colorConsole.log(`${colorConsole.gray("Content-Type:")} application/json`);
+    colorConsole.log(`\n${colorConsole.gray("Request Body:")}`);
     colorConsole.log(JSON.stringify(contentTypeData, null, 2));
     colorConsole.success(`✅ Would create content type: ${colorConsole.highlight(typeName)}`);
   } else {
     try {
       await leadCMSDataService.createContentType(contentTypeData);
       colorConsole.success(`✅ Created content type: ${colorConsole.highlight(typeName)}`);
-    } catch (error: any) {
-      colorConsole.error(`❌ Failed to create content type '${colorConsole.highlight(typeName)}':`, error.message);
+    } catch (_error: unknown) {
+      const error = _error as Error;
+      colorConsole.error(
+        `❌ Failed to create content type '${colorConsole.highlight(typeName)}':`,
+        error.message
+      );
       throw error;
     }
   }
@@ -789,7 +880,12 @@ async function createContentTypeInteractive(typeName: string, localContent: Loca
 /**
  * Filter content operations to only include specific content by ID or slug
  */
-function filterContentOperations(operations: ContentOperations, targetId?: string, targetSlug?: string, statusFilters?: string[]): ContentOperations {
+function filterContentOperations(
+  operations: ContentOperations,
+  targetId?: string,
+  targetSlug?: string,
+  statusFilters?: string[]
+): ContentOperations {
   const normalizedStatusFilters = normalizeContentStatusFilters(statusFilters);
 
   if (!targetId && !targetSlug && !normalizedStatusFilters) {
@@ -829,12 +925,12 @@ function filterContentOperations(operations: ContentOperations, targetId?: strin
   };
 
   return {
-    create: includesStatus('create') ? operations.create.filter(matchesTarget) : [],
-    update: includesStatus('update') ? operations.update.filter(matchesTarget) : [],
-    rename: includesStatus('rename') ? operations.rename.filter(matchesTarget) : [],
-    typeChange: includesStatus('typeChange') ? operations.typeChange.filter(matchesTarget) : [],
-    conflict: includesStatus('conflict') ? operations.conflict.filter(matchesTarget) : [],
-    delete: includesStatus('delete') ? operations.delete.filter(matchesTarget) : []
+    create: includesStatus("create") ? operations.create.filter(matchesTarget) : [],
+    update: includesStatus("update") ? operations.update.filter(matchesTarget) : [],
+    rename: includesStatus("rename") ? operations.rename.filter(matchesTarget) : [],
+    typeChange: includesStatus("typeChange") ? operations.typeChange.filter(matchesTarget) : [],
+    conflict: includesStatus("conflict") ? operations.conflict.filter(matchesTarget) : [],
+    delete: includesStatus("delete") ? operations.delete.filter(matchesTarget) : [],
   };
 }
 
@@ -855,20 +951,24 @@ async function displayDetailedDiff(
   if (remote?.id) {
     console.log(`   Remote ID: ${remote.id}`);
   }
-  console.log('');
+  console.log("");
 
   // Compare content using the new transformation approach
-  console.log('\n📝 Content Changes:');
+  console.log("\n📝 Content Changes:");
 
   try {
     // Read local file content as-is
-    const localFileContent = stripTimestampMetadata(await fs.readFile(local.filePath, 'utf-8'));
+    const localFileContent = stripTimestampMetadata(await fs.readFile(local.filePath, "utf-8"));
 
     // Transform remote content to local format for comparison
-    const transformedRemoteContent = remote ? stripTimestampMetadata(await transformRemoteToLocalFormat(remote, typeMap as ContentTypeMap)) : '';
+    const transformedRemoteContent = remote
+      ? stripTimestampMetadata(
+          await transformRemoteToLocalFormat(remote, typeMap as ContentTypeMap)
+        )
+      : "";
 
     if (localFileContent.trim() === transformedRemoteContent.trim()) {
-      console.log('   No content changes detected');
+      console.log("   No content changes detected");
     } else {
       // Use line-by-line diff for detailed comparison
       const diff = Diff.diffLines(transformedRemoteContent, localFileContent);
@@ -878,7 +978,7 @@ async function displayDetailedDiff(
       let unchangedLines = 0;
 
       // Show diff preview and count changes
-      colorConsole.info('   Content diff preview:');
+      colorConsole.info("   Content diff preview:");
 
       let previewLines = 0;
       const shouldLimitPreviewLines = options.limitPreviewLines !== false;
@@ -886,12 +986,15 @@ async function displayDetailedDiff(
 
       for (const part of diff) {
         // Count non-empty lines only for more accurate statistics
-        const lines = part.value.split('\n').filter((line: string) => line.trim() !== '');
+        const lines = part.value.split("\n").filter((line: string) => line.trim() !== "");
 
         if (part.added) {
           addedLines += lines.length;
           if (previewLines < maxPreviewLines) {
-            for (const line of lines.slice(0, Math.min(lines.length, maxPreviewLines - previewLines))) {
+            for (const line of lines.slice(
+              0,
+              Math.min(lines.length, maxPreviewLines - previewLines)
+            )) {
               colorConsole.log(`   ${diffColors.added(`+ ${line}`)}`);
               previewLines++;
             }
@@ -899,7 +1002,10 @@ async function displayDetailedDiff(
         } else if (part.removed) {
           removedLines += lines.length;
           if (previewLines < maxPreviewLines) {
-            for (const line of lines.slice(0, Math.min(lines.length, maxPreviewLines - previewLines))) {
+            for (const line of lines.slice(
+              0,
+              Math.min(lines.length, maxPreviewLines - previewLines)
+            )) {
               colorConsole.log(`   ${diffColors.removed(`- ${line}`)}`);
               previewLines++;
             }
@@ -911,40 +1017,59 @@ async function displayDetailedDiff(
         if (shouldLimitPreviewLines && previewLines >= maxPreviewLines) break;
       }
 
-      if (shouldLimitPreviewLines && previewLines >= maxPreviewLines && (addedLines + removedLines > previewLines)) {
+      if (
+        shouldLimitPreviewLines &&
+        previewLines >= maxPreviewLines &&
+        addedLines + removedLines > previewLines
+      ) {
         colorConsole.gray(`   ... (${addedLines + removedLines - previewLines} more changes)`);
       }
 
       const summaryText = `\n   📊 Change Summary: ${colorConsole.green(`+${addedLines} lines added`)}, ${colorConsole.red(`-${removedLines} lines removed`)}, ${unchangedLines} lines unchanged`;
       colorConsole.log(summaryText);
     }
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as Error;
     logger.verbose(`[DIFF] Failed to generate detailed diff for ${local.slug}: ${error.message}`);
-    console.log('   Unable to show content comparison');
+    console.log("   Unable to show content comparison");
   }
 
-  console.log('');
+  console.log("");
 }
 
 /**
  * Display status/preview of changes
  */
-async function displayStatus(operations: ContentOperations, isStatusOnly: boolean = false, isSingleFile: boolean = false, showDetailedPreview: boolean = false, typeMap?: Record<string, string>, showDelete: boolean = false, remoteName?: string): Promise<void> {
+async function displayStatus(
+  operations: ContentOperations,
+  isStatusOnly: boolean = false,
+  isSingleFile: boolean = false,
+  showDetailedPreview: boolean = false,
+  typeMap?: Record<string, string>,
+  showDelete: boolean = false,
+  remoteName?: string
+): Promise<void> {
   if (isSingleFile) {
-    colorConsole.important('\n📄 LeadCMS File Status');
+    colorConsole.important("\n📄 LeadCMS File Status");
   } else {
-    colorConsole.important('\n📊 LeadCMS Status');
+    colorConsole.important("\n📊 LeadCMS Status");
   }
-  colorConsole.log('');
+  colorConsole.log("");
 
   // Summary line like git
   const deleteCount = showDelete ? operations.delete.length : 0;
-  const totalChanges = operations.create.length + operations.update.length + operations.rename.length + operations.typeChange.length + operations.conflict.length + deleteCount;
+  const totalChanges =
+    operations.create.length +
+    operations.update.length +
+    operations.rename.length +
+    operations.typeChange.length +
+    operations.conflict.length +
+    deleteCount;
   if (totalChanges === 0) {
     if (isSingleFile) {
-      colorConsole.success('✅ File is in sync with remote content!');
+      colorConsole.success("✅ File is in sync with remote content!");
     } else {
-      colorConsole.success('✅ No changes detected. Everything is in sync!');
+      colorConsole.success("✅ No changes detected. Everything is in sync!");
     }
     return;
   }
@@ -953,19 +1078,25 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
   if (isSingleFile) {
     // Show detailed diff for each operation
     for (const op of operations.create) {
-      await displayDetailedDiff(op, 'New file', typeMap, { limitPreviewLines: false });
+      await displayDetailedDiff(op, "New file", typeMap, { limitPreviewLines: false });
     }
     for (const op of operations.update) {
-      await displayDetailedDiff(op, 'Modified', typeMap, { limitPreviewLines: false });
+      await displayDetailedDiff(op, "Modified", typeMap, { limitPreviewLines: false });
     }
     for (const op of operations.rename) {
-      await displayDetailedDiff(op, `Renamed (${op.oldSlug} → ${op.local.slug})`, typeMap, { limitPreviewLines: false });
+      await displayDetailedDiff(op, `Renamed (${op.oldSlug} → ${op.local.slug})`, typeMap, {
+        limitPreviewLines: false,
+      });
     }
     for (const op of operations.typeChange) {
-      await displayDetailedDiff(op, `Type changed (${op.oldType} → ${op.newType})`, typeMap, { limitPreviewLines: false });
+      await displayDetailedDiff(op, `Type changed (${op.oldType} → ${op.newType})`, typeMap, {
+        limitPreviewLines: false,
+      });
     }
     for (const op of operations.conflict) {
-      await displayDetailedDiff(op, `Conflict: ${op.reason}`, typeMap, { limitPreviewLines: false });
+      await displayDetailedDiff(op, `Conflict: ${op.reason}`, typeMap, {
+        limitPreviewLines: false,
+      });
     }
     return;
   }
@@ -974,13 +1105,24 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
   const deleteOpsToShow = showDelete ? operations.delete : [];
 
   // Changes to be synced (like git's "Changes to be committed")
-  if (operations.create.length > 0 || operations.update.length > 0 || operations.rename.length > 0 || operations.typeChange.length > 0 || deleteOpsToShow.length > 0) {
-    const syncableChanges = operations.create.length + operations.update.length + operations.rename.length + operations.typeChange.length + deleteOpsToShow.length;
+  if (
+    operations.create.length > 0 ||
+    operations.update.length > 0 ||
+    operations.rename.length > 0 ||
+    operations.typeChange.length > 0 ||
+    deleteOpsToShow.length > 0
+  ) {
+    const syncableChanges =
+      operations.create.length +
+      operations.update.length +
+      operations.rename.length +
+      operations.typeChange.length +
+      deleteOpsToShow.length;
     console.log(`Changes to be synced (${syncableChanges} files):`);
     if (!isStatusOnly) {
       console.log('  (use "leadcms status" to see sync status)');
     }
-    console.log('');
+    console.log("");
 
     // Helper function to sort operations by locale (ASC) then slug (ASC)
     const sortOperations = (ops: MatchOperation[]) => {
@@ -996,56 +1138,66 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
 
     // New content
     for (const op of sortOperations([...operations.create])) {
-      const typeLabel = (op.local.type || 'unknown').padEnd(12);
-      const localeLabel = `[${op.local.locale || 'unknown'}]`.padEnd(6);
-      colorConsole.log(`        ${statusColors.created('new:     ')}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)}`);
+      const typeLabel = (op.local.type || "unknown").padEnd(12);
+      const localeLabel = `[${op.local.locale || "unknown"}]`.padEnd(6);
+      colorConsole.log(
+        `        ${statusColors.created("new:     ")}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)}`
+      );
     }
 
     // Modified content
     for (const op of sortOperations([...operations.update])) {
-      const typeLabel = (op.local.type || 'unknown').padEnd(12);
-      const localeLabel = `[${op.local.locale || 'unknown'}]`.padEnd(6);
-      const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
-      colorConsole.log(`        ${statusColors.modified('modified:')}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`);
+      const typeLabel = (op.local.type || "unknown").padEnd(12);
+      const localeLabel = `[${op.local.locale || "unknown"}]`.padEnd(6);
+      const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
+      colorConsole.log(
+        `        ${statusColors.modified("modified:")}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`
+      );
     }
 
     // Renamed content (slug changed)
     for (const op of sortOperations([...operations.rename])) {
-      const typeLabel = (op.local.type || 'unknown').padEnd(12);
-      const localeLabel = `[${op.local.locale || 'unknown'}]`.padEnd(6);
-      const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
-      colorConsole.log(`        ${statusColors.renamed('renamed:')}    ${typeLabel} ${localeLabel} ${colorConsole.gray(op.oldSlug || 'unknown')} -> ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`);
+      const typeLabel = (op.local.type || "unknown").padEnd(12);
+      const localeLabel = `[${op.local.locale || "unknown"}]`.padEnd(6);
+      const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
+      colorConsole.log(
+        `        ${statusColors.renamed("renamed:")}    ${typeLabel} ${localeLabel} ${colorConsole.gray(op.oldSlug || "unknown")} -> ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`
+      );
     }
 
     // Type changed content
     for (const op of sortOperations([...operations.typeChange])) {
-      const typeLabel = (op.local.type || 'unknown').padEnd(12);
-      const localeLabel = `[${op.local.locale || 'unknown'}]`.padEnd(6);
-      const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
-      const typeChangeLabel = `(${colorConsole.gray(op.oldType || 'unknown')} -> ${colorConsole.highlight(op.newType || 'unknown')})`;
-      colorConsole.log(`        ${statusColors.typeChange('type change:')}${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${typeChangeLabel} ${colorConsole.gray(idLabel)}`);
+      const typeLabel = (op.local.type || "unknown").padEnd(12);
+      const localeLabel = `[${op.local.locale || "unknown"}]`.padEnd(6);
+      const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
+      const typeChangeLabel = `(${colorConsole.gray(op.oldType || "unknown")} -> ${colorConsole.highlight(op.newType || "unknown")})`;
+      colorConsole.log(
+        `        ${statusColors.typeChange("type change:")}${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${typeChangeLabel} ${colorConsole.gray(idLabel)}`
+      );
     }
 
     // Deleted content (remote but not local) - only show if showDelete is true
     for (const op of sortOperations([...deleteOpsToShow])) {
-      const typeLabel = (op.remote?.type || 'unknown').padEnd(12);
-      const localeLabel = `[${op.remote?.language || 'unknown'}]`.padEnd(6);
-      const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
-      colorConsole.log(`        ${statusColors.conflict('deleted:')}    ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.remote?.slug || 'unknown')} ${colorConsole.gray(idLabel)}`);
+      const typeLabel = (op.remote?.type || "unknown").padEnd(12);
+      const localeLabel = `[${op.remote?.language || "unknown"}]`.padEnd(6);
+      const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
+      colorConsole.log(
+        `        ${statusColors.conflict("deleted:")}    ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.remote?.slug || "unknown")} ${colorConsole.gray(idLabel)}`
+      );
     }
 
     // Show detailed previews if requested (and not in single file mode which already shows them)
     if (showDetailedPreview && !isSingleFile) {
-      console.log('');
-      console.log('📋 Detailed Change Previews:');
-      console.log('');
+      console.log("");
+      console.log("📋 Detailed Change Previews:");
+      console.log("");
 
       // Show detailed diff for each operation (same as single file mode)
       for (const op of sortOperations([...operations.create])) {
-        await displayDetailedDiff(op, 'New file', typeMap);
+        await displayDetailedDiff(op, "New file", typeMap);
       }
       for (const op of sortOperations([...operations.update])) {
-        await displayDetailedDiff(op, 'Modified', typeMap);
+        await displayDetailedDiff(op, "Modified", typeMap);
       }
       for (const op of sortOperations([...operations.rename])) {
         await displayDetailedDiff(op, `Renamed (${op.oldSlug} → ${op.local.slug})`, typeMap);
@@ -1055,13 +1207,13 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
       }
     }
 
-    console.log('');
-  }  // Conflicts (like git's merge conflicts)
+    console.log("");
+  } // Conflicts (like git's merge conflicts)
   if (operations.conflict.length > 0) {
     colorConsole.warn(`⚠️  Unmerged conflicts (${operations.conflict.length} files):`);
-    const remoteFlag = remoteName ? ` -r ${remoteName}` : '';
+    const remoteFlag = remoteName ? ` -r ${remoteName}` : "";
     colorConsole.info(`  (use "leadcms pull-content${remoteFlag}" to merge remote changes)`);
-    colorConsole.log('');
+    colorConsole.log("");
 
     // Sort conflicts by locale then slug as well
     const sortedConflicts = [...operations.conflict].sort((a, b) => {
@@ -1072,19 +1224,21 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
     });
 
     for (const op of sortedConflicts) {
-      const typeLabel = (op.local.type || 'unknown').padEnd(12);
-      const localeLabel = `[${op.local.locale || 'unknown'}]`.padEnd(6);
-      const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : '';
-      colorConsole.log(`        ${statusColors.conflict('conflict:')}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`);
-      colorConsole.log(`                    ${colorConsole.gray(op.reason || 'Unknown conflict')}`);
+      const typeLabel = (op.local.type || "unknown").padEnd(12);
+      const localeLabel = `[${op.local.locale || "unknown"}]`.padEnd(6);
+      const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
+      colorConsole.log(
+        `        ${statusColors.conflict("conflict:")}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`
+      );
+      colorConsole.log(`                    ${colorConsole.gray(op.reason || "Unknown conflict")}`);
     }
-    colorConsole.log('');
+    colorConsole.log("");
 
     // Show detailed previews for conflicts if requested (and not in single file mode)
     if (showDetailedPreview && !isSingleFile && operations.conflict.length > 0) {
-      console.log('');
-      console.log('📋 Detailed Conflict Previews:');
-      console.log('');
+      console.log("");
+      console.log("📋 Detailed Conflict Previews:");
+      console.log("");
 
       for (const op of sortedConflicts) {
         await displayDetailedDiff(op, `Conflict: ${op.reason}`, typeMap);
@@ -1092,12 +1246,14 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
     }
 
     if (!isStatusOnly) {
-      colorConsole.important('💡 To resolve conflicts:');
+      colorConsole.important("💡 To resolve conflicts:");
       colorConsole.info(`   • Run "leadcms pull-content${remoteFlag}" to pull latest changes`);
-      colorConsole.info('   • Resolve conflicts in local files');
+      colorConsole.info("   • Resolve conflicts in local files");
       colorConsole.info(`   • Run "leadcms push-content${remoteFlag}" again`);
-      colorConsole.warn(`   • Or use "leadcms push-content${remoteFlag} --force" to override remote changes (⚠️  data loss risk)`);
-      colorConsole.log('');
+      colorConsole.warn(
+        `   • Or use "leadcms push-content${remoteFlag} --force" to override remote changes (⚠️  data loss risk)`
+      );
+      colorConsole.log("");
     }
   }
 }
@@ -1107,24 +1263,28 @@ async function displayStatus(operations: ContentOperations, isStatusOnly: boolea
  */
 async function showDryRunOperations(operations: ContentOperations): Promise<void> {
   // Check if there are any operations to show
-  const totalOperations = operations.create.length + operations.update.length +
-    operations.rename.length + operations.typeChange.length + operations.delete.length;
+  const totalOperations =
+    operations.create.length +
+    operations.update.length +
+    operations.rename.length +
+    operations.typeChange.length +
+    operations.delete.length;
 
   if (totalOperations === 0) {
     return; // Don't show dry run preview if there are no operations
   }
 
-  colorConsole.important('\n🧪 Dry Run Mode - API Calls Preview');
-  colorConsole.info('The following API calls would be made:\n');
+  colorConsole.important("\n🧪 Dry Run Mode - API Calls Preview");
+  colorConsole.info("The following API calls would be made:\n");
 
   // Create operations
   if (operations.create.length > 0) {
     colorConsole.progress(`\n📤 CREATE Operations (${operations.create.length}):`);
     for (const op of operations.create) {
       const contentData = formatContentForAPI(op.local);
-      colorConsole.log(`\n${colorConsole.cyan('POST')} ${colorConsole.highlight('/api/content')}`);
-      colorConsole.log(`${colorConsole.gray('Content-Type:')} application/json`);
-      colorConsole.log(`\n${colorConsole.gray('Request Body:')}`);
+      colorConsole.log(`\n${colorConsole.cyan("POST")} ${colorConsole.highlight("/api/content")}`);
+      colorConsole.log(`${colorConsole.gray("Content-Type:")} application/json`);
+      colorConsole.log(`\n${colorConsole.gray("Request Body:")}`);
       colorConsole.log(JSON.stringify(contentData, null, 2));
     }
   }
@@ -1135,9 +1295,11 @@ async function showDryRunOperations(operations: ContentOperations): Promise<void
     for (const op of operations.update) {
       if (op.remote?.id) {
         const contentData = formatContentForAPI(op.local);
-        colorConsole.log(`\n${colorConsole.yellow('PUT')} ${colorConsole.highlight(`/api/content/${op.remote.id}`)}`);
-        colorConsole.log(`${colorConsole.gray('Content-Type:')} application/json`);
-        colorConsole.log(`\n${colorConsole.gray('Request Body:')}`);
+        colorConsole.log(
+          `\n${colorConsole.yellow("PUT")} ${colorConsole.highlight(`/api/content/${op.remote.id}`)}`
+        );
+        colorConsole.log(`${colorConsole.gray("Content-Type:")} application/json`);
+        colorConsole.log(`\n${colorConsole.gray("Request Body:")}`);
         colorConsole.log(JSON.stringify(contentData, null, 2));
       }
     }
@@ -1149,10 +1311,14 @@ async function showDryRunOperations(operations: ContentOperations): Promise<void
     for (const op of operations.rename) {
       if (op.remote?.id) {
         const contentData = formatContentForAPI(op.local);
-        colorConsole.log(`\n${colorConsole.yellow('PUT')} ${colorConsole.highlight(`/api/content/${op.remote.id}`)}`);
-        colorConsole.log(`${colorConsole.gray('Content-Type:')} application/json`);
-        colorConsole.log(`${colorConsole.gray('Note:')} Renaming ${colorConsole.gray(op.oldSlug || 'unknown')} → ${colorConsole.highlight(op.local.slug)}`);
-        colorConsole.log(`\n${colorConsole.gray('Request Body:')}`);
+        colorConsole.log(
+          `\n${colorConsole.yellow("PUT")} ${colorConsole.highlight(`/api/content/${op.remote.id}`)}`
+        );
+        colorConsole.log(`${colorConsole.gray("Content-Type:")} application/json`);
+        colorConsole.log(
+          `${colorConsole.gray("Note:")} Renaming ${colorConsole.gray(op.oldSlug || "unknown")} → ${colorConsole.highlight(op.local.slug)}`
+        );
+        colorConsole.log(`\n${colorConsole.gray("Request Body:")}`);
         colorConsole.log(JSON.stringify(contentData, null, 2));
       }
     }
@@ -1164,10 +1330,14 @@ async function showDryRunOperations(operations: ContentOperations): Promise<void
     for (const op of operations.typeChange) {
       if (op.remote?.id) {
         const contentData = formatContentForAPI(op.local);
-        colorConsole.log(`\n${colorConsole.yellow('PUT')} ${colorConsole.highlight(`/api/content/${op.remote.id}`)}`);
-        colorConsole.log(`${colorConsole.gray('Content-Type:')} application/json`);
-        colorConsole.log(`${colorConsole.gray('Note:')} Type change ${colorConsole.gray(op.oldType || 'unknown')} → ${colorConsole.highlight(op.newType || 'unknown')}`);
-        colorConsole.log(`\n${colorConsole.gray('Request Body:')}`);
+        colorConsole.log(
+          `\n${colorConsole.yellow("PUT")} ${colorConsole.highlight(`/api/content/${op.remote.id}`)}`
+        );
+        colorConsole.log(`${colorConsole.gray("Content-Type:")} application/json`);
+        colorConsole.log(
+          `${colorConsole.gray("Note:")} Type change ${colorConsole.gray(op.oldType || "unknown")} → ${colorConsole.highlight(op.newType || "unknown")}`
+        );
+        colorConsole.log(`\n${colorConsole.gray("Request Body:")}`);
         colorConsole.log(JSON.stringify(contentData, null, 2));
       }
     }
@@ -1178,21 +1348,37 @@ async function showDryRunOperations(operations: ContentOperations): Promise<void
     colorConsole.progress(`\n🗑️  DELETE Operations (${operations.delete.length}):`);
     for (const op of operations.delete) {
       if (op.remote?.id) {
-        colorConsole.log(`\n${colorConsole.red('DELETE')} ${colorConsole.highlight(`/api/content/${op.remote.id}`)}`);
-        colorConsole.log(`${colorConsole.gray('Note:')} Deleting ${colorConsole.highlight(op.remote.slug)} (${op.remote.type})`);
+        colorConsole.log(
+          `\n${colorConsole.red("DELETE")} ${colorConsole.highlight(`/api/content/${op.remote.id}`)}`
+        );
+        colorConsole.log(
+          `${colorConsole.gray("Note:")} Deleting ${colorConsole.highlight(op.remote.slug)} (${op.remote.type})`
+        );
       }
     }
   }
 
-  colorConsole.log('\n');
-  colorConsole.important('💡 No actual API calls were made. Use without --dry-run to execute.');
+  colorConsole.log("\n");
+  colorConsole.important("💡 No actual API calls were made. Use without --dry-run to execute.");
 }
 
 /**
  * Main function for push command
  */
 async function pushMain(options: PushOptions = {}): Promise<void> {
-  const { statusOnly = false, targetId, targetSlug, statusFilter, showDetailedPreview = false, dryRun = false, allowDelete = false, showDelete = false, allowConflictMarkers = false, quiet = false, remoteContext: remoteCtx } = options;
+  const {
+    statusOnly = false,
+    targetId,
+    targetSlug,
+    statusFilter,
+    showDetailedPreview = false,
+    dryRun = false,
+    allowDelete = false,
+    showDelete = false,
+    allowConflictMarkers = false,
+    quiet = false,
+    remoteContext: remoteCtx,
+  } = options;
 
   let force = options.force ?? false;
 
@@ -1204,19 +1390,25 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     }
 
     const isSingleFileMode = !!(targetId || targetSlug);
-    const actionDescription = statusOnly ? 'status check' : 'push';
-    const targetDescription = targetId ? `ID ${targetId}` : targetSlug ? `slug "${targetSlug}"` : 'all content';
+    const actionDescription = statusOnly ? "status check" : "push";
+    const targetDescription = targetId
+      ? `ID ${targetId}`
+      : targetSlug
+        ? `slug "${targetSlug}"`
+        : "all content";
 
     logger.verbose(`[PUSH] Starting ${actionDescription} for ${targetDescription}...`);
 
     // Check for API key if not in status-only mode
     if (!statusOnly && !dryRun) {
-      const hasApiKey = remoteCtx ? !!remoteCtx.apiKey : !!(await import('../lib/config.js').then(m => m.getConfig())).apiKey;
+      const hasApiKey = remoteCtx
+        ? !!remoteCtx.apiKey
+        : !!(await import("../lib/config.js").then((m) => m.getConfig())).apiKey;
       if (!hasApiKey) {
-        console.log('\n❌ Cannot push changes: No API key configured (anonymous mode)');
-        console.log('\n💡 To push changes, you need to authenticate:');
-        console.log('   • Set LEADCMS_API_KEY in your .env file');
-        console.log('   • Or run: leadcms login');
+        console.log("\n❌ Cannot push changes: No API key configured (anonymous mode)");
+        console.log("\n💡 To push changes, you need to authenticate:");
+        console.log("   • Set LEADCMS_API_KEY in your .env file");
+        console.log("   • Or run: leadcms login");
         console.log('\nℹ️  Tip: Use "leadcms status" to check changes without authentication');
         return;
       }
@@ -1226,7 +1418,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     const localContent = await readLocalContent();
 
     if (localContent.length === 0) {
-      console.log('📂 No local content found. Nothing to sync.');
+      console.log("📂 No local content found. Nothing to sync.");
       return;
     }
 
@@ -1235,22 +1427,30 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
       const conflictFiles = await validateMergeConflicts(localContent);
       if (conflictFiles.length > 0) {
         for (const item of conflictFiles) {
-          colorConsole.error(`❌ Merge conflict markers detected: ${colorConsole.highlight(item.filePath)}`);
+          colorConsole.error(
+            `❌ Merge conflict markers detected: ${colorConsole.highlight(item.filePath)}`
+          );
         }
-        colorConsole.error(`\n⚠️  ${conflictFiles.length} file(s) skipped due to unresolved merge conflicts.`);
-        colorConsole.error('   Resolve the conflicts or use --allow-conflict-markers to override.\n');
+        colorConsole.error(
+          `\n⚠️  ${conflictFiles.length} file(s) skipped due to unresolved merge conflicts.`
+        );
+        colorConsole.error(
+          "   Resolve the conflicts or use --allow-conflict-markers to override.\n"
+        );
         // Remove conflicted files from the push set
-        const conflictPaths = new Set(conflictFiles.map(f => f.filePath));
+        const conflictPaths = new Set(conflictFiles.map((f) => f.filePath));
         const originalCount = localContent.length;
-        const cleaned = localContent.filter(c => !conflictPaths.has(c.filePath));
+        const cleaned = localContent.filter((c) => !conflictPaths.has(c.filePath));
         // Replace contents in-place so downstream code sees the filtered list
         localContent.length = 0;
         localContent.push(...cleaned);
         if (localContent.length === 0) {
-          console.log('📂 No pushable content remaining after merge-conflict filtering.');
+          console.log("📂 No pushable content remaining after merge-conflict filtering.");
           return;
         }
-        logger.verbose(`[PUSH] Filtered out ${originalCount - localContent.length} file(s) with merge conflicts`);
+        logger.verbose(
+          `[PUSH] Filtered out ${originalCount - localContent.length} file(s) with merge conflicts`
+        );
       }
     }
 
@@ -1258,24 +1458,26 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     const remoteTypes = await leadCMSDataService.getContentTypes();
     const remoteTypeMap: Record<string, string> = {};
     if (Array.isArray(remoteTypes)) {
-      remoteTypes.forEach(type => {
+      remoteTypes.forEach((type) => {
         remoteTypeMap[type.uid] = type.format;
       });
     } else {
-      logger.verbose('[PUSH] Warning: content types response was not an array, proceeding without type map');
+      logger.verbose(
+        "[PUSH] Warning: content types response was not an array, proceeding without type map"
+      );
     }
 
     // Load per-remote metadata-map for multi-remote support
     let metadataMap: MetadataMap | undefined;
     if (remoteCtx) {
-      const rc = await import('../lib/remote-context.js');
+      const rc = await import("../lib/remote-context.js");
       metadataMap = await rc.readMetadataMap(remoteCtx);
     }
 
     // Filter local content if targeting specific content
     let filteredLocalContent = localContent;
     if (isSingleFileMode) {
-      filteredLocalContent = localContent.filter(content => {
+      filteredLocalContent = localContent.filter((content) => {
         if (targetId && !metadataMap && content.metadata.id?.toString() === targetId) return true;
         if (targetSlug && content.slug === targetSlug) return true;
         return false;
@@ -1294,7 +1496,9 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
       if (filteredLocalContent.length === 0 && targetId) {
         // ID might only exist in remote metadata (e.g., JSON files without local id field).
         // Proceed with all local content and let filterContentOperations match by remote ID.
-        logger.verbose(`[LOCAL] No local file with ID ${targetId} in metadata, will match against remote content`);
+        logger.verbose(
+          `[LOCAL] No local file with ID ${targetId} in metadata, will match against remote content`
+        );
         filteredLocalContent = localContent;
       } else {
         logger.verbose(`[LOCAL] Found ${filteredLocalContent.length} matching local file(s)`);
@@ -1302,7 +1506,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     } else {
       // Get local content types and validate them
       const localTypes = getLocalContentTypes(localContent);
-      logger.verbose(`[LOCAL] Found content types: ${Array.from(localTypes).join(', ')}`);
+      logger.verbose(`[LOCAL] Found content types: ${Array.from(localTypes).join(", ")}`);
       await validateContentTypes(localTypes, remoteTypeMap, localContent, { dryRun, statusOnly });
     }
 
@@ -1312,13 +1516,20 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     // Match local vs remote content with type mapping for proper content transformation
     // In status mode, enable deletion detection if showDelete is true (for display purposes)
     // In push mode, only detect deletions if allowDelete is true (for execution)
-    const shouldDetectDeletions = statusOnly ? (showDelete || allowDelete) : allowDelete;
-    const operations = await matchContent(filteredLocalContent, remoteContent, remoteTypeMap, shouldDetectDeletions, metadataMap);
+    const shouldDetectDeletions = statusOnly ? showDelete || allowDelete : allowDelete;
+    const operations = await matchContent(
+      filteredLocalContent,
+      remoteContent,
+      remoteTypeMap,
+      shouldDetectDeletions,
+      metadataMap
+    );
 
     // Filter operations if targeting specific content
-    const finalOperations = (isSingleFileMode || (statusFilter && statusFilter.length > 0))
-      ? filterContentOperations(operations, targetId, targetSlug, statusFilter)
-      : operations;
+    const finalOperations =
+      isSingleFileMode || (statusFilter && statusFilter.length > 0)
+        ? filterContentOperations(operations, targetId, targetSlug, statusFilter)
+        : operations;
 
     // Check if we found the target content
     if (isSingleFileMode) {
@@ -1327,18 +1538,22 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
       if (totalChanges === 0) {
         // Check if the target content exists but is in sync
         const targetFoundInRemote = targetId
-          ? remoteContent.some(r => r.id?.toString() === targetId)
+          ? remoteContent.some((r) => r.id?.toString() === targetId)
           : false;
         const targetFoundInLocal = targetId
           ? hasLocalContentByTargetId(localContent, targetId, metadataMap)
           : targetSlug
-            ? localContent.some(c => c.slug === targetSlug)
+            ? localContent.some((c) => c.slug === targetSlug)
             : false;
 
         if (targetFoundInRemote || targetFoundInLocal) {
-          console.log(`✅ Content with ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`} is in sync`);
+          console.log(
+            `✅ Content with ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`} is in sync`
+          );
         } else {
-          console.log(`❌ No content found with ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`} in remote or local`);
+          console.log(
+            `❌ No content found with ${targetId ? `ID ${targetId}` : `slug "${targetSlug}"`} in remote or local`
+          );
           return;
         }
       }
@@ -1346,7 +1561,15 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
 
     // Display status (skip in quiet mode — push-all handles unified display)
     if (!quiet) {
-      await displayStatus(finalOperations, statusOnly, isSingleFileMode, showDetailedPreview, remoteTypeMap, statusOnly ? showDelete : true, remoteCtx?.name);
+      await displayStatus(
+        finalOperations,
+        statusOnly,
+        isSingleFileMode,
+        showDetailedPreview,
+        remoteTypeMap,
+        statusOnly ? showDelete : true,
+        remoteCtx?.name
+      );
     }
 
     // If status only, we're done
@@ -1362,7 +1585,9 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
 
     // Handle conflicts
     if (finalOperations.conflict.length > 0 && !force) {
-      console.log('\n❌ Cannot proceed due to conflicts. Use --force to override or resolve conflicts first.');
+      console.log(
+        "\n❌ Cannot proceed due to conflicts. Use --force to override or resolve conflicts first."
+      );
       return;
     }
 
@@ -1370,9 +1595,9 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     if (totalChanges === 0) {
       if (!quiet) {
         if (isSingleFileMode) {
-          console.log('✅ File is already in sync.');
+          console.log("✅ File is already in sync.");
         } else {
-          console.log('✅ Nothing to sync.');
+          console.log("✅ Nothing to sync.");
         }
       }
       return;
@@ -1380,12 +1605,12 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
 
     // Confirm changes (skip in quiet mode — push-all handles unified confirmation)
     if (!quiet) {
-      const itemDescription = isSingleFileMode ? 'file change' : 'changes';
+      const itemDescription = isSingleFileMode ? "file change" : "changes";
       const confirmMsg = `\nProceed with syncing ${totalChanges} ${itemDescription} to LeadCMS? (y/N): `;
       const confirmation = await question(confirmMsg);
 
-      if (confirmation.toLowerCase() !== 'y' && confirmation.toLowerCase() !== 'yes') {
-        console.log('🚫 Push cancelled.');
+      if (confirmation.toLowerCase() !== "y" && confirmation.toLowerCase() !== "yes") {
+        console.log("🚫 Push cancelled.");
         return;
       }
     }
@@ -1396,16 +1621,18 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     // Display final message based on results (skip in quiet mode)
     if (!quiet) {
       if (results.failed === 0) {
-        colorConsole.success('\n🎉 Content push completed successfully!');
+        colorConsole.success("\n🎉 Content push completed successfully!");
       } else if (results.successful > 0) {
-        colorConsole.warn(`\n⚠️  Content push completed with errors: ${results.successful} successful, ${results.failed} failed`);
+        colorConsole.warn(
+          `\n⚠️  Content push completed with errors: ${results.successful} successful, ${results.failed} failed`
+        );
       } else {
-        colorConsole.error('\n❌ Content push failed - no changes were synced');
+        colorConsole.error("\n❌ Content push failed - no changes were synced");
       }
     }
-
-  } catch (error: any) {
-    const operation = statusOnly ? 'Status check' : 'Push';
+  } catch (_error: unknown) {
+    const error = _error as Error;
+    const operation = statusOnly ? "Status check" : "Push";
     console.error(`❌ ${operation} failed:`, error.message);
     process.exit(1);
   } finally {
@@ -1419,7 +1646,10 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
 /**
  * Execute the actual push operations
  */
-async function executePush(operations: ContentOperations, options: ExecutionOptions = {}): Promise<{ successful: number; failed: number }> {
+async function executePush(
+  operations: ContentOperations,
+  options: ExecutionOptions = {}
+): Promise<{ successful: number; failed: number }> {
   const { force = false, remoteCtx } = options;
 
   // Handle force updates for conflicts
@@ -1428,7 +1658,7 @@ async function executePush(operations: ContentOperations, options: ExecutionOpti
     for (const conflict of operations.conflict) {
       operations.update.push({
         local: conflict.local,
-        remote: conflict.remote
+        remote: conflict.remote,
       });
     }
   }
@@ -1440,8 +1670,11 @@ async function executePush(operations: ContentOperations, options: ExecutionOpti
 /**
  * Execute operations individually (one by one)
  */
-async function executeIndividualOperations(operations: ContentOperations, options: ExecutionOptions = {}): Promise<{ successful: number; failed: number }> {
-  const { force = false, remoteCtx } = options;
+async function executeIndividualOperations(
+  operations: ContentOperations,
+  options: ExecutionOptions = {}
+): Promise<{ successful: number; failed: number }> {
+  const { force: _force = false, remoteCtx } = options;
   let successful = 0;
   let failed = 0;
 
@@ -1454,14 +1687,21 @@ async function executeIndividualOperations(operations: ContentOperations, option
         if (result) {
           await updateLocalMetadata(op.local, result, remoteCtx);
           successful++;
-          colorConsole.success(`✅ Created: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`);
+          colorConsole.success(
+            `✅ Created: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`
+          );
         } else {
           failed++;
-          colorConsole.error(`❌ Failed to create: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`);
+          colorConsole.error(
+            `❌ Failed to create: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`
+          );
         }
-      } catch (error: any) {
+      } catch (_error: unknown) {
+        const error = _error as Error;
         failed++;
-        colorConsole.error(`❌ Failed to create ${op.local.type}/${op.local.slug}: ${error.message}`);
+        colorConsole.error(
+          `❌ Failed to create ${op.local.type}/${op.local.slug}: ${error.message}`
+        );
       }
     }
   }
@@ -1472,22 +1712,34 @@ async function executeIndividualOperations(operations: ContentOperations, option
     for (const op of operations.update) {
       try {
         if (op.remote?.id) {
-          const result = await leadCMSDataService.updateContent(op.remote.id, formatContentForAPI(op.local));
+          const result = await leadCMSDataService.updateContent(
+            op.remote.id,
+            formatContentForAPI(op.local)
+          );
           if (result) {
             await updateLocalMetadata(op.local, result, remoteCtx);
             successful++;
-            colorConsole.success(`✅ Updated: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`);
+            colorConsole.success(
+              `✅ Updated: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`
+            );
           } else {
             failed++;
-            colorConsole.error(`❌ Failed to update: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`);
+            colorConsole.error(
+              `❌ Failed to update: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`
+            );
           }
         } else {
           failed++;
-          colorConsole.error(`❌ Failed to update ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}: No remote ID`);
+          colorConsole.error(
+            `❌ Failed to update ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}: No remote ID`
+          );
         }
-      } catch (error: any) {
+      } catch (_error: unknown) {
+        const error = _error as Error;
         failed++;
-        colorConsole.error(`❌ Failed to update ${op.local.type}/${op.local.slug}: ${error.message}`);
+        colorConsole.error(
+          `❌ Failed to update ${op.local.type}/${op.local.slug}: ${error.message}`
+        );
       }
     }
   }
@@ -1498,7 +1750,10 @@ async function executeIndividualOperations(operations: ContentOperations, option
     for (const op of operations.rename) {
       try {
         if (op.remote?.id) {
-          const result = await leadCMSDataService.updateContent(op.remote.id, formatContentForAPI(op.local));
+          const result = await leadCMSDataService.updateContent(
+            op.remote.id,
+            formatContentForAPI(op.local)
+          );
           if (result) {
             await updateLocalMetadata(op.local, result, remoteCtx);
             successful++;
@@ -1511,7 +1766,8 @@ async function executeIndividualOperations(operations: ContentOperations, option
           failed++;
           colorConsole.error(`❌ Failed to rename ${op.oldSlug}: No remote ID`);
         }
-      } catch (error: any) {
+      } catch (_error: unknown) {
+        const error = _error as Error;
         failed++;
         colorConsole.error(`❌ Failed to rename ${op.oldSlug}: ${error.message}`);
       }
@@ -1524,20 +1780,28 @@ async function executeIndividualOperations(operations: ContentOperations, option
     for (const op of operations.typeChange) {
       try {
         if (op.remote?.id) {
-          const result = await leadCMSDataService.updateContent(op.remote.id, formatContentForAPI(op.local));
+          const result = await leadCMSDataService.updateContent(
+            op.remote.id,
+            formatContentForAPI(op.local)
+          );
           if (result) {
             await updateLocalMetadata(op.local, result, remoteCtx);
             successful++;
-            colorConsole.success(`✅ Type changed: ${op.local.slug} (${op.oldType} -> ${op.newType})`);
+            colorConsole.success(
+              `✅ Type changed: ${op.local.slug} (${op.oldType} -> ${op.newType})`
+            );
           } else {
             failed++;
-            colorConsole.error(`❌ Failed to change type: ${op.local.slug} (${op.oldType} -> ${op.newType})`);
+            colorConsole.error(
+              `❌ Failed to change type: ${op.local.slug} (${op.oldType} -> ${op.newType})`
+            );
           }
         } else {
           failed++;
           colorConsole.error(`❌ Failed to change type for ${op.local.slug}: No remote ID`);
         }
-      } catch (error: any) {
+      } catch (_error: unknown) {
+        const error = _error as Error;
         failed++;
         colorConsole.error(`❌ Failed to change type for ${op.local.slug}: ${error.message}`);
       }
@@ -1552,14 +1816,21 @@ async function executeIndividualOperations(operations: ContentOperations, option
         if (op.remote?.id) {
           await leadCMSDataService.deleteContent(op.remote.id);
           successful++;
-          colorConsole.success(`✅ Deleted: ${colorConsole.highlight(`${op.remote.type}/${op.remote.slug}`)}`);
+          colorConsole.success(
+            `✅ Deleted: ${colorConsole.highlight(`${op.remote.type}/${op.remote.slug}`)}`
+          );
         } else {
           failed++;
-          colorConsole.error(`❌ Failed to delete ${colorConsole.highlight(`${op.remote?.type}/${op.remote?.slug}`)}: No remote ID`);
+          colorConsole.error(
+            `❌ Failed to delete ${colorConsole.highlight(`${op.remote?.type}/${op.remote?.slug}`)}: No remote ID`
+          );
         }
-      } catch (error: any) {
+      } catch (_error: unknown) {
+        const error = _error as Error;
         failed++;
-        colorConsole.error(`❌ Failed to delete ${op.remote?.type}/${op.remote?.slug}: ${error.message}`);
+        colorConsole.error(
+          `❌ Failed to delete ${op.remote?.type}/${op.remote?.slug}: ${error.message}`
+        );
       }
     }
   }
@@ -1570,14 +1841,15 @@ async function executeIndividualOperations(operations: ContentOperations, option
   if (successful > 0) {
     logger.info(`\n🔄 Syncing latest changes from LeadCMS to local store...`);
     try {
-      const { pullLeadCMSContent } = await import('./pull-leadcms-content.js');
+      const { pullLeadCMSContent } = await import("./pull-leadcms-content.js");
       await pullLeadCMSContent({ remoteContext: remoteCtx });
-      const { pullLeadCMSMedia } = await import('./pull-leadcms-media.js');
+      const { pullLeadCMSMedia } = await import("./pull-leadcms-media.js");
       await pullLeadCMSMedia({ remoteContext: remoteCtx });
-      console.log('✅ Local content store synchronized with latest changes');
-    } catch (error: any) {
-      console.warn('⚠️  Failed to automatically sync local content:', error.message);
-      console.log('💡 You may want to manually run the pull command to sync latest changes');
+      console.log("✅ Local content store synchronized with latest changes");
+    } catch (_error: unknown) {
+      const error = _error as Error;
+      console.warn("⚠️  Failed to automatically sync local content:", error.message);
+      console.log("💡 You may want to manually run the pull command to sync latest changes");
     }
   }
 
@@ -1588,20 +1860,23 @@ async function executeIndividualOperations(operations: ContentOperations, option
  * Format local content for API submission
  */
 
-
 /**
  * Update local file with metadata from LeadCMS response.
  * In multi-remote mode, saves IDs and timestamps to per-remote map files.
  * Frontmatter is only updated for the default remote (or in single-remote mode).
  */
-async function updateLocalMetadata(localContent: LocalContentItem, remoteResponse: ContentItem, remoteCtx?: RemoteContext): Promise<void> {
+async function updateLocalMetadata(
+  localContent: LocalContentItem,
+  remoteResponse: ContentItem,
+  remoteCtx?: RemoteContext
+): Promise<void> {
   const { filePath } = localContent;
   const ext = path.extname(filePath);
 
   // Per-remote metadata updates
   if (remoteCtx) {
     try {
-      const rc = await import('../lib/remote-context.js');
+      const rc = await import("../lib/remote-context.js");
       const metaMap = await rc.readMetadataMap(remoteCtx);
       if (remoteResponse.id != null) {
         rc.setRemoteId(metaMap, localContent.locale, localContent.slug, remoteResponse.id);
@@ -1611,7 +1886,8 @@ async function updateLocalMetadata(localContent: LocalContentItem, remoteRespons
         updatedAt: remoteResponse.updatedAt,
       });
       await rc.writeMetadataMap(remoteCtx, metaMap);
-    } catch (error: any) {
+    } catch (_error: unknown) {
+      const error = _error as Error;
       console.warn(`Failed to update remote map files for ${filePath}:`, error.message);
     }
   }
@@ -1622,8 +1898,8 @@ async function updateLocalMetadata(localContent: LocalContentItem, remoteRespons
   }
 
   try {
-    if (ext === '.mdx') {
-      const fileContent = await fs.readFile(filePath, 'utf-8');
+    if (ext === ".mdx") {
+      const fileContent = await fs.readFile(filePath, "utf-8");
       const parsed = matter(fileContent);
 
       // Update metadata with response data
@@ -1635,10 +1911,9 @@ async function updateLocalMetadata(localContent: LocalContentItem, remoteRespons
 
       // Rebuild the file
       const newContent = matter.stringify(parsed.content, parsed.data);
-      await fs.writeFile(filePath, newContent, 'utf-8');
-
-    } else if (ext === '.json') {
-      const jsonData = JSON.parse(await fs.readFile(filePath, 'utf-8'));
+      await fs.writeFile(filePath, newContent, "utf-8");
+    } else if (ext === ".json") {
+      const jsonData = JSON.parse(await fs.readFile(filePath, "utf-8"));
 
       // Update metadata
       jsonData.id = remoteResponse.id;
@@ -1647,9 +1922,10 @@ async function updateLocalMetadata(localContent: LocalContentItem, remoteRespons
         jsonData.updatedAt = remoteResponse.updatedAt;
       }
 
-      await fs.writeFile(filePath, JSON.stringify(jsonData, null, 2), 'utf-8');
+      await fs.writeFile(filePath, JSON.stringify(jsonData, null, 2), "utf-8");
     }
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = _error as Error;
     console.warn(`Failed to update local metadata for ${filePath}:`, error.message);
   }
 }
@@ -1676,9 +1952,9 @@ export { validateMergeConflicts };
 export { filterLocalContentByTargetId };
 export { hasLocalContentByTargetId };
 // Re-export merge conflict detector for testing
-export { hasMergeConflictMarkers } from '../lib/merge-conflict-detector.js';
+export { hasMergeConflictMarkers } from "../lib/merge-conflict-detector.js";
 // Re-export formatContentForAPI from utility module for testing
-export { formatContentForAPI } from '../lib/content-api-formatting.js';
+export { formatContentForAPI } from "../lib/content-api-formatting.js";
 // Re-export the new comparison function for consistency
 export { transformRemoteForComparison } from "../lib/content-transformation.js";
 
@@ -1695,7 +1971,12 @@ export interface ContentStatusResult {
  * Get content status data without printing anything.
  * Used by the unified status-all renderer.
  */
-export async function getContentStatusData(options: { showDelete?: boolean; remoteContext?: import("../lib/remote-context.js").RemoteContext } = {}): Promise<ContentStatusResult> {
+export async function getContentStatusData(
+  options: {
+    showDelete?: boolean;
+    remoteContext?: import("../lib/remote-context.js").RemoteContext;
+  } = {}
+): Promise<ContentStatusResult> {
   // Configure data service for the target remote (multi-remote support)
   if (options.remoteContext) {
     leadCMSDataService.configureForRemote(options.remoteContext.url, options.remoteContext.apiKey);
@@ -1714,9 +1995,13 @@ export async function getContentStatusData(options: { showDelete?: boolean; remo
   const remoteTypes = await leadCMSDataService.getContentTypes();
   const remoteTypeMap: Record<string, string> = {};
   if (Array.isArray(remoteTypes)) {
-    remoteTypes.forEach(type => { remoteTypeMap[type.uid] = type.format; });
+    remoteTypes.forEach((type) => {
+      remoteTypeMap[type.uid] = type.format;
+    });
   } else {
-    logger.verbose('[STATUS] Warning: content types response was not an array, proceeding without type map');
+    logger.verbose(
+      "[STATUS] Warning: content types response was not an array, proceeding without type map"
+    );
   }
 
   const remoteContent = await fetchRemoteContent();
@@ -1724,11 +2009,17 @@ export async function getContentStatusData(options: { showDelete?: boolean; remo
   // Load per-remote maps for multi-remote support
   let metadataMap: MetadataMap | undefined;
   if (options.remoteContext) {
-    const rc = await import('../lib/remote-context.js');
+    const rc = await import("../lib/remote-context.js");
     metadataMap = await rc.readMetadataMap(options.remoteContext);
   }
 
-  const operations = await matchContent(localContent, remoteContent, remoteTypeMap, options.showDelete || false, metadataMap);
+  const operations = await matchContent(
+    localContent,
+    remoteContent,
+    remoteTypeMap,
+    options.showDelete || false,
+    metadataMap
+  );
 
   return {
     operations,

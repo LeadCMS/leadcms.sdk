@@ -3,21 +3,21 @@
  * LeadCMS Push Content CLI Entry Point
  */
 
-import 'dotenv/config';
-import { pushLeadCMSContent } from '../../scripts/push-leadcms-content.js';
-import { requireAuthenticatedUser, resolveIdentity } from '../../scripts/leadcms-helpers.js';
-import { initVerboseFromArgs } from '../../lib/logger.js';
-import { startSpinner } from '../../lib/spinner.js';
-import { parsePushContentStatusArgs } from './content-status-args.js';
-import { parseRemoteFlag } from './remote-flag.js';
+import "dotenv/config";
+import { pushLeadCMSContent } from "../../scripts/push-leadcms-content.js";
+import { requireAuthenticatedUser, resolveIdentity } from "../../scripts/leadcms-helpers.js";
+import { initVerboseFromArgs } from "../../lib/logger.js";
+import { startSpinner } from "../../lib/spinner.js";
+import { parsePushContentStatusArgs } from "./content-status-args.js";
+import { parseRemoteFlag } from "./remote-flag.js";
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
 const remoteContext = parseRemoteFlag(args);
 const { statusOnly, statusFilter } = parsePushContentStatusArgs(args);
-const force = args.includes('--force');
-const dryRun = args.includes('--dry-run');
-const allowDelete = args.includes('--delete');
+const force = args.includes("--force");
+const dryRun = args.includes("--dry-run");
+const allowDelete = args.includes("--delete");
 
 if (!statusOnly && !dryRun) {
   await requireAuthenticatedUser(remoteContext?.apiKey);
@@ -29,21 +29,30 @@ if (!statusOnly && !dryRun) {
 let targetId: string | undefined;
 let targetSlug: string | undefined;
 
-const idIndex = args.findIndex(arg => arg === '--id');
+const idIndex = args.findIndex((arg) => arg === "--id");
 if (idIndex !== -1 && args[idIndex + 1]) {
   targetId = args[idIndex + 1];
 }
 
-const slugIndex = args.findIndex(arg => arg === '--slug');
+const slugIndex = args.findIndex((arg) => arg === "--slug");
 if (slugIndex !== -1 && args[slugIndex + 1]) {
   targetSlug = args[slugIndex + 1];
 }
 
-const spinner = startSpinner('Pushing content to LeadCMS…');
-pushLeadCMSContent({ statusOnly, force, targetId, targetSlug, statusFilter, dryRun, allowDelete, remoteContext })
+const spinner = startSpinner("Pushing content to LeadCMS…");
+pushLeadCMSContent({
+  statusOnly,
+  force,
+  targetId,
+  targetSlug,
+  statusFilter,
+  dryRun,
+  allowDelete,
+  remoteContext,
+})
   .then(() => spinner.stop())
-  .catch((error: any) => {
-    spinner.fail('Content push failed');
-    console.error(error.message);
+  .catch((error: unknown) => {
+    spinner.fail("Content push failed");
+    console.error((error as Error).message);
     process.exit(1);
   });

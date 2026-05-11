@@ -2,12 +2,12 @@ import {
   parseEmailTemplateFileContent,
   transformEmailTemplateRemoteToLocalFormat,
   formatEmailTemplateForApi,
-} from '../src/lib/email-template-transformation';
-import { hasContentDifferences, stripTimestampMetadata } from '../src/lib/content-transformation';
-import { threeWayMerge, isLocallyModified } from '../src/lib/content-merge';
+} from "../src/lib/email-template-transformation";
+import { hasContentDifferences, stripTimestampMetadata } from "../src/lib/content-transformation";
+import { threeWayMerge, isLocallyModified } from "../src/lib/content-merge";
 
-describe('email template HTML frontmatter', () => {
-  it('parses HTML comment frontmatter and body', () => {
+describe("email template HTML frontmatter", () => {
+  it("parses HTML comment frontmatter and body", () => {
     const input = `<!--
 ---
 name: "Welcome"
@@ -19,14 +19,14 @@ groupName: "Notifications"
 <body>Hi</body>`;
 
     const parsed = parseEmailTemplateFileContent(input);
-    expect(parsed.metadata.name).toBe('Welcome');
-    expect(parsed.metadata.subject).toBe('Hello');
-    expect(parsed.metadata.fromEmail).toBe('team@example.com');
-    expect(parsed.metadata.groupName).toBe('Notifications');
-    expect(parsed.body).toBe('<body>Hi</body>');
+    expect(parsed.metadata.name).toBe("Welcome");
+    expect(parsed.metadata.subject).toBe("Hello");
+    expect(parsed.metadata.fromEmail).toBe("team@example.com");
+    expect(parsed.metadata.groupName).toBe("Notifications");
+    expect(parsed.body).toBe("<body>Hi</body>");
   });
 
-  it('still parses legacy emailGroupId from frontmatter', () => {
+  it("still parses legacy emailGroupId from frontmatter", () => {
     const input = `<!--
 ---
 name: "Legacy"
@@ -39,133 +39,133 @@ emailGroupId: 12
     expect(parsed.metadata.emailGroupId).toBe(12);
   });
 
-  it('serializes remote template into HTML with groupName instead of emailGroupId', () => {
+  it("serializes remote template into HTML with groupName instead of emailGroupId", () => {
     const remote = {
       id: 5,
-      name: 'Reset Password',
-      subject: 'Reset',
-      fromEmail: 'support@example.com',
-      fromName: 'Support',
-      language: 'en',
+      name: "Reset Password",
+      subject: "Reset",
+      fromEmail: "support@example.com",
+      fromName: "Support",
+      language: "en",
       emailGroupId: 2,
-      emailGroup: { id: 2, name: 'Notifications' },
+      emailGroup: { id: 2, name: "Notifications" },
       bodyTemplate: '<img src="/api/media/emails/reset.png" />',
     };
 
     const output = transformEmailTemplateRemoteToLocalFormat(remote);
-    expect(output).toContain('<!--');
-    expect(output).toContain('name: Reset Password');
-    expect(output).toContain('groupName: Notifications');
-    expect(output).not.toContain('emailGroupId');
-    expect(output).toContain('/media/emails/reset.png');
+    expect(output).toContain("<!--");
+    expect(output).toContain("name: Reset Password");
+    expect(output).toContain("groupName: Notifications");
+    expect(output).not.toContain("emailGroupId");
+    expect(output).toContain("/media/emails/reset.png");
   });
 
-  it('does not include emailGroupId in serialized output', () => {
+  it("does not include emailGroupId in serialized output", () => {
     const remote = {
       id: 5,
-      name: 'Welcome',
-      subject: 'Hello',
+      name: "Welcome",
+      subject: "Hello",
       emailGroupId: 3,
-      bodyTemplate: '<body>Hi</body>',
+      bodyTemplate: "<body>Hi</body>",
     };
 
     const output = transformEmailTemplateRemoteToLocalFormat(remote);
-    expect(output).not.toContain('emailGroupId');
+    expect(output).not.toContain("emailGroupId");
   });
 
-  it('omits empty attachments from serialized frontmatter', () => {
+  it("omits empty attachments from serialized frontmatter", () => {
     const remote = {
       id: 5,
-      name: 'Welcome',
-      subject: 'Hello',
+      name: "Welcome",
+      subject: "Hello",
       attachments: [],
-      bodyTemplate: '<body>Hi</body>',
+      bodyTemplate: "<body>Hi</body>",
     };
 
     const output = transformEmailTemplateRemoteToLocalFormat(remote);
-    expect(output).not.toContain('attachments:');
+    expect(output).not.toContain("attachments:");
   });
 
-  it('includes attachments in serialized frontmatter when present', () => {
+  it("includes attachments in serialized frontmatter when present", () => {
     const remote = {
       id: 5,
-      name: 'Welcome',
-      subject: 'Hello',
-      attachments: ['media/email/file-1.pdf', 'media/email/file-2.pdf'],
-      bodyTemplate: '<body>Hi</body>',
+      name: "Welcome",
+      subject: "Hello",
+      attachments: ["media/email/file-1.pdf", "media/email/file-2.pdf"],
+      bodyTemplate: "<body>Hi</body>",
     };
 
     const output = transformEmailTemplateRemoteToLocalFormat(remote);
-    expect(output).toContain('attachments:');
-    expect(output).toContain('- media/email/file-1.pdf');
-    expect(output).toContain('- media/email/file-2.pdf');
+    expect(output).toContain("attachments:");
+    expect(output).toContain("- media/email/file-1.pdf");
+    expect(output).toContain("- media/email/file-2.pdf");
   });
 
-  it('formats local template for API with media path replacement', () => {
+  it("formats local template for API with media path replacement", () => {
     const local = {
       metadata: {
-        name: 'Welcome',
-        subject: 'Hello',
-        fromEmail: 'team@example.com',
-        fromName: 'Team',
-        language: 'en',
+        name: "Welcome",
+        subject: "Hello",
+        fromEmail: "team@example.com",
+        fromName: "Team",
+        language: "en",
         emailGroupId: 9,
       },
       body: '<img src="/media/emails/welcome.png" />',
     };
 
     const payload = formatEmailTemplateForApi(local);
-    expect(payload.bodyTemplate).toContain('/api/media/emails/welcome.png');
+    expect(payload.bodyTemplate).toContain("/api/media/emails/welcome.png");
     expect(payload.emailGroupId).toBe(9);
   });
 
-  it('includes category field in API payload', () => {
+  it("includes category field in API payload", () => {
     const local = {
       metadata: {
-        name: 'PlainTemplate',
-        subject: 'Subject',
-        fromEmail: 'team@example.com',
-        fromName: 'Team',
-        language: 'en',
-        category: 'PlainText',
+        name: "PlainTemplate",
+        subject: "Subject",
+        fromEmail: "team@example.com",
+        fromName: "Team",
+        language: "en",
+        category: "PlainText",
         emailGroupId: 1,
       },
-      body: '<p>Hello</p>',
+      body: "<p>Hello</p>",
     };
 
     const payload = formatEmailTemplateForApi(local);
-    expect(payload.category).toBe('PlainText');
+    expect(payload.category).toBe("PlainText");
   });
 
-  it('omits category when not set in metadata', () => {
+  it("omits category when not set in metadata", () => {
     const local = {
       metadata: {
-        name: 'Welcome',
-        subject: 'Hello',
-        fromEmail: 'team@example.com',
-        fromName: 'Team',
-        language: 'en',
+        name: "Welcome",
+        subject: "Hello",
+        fromEmail: "team@example.com",
+        fromName: "Team",
+        language: "en",
         emailGroupId: 9,
       },
-      body: '<p>Hi</p>',
+      body: "<p>Hi</p>",
     };
 
     const payload = formatEmailTemplateForApi(local);
     expect(payload.category).toBeUndefined();
   });
 
-  it('does not send groupName to the API', () => {
+  it("does not send groupName to the API", () => {
     const local = {
       metadata: {
-        name: 'Welcome',
-        subject: 'Hello',
-        fromEmail: 'team@example.com',
-        fromName: 'Team',
-        language: 'en',
+        name: "Welcome",
+        subject: "Hello",
+        fromEmail: "team@example.com",
+        fromName: "Team",
+        language: "en",
         emailGroupId: 9,
-        groupName: 'Notifications',
+        groupName: "Notifications",
       },
-      body: '<body>Hi</body>',
+      body: "<body>Hi</body>",
     };
 
     const payload = formatEmailTemplateForApi(local);
@@ -173,60 +173,60 @@ emailGroupId: 12
     expect(payload.groupName).toBeUndefined();
   });
 
-  it('does not include groupName when emailGroup is null (API sync response)', () => {
+  it("does not include groupName when emailGroup is null (API sync response)", () => {
     // The sync API returns emailGroup: null even when emailGroupId is set.
     // Without enrichment, groupName should be absent.
     const remote = {
       id: 3,
-      name: 'Acknowledgment',
-      subject: 'Thank You',
-      fromEmail: 'support@example.com',
-      fromName: 'Support',
-      language: 'en',
+      name: "Acknowledgment",
+      subject: "Thank You",
+      fromEmail: "support@example.com",
+      fromName: "Support",
+      language: "en",
       emailGroupId: 1,
       emailGroup: null,
-      bodyTemplate: '<body>Thanks</body>',
+      bodyTemplate: "<body>Thanks</body>",
     };
 
     const output = transformEmailTemplateRemoteToLocalFormat(remote);
-    expect(output).toContain('name: Acknowledgment');
-    expect(output).not.toContain('groupName');
-    expect(output).not.toContain('emailGroupId');
+    expect(output).toContain("name: Acknowledgment");
+    expect(output).not.toContain("groupName");
+    expect(output).not.toContain("emailGroupId");
   });
 
-  it('includes groupName when emailGroup is enriched before transformation', () => {
+  it("includes groupName when emailGroup is enriched before transformation", () => {
     // After enrichment (pull-leadcms-email-templates resolves groups),
     // the template should include groupName.
     const remote = {
       id: 3,
-      name: 'Acknowledgment',
-      subject: 'Thank You',
-      fromEmail: 'support@example.com',
-      fromName: 'Support',
-      language: 'en',
+      name: "Acknowledgment",
+      subject: "Thank You",
+      fromEmail: "support@example.com",
+      fromName: "Support",
+      language: "en",
       emailGroupId: 1,
-      emailGroup: { id: 1, name: 'Transactional', language: 'en' },
-      bodyTemplate: '<body>Thanks</body>',
+      emailGroup: { id: 1, name: "Transactional", language: "en" },
+      bodyTemplate: "<body>Thanks</body>",
     };
 
     const output = transformEmailTemplateRemoteToLocalFormat(remote);
-    expect(output).toContain('groupName: Transactional');
-    expect(output).not.toContain('emailGroupId');
+    expect(output).toContain("groupName: Transactional");
+    expect(output).not.toContain("emailGroupId");
   });
 
-  it('roundtrip: enriched remote produces identical output to local file (no false diff)', () => {
+  it("roundtrip: enriched remote produces identical output to local file (no false diff)", () => {
     // Simulate a template freshly pulled with enriched emailGroup
     const remote = {
       id: 3,
-      name: 'Acknowledgment',
-      subject: 'Thank You for Your Feedback',
-      fromEmail: 'support@leadcms.ai',
-      fromName: 'Support Team',
-      language: 'en',
+      name: "Acknowledgment",
+      subject: "Thank You for Your Feedback",
+      fromEmail: "support@leadcms.ai",
+      fromName: "Support Team",
+      language: "en",
       emailGroupId: 1,
-      emailGroup: { id: 1, name: 'Transactional', language: 'en' },
-      createdAt: '2025-05-26T06:25:45.803122Z',
-      bodyTemplate: '<body>Thanks</body>',
+      emailGroup: { id: 1, name: "Transactional", language: "en" },
+      createdAt: "2025-05-26T06:25:45.803122Z",
+      bodyTemplate: "<body>Thanks</body>",
     };
 
     // Transform to local format (simulates what pull writes to disk)
@@ -239,17 +239,17 @@ emailGroupId: 12
     expect(hasContentDifferences(localContent, statusContent)).toBe(false);
   });
 
-  it('roundtrip: unenriched remote (emailGroup: null) produces different output than enriched local', () => {
+  it("roundtrip: unenriched remote (emailGroup: null) produces different output than enriched local", () => {
     const enrichedRemote = {
       id: 3,
-      name: 'Acknowledgment',
-      subject: 'Thank You',
-      fromEmail: 'support@example.com',
-      fromName: 'Support',
-      language: 'en',
+      name: "Acknowledgment",
+      subject: "Thank You",
+      fromEmail: "support@example.com",
+      fromName: "Support",
+      language: "en",
       emailGroupId: 1,
-      emailGroup: { id: 1, name: 'Transactional', language: 'en' },
-      bodyTemplate: '<body>Thanks</body>',
+      emailGroup: { id: 1, name: "Transactional", language: "en" },
+      bodyTemplate: "<body>Thanks</body>",
     };
 
     const unenrichedRemote = {
@@ -262,30 +262,30 @@ emailGroupId: 12
 
     // Without enrichment, groupName is missing — so the outputs differ
     expect(hasContentDifferences(enrichedOutput, unenrichedOutput)).toBe(true);
-    expect(enrichedOutput).toContain('groupName: Transactional');
-    expect(unenrichedOutput).not.toContain('groupName');
+    expect(enrichedOutput).toContain("groupName: Transactional");
+    expect(unenrichedOutput).not.toContain("groupName");
   });
 
-  describe('timestamp precision normalization', () => {
-    it('does not flag as different when only timestamp precision differs (6 vs 7 digits)', () => {
+  describe("timestamp precision normalization", () => {
+    it("does not flag as different when only timestamp precision differs (6 vs 7 digits)", () => {
       const remote6 = {
         id: 1,
-        name: 'Welcome',
-        subject: 'Hello',
-        fromEmail: 'team@example.com',
-        fromName: 'Team',
-        language: 'en',
+        name: "Welcome",
+        subject: "Hello",
+        fromEmail: "team@example.com",
+        fromName: "Team",
+        language: "en",
         emailGroupId: 1,
-        emailGroup: { id: 1, name: 'Notifications', language: 'en' },
-        createdAt: '2026-02-19T16:57:53.063594Z',
-        updatedAt: '2026-02-19T16:57:53.063594Z',
-        bodyTemplate: '<body>Hello</body>',
+        emailGroup: { id: 1, name: "Notifications", language: "en" },
+        createdAt: "2026-02-19T16:57:53.063594Z",
+        updatedAt: "2026-02-19T16:57:53.063594Z",
+        bodyTemplate: "<body>Hello</body>",
       };
 
       const remote7 = {
         ...remote6,
-        createdAt: '2026-02-19T16:57:53.0635946Z',
-        updatedAt: '2026-02-19T16:57:53.0635946Z',
+        createdAt: "2026-02-19T16:57:53.0635946Z",
+        updatedAt: "2026-02-19T16:57:53.0635946Z",
       };
 
       const local6 = transformEmailTemplateRemoteToLocalFormat(remote6);
@@ -295,21 +295,21 @@ emailGroupId: 12
       expect(hasContentDifferences(local6, local7)).toBe(false);
     });
 
-    it('does not flag as different when trailing zeros differ', () => {
+    it("does not flag as different when trailing zeros differ", () => {
       const remote1 = {
         id: 2,
-        name: 'Reset',
-        subject: 'Reset Password',
-        fromEmail: 'security@example.com',
-        fromName: 'Security',
-        language: 'en',
-        updatedAt: '2026-02-19T16:57:53.060000Z',
-        bodyTemplate: '<body>Reset</body>',
+        name: "Reset",
+        subject: "Reset Password",
+        fromEmail: "security@example.com",
+        fromName: "Security",
+        language: "en",
+        updatedAt: "2026-02-19T16:57:53.060000Z",
+        bodyTemplate: "<body>Reset</body>",
       };
 
       const remote2 = {
         ...remote1,
-        updatedAt: '2026-02-19T16:57:53.06Z',
+        updatedAt: "2026-02-19T16:57:53.06Z",
       };
 
       const local1 = transformEmailTemplateRemoteToLocalFormat(remote1);
@@ -318,22 +318,22 @@ emailGroupId: 12
       expect(hasContentDifferences(local1, local2)).toBe(false);
     });
 
-    it('still detects real differences alongside timestamp precision differences', () => {
+    it("still detects real differences alongside timestamp precision differences", () => {
       const remote1 = {
         id: 1,
-        name: 'Welcome',
-        subject: 'Hello',
-        fromEmail: 'team@example.com',
-        fromName: 'Team',
-        language: 'en',
-        updatedAt: '2026-02-19T16:57:53.063594Z',
-        bodyTemplate: '<body>Hello</body>',
+        name: "Welcome",
+        subject: "Hello",
+        fromEmail: "team@example.com",
+        fromName: "Team",
+        language: "en",
+        updatedAt: "2026-02-19T16:57:53.063594Z",
+        bodyTemplate: "<body>Hello</body>",
       };
 
       const remote2 = {
         ...remote1,
-        subject: 'Hi there',
-        updatedAt: '2026-02-19T16:57:53.0635946Z',
+        subject: "Hi there",
+        updatedAt: "2026-02-19T16:57:53.0635946Z",
       };
 
       const local1 = transformEmailTemplateRemoteToLocalFormat(remote1);
@@ -344,23 +344,24 @@ emailGroupId: 12
     });
   });
 
-  describe('three-way merge for email templates', () => {
+  describe("three-way merge for email templates", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const makeTemplate = (overrides: Record<string, any> = {}) => ({
       id: 1,
-      name: 'Welcome',
-      subject: 'Hello',
-      fromEmail: 'team@example.com',
-      fromName: 'Team',
-      language: 'en',
+      name: "Welcome",
+      subject: "Hello",
+      fromEmail: "team@example.com",
+      fromName: "Team",
+      language: "en",
       emailGroupId: 1,
-      emailGroup: { id: 1, name: 'Notifications', language: 'en' },
-      createdAt: '2026-01-01T00:00:00.000000Z',
-      updatedAt: '2026-01-01T00:00:00.000000Z',
-      bodyTemplate: '<body>Welcome to our platform!</body>',
+      emailGroup: { id: 1, name: "Notifications", language: "en" },
+      createdAt: "2026-01-01T00:00:00.000000Z",
+      updatedAt: "2026-01-01T00:00:00.000000Z",
+      bodyTemplate: "<body>Welcome to our platform!</body>",
       ...overrides,
     });
 
-    it('detects no local modification when files match (isLocallyModified)', () => {
+    it("detects no local modification when files match (isLocallyModified)", () => {
       const remote = makeTemplate();
       const baseContent = transformEmailTemplateRemoteToLocalFormat(remote);
       const localContent = baseContent; // local unchanged
@@ -368,29 +369,29 @@ emailGroupId: 12
       expect(isLocallyModified(baseContent, localContent)).toBe(false);
     });
 
-    it('detects no local modification despite timestamp precision difference', () => {
-      const base = makeTemplate({ updatedAt: '2026-01-01T00:00:00.123456Z' });
+    it("detects no local modification despite timestamp precision difference", () => {
+      const base = makeTemplate({ updatedAt: "2026-01-01T00:00:00.123456Z" });
       const baseContent = transformEmailTemplateRemoteToLocalFormat(base);
       // Simulate local file with different precision (7 digits)
-      const localContent = baseContent.replace('123456Z', '1234567Z');
+      const localContent = baseContent.replace("123456Z", "1234567Z");
 
       expect(isLocallyModified(baseContent, localContent)).toBe(false);
     });
 
-    it('detects local modification when subject is changed', () => {
+    it("detects local modification when subject is changed", () => {
       const remote = makeTemplate();
       const baseContent = transformEmailTemplateRemoteToLocalFormat(remote);
-      const localContent = baseContent.replace('subject: Hello', 'subject: Welcome aboard');
+      const localContent = baseContent.replace("subject: Hello", "subject: Welcome aboard");
 
       expect(isLocallyModified(baseContent, localContent)).toBe(true);
     });
 
-    it('auto-merges non-overlapping local and remote changes', () => {
+    it("auto-merges non-overlapping local and remote changes", () => {
       const base = makeTemplate();
-      const local = makeTemplate({ subject: 'Welcome aboard' });
+      const local = makeTemplate({ subject: "Welcome aboard" });
       const remote = makeTemplate({
-        bodyTemplate: '<body>Welcome! We are glad to have you.</body>',
-        updatedAt: '2026-02-01T00:00:00.000000Z',
+        bodyTemplate: "<body>Welcome! We are glad to have you.</body>",
+        updatedAt: "2026-02-01T00:00:00.000000Z",
       });
 
       const baseContent = transformEmailTemplateRemoteToLocalFormat(base);
@@ -402,19 +403,19 @@ emailGroupId: 12
       expect(result.success).toBe(true);
       expect(result.hasConflicts).toBe(false);
       // Local subject change preserved
-      expect(result.merged).toContain('subject: Welcome aboard');
+      expect(result.merged).toContain("subject: Welcome aboard");
       // Remote body change preserved
-      expect(result.merged).toContain('We are glad to have you');
+      expect(result.merged).toContain("We are glad to have you");
       // Server-controlled updatedAt takes remote value
-      expect(result.merged).toContain('2026-02-01');
+      expect(result.merged).toContain("2026-02-01");
     });
 
-    it('detects conflict when both sides change the same field', () => {
+    it("detects conflict when both sides change the same field", () => {
       const base = makeTemplate();
-      const local = makeTemplate({ subject: 'Welcome aboard' });
+      const local = makeTemplate({ subject: "Welcome aboard" });
       const remote = makeTemplate({
-        subject: 'Greetings',
-        updatedAt: '2026-02-01T00:00:00.000000Z',
+        subject: "Greetings",
+        updatedAt: "2026-02-01T00:00:00.000000Z",
       });
 
       const baseContent = transformEmailTemplateRemoteToLocalFormat(base);
@@ -426,23 +427,23 @@ emailGroupId: 12
       expect(result.success).toBe(false);
       expect(result.hasConflicts).toBe(true);
       expect(result.conflictCount).toBeGreaterThanOrEqual(1);
-      expect(result.merged).toContain('<<<<<<< local');
-      expect(result.merged).toContain('>>>>>>> remote');
+      expect(result.merged).toContain("<<<<<<< local");
+      expect(result.merged).toContain(">>>>>>> remote");
     });
 
-    it('auto-resolves server-controlled fields (updatedAt/createdAt) without conflict', () => {
+    it("auto-resolves server-controlled fields (updatedAt/createdAt) without conflict", () => {
       const base = makeTemplate({
-        updatedAt: '2026-01-01T00:00:00.000000Z',
-        createdAt: '2026-01-01T00:00:00.000000Z',
+        updatedAt: "2026-01-01T00:00:00.000000Z",
+        createdAt: "2026-01-01T00:00:00.000000Z",
       });
       const local = makeTemplate({
-        subject: 'Updated locally',
-        updatedAt: '2026-01-01T00:00:00.000000Z',
-        createdAt: '2026-01-01T00:00:00.000000Z',
+        subject: "Updated locally",
+        updatedAt: "2026-01-01T00:00:00.000000Z",
+        createdAt: "2026-01-01T00:00:00.000000Z",
       });
       const remote = makeTemplate({
-        updatedAt: '2026-02-15T12:00:00.000000Z',
-        createdAt: '2026-01-01T00:00:00.000000Z',
+        updatedAt: "2026-02-15T12:00:00.000000Z",
+        createdAt: "2026-01-01T00:00:00.000000Z",
       });
 
       const baseContent = transformEmailTemplateRemoteToLocalFormat(base);
@@ -455,29 +456,29 @@ emailGroupId: 12
       expect(result.success).toBe(true);
       expect(result.hasConflicts).toBe(false);
       // Remote updatedAt wins
-      expect(result.merged).toContain('2026-02-15');
+      expect(result.merged).toContain("2026-02-15");
       // Local subject change preserved
-      expect(result.merged).toContain('subject: Updated locally');
+      expect(result.merged).toContain("subject: Updated locally");
     });
   });
 
-  describe('timestamp metadata exclusion from comparison', () => {
-    it('should not detect differences when only updatedAt differs', () => {
+  describe("timestamp metadata exclusion from comparison", () => {
+    it("should not detect differences when only updatedAt differs", () => {
       const remote1 = {
         id: 11,
-        name: 'WS_Contact_Us',
-        subject: 'Contact form',
-        bodyTemplate: '<p>Hello</p>',
-        fromEmail: 'hello@example.com',
-        fromName: 'Team',
-        language: 'ru-RU',
-        createdAt: '2026-02-28T10:07:23.248368Z',
-        updatedAt: '2026-03-03T08:44:58.037472Z',
+        name: "WS_Contact_Us",
+        subject: "Contact form",
+        bodyTemplate: "<p>Hello</p>",
+        fromEmail: "hello@example.com",
+        fromName: "Team",
+        language: "ru-RU",
+        createdAt: "2026-02-28T10:07:23.248368Z",
+        updatedAt: "2026-03-03T08:44:58.037472Z",
       };
 
       const remote2 = {
         ...remote1,
-        updatedAt: '2026-03-12T15:39:28.792915Z',
+        updatedAt: "2026-03-12T15:39:28.792915Z",
       };
 
       const local1 = transformEmailTemplateRemoteToLocalFormat(remote1);
@@ -487,32 +488,36 @@ emailGroupId: 12
       expect(hasContentDifferences(local1, local2)).toBe(true);
 
       // After stripping timestamp metadata, no differences
-      expect(hasContentDifferences(stripTimestampMetadata(local1), stripTimestampMetadata(local2))).toBe(false);
+      expect(
+        hasContentDifferences(stripTimestampMetadata(local1), stripTimestampMetadata(local2))
+      ).toBe(false);
     });
 
-    it('should still detect real content changes after stripping timestamps', () => {
+    it("should still detect real content changes after stripping timestamps", () => {
       const remote1 = {
         id: 11,
-        name: 'WS_Contact_Us',
-        subject: 'Contact form',
-        bodyTemplate: '<p>Hello</p>',
-        fromEmail: 'hello@example.com',
-        fromName: 'Team',
-        language: 'ru-RU',
-        createdAt: '2026-02-28T10:07:23.248368Z',
-        updatedAt: '2026-03-03T08:44:58.037472Z',
+        name: "WS_Contact_Us",
+        subject: "Contact form",
+        bodyTemplate: "<p>Hello</p>",
+        fromEmail: "hello@example.com",
+        fromName: "Team",
+        language: "ru-RU",
+        createdAt: "2026-02-28T10:07:23.248368Z",
+        updatedAt: "2026-03-03T08:44:58.037472Z",
       };
 
       const remote2 = {
         ...remote1,
-        subject: 'Updated contact form',
-        updatedAt: '2026-03-12T15:39:28.792915Z',
+        subject: "Updated contact form",
+        updatedAt: "2026-03-12T15:39:28.792915Z",
       };
 
       const local1 = transformEmailTemplateRemoteToLocalFormat(remote1);
       const local2 = transformEmailTemplateRemoteToLocalFormat(remote2);
 
-      expect(hasContentDifferences(stripTimestampMetadata(local1), stripTimestampMetadata(local2))).toBe(true);
+      expect(
+        hasContentDifferences(stripTimestampMetadata(local1), stripTimestampMetadata(local2))
+      ).toBe(true);
     });
   });
 });
