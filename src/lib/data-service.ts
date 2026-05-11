@@ -9,6 +9,7 @@ import type { Comment as CommentItem } from './comment-types.js';
 import type {
   SegmentDetailsDto, SegmentCreateDto, SegmentUpdateDto,
   SequenceDetailsDto, SequenceCreateDto, SequenceUpdateDto,
+  RedirectDetailsDto, RedirectCreateDto, RedirectUpdateDto,
 } from './automation-types.js';
 
 /**
@@ -188,6 +189,7 @@ interface MockScenario {
   comments?: CommentItem[];
   segments?: SegmentDetailsDto[];
   sequences?: SequenceDetailsDto[];
+  redirects?: RedirectDetailsDto[];
 }
 
 interface MockData {
@@ -199,6 +201,7 @@ interface MockData {
   comments: CommentItem[];
   segments: SegmentDetailsDto[];
   sequences: SequenceDetailsDto[];
+  redirects: RedirectDetailsDto[];
   scenario: string;
 }
 
@@ -412,6 +415,7 @@ class LeadCMSDataService {
       comments: JSON.parse(JSON.stringify(scenario.comments || [])),
       segments: JSON.parse(JSON.stringify(scenario.segments || [])),
       sequences: JSON.parse(JSON.stringify(scenario.sequences || [])),
+      redirects: JSON.parse(JSON.stringify(scenario.redirects || [])),
       scenario: scenario.name
     };
   }
@@ -1665,6 +1669,270 @@ class LeadCMSDataService {
   }
 
   /**
+   * Trigger auto-discovery of redirects on the server side.
+   * Must be called before syncing redirects.
+   */
+  async discoverRedirects(): Promise<void> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose('[MOCK] Discovering redirects (no-op in mock mode)');
+      return;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Redirect operations require authentication. Please configure LEADCMS_API_KEY.');
+    }
+
+    if (!this.baseURL) {
+      throw new Error('LeadCMS URL is not configured.');
+    }
+
+    try {
+      logger.verbose('[API] Triggering redirect discovery');
+      await axios.post(`${this.baseURL}/api/redirects/discover`, null, {
+        headers: this.getApiHeaders(),
+      });
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+      console.error('[API] Failed to trigger redirect discovery:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all redirects from LeadCMS (paginated)
+   */
+  async getAllRedirects(): Promise<RedirectDetailsDto[]> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose('[MOCK] Getting all redirects');
+      return [...(this.mockData.redirects || [])];
+    }
+
+    if (!this.apiKey) {
+      logger.verbose('[API] Redirects require authentication — no API key configured, skipping');
+      return [];
+    }
+
+    if (!this.baseURL) {
+      throw new Error('LeadCMS URL is not configured.');
+    }
+
+    const allRedirects: RedirectDetailsDto[] = [];
+    let syncToken = '';
+    const limit = 100;
+
+    while (true) {
+      try {
+        const url = new URL(`${this.baseURL}/api/redirects/sync`);
+        url.searchParams.set('filter[limit]', String(limit));
+        if (syncToken) url.searchParams.set('syncToken', syncToken);
+
+        logger.verbose(`[API] Fetching redirects (syncToken=${syncToken || '(none)'})`);
+
+        const res: AxiosResponse<{ items?: RedirectDetailsDto[]; deleted?: number[] }> = await axios.get(
+          url.toString(),
+          { headers: this.getApiHeaders() }
+        );
+
+        if (res.status === 204) break;
+
+        const batch: RedirectDetailsDto[] = Array.isArray(res.data?.items) ? res.data.items : [];
+        allRedirects.push(...batch);
+
+        const nextToken: string = res.headers['x-next-sync-token'] || '';
+        if (!nextToken || nextToken === syncToken || batch.length < limit) break;
+        syncToken = nextToken;
+      } catch (error: any) {
+        if (error.response?.status === 401) {
+          throw formatAuthenticationError(error);
+        }
+        console.error('[API] Failed to fetch redirects:', error.message);
+        throw error;
+      }
+    }
+
+    return allRedirects;
+  }
+
+  /**
+   * Get a single redirect by ID
+   */
+  async getRedirectById(id: number): Promise<RedirectDetailsDto | null> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose(`[MOCK] Getting redirect with ID: ${id}`);
+      return this.mockData.redirects?.find(r => r.id === id) ?? null;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Redirect operations require authentication. Please configure LEADCMS_API_KEY.');
+    }
+
+    if (!this.baseURL) {
+      throw new Error('LeadCMS URL is not configured.');
+    }
+
+    try {
+      logger.verbose(`[API] Getting redirect with ID: ${id}`);
+      const res: AxiosResponse<RedirectDetailsDto> = await axios.get(
+        `${this.baseURL}/api/redirects/${id}`,
+        { headers: this.getApiHeaders() }
+      );
+      return res.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) return null;
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+      console.error('[API] Failed to get redirect:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Create redirect in LeadCMS
+   */
+  async createRedirect(dto: RedirectCreateDto): Promise<RedirectDetailsDto> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose('[MOCK] Creating redirect');
+      const newId = (this.mockData.redirects?.length ?? 0) + 1;
+      const redirect: RedirectDetailsDto = {
+        id: newId,
+        sourceType: dto.sourceType,
+        targetType: dto.targetType,
+        kind: dto.kind,
+        fromPath: dto.fromPath ?? null,
+        fromLanguage: dto.fromLanguage ?? null,
+        fromSlug: dto.fromSlug ?? null,
+        fromContentId: dto.fromContentId ?? null,
+        toUrl: dto.toUrl ?? null,
+        toPath: dto.toPath ?? null,
+        toLanguage: dto.toLanguage ?? null,
+        toSlug: dto.toSlug ?? null,
+        toContentId: dto.toContentId ?? null,
+
+        isAutoDiscovered: false,
+        isAutoDiscoverySuppressed: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: null,
+      };
+      this.mockData.redirects = this.mockData.redirects || [];
+      this.mockData.redirects.push(redirect);
+      return redirect;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Redirect operations require authentication. Please configure LEADCMS_API_KEY.');
+    }
+
+    if (!this.baseURL) {
+      throw new Error('LeadCMS URL is not configured.');
+    }
+
+    try {
+      logger.verbose('[API] Creating redirect');
+      const res: AxiosResponse<RedirectDetailsDto> = await axios.post(
+        `${this.baseURL}/api/redirects`,
+        dto,
+        { headers: this.getApiHeaders() }
+      );
+      return res.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+      const msg = formatApiValidationErrors(error.response);
+      console.error('[API] Failed to create redirect:', msg);
+      throw error;
+    }
+  }
+
+  /**
+   * Update redirect in LeadCMS
+   */
+  async updateRedirect(id: number, dto: RedirectUpdateDto): Promise<RedirectDetailsDto> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose(`[MOCK] Updating redirect with ID: ${id}`);
+      const existing = this.mockData.redirects?.find(r => r.id === id);
+      if (!existing) throw new Error(`Redirect ${id} not found`);
+      Object.assign(existing, dto, { updatedAt: new Date().toISOString() });
+      return existing;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Redirect operations require authentication. Please configure LEADCMS_API_KEY.');
+    }
+
+    if (!this.baseURL) {
+      throw new Error('LeadCMS URL is not configured.');
+    }
+
+    try {
+      logger.verbose(`[API] Updating redirect with ID: ${id}`);
+      const res: AxiosResponse<RedirectDetailsDto> = await axios.patch(
+        `${this.baseURL}/api/redirects/${id}`,
+        dto,
+        { headers: this.getApiHeaders() }
+      );
+      return res.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+      const msg = formatApiValidationErrors(error.response);
+      console.error('[API] Failed to update redirect:', msg);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete redirect in LeadCMS
+   */
+  async deleteRedirect(id: number): Promise<void> {
+    this._initialize();
+
+    if (this.useMock && this.mockData) {
+      logger.verbose(`[MOCK] Deleting redirect with ID: ${id}`);
+      const index = this.mockData.redirects?.findIndex(r => r.id === id) ?? -1;
+      if (index !== -1) {
+        this.mockData.redirects!.splice(index, 1);
+      }
+      return;
+    }
+
+    if (!this.apiKey) {
+      throw new Error('Redirect operations require authentication. Please configure LEADCMS_API_KEY.');
+    }
+
+    if (!this.baseURL) {
+      throw new Error('LeadCMS URL is not configured.');
+    }
+
+    try {
+      logger.verbose(`[API] Deleting redirect with ID: ${id}`);
+      await axios.delete(`${this.baseURL}/api/redirects/${id}`, {
+        headers: this.getApiHeaders(),
+      });
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw formatAuthenticationError(error);
+      }
+      console.error('[API] Failed to delete redirect:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Create content type in LeadCMS or mock
    */
   async createContentType(contentType: Partial<ContentType>): Promise<ContentType> {
@@ -2053,6 +2321,7 @@ class LeadCMSDataService {
       comments: JSON.parse(JSON.stringify(scenario.comments || [])),
       segments: JSON.parse(JSON.stringify(scenario.segments || [])),
       sequences: JSON.parse(JSON.stringify(scenario.sequences || [])),
+      redirects: JSON.parse(JSON.stringify(scenario.redirects || [])),
       scenario: scenario.name
     };
 
@@ -2082,6 +2351,7 @@ class LeadCMSDataService {
       comments: [...this.mockData.comments],
       segments: [...this.mockData.segments],
       sequences: [...this.mockData.sequences],
+      redirects: [...(this.mockData.redirects || [])],
       scenario: this.currentScenario?.name || ''
     };
   }

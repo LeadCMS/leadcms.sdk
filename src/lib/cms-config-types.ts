@@ -134,3 +134,10 @@ export function isSegmentsSupported(): boolean {
 export function isSequencesSupported(): boolean {
   return isEntitySupported('Sequence') || isEntitySupported('Sequences');
 }
+
+/**
+ * Check if redirects are supported
+ */
+export function isRedirectsSupported(): boolean {
+  return isEntitySupported('Redirect') || isEntitySupported('Redirects');
+}

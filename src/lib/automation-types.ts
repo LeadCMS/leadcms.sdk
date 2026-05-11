@@ -268,6 +268,224 @@ export type EmailTemplateIdNameMap = Map<number, string>;
 /** Map of email template name → ID, used for push transformations. */
 export type EmailTemplateNameIdMap = Map<string, number>;
 
+// ── Redirects ──────────────────────────────────────────────────────────
+
+export type RedirectSourceType = "InternalPath" | "ContentSlug" | "ContentId";
+export type RedirectTargetType = "ExternalUrl" | "InternalPath" | "ContentSlug" | "ContentId";
+export type RedirectKind = "Permanent" | "Temporary";
+
+export interface RedirectDetailsDto {
+  id: number;
+  sourceType: RedirectSourceType;
+  targetType: RedirectTargetType;
+  kind: RedirectKind;
+  fromPath: string | null;
+  fromLanguage: string | null;
+  fromSlug: string | null;
+  fromContentId: number | null;
+  toUrl: string | null;
+  toPath: string | null;
+  toLanguage: string | null;
+  toSlug: string | null;
+  toContentId: number | null;
+  isAutoDiscovered: boolean;
+  isAutoDiscoverySuppressed: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface RedirectCreateDto {
+  sourceType: RedirectSourceType;
+  targetType: RedirectTargetType;
+  kind: RedirectKind;
+  fromPath?: string | null;
+  fromLanguage?: string | null;
+  fromSlug?: string | null;
+  fromContentId?: number | null;
+  toUrl?: string | null;
+  toPath?: string | null;
+  toLanguage?: string | null;
+  toSlug?: string | null;
+  toContentId?: number | null;
+}
+
+export interface RedirectUpdateDto {
+  kind?: RedirectKind;
+  fromPath?: string | null;
+  fromLanguage?: string | null;
+  fromSlug?: string | null;
+  fromContentId?: number | null;
+  toUrl?: string | null;
+  toPath?: string | null;
+  toLanguage?: string | null;
+  toSlug?: string | null;
+  toContentId?: number | null;
+}
+
+/** Compute a stable surrogate key from the "from" fields (which must be unique per redirect). */
+export function redirectSurrogateKey(
+  r: Pick<LocalRedirect | RedirectDetailsDto, 'fromPath' | 'fromLanguage' | 'fromSlug' | 'fromContentId'>
+): string {
+  if (r.fromPath != null) return `path:${r.fromPath}`;
+  if (r.fromSlug != null) return `slug:${r.fromLanguage ?? ''}/${r.fromSlug}`;
+  if (r.fromContentId != null) return `content:${r.fromContentId}`;
+  return 'unknown';
+}
+
+/**
+ * Local YAML representation — id, createdAt, updatedAt, sourceType and targetType
+ * are omitted; sourceType/targetType are auto-detected on push from the populated fields.
+ */
+export interface LocalRedirect {
+  kind: RedirectKind;
+  fromPath?: string | null;
+  fromLanguage?: string | null;
+  fromSlug?: string | null;
+  fromContentId?: number | null;
+  toUrl?: string | null;
+  toPath?: string | null;
+  toLanguage?: string | null;
+  toSlug?: string | null;
+  toContentId?: number | null;
+}
+
+/** A redirect item as stored on disk — `kind` is implied by the YAML section. */
+export type LocalRedirectItem = Omit<LocalRedirect, 'kind'>;
+
+/**
+ * On-disk format for redirects.yaml.
+ * Redirects are split by kind so the `kind` field is not repeated per item.
+ */
+export interface LocalRedirectsFile {
+  permanent?: LocalRedirectItem[];
+  temporary?: LocalRedirectItem[];
+}
+
+/** Flatten a LocalRedirectsFile into LocalRedirect[] with `kind` injected. */
+export function flattenRedirectsFile(file: LocalRedirectsFile): LocalRedirect[] {
+  const permanents = (file.permanent ?? []).map(r => ({ ...r, kind: 'Permanent' as RedirectKind }));
+  const temporaries = (file.temporary ?? []).map(r => ({ ...r, kind: 'Temporary' as RedirectKind }));
+  return [...permanents, ...temporaries];
+}
+
+/** Build a LocalRedirectsFile from a flat LocalRedirect[] by splitting on kind. */
+export function buildRedirectsFile(redirects: LocalRedirect[]): LocalRedirectsFile {
+  const permanent = redirects
+    .filter(r => r.kind === 'Permanent')
+    .map(({ kind: _k, ...rest }): LocalRedirectItem => rest);
+  const temporary = redirects
+    .filter(r => r.kind === 'Temporary')
+    .map(({ kind: _k, ...rest }): LocalRedirectItem => rest);
+  const file: LocalRedirectsFile = {};
+  if (permanent.length) file.permanent = permanent;
+  if (temporary.length) file.temporary = temporary;
+  return file;
+}
+
+/**
+ * Strip `fromLanguage` / `toLanguage` from redirects where they match
+ * `language`. Used when writing YAML in single-language mode so those fields
+ * are not repeated on every item.
+ */
+export function stripDefaultLanguage(
+  redirects: LocalRedirect[],
+  language: string,
+): LocalRedirect[] {
+  return redirects.map(r => {
+    const result = { ...r };
+    if (result.fromLanguage === language) { delete result.fromLanguage; }
+    if (result.toLanguage === language) { delete result.toLanguage; }
+    return result;
+  });
+}
+
+/**
+ * Inject `fromLanguage` / `toLanguage` into ContentSlug redirects that are
+ * missing them. Used when reading YAML in single-language mode to restore the
+ * fields before sending to the API.
+ */
+export function injectDefaultLanguage(
+  redirects: LocalRedirect[],
+  language: string,
+): LocalRedirect[] {
+  return redirects.map(r => {
+    const result = { ...r };
+    if (r.fromSlug != null && r.fromLanguage == null) {
+      result.fromLanguage = language;
+    }
+    if (r.toSlug != null && r.toLanguage == null) {
+      result.toLanguage = language;
+    }
+    return result;
+  });
+}
+
+/** Derive sourceType from which fields are populated. */
+export function detectSourceType(r: LocalRedirect): RedirectSourceType {
+  if (r.fromPath != null) return "InternalPath";
+  if (r.fromContentId != null) return "ContentId";
+  return "ContentSlug";
+}
+
+/** Derive targetType from which fields are populated. */
+export function detectTargetType(r: LocalRedirect): RedirectTargetType {
+  if (r.toUrl != null) return "ExternalUrl";
+  if (r.toPath != null) return "InternalPath";
+  if (r.toContentId != null) return "ContentId";
+  return "ContentSlug";
+}
+
+/** Convert a RedirectDetailsDto to local YAML format — strips server-managed fields (id, dates). */
+export function toLocalRedirect(dto: RedirectDetailsDto): LocalRedirect {
+  const r: LocalRedirect = {
+    kind: dto.kind,
+  };
+  if (dto.fromPath != null) r.fromPath = dto.fromPath;
+  if (dto.fromLanguage != null) r.fromLanguage = dto.fromLanguage;
+  if (dto.fromSlug != null) r.fromSlug = dto.fromSlug;
+  if (dto.fromContentId != null) r.fromContentId = dto.fromContentId;
+  if (dto.toUrl != null) r.toUrl = dto.toUrl;
+  if (dto.toPath != null) r.toPath = dto.toPath;
+  if (dto.toLanguage != null) r.toLanguage = dto.toLanguage;
+  if (dto.toSlug != null) r.toSlug = dto.toSlug;
+  if (dto.toContentId != null) r.toContentId = dto.toContentId;
+  return r;
+}
+
+/** Convert a LocalRedirect to a RedirectCreateDto. */
+export function toRedirectCreateDto(r: LocalRedirect): RedirectCreateDto {
+  return {
+    sourceType: detectSourceType(r),
+    targetType: detectTargetType(r),
+    kind: r.kind,
+    fromPath: r.fromPath ?? null,
+    fromLanguage: r.fromLanguage ?? null,
+    fromSlug: r.fromSlug ?? null,
+    fromContentId: r.fromContentId ?? null,
+    toUrl: r.toUrl ?? null,
+    toPath: r.toPath ?? null,
+    toLanguage: r.toLanguage ?? null,
+    toSlug: r.toSlug ?? null,
+    toContentId: r.toContentId ?? null,
+  };
+}
+
+/** Convert a LocalRedirect to a RedirectUpdateDto (writable fields only). */
+export function toRedirectUpdateDto(r: LocalRedirect): RedirectUpdateDto {
+  return {
+    kind: r.kind,
+    fromPath: r.fromPath ?? null,
+    fromLanguage: r.fromLanguage ?? null,
+    fromSlug: r.fromSlug ?? null,
+    fromContentId: r.fromContentId ?? null,
+    toUrl: r.toUrl ?? null,
+    toPath: r.toPath ?? null,
+    toLanguage: r.toLanguage ?? null,
+    toSlug: r.toSlug ?? null,
+    toContentId: r.toContentId ?? null,
+  };
+}
+
 /**
  * Recursively strip null values and empty arrays from an object
  * to keep local files clean and compact.

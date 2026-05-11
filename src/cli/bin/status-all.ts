@@ -12,6 +12,7 @@ import { buildEmailTemplateStatus, getRemoteGroupLabel } from '../../scripts/pus
 import { getSettingsStatusData, renderSettingsStatus, formatSettingValue, formatSettingDiff, renderSettingDiffPreview } from '../../scripts/push-settings.js';
 import { buildSegmentStatus } from '../../scripts/push-segments.js';
 import { buildSequenceStatus } from '../../scripts/push-sequences.js';
+import { buildRedirectStatus } from '../../scripts/push-redirects.js';
 import { initVerboseFromArgs } from '../../lib/logger.js';
 import { colorConsole, statusColors } from '../../lib/console-colors.js';
 import { defaultLanguage, leadCMSApiKey, resolveIdentity } from '../../scripts/leadcms-helpers.js';
@@ -25,6 +26,7 @@ import type { EmailTemplateOperation, EmailTemplateStatusResult } from '../../sc
 import type { SettingsStatusResult } from '../../lib/settings-types.js';
 import type { SegmentOperation, SegmentStatusResult } from '../../scripts/push-segments.js';
 import type { SequenceOperation, SequenceStatusResult } from '../../scripts/push-sequences.js';
+import type { RedirectOperation, RedirectStatusResult } from '../../scripts/push-redirects.js';
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
@@ -298,9 +300,10 @@ async function statusAll() {
     let settingsResult: SettingsStatusResult | null = null;
     let segmentResult: SegmentStatusResult | null = null;
     let sequenceResult: SequenceStatusResult | null = null;
+    let redirectResult: RedirectStatusResult | null = null;
 
     try {
-      [contentResult, commentResult, mediaResult, emailResult, settingsResult, segmentResult, sequenceResult] = await Promise.all([
+      [contentResult, commentResult, mediaResult, emailResult, settingsResult, segmentResult, sequenceResult, redirectResult] = await Promise.all([
         getContentStatusData({ showDelete, remoteContext }).catch((err: any) => {
           spinner.update('Fetching status… (content failed)');
           return null;
@@ -337,6 +340,12 @@ async function statusAll() {
             return null;
           })
           : Promise.resolve(null),
+        canCheckEmailTemplates
+          ? buildRedirectStatus({ showDelete, remoteContext }).catch((err: any) => {
+            spinner.update('Fetching status… (redirects failed)');
+            return null;
+          })
+          : Promise.resolve(null),
       ]);
       spinner.stop();
     } catch (err) {
@@ -352,6 +361,7 @@ async function statusAll() {
     const emailOps = emailResult?.operations ?? null;
     const segmentOps = segmentResult?.operations ?? null;
     const sequenceOps = sequenceResult?.operations ?? null;
+    const redirectOps = redirectResult?.operations ?? null;
 
     // Count changes per section
     const contentChanges = contentOps
@@ -385,6 +395,10 @@ async function statusAll() {
       ? sequenceOps.filter(op => showDelete ? true : op.type !== 'delete').length
       : 0;
 
+    const redirectChanges = redirectOps
+      ? redirectOps.filter(op => showDelete ? true : op.type !== 'delete').length
+      : 0;
+
     // Count up-to-date items per section
     const contentSkips = contentResult
       ? contentResult.totalLocal - contentChanges
@@ -414,7 +428,11 @@ async function statusAll() {
       ? sequenceResult.totalLocal - sequenceChanges
       : 0;
 
-    const totalChanges = contentChanges + commentChanges + mediaChanges + emailChanges + settingsChanges + segmentChanges + sequenceChanges;
+    const redirectSkips = redirectResult
+      ? redirectResult.totalLocal - redirectChanges
+      : 0;
+
+    const totalChanges = contentChanges + commentChanges + mediaChanges + emailChanges + settingsChanges + segmentChanges + sequenceChanges + redirectChanges;
 
     if (totalChanges === 0) {
       colorConsole.success('\n✅ Everything is in sync!\n');
@@ -433,6 +451,9 @@ async function statusAll() {
       }
       if (canCheckEmailTemplates && sequenceResult) {
         console.log(`   🔗 Sequences:        ${sequenceSkips > 0 ? `${sequenceSkips} item(s) ` : ''}up to date`);
+      }
+      if (canCheckEmailTemplates && redirectResult) {
+        console.log(`   🔀 Redirects:        ${redirectSkips > 0 ? `${redirectSkips} item(s) ` : ''}up to date`);
       }
       console.log('');
       process.exit(0);
@@ -503,7 +524,47 @@ async function statusAll() {
       renderSequenceSection(sequenceOps);
       console.log('');
     }
-
+    // ── Redirects section ──
+    if (redirectOps && redirectChanges > 0) {
+      colorConsole.important(`  🔀 Redirects (${redirectChanges} change${redirectChanges !== 1 ? 's' : ''}):`)
+      const fmtSlug = (lang: string | null | undefined, slug: string | null | undefined) =>
+        slug ? (lang ? `[${lang}/${slug}]` : `[${slug}]`) : null;
+      for (const op of redirectOps) {
+        if (op.type === 'skip') continue;
+        if (op.type === 'delete' && !showDelete) continue;
+        const from =
+          op.local?.fromPath ??
+          fmtSlug(op.local?.fromLanguage, op.local?.fromSlug) ??
+          (op.local?.fromContentId != null ? `ContentId:${op.local.fromContentId}` : null) ??
+          op.remote?.fromPath ??
+          fmtSlug(op.remote?.fromLanguage, op.remote?.fromSlug) ??
+          (op.remote?.fromContentId != null ? `ContentId:${op.remote.fromContentId}` : null) ??
+          'unknown';
+        const to =
+          op.local?.toPath ?? op.local?.toUrl ??
+          fmtSlug(op.local?.toLanguage, op.local?.toSlug) ??
+          (op.local?.toContentId != null ? `ContentId:${op.local.toContentId}` : null) ??
+          op.remote?.toPath ?? op.remote?.toUrl ??
+          fmtSlug(op.remote?.toLanguage, op.remote?.toSlug) ??
+          (op.remote?.toContentId != null ? `ContentId:${op.remote.toContentId}` : null) ??
+          'unknown';
+        const kindCode = (op.local?.kind ?? op.remote?.kind) === 'Permanent' ? '301' : '302';
+        const label = `[${kindCode}] ${from} → ${to}`;
+        const idLabel = op.remote?.id ? colorConsole.gray(`(ID: ${op.remote.id})`) : '';
+        switch (op.type) {
+          case 'create':
+            colorConsole.log(`        ${statusColors.created('new:      ')} ${colorConsole.highlight(label)}`);
+            break;
+          case 'update':
+            colorConsole.log(`        ${statusColors.modified('modified: ')} ${colorConsole.highlight(label)} ${idLabel}`);
+            break;
+          case 'delete':
+            colorConsole.log(`        ${statusColors.conflict('deleted:  ')} ${colorConsole.highlight(label)} ${idLabel}`);
+            break;
+        }
+      }
+      console.log('');
+    }
     // ── Summary ──
     console.log('─'.repeat(80));
 
@@ -591,6 +652,20 @@ async function statusAll() {
         conflicts: counts.conflict || 0,
         deletes: showDelete ? (counts.delete || 0) : 0,
         skips: sequenceSkips,
+      }));
+    }
+
+    if (canCheckEmailTemplates && redirectOps) {
+      const counts = redirectOps.reduce(
+        (acc, op) => { acc[op.type] = (acc[op.type] || 0) + 1; return acc; },
+        {} as Record<string, number>,
+      );
+      console.log(renderSummaryLine('🔀 Redirects:       ', {
+        creates: counts.create || 0,
+        updates: counts.update || 0,
+        conflicts: 0,
+        deletes: showDelete ? (counts.delete || 0) : 0,
+        skips: redirectSkips,
       }));
     }
 

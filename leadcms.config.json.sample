@@ -6,6 +6,17 @@
   "emailTemplatesDir": ".leadcms/email-templates",
   "enableDrafts": false,
 
+  "_comment_redirects": "Redirects configuration (optional).",
+  "redirectsDir": ".leadcms/redirects",
+  "languageDomains": {
+    "en": "https://en.example.com",
+    "de": "https://de.example.com"
+  },
+  "redirects": {
+    "outputDir": "redirects",
+    "pathPattern": "/{language}/{slug}"
+  },
+
   "_comment_remotes": "Multi-remote setup (optional). Omit 'remotes' for single-remote mode.",
   "remotes": {
     "production": {

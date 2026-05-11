@@ -2,7 +2,7 @@
   "openapi": "3.0.1",
   "info": {
     "title": "LeadCMS API",
-    "version": "1.5.15.0"
+    "version": "1.5.16.0"
   },
   "paths": {
     "/api/accounts/tags": {
@@ -20548,10 +20548,434 @@
         }
       }
     },
-    "/api/redirects/discover": {
+    "/api/redirects": {
+      "post": {
+        "tags": [
+          "Redirects"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedirectCreateDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedirectCreateDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedirectCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedirectDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedirectDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "tags": [
           "Redirects"
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RedirectDetailsDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RedirectDetailsDto"
+                  }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RedirectDetailsDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/redirects/{id}": {
+      "patch": {
+        "tags": [
+          "Redirects"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedirectUpdateDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedirectUpdateDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedirectUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedirectDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedirectDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Redirects"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Redirects"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedirectDetailsDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedirectDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/redirects/discover": {
+      "post": {
+        "tags": [
+          "Redirects"
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -20588,6 +21012,176 @@
           },
           "403": {
             "description": "Forbidden"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/redirects/bulk": {
+      "delete": {
+        "tags": [
+          "Redirects"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            },
+            "text/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            },
+            "text/csv": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/redirects/export": {
+      "get": {
+        "tags": [
+          "Redirects"
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server Error",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/redirects/sync": {
+      "get": {
+        "tags": [
+          "Redirects"
+        ],
+        "parameters": [
+          {
+            "name": "syncToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "500": {
             "description": "Server Error",
@@ -32390,6 +32984,12 @@
             "type": "string",
             "example": "string"
           },
+          "contentBody": {
+            "title": "Content Body",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
           "prompt": {
             "title": "Prompt",
             "minLength": 1,
@@ -32432,6 +33032,12 @@
             "title": "Content Slug",
             "minLength": 1,
             "type": "string",
+            "example": "string"
+          },
+          "contentBody": {
+            "title": "Content Body",
+            "type": "string",
+            "nullable": true,
             "example": "string"
           },
           "prompt": {
@@ -37438,34 +38044,317 @@
         },
         "additionalProperties": false
       },
-      "RedirectDetailsDto": {
+      "RedirectCreateDto": {
+        "required": [
+          "kind",
+          "sourceType",
+          "targetType"
+        ],
         "type": "object",
         "properties": {
-          "contentId": {
-            "title": "Content Id",
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "fromSlug": {
-            "title": "From Slug",
+          "sourceType": {
+            "title": "Source Type",
+            "enum": [
+              "InternalPath",
+              "ContentSlug",
+              "ContentId"
+            ],
             "type": "string",
-            "example": "string"
+            "example": "InternalPath"
           },
-          "toSlug": {
-            "title": "To Slug",
+          "fromPath": {
+            "title": "From Path",
             "type": "string",
+            "nullable": true,
             "example": "string"
           },
           "fromLanguage": {
             "title": "From Language",
             "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "fromSlug": {
+            "title": "From Slug",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "fromContentId": {
+            "title": "From Content Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "kind": {
+            "title": "Kind",
+            "enum": [
+              "Permanent",
+              "Temporary"
+            ],
+            "type": "string",
+            "example": "0"
+          },
+          "targetType": {
+            "title": "Target Type",
+            "enum": [
+              "ExternalUrl",
+              "InternalPath",
+              "ContentSlug",
+              "ContentId"
+            ],
+            "type": "string",
+            "example": "ExternalUrl"
+          },
+          "toUrl": {
+            "title": "To Url",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "toPath": {
+            "title": "To Path",
+            "type": "string",
+            "nullable": true,
             "example": "string"
           },
           "toLanguage": {
             "title": "To Language",
             "type": "string",
+            "nullable": true,
             "example": "string"
+          },
+          "toSlug": {
+            "title": "To Slug",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "toContentId": {
+            "title": "To Content Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "RedirectDetailsDto": {
+        "required": [
+          "kind",
+          "sourceType",
+          "targetType"
+        ],
+        "type": "object",
+        "properties": {
+          "sourceType": {
+            "title": "Source Type",
+            "enum": [
+              "InternalPath",
+              "ContentSlug",
+              "ContentId"
+            ],
+            "type": "string",
+            "example": "InternalPath"
+          },
+          "fromPath": {
+            "title": "From Path",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "fromLanguage": {
+            "title": "From Language",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "fromSlug": {
+            "title": "From Slug",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "fromContentId": {
+            "title": "From Content Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "kind": {
+            "title": "Kind",
+            "enum": [
+              "Permanent",
+              "Temporary"
+            ],
+            "type": "string",
+            "example": "0"
+          },
+          "targetType": {
+            "title": "Target Type",
+            "enum": [
+              "ExternalUrl",
+              "InternalPath",
+              "ContentSlug",
+              "ContentId"
+            ],
+            "type": "string",
+            "example": "ExternalUrl"
+          },
+          "toUrl": {
+            "title": "To Url",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "toPath": {
+            "title": "To Path",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "toLanguage": {
+            "title": "To Language",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "toSlug": {
+            "title": "To Slug",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "toContentId": {
+            "title": "To Content Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "isAutoDiscovered": {
+            "title": "Is Auto Discovered",
+            "type": "boolean",
+            "example": true
+          },
+          "createdAt": {
+            "title": "Created At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "example": "2023-04-18T12:00:00.0000000Z"
+          },
+          "updatedAt": {
+            "title": "Updated At",
+            "pattern": "^(\\d{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])T(2[0-4]|1[0-9]|0[1-9]):(2[0-4]|1[0-9]|0[1-9]):([1-5]?0[0-9]).(\\d{7})Z$",
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2023-04-18T12:00:00.0000000Z"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RedirectUpdateDto": {
+        "type": "object",
+        "properties": {
+          "sourceType": {
+            "title": "Source Type",
+            "enum": [
+              "InternalPath",
+              "ContentSlug",
+              "ContentId"
+            ],
+            "type": "string",
+            "nullable": true,
+            "example": "InternalPath"
+          },
+          "fromPath": {
+            "title": "From Path",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "fromLanguage": {
+            "title": "From Language",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "fromSlug": {
+            "title": "From Slug",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "fromContentId": {
+            "title": "From Content Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "kind": {
+            "title": "Kind",
+            "enum": [
+              "Permanent",
+              "Temporary"
+            ],
+            "type": "string",
+            "nullable": true,
+            "example": "0"
+          },
+          "targetType": {
+            "title": "Target Type",
+            "enum": [
+              "ExternalUrl",
+              "InternalPath",
+              "ContentSlug",
+              "ContentId"
+            ],
+            "type": "string",
+            "nullable": true,
+            "example": "ExternalUrl"
+          },
+          "toUrl": {
+            "title": "To Url",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "toPath": {
+            "title": "To Path",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "toLanguage": {
+            "title": "To Language",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "toSlug": {
+            "title": "To Slug",
+            "type": "string",
+            "nullable": true,
+            "example": "string"
+          },
+          "toContentId": {
+            "title": "To Content Id",
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
           }
         },
         "additionalProperties": false

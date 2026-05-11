@@ -33,12 +33,24 @@ const config = getConfig();
 export let leadCMSUrl = config.url;
 export let leadCMSApiKey = config.apiKey;
 export const defaultLanguage = config.defaultLanguage;
+
+/**
+ * In single-language mode (no multi-language domain mapping configured),
+ * this is the effective language code. `undefined` when multiple languages are
+ * configured via `languageDomains`, which signals that `fromLanguage` /
+ * `toLanguage` are meaningful and must be preserved in `redirects.yaml`.
+ */
+export const singleLanguage: string | undefined =
+  !config.languageDomains || Object.keys(config.languageDomains).length <= 1
+    ? config.defaultLanguage
+    : undefined;
 export const CONTENT_DIR = path.resolve(config.contentDir);
 export const MEDIA_DIR = path.resolve(config.mediaDir);
 export const EMAIL_TEMPLATES_DIR = path.resolve(config.emailTemplatesDir);
 export const SETTINGS_DIR = path.resolve(config.settingsDir || ".leadcms/settings");
 export const SEGMENTS_DIR = path.resolve(config.segmentsDir || ".leadcms/segments");
 export const SEQUENCES_DIR = path.resolve(config.sequencesDir || ".leadcms/sequences");
+export const REDIRECTS_DIR = path.resolve(config.redirectsDir || ".leadcms/redirects");
 
 // Fetch content types dynamically from LeadCMS API to build typeMap
 // Content types are automatically detected and don't need to be configured

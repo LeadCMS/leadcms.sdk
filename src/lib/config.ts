@@ -23,6 +23,28 @@ export interface LeadCMSConfig {
   segmentsDir: string;
   /** Sequences directory path (relative to project root) */
   sequencesDir: string;
+  /** Redirects directory path (relative to project root) */
+  redirectsDir: string;
+  /**
+   * Language → base URL mapping for domain-per-language deployments.
+   * Key = language code, value = full base URL (no trailing slash).
+   * Example: { "en": "https://en.example.com", "de": "https://de.example.com" }
+   */
+  languageDomains?: Record<string, string>;
+  /** Redirects map generation settings */
+  redirects?: {
+    /**
+     * Output directory for generated redirect map files (relative to project root).
+     * The SDK writes `{outputDir}/301.map` and `{outputDir}/302.map`.
+     * Default: "redirects"
+     */
+    outputDir?: string;
+    /**
+     * Path template for resolving ContentSlug-type redirects.
+     * Tokens: {language}, {slug}, {domain}. Default: "/{language}/{slug}"
+     */
+    pathPattern?: string;
+  };
   /** Enable draft content support */
   enableDrafts: boolean;
   /** Force preview mode on/off (overrides environment detection) */
@@ -60,6 +82,7 @@ const DEFAULT_CONFIG: Partial<LeadCMSConfig> = {
   settingsDir: ".leadcms/settings",
   segmentsDir: ".leadcms/segments",
   sequencesDir: ".leadcms/sequences",
+  redirectsDir: ".leadcms/redirects",
   enableDrafts: false,
 };
 
@@ -100,6 +123,9 @@ export function loadConfig(): LeadCMSConfig {
     settingsDir: mergedConfig.settingsDir || DEFAULT_CONFIG.settingsDir!,
     segmentsDir: mergedConfig.segmentsDir || DEFAULT_CONFIG.segmentsDir!,
     sequencesDir: mergedConfig.sequencesDir || DEFAULT_CONFIG.sequencesDir!,
+    redirectsDir: mergedConfig.redirectsDir || DEFAULT_CONFIG.redirectsDir!,
+    languageDomains: mergedConfig.languageDomains,
+    redirects: mergedConfig.redirects,
     enableDrafts: mergedConfig.enableDrafts || DEFAULT_CONFIG.enableDrafts!,
     preview: mergedConfig.preview, // Optional - undefined if not provided
     remotes: mergedConfig.remotes,
@@ -264,6 +290,10 @@ function loadConfigFromEnv(): Partial<LeadCMSConfig> {
 
   if (process.env.LEADCMS_SEQUENCES_DIR) {
     config.sequencesDir = process.env.LEADCMS_SEQUENCES_DIR;
+  }
+
+  if (process.env.LEADCMS_REDIRECTS_DIR) {
+    config.redirectsDir = process.env.LEADCMS_REDIRECTS_DIR;
   }
 
   if (process.env.LEADCMS_ENABLE_DRAFTS) {

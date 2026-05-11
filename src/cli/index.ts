@@ -94,6 +94,9 @@ switch (command) {
   case 'pull-sequences':
     runScript('pull-sequences.js', commandArgs);
     break;
+  case 'pull-redirects':
+    runScript('pull-redirects.js', commandArgs);
+    break;
   case 'push':
     runScript('push-all.js', commandArgs);
     break;
@@ -118,6 +121,12 @@ switch (command) {
   case 'push-sequences':
     runScript('push-sequences.js', commandArgs);
     break;
+  case 'push-redirects':
+    runScript('push-redirects.js', commandArgs);
+    break;
+  case 'generate-redirects-map':
+    runScript('generate-redirects-map.js', commandArgs);
+    break;
   case 'status':
     runScript('status-all.js', commandArgs);
     break;
@@ -141,6 +150,9 @@ switch (command) {
     break;
   case 'status-sequences':
     runScript('status-sequences.js', commandArgs);
+    break;
+  case 'status-redirects':
+    runScript('status-redirects.js', commandArgs);
     break;
   case 'watch':
     runScript('watch.js', commandArgs);
@@ -207,6 +219,8 @@ Usage:
   leadcms pull-settings [options] - Pull CMS settings locally
     --name <key>         - Pull a specific setting by key name
     --reset              - Delete local settings directory, then pull fresh
+  leadcms pull-redirects [options] - Pull redirects from LeadCMS (auto-discovers first)
+    --reset              - Delete local redirects file and sync token, then pull fresh
 
   Push commands:
   leadcms push [options] - Push all local changes (content + media) to LeadCMS
@@ -237,6 +251,14 @@ Usage:
     --name <key>         - Push a specific setting by key name
     --dry-run            - Show what would be pushed without pushing
     --force              - Push all tracked settings even if unchanged
+  leadcms push-redirects [options] - Push local redirects to LeadCMS
+    --force              - Override remote changes (skip conflict check)
+    --dry-run            - Show what would be pushed without making changes
+    --delete             - Delete remote redirects not present locally
+  leadcms generate-redirects-map [options] - Generate nginx redirect map from local redirects
+    --output, -o <file>  - Override output file path (default: redirects/nginx.map)
+    --language, -l <lang> - Filter to a specific language only
+    --dry-run, -d        - Print the map without writing the file
 
   Status & monitoring:
   leadcms status [options] - Show sync status for all entities (content + media + email templates)
@@ -260,6 +282,8 @@ Usage:
     --id <template-id>   - Show detailed status for specific template by ID
   leadcms status-settings [options] - Show settings sync status
     --name <key>         - Show status for a specific setting by key name
+  leadcms status-redirects [options] - Show redirect sync status only
+    --delete             - Show redirect deletion operations
   leadcms watch          - Watch for real-time updates via Server-Sent Events
 
   Utilities:

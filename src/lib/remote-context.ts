@@ -167,7 +167,7 @@ function resolveApiKeyFromEnv(
 /** Absolute path to a sync token file for a given remote + entity type. */
 export function syncTokenPath(
   ctx: RemoteContext,
-  entityType: "content" | "media" | "comments" | "email-templates" | "segments" | "sequences",
+  entityType: "content" | "media" | "comments" | "email-templates" | "segments" | "sequences" | "redirects",
 ): string {
   return path.join(ctx.stateDir, `${entityType}-sync-token`);
 }
@@ -426,6 +426,8 @@ export interface MetadataMap {
   comments?: Record<string, Record<string, MetadataEntry>>;
   segments?: Record<string, MetadataEntry>;
   sequences?: Record<string, Record<string, MetadataEntry>>;
+  /** Redirect surrogate-key → remote ID mapping. */
+  redirects?: Record<string, number>;
 }
 
 /** Read the metadata-map for a remote. Returns empty map if file doesn't exist. */
@@ -482,6 +484,9 @@ export async function clearMetadataSection(
     ...(map.sequences && Object.keys(map.sequences).length > 0
       ? { sequences: sortNestedMap(map.sequences) }
       : {}),
+    ...(map.redirects && Object.keys(map.redirects).length > 0
+      ? { redirects: sortFlatMap(map.redirects) }
+      : {}),
   };
   await fs.writeFile(
     metadataMapPath(ctx),
@@ -511,6 +516,9 @@ export async function writeMetadataMap(
       : {}),
     ...(map.sequences && Object.keys(map.sequences).length > 0
       ? { sequences: sortNestedMap(map.sequences) }
+      : {}),
+    ...(map.redirects && Object.keys(map.redirects).length > 0
+      ? { redirects: sortFlatMap(map.redirects) }
       : {}),
   };
   await fs.writeFile(

@@ -73,6 +73,7 @@ export function getLeadCMSConfig(): LeadCMSConfig {
       settingsDir: process.env.LEADCMS_SETTINGS_DIR || ".leadcms/settings",
       segmentsDir: process.env.LEADCMS_SEGMENTS_DIR || ".leadcms/segments",
       sequencesDir: process.env.LEADCMS_SEQUENCES_DIR || ".leadcms/sequences",
+      redirectsDir: process.env.LEADCMS_REDIRECTS_DIR || ".leadcms/redirects",
       enableDrafts: process.env.LEADCMS_ENABLE_DRAFTS === "true",
     };
   }

@@ -228,3 +228,7 @@ test-results/
 playwright-report/
 test-results.xml
 site-content
+
+
+# Serena files
+.serena

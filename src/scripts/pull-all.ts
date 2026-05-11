@@ -9,7 +9,7 @@ import fs from "fs/promises";
 import path from "path";
 import axios from "axios";
 import { leadCMSUrl, leadCMSApiKey } from "./leadcms-helpers.js";
-import { setCMSConfig, isContentSupported, isMediaSupported, isCommentsSupported, isEmailTemplatesSupported, isSettingsSupported, isSegmentsSupported, isSequencesSupported } from "../lib/cms-config-types.js";
+import { setCMSConfig, isContentSupported, isMediaSupported, isCommentsSupported, isEmailTemplatesSupported, isSettingsSupported, isSegmentsSupported, isSequencesSupported, isRedirectsSupported } from "../lib/cms-config-types.js";
 import { getConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
 import { syncTokenPath, metadataMapPath, clearMetadataSection } from "../lib/remote-context.js";
@@ -37,6 +37,7 @@ async function fetchAndCacheCMSConfig(baseUrl?: string): Promise<{
   settings: boolean;
   segments: boolean;
   sequences: boolean;
+  redirects: boolean;
 }> {
   try {
     const effectiveUrl = baseUrl || leadCMSUrl;
@@ -55,6 +56,7 @@ async function fetchAndCacheCMSConfig(baseUrl?: string): Promise<{
         settings: isSettingsSupported() && hasApiKey,
         segments: isSegmentsSupported() && hasApiKey,
         sequences: isSequencesSupported() && hasApiKey,
+        redirects: isRedirectsSupported() && hasApiKey,
       };
 
       logger.info(`✅ CMS Configuration received`);
@@ -65,6 +67,7 @@ async function fetchAndCacheCMSConfig(baseUrl?: string): Promise<{
       logger.info(`   - Settings: ${support.settings ? '✓' : '✗'}${isSettingsSupported() && !hasApiKey ? ' (requires auth)' : ''}`);
       logger.info(`   - Segments: ${support.segments ? '✓' : '✗'}${isSegmentsSupported() && !hasApiKey ? ' (requires auth)' : ''}`);
       logger.info(`   - Sequences: ${support.sequences ? '✓' : '✗'}${isSequencesSupported() && !hasApiKey ? ' (requires auth)' : ''}`);
+      logger.info(`   - Redirects: ${support.redirects ? '✓' : '✗'}${isRedirectsSupported() && !hasApiKey ? ' (requires auth)' : ''}`);
       logger.info('');
 
       return support;
@@ -74,7 +77,7 @@ async function fetchAndCacheCMSConfig(baseUrl?: string): Promise<{
     console.warn(`⚠️  Assuming all entities are supported (backward compatibility)\n`);
   }
 
-  return { content: false, media: false, comments: false, emailTemplates: false, settings: false, segments: false, sequences: false };
+  return { content: false, media: false, comments: false, emailTemplates: false, settings: false, segments: false, sequences: false, redirects: false };
 }
 
 /**
@@ -272,6 +275,30 @@ async function resetSequencesState(remoteCtx?: RemoteContext): Promise<void> {
 }
 
 /**
+ * Reset redirects directory and its sync token.
+ */
+export async function resetRedirectsState(remoteCtx?: RemoteContext): Promise<void> {
+  const config = getConfig();
+  const redirectsDir = path.resolve(config.redirectsDir || ".leadcms/redirects");
+
+  try {
+    await fs.rm(redirectsDir, { recursive: true, force: true });
+    logger.verbose(`   ✓ Cleared redirects directory: ${redirectsDir}`);
+  } catch { /* directory may not exist */ }
+
+  if (remoteCtx) {
+    try {
+      await fs.unlink(syncTokenPath(remoteCtx, 'redirects'));
+      logger.verbose(`   ✓ Removed per-remote redirects sync token (${remoteCtx.name})`);
+    } catch { /* not found — ok */ }
+    try {
+      await clearMetadataSection(remoteCtx, 'redirects');
+      logger.verbose(`   ✓ Cleared redirects id-map in metadata.json (${remoteCtx.name})`);
+    } catch { /* not found — ok */ }
+  }
+}
+
+/**
  * Delete all local content, media, comments, and sync tokens.
  * Used by --reset to do a clean pull from scratch.
  * When remoteCtx is provided, also clears per-remote state (sync tokens and metadata).
@@ -286,6 +313,7 @@ async function resetLocalState(remoteCtx?: RemoteContext): Promise<void> {
   await resetSettingsState();
   await resetSegmentsState(remoteCtx);
   await resetSequencesState(remoteCtx);
+  await resetRedirectsState(remoteCtx);
 
   // Clear per-remote metadata
   if (remoteCtx) {
@@ -322,9 +350,9 @@ async function main(options: PullAllOptions = {}): Promise<void> {
   }
 
   // Check which entities are supported
-  const { content, media, comments, emailTemplates, settings, segments, sequences } = await fetchAndCacheCMSConfig(effectiveUrl);
+  const { content, media, comments, emailTemplates, settings, segments, sequences, redirects } = await fetchAndCacheCMSConfig(effectiveUrl);
 
-  if (!content && !media && !comments && !emailTemplates && !settings && !segments && !sequences) {
+  if (!content && !media && !comments && !emailTemplates && !settings && !segments && !sequences && !redirects) {
     console.log(`⏭️  No supported entities found - nothing to sync`);
     return;
   }
@@ -379,6 +407,12 @@ async function main(options: PullAllOptions = {}): Promise<void> {
       console.log(`🔗 Pulling sequences...`);
       const { pullLeadCMSSequences } = await import('./pull-sequences.js');
       await pullLeadCMSSequences(remoteCtx);
+    }
+
+    if (redirects) {
+      console.log(`↩️  Pulling redirects...`);
+      const { pullLeadCMSRedirects } = await import('./pull-redirects.js');
+      await pullLeadCMSRedirects(remoteCtx);
     }
 
     console.log(`\n✨ Pull completed successfully!\n`);
