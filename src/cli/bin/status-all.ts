@@ -92,6 +92,11 @@ function renderContentSection(ops: ContentOperations): number {
     (o) => o.local.locale,
     (o) => o.local.slug
   );
+  const remoteCreated = sortByLocaleAndSlug(
+    ops.remoteCreated,
+    (o) => o.remote?.language || o.local.locale,
+    (o) => o.remote?.slug || o.local.slug
+  );
   const updates = sortByLocaleAndSlug(
     ops.update,
     (o) => o.local.locale,
@@ -114,22 +119,30 @@ function renderContentSection(ops: ContentOperations): number {
   );
   const deletes = showDelete
     ? sortByLocaleAndSlug(
-        ops.delete,
-        (o) => o.remote?.language || "",
-        (o) => o.remote?.slug || ""
-      )
+      ops.delete,
+      (o) => o.remote?.language || "",
+      (o) => o.remote?.slug || ""
+    )
     : [];
+  const remoteDeleteds = sortByLocaleAndSlug(
+    ops.remoteDeleted,
+    (o) => o.local.locale,
+    (o) => o.local.slug
+  );
 
   const changeCount =
     creates.length +
+    remoteCreated.length +
     updates.length +
     renames.length +
     typeChanges.length +
     conflicts.length +
-    deletes.length;
+    deletes.length +
+    remoteDeleteds.length;
 
-  for (const op of creates) renderContentLine(op, "new:      ", statusColors.created);
-  for (const op of updates) renderContentLine(op, "modified: ", statusColors.modified);
+  for (const op of creates) renderContentLine(op, "added locally: ", statusColors.created);
+  for (const op of remoteCreated) renderContentLine(op, "added remotely:", statusColors.created);
+  for (const op of updates) renderContentLine(op, "updated locally:", statusColors.modified);
   for (const op of renames) {
     const typeLabel = (op.local.type || "unknown").padEnd(12);
     const localeLabel = `[${op.local.locale || "unknown"}]`.padEnd(6);
@@ -148,10 +161,15 @@ function renderContentSection(ops: ContentOperations): number {
     );
   }
   for (const op of conflicts) {
-    renderContentLine(op, "conflict: ", statusColors.conflict);
-    colorConsole.log(`                    ${colorConsole.gray(op.reason || "Unknown conflict")}`);
+    renderContentLine(op, "updated remotely:", statusColors.modified);
+    const remoteFlag = remoteContext ? ` -r ${remoteContext.name}` : "";
+    colorConsole.log(
+      `                    ${colorConsole.gray(`Run "leadcms pull-content${remoteFlag}" to sync remote changes locally.`)}`
+    );
   }
-  for (const op of deletes) renderContentLine(op, "deleted:  ", statusColors.conflict);
+  for (const op of deletes) renderContentLine(op, "deleted locally:", statusColors.conflict);
+  for (const op of remoteDeleteds)
+    renderContentLine(op, "deleted remotely:", statusColors.conflict);
 
   return changeCount;
 }
@@ -160,21 +178,33 @@ function renderContentSection(ops: ContentOperations): number {
 
 function renderMediaSection(result: MediaStatusResult): number {
   const creates = result.operations.filter((op) => op.type === "create");
+  const remoteCreateds = result.operations.filter((op) => op.type === "remote-created");
   const updates = result.operations.filter((op) => op.type === "update");
   const deletes = showDelete ? result.operations.filter((op) => op.type === "delete") : [];
+  const remoteDeleteds = result.operations.filter((op) => op.type === "remote-deleted");
 
-  const changeCount = creates.length + updates.length + deletes.length;
+  const changeCount =
+    creates.length +
+    remoteCreateds.length +
+    updates.length +
+    deletes.length +
+    remoteDeleteds.length;
 
   for (const op of creates) {
     const sizeKB = (op.local!.size / 1024).toFixed(2);
     colorConsole.log(
-      `        ${statusColors.created("new:      ")}   ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)} ${colorConsole.gray(`(${sizeKB}KB)`)}`
+      `        ${statusColors.created("added locally: ")}   ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)} ${colorConsole.gray(`(${sizeKB}KB)`)}`
+    );
+  }
+  for (const op of remoteCreateds) {
+    colorConsole.log(
+      `        ${statusColors.created("added remotely:")} ${op.remote!.scopeUid}/${colorConsole.highlight(op.remote!.name)}`
     );
   }
   for (const op of updates) {
     const sizeKB = (op.local!.size / 1024).toFixed(2);
     colorConsole.log(
-      `        ${statusColors.modified("modified: ")}   ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)} ${colorConsole.gray(`(${sizeKB}KB)`)}`
+      `        ${statusColors.modified("updated locally:")}   ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)} ${colorConsole.gray(`(${sizeKB}KB)`)}`
     );
     if (op.reason) {
       colorConsole.log(`                    ${colorConsole.gray(op.reason)}`);
@@ -182,7 +212,13 @@ function renderMediaSection(result: MediaStatusResult): number {
   }
   for (const op of deletes) {
     colorConsole.log(
-      `        ${statusColors.conflict("deleted:  ")}   ${op.remote!.scopeUid}/${colorConsole.highlight(op.remote!.name)}`
+      `        ${statusColors.conflict("deleted locally:")}   ${op.remote!.scopeUid}/${colorConsole.highlight(op.remote!.name)}`
+    );
+  }
+  for (const op of remoteDeleteds) {
+    const sizeKB = (op.local!.size / 1024).toFixed(2);
+    colorConsole.log(
+      `        ${statusColors.conflict("deleted remotely:")} ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)} ${colorConsole.gray(`(${sizeKB}KB)`)}`
     );
   }
 
@@ -200,17 +236,18 @@ function renderCommentSection(operations: CommentOperation[]): number {
   const changeCount = creates.length + updates.length + conflicts.length + deletes.length;
 
   for (const op of creates) {
-    const comment = op.local?.comment;
+    const comment = op.local?.comment || op.remote;
     const label = `${comment?.commentableType || "Unknown"}#${comment?.commentableId || "?"} [${comment?.language || defaultLanguage}]`;
+    const createLabel = op.remote && !op.local ? "added remotely:" : "added locally: ";
     colorConsole.log(
-      `        ${statusColors.created("new:      ")}   ${label} ${colorConsole.highlight(comment?.body?.slice(0, 48) || "New comment")}`
+      `        ${statusColors.created(createLabel)}   ${label} ${colorConsole.highlight(comment?.body?.slice(0, 48) || "New comment")}`
     );
   }
   for (const op of updates) {
     const comment = op.local?.comment || op.remote;
     const label = `${comment?.commentableType || "Unknown"}#${comment?.commentableId || "?"} [${comment?.language || defaultLanguage}]`;
     colorConsole.log(
-      `        ${statusColors.modified("modified: ")}   ${label} ${colorConsole.gray(`(ID: ${op.remote?.id || comment?.id || "unknown"})`)}`
+      `        ${statusColors.modified("updated locally:")}   ${label} ${colorConsole.gray(`(ID: ${op.remote?.id || comment?.id || "unknown"})`)}`
     );
   }
   for (const op of conflicts) {
@@ -227,7 +264,7 @@ function renderCommentSection(operations: CommentOperation[]): number {
     const comment = op.remote;
     const label = `${comment?.commentableType || "Unknown"}#${comment?.commentableId || "?"} [${comment?.language || defaultLanguage}]`;
     colorConsole.log(
-      `        ${statusColors.conflict("deleted:  ")}   ${label} ${colorConsole.gray(`(ID: ${comment?.id || "unknown"})`)}`
+      `        ${statusColors.conflict("deleted locally:")}   ${label} ${colorConsole.gray(`(ID: ${comment?.id || "unknown"})`)}`
     );
   }
 
@@ -241,15 +278,19 @@ function renderEmailTemplateSection(operations: EmailTemplateOperation[]): numbe
   const updates = operations.filter((op) => op.type === "update");
   const conflicts = operations.filter((op) => op.type === "conflict");
   const deletes = showDelete ? operations.filter((op) => op.type === "delete") : [];
+  const remoteDeleteds = operations.filter((op) => op.type === "remote-deleted");
 
-  const changeCount = creates.length + updates.length + conflicts.length + deletes.length;
+  const changeCount =
+    creates.length + updates.length + conflicts.length + deletes.length + remoteDeleteds.length;
 
   for (const op of creates) {
-    const groupLabel = (op.local?.groupFolder || "ungrouped").padEnd(12);
-    const localeLabel = `[${op.local?.locale || defaultLanguage}]`.padEnd(6);
-    const nameLabel = (op.local?.metadata?.name as string | undefined) || "unknown";
+    const groupLabel = (op.local?.groupFolder || getRemoteGroupLabel(op.remote || {})).padEnd(12);
+    const localeLabel = `[${op.local?.locale || op.remote?.language || defaultLanguage}]`.padEnd(6);
+    const nameLabel =
+      (op.local?.metadata?.name as string | undefined) || op.remote?.name || "unknown";
+    const createLabel = op.remote && !op.local ? "added remotely:" : "added locally: ";
     colorConsole.log(
-      `        ${statusColors.created("new:      ")}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)}`
+      `        ${statusColors.created(createLabel)}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)}`
     );
   }
   for (const op of updates) {
@@ -259,7 +300,7 @@ function renderEmailTemplateSection(operations: EmailTemplateOperation[]): numbe
       (op.local?.metadata?.name as string | undefined) || op.remote?.name || "unknown";
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
     colorConsole.log(
-      `        ${statusColors.modified("modified: ")}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+      `        ${statusColors.modified("updated locally:")}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
     );
   }
   for (const op of conflicts) {
@@ -278,7 +319,15 @@ function renderEmailTemplateSection(operations: EmailTemplateOperation[]): numbe
     const nameLabel = op.remote?.name || "unknown";
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
     colorConsole.log(
-      `        ${statusColors.conflict("deleted:  ")}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+      `        ${statusColors.conflict("deleted locally:")}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+    );
+  }
+  for (const op of remoteDeleteds) {
+    const groupLabel = (op.local?.groupFolder || "ungrouped").padEnd(12);
+    const localeLabel = `[${op.local?.locale || defaultLanguage}]`.padEnd(6);
+    const nameLabel = (op.local?.metadata?.name as string | undefined) || "unknown";
+    colorConsole.log(
+      `        ${statusColors.conflict("deleted remotely:")} ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)}`
     );
   }
 
@@ -292,20 +341,23 @@ function renderSegmentSection(operations: SegmentOperation[]): number {
   const updates = operations.filter((op) => op.type === "update");
   const conflicts = operations.filter((op) => op.type === "conflict");
   const deletes = showDelete ? operations.filter((op) => op.type === "delete") : [];
+  const remoteDeleteds = operations.filter((op) => op.type === "remote-deleted");
 
-  const changeCount = creates.length + updates.length + conflicts.length + deletes.length;
+  const changeCount =
+    creates.length + updates.length + conflicts.length + deletes.length + remoteDeleteds.length;
 
   for (const op of creates) {
-    const nameLabel = op.local?.name || "unknown";
+    const nameLabel = op.local?.name || op.remote?.name || "unknown";
+    const createLabel = op.remote && !op.local ? "added remotely:" : "added locally: ";
     colorConsole.log(
-      `        ${statusColors.created("new:      ")}   ${colorConsole.highlight(nameLabel)}`
+      `        ${statusColors.created(createLabel)}   ${colorConsole.highlight(nameLabel)}`
     );
   }
   for (const op of updates) {
     const nameLabel = op.local?.name || op.remote?.name || "unknown";
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
     colorConsole.log(
-      `        ${statusColors.modified("modified: ")}   ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+      `        ${statusColors.modified("updated locally:")}   ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
     );
   }
   for (const op of conflicts) {
@@ -320,7 +372,13 @@ function renderSegmentSection(operations: SegmentOperation[]): number {
     const nameLabel = op.remote?.name || "unknown";
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
     colorConsole.log(
-      `        ${statusColors.conflict("deleted:  ")}   ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+      `        ${statusColors.conflict("deleted locally:")}   ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+    );
+  }
+  for (const op of remoteDeleteds) {
+    const nameLabel = op.local?.name || "unknown";
+    colorConsole.log(
+      `        ${statusColors.conflict("deleted remotely:")}   ${colorConsole.highlight(nameLabel)}`
     );
   }
 
@@ -334,20 +392,23 @@ function renderSequenceSection(operations: SequenceOperation[]): number {
   const updates = operations.filter((op) => op.type === "update");
   const conflicts = operations.filter((op) => op.type === "conflict");
   const deletes = showDelete ? operations.filter((op) => op.type === "delete") : [];
+  const remoteDeleteds = operations.filter((op) => op.type === "remote-deleted");
 
-  const changeCount = creates.length + updates.length + conflicts.length + deletes.length;
+  const changeCount =
+    creates.length + updates.length + conflicts.length + deletes.length + remoteDeleteds.length;
 
   for (const op of creates) {
-    const nameLabel = op.local?.name || "unknown";
+    const nameLabel = op.local?.name || op.remote?.name || "unknown";
+    const createLabel = op.remote && !op.local ? "added remotely:" : "added locally: ";
     colorConsole.log(
-      `        ${statusColors.created("new:      ")}   ${colorConsole.highlight(nameLabel)}`
+      `        ${statusColors.created(createLabel)}   ${colorConsole.highlight(nameLabel)}`
     );
   }
   for (const op of updates) {
     const nameLabel = op.local?.name || op.remote?.name || "unknown";
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
     colorConsole.log(
-      `        ${statusColors.modified("modified: ")}   ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+      `        ${statusColors.modified("updated locally:")}   ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
     );
   }
   for (const op of conflicts) {
@@ -362,7 +423,13 @@ function renderSequenceSection(operations: SequenceOperation[]): number {
     const nameLabel = op.remote?.name || "unknown";
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
     colorConsole.log(
-      `        ${statusColors.conflict("deleted:  ")}   ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+      `        ${statusColors.conflict("deleted locally:")}   ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+    );
+  }
+  for (const op of remoteDeleteds) {
+    const nameLabel = op.local?.name || "unknown";
+    colorConsole.log(
+      `        ${statusColors.conflict("deleted remotely:")} ${colorConsole.highlight(nameLabel)}`
     );
   }
 
@@ -379,6 +446,8 @@ function renderSummaryLine(
     renames?: number;
     typeChanges?: number;
     conflicts: number;
+    remoteCreates?: number;
+    remoteUpdates?: number;
     deletes: number;
     skips?: number;
   }
@@ -391,6 +460,10 @@ function renderSummaryLine(
     parts.push(`${counts.typeChanges} type changed`);
   if (counts.conflicts > 0)
     parts.push(`${counts.conflicts} conflict${counts.conflicts > 1 ? "s" : ""}`);
+  if (counts.remoteUpdates && counts.remoteUpdates > 0)
+    parts.push(`${counts.remoteUpdates} updated remotely`);
+  if (counts.remoteCreates && counts.remoteCreates > 0)
+    parts.push(`${counts.remoteCreates} added remotely`);
   if (counts.deletes > 0) parts.push(`${counts.deletes} to delete`);
   if (counts.skips && counts.skips > 0) parts.push(`${counts.skips} up to date`);
 
@@ -436,39 +509,41 @@ async function statusAll() {
           spinner.update("Fetching status… (comments failed)");
           return null;
         }),
-        statusMedia({ scopeUid, showDelete, silent: true }).catch((_err: unknown) => {
-          spinner.update("Fetching status… (media failed)");
-          return null;
-        }),
+        statusMedia({ scopeUid, showDelete, silent: true, remoteContext }).catch(
+          (_err: unknown) => {
+            spinner.update("Fetching status… (media failed)");
+            return null;
+          }
+        ),
         canCheckEmailTemplates
           ? buildEmailTemplateStatus({ showDelete, remoteContext }).catch((_err: unknown) => {
-              spinner.update("Fetching status… (email templates failed)");
-              return null;
-            })
+            spinner.update("Fetching status… (email templates failed)");
+            return null;
+          })
           : Promise.resolve(null),
         canCheckEmailTemplates
           ? getSettingsStatusData().catch((_err: unknown) => {
-              spinner.update("Fetching status… (settings failed)");
-              return null;
-            })
+            spinner.update("Fetching status… (settings failed)");
+            return null;
+          })
           : Promise.resolve(null),
         canCheckEmailTemplates
           ? buildSegmentStatus({ showDelete, remoteContext }).catch((_err: unknown) => {
-              spinner.update("Fetching status… (segments failed)");
-              return null;
-            })
+            spinner.update("Fetching status… (segments failed)");
+            return null;
+          })
           : Promise.resolve(null),
         canCheckEmailTemplates
           ? buildSequenceStatus({ showDelete, remoteContext }).catch((_err: unknown) => {
-              spinner.update("Fetching status… (sequences failed)");
-              return null;
-            })
+            spinner.update("Fetching status… (sequences failed)");
+            return null;
+          })
           : Promise.resolve(null),
         canCheckEmailTemplates
           ? buildRedirectStatus({ showDelete, remoteContext }).catch((_err: unknown) => {
-              spinner.update("Fetching status… (redirects failed)");
-              return null;
-            })
+            spinner.update("Fetching status… (redirects failed)");
+            return null;
+          })
           : Promise.resolve(null),
       ]);
       spinner.stop();
@@ -490,17 +565,21 @@ async function statusAll() {
     // Count changes per section
     const contentChanges = contentOps
       ? contentOps.create.length +
-        contentOps.update.length +
-        contentOps.rename.length +
-        contentOps.typeChange.length +
-        contentOps.conflict.length +
-        (showDelete ? contentOps.delete.length : 0)
+      contentOps.remoteCreated.length +
+      contentOps.update.length +
+      contentOps.rename.length +
+      contentOps.typeChange.length +
+      contentOps.conflict.length +
+      contentOps.remoteDeleted.length +
+      (showDelete ? contentOps.delete.length : 0)
       : 0;
 
     const mediaChanges = mediaResult
       ? mediaResult.summary.creates +
-        mediaResult.summary.updates +
-        (showDelete ? mediaResult.summary.deletes : 0)
+      mediaResult.summary.remoteCreateds +
+      mediaResult.summary.updates +
+      mediaResult.summary.remoteDeleteds +
+      (showDelete ? mediaResult.summary.deletes : 0)
       : 0;
 
     const commentChanges = commentOps
@@ -649,7 +728,7 @@ async function statusAll() {
         switch (entry.status) {
           case "modified":
             colorConsole.log(
-              `        ${statusColors.modified("modified: ")}   ${colorConsole.highlight(label)} ${colorConsole.gray(formatSettingDiff(entry.key, entry.remoteValue, entry.localValue))}`
+              `        ${statusColors.modified("updated locally:")}   ${colorConsole.highlight(label)} ${colorConsole.gray(formatSettingDiff(entry.key, entry.remoteValue, entry.localValue))}`
             );
             renderSettingDiffPreview(
               entry.key,
@@ -660,7 +739,7 @@ async function statusAll() {
             break;
           case "local-only":
             colorConsole.log(
-              `        ${statusColors.created("new:      ")}   ${colorConsole.highlight(label)} ${colorConsole.gray(`= ${formatSettingValue(entry.key, entry.localValue)}`)}`
+              `        ${statusColors.created("added locally: ")}   ${colorConsole.highlight(label)} ${colorConsole.gray(`= ${formatSettingValue(entry.key, entry.localValue)}`)}`
             );
             break;
           case "remote-only":
@@ -696,7 +775,7 @@ async function statusAll() {
         `  🔀 Redirects (${redirectChanges} change${redirectChanges !== 1 ? "s" : ""}):`
       );
       const fmtSlug = (lang: string | null | undefined, slug: string | null | undefined) =>
-        slug ? (lang ? `[${lang}/${slug}]` : `[${slug}]`) : null;
+        slug ? (lang ? `[${lang}] ${slug}` : slug) : null;
       for (const op of redirectOps) {
         if (op.type === "skip") continue;
         if (op.type === "delete" && !showDelete) continue;
@@ -722,19 +801,26 @@ async function statusAll() {
         const label = `[${kindCode}] ${from} → ${to}`;
         const idLabel = op.remote?.id ? colorConsole.gray(`(ID: ${op.remote.id})`) : "";
         switch (op.type) {
-          case "create":
+          case "create": {
+            const createLabel = op.remote && !op.local ? "added remotely:" : "added locally: ";
             colorConsole.log(
-              `        ${statusColors.created("new:      ")} ${colorConsole.highlight(label)}`
+              `        ${statusColors.created(createLabel)} ${colorConsole.highlight(label)}`
             );
             break;
+          }
           case "update":
             colorConsole.log(
-              `        ${statusColors.modified("modified: ")} ${colorConsole.highlight(label)} ${idLabel}`
+              `        ${statusColors.modified("updated locally:")} ${colorConsole.highlight(label)} ${idLabel}`
             );
             break;
           case "delete":
             colorConsole.log(
-              `        ${statusColors.conflict("deleted:  ")} ${colorConsole.highlight(label)} ${idLabel}`
+              `        ${statusColors.conflict("deleted locally:")} ${colorConsole.highlight(label)} ${idLabel}`
+            );
+            break;
+          case "remote-deleted":
+            colorConsole.log(
+              `        ${statusColors.conflict("deleted remotely:")} ${colorConsole.highlight(label)}`
             );
             break;
         }
@@ -751,7 +837,9 @@ async function statusAll() {
           updates: contentOps.update.length,
           renames: contentOps.rename.length,
           typeChanges: contentOps.typeChange.length,
-          conflicts: contentOps.conflict.length,
+          conflicts: 0,
+          remoteCreates: contentOps.remoteCreated.length,
+          remoteUpdates: contentOps.conflict.length,
           deletes: showDelete ? contentOps.delete.length : 0,
           skips: contentSkips,
         })
@@ -774,9 +862,11 @@ async function statusAll() {
       console.log(
         renderSummaryLine("📷 Media:           ", {
           creates: mediaResult.summary.creates,
+          remoteCreates: mediaResult.summary.remoteCreateds,
           updates: mediaResult.summary.updates,
           conflicts: 0,
-          deletes: showDelete ? mediaResult.summary.deletes : 0,
+          deletes:
+            (showDelete ? mediaResult.summary.deletes : 0) + mediaResult.summary.remoteDeleteds,
           skips: mediaSkips,
         })
       );
@@ -795,7 +885,7 @@ async function statusAll() {
           creates: counts.create || 0,
           updates: counts.update || 0,
           conflicts: counts.conflict || 0,
-          deletes: showDelete ? counts.delete || 0 : 0,
+          deletes: (showDelete ? counts.delete || 0 : 0) + (counts["remote-deleted"] || 0),
           skips: emailSkips,
         })
       );
@@ -831,7 +921,7 @@ async function statusAll() {
           creates: counts.create || 0,
           updates: counts.update || 0,
           conflicts: counts.conflict || 0,
-          deletes: showDelete ? counts.delete || 0 : 0,
+          deletes: (showDelete ? counts.delete || 0 : 0) + (counts["remote-deleted"] || 0),
           skips: segmentSkips,
         })
       );

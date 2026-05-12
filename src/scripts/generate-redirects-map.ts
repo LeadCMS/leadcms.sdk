@@ -289,11 +289,25 @@ export async function generateRedirectsMap(
   if (permanent.length > 0) {
     await fs.writeFile(file301, buildMapFile(resolved, "Permanent"), "utf8");
     written.push(`301.map (${permanent.length} entries)`);
+  } else {
+    try {
+      await fs.unlink(file301);
+      logger.verbose(`[generate-redirects-map] Removed stale ${file301}`);
+    } catch {
+      /* file didn't exist — nothing to do */
+    }
   }
 
   if (temporary.length > 0) {
     await fs.writeFile(file302, buildMapFile(resolved, "Temporary"), "utf8");
     written.push(`302.map (${temporary.length} entries)`);
+  } else {
+    try {
+      await fs.unlink(file302);
+      logger.verbose(`[generate-redirects-map] Removed stale ${file302}`);
+    } catch {
+      /* file didn't exist — nothing to do */
+    }
   }
 
   for (const w of written) {

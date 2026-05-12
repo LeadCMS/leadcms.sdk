@@ -34,6 +34,15 @@ const mockDeleteRedirect = jest.fn();
 const mockConfigureForRemote = jest.fn();
 const mockReadMetadataMap = jest.fn();
 const mockResolveRemote = jest.fn();
+const mockAxiosGet = jest.fn();
+
+jest.mock("axios", () => ({
+  __esModule: true,
+  default: {
+    get: (...args: unknown[]) => mockAxiosGet(...args),
+    post: jest.fn(),
+  },
+}));
 
 jest.mock("../src/lib/data-service.js", () => ({
   leadCMSDataService: {
@@ -329,6 +338,7 @@ describe("buildRedirectStatus", () => {
     mockUpdateRedirect.mockReset();
     mockDeleteRedirect.mockReset();
     mockReadMetadataMap.mockResolvedValue({});
+    mockAxiosGet.mockReset();
     mockResolveRemote.mockReturnValue({
       name: "default",
       url: "https://test.leadcms.com",
@@ -398,15 +408,51 @@ describe("buildRedirectStatus", () => {
     expect(result.operations[0].remote?.id).toBe(12);
   });
 
-  it("does NOT report delete operation for remote-only redirect when showDelete=false", async () => {
-    await writeLocalRedirects(tmpDir, []);
+  it("reports remote-only redirect as added remotely when showDelete=false", async () => {
+    // tmpDir is empty — no redirects.yaml
     mockGetAllRedirects.mockResolvedValueOnce([
       makeRemote({ id: 12, fromPath: "/gone", toUrl: "https://example.com" }),
     ]);
 
     const result = await buildRedirectStatus({ showDelete: false });
 
-    expect(result.operations).toHaveLength(0);
+    expect(result.operations).toHaveLength(1);
+    expect(result.operations[0].type).toBe("create");
+    expect(result.operations[0].local).toBeUndefined();
+    expect(result.operations[0].remote?.id).toBe(12);
+    expect(result.operations[0].reason).toBe("New redirect on remote");
+  });
+
+  it("reports remote-created redirect returned by sync token delta", async () => {
+    await writeLocalRedirects(tmpDir, []);
+    await fs.writeFile(path.join(tmpDir, ".sync-token"), "token-before", "utf8");
+
+    const remoteCreated = makeRemote({
+      id: 15,
+      sourceType: "ContentSlug",
+      targetType: "ContentSlug",
+      fromPath: null,
+      fromLanguage: "en",
+      fromSlug: "news/old-slug",
+      toUrl: null,
+      toLanguage: "en",
+      toSlug: "news/new-slug",
+    });
+
+    mockGetAllRedirects.mockResolvedValueOnce([remoteCreated]);
+    mockAxiosGet
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { items: [remoteCreated], deleted: [] },
+        headers: { "x-next-sync-token": "token-after" },
+      })
+      .mockResolvedValueOnce({ status: 204, data: {}, headers: {} });
+
+    const result = await buildRedirectStatus({ showDelete: false });
+
+    expect(result.operations).toHaveLength(1);
+    expect(result.operations[0].type).toBe("create");
+    expect(result.operations[0].remote?.id).toBe(15);
   });
 
   it("reports delete operation for ContentSlug redirect with no fromLanguage (single-language mode)", async () => {

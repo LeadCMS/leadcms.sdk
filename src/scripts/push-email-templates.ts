@@ -71,7 +71,7 @@ interface StatusOptions {
 }
 
 interface EmailTemplateOperation {
-  type: "create" | "update" | "delete" | "conflict";
+  type: "create" | "update" | "delete" | "conflict" | "remote-deleted";
   local?: LocalEmailTemplateItem;
   remote?: RemoteEmailTemplateItem;
   reason?: string;
@@ -562,6 +562,11 @@ async function buildEmailTemplateStatus(
     metadataMap = await rc.readMetadataMap(remoteCtx);
   }
 
+  // Build a set of all remote IDs for O(1) remote-deleted detection
+  const remoteIdSet = new Set<number | string>(
+    remoteTemplates.map((t) => t.id).filter((id): id is number => id != null)
+  );
+
   for (const local of localTemplates) {
     const resolvedGroupId = resolveEmailGroupId(local, groupIndex);
     let pendingGroupCreationReason: string | undefined;
@@ -601,7 +606,19 @@ async function buildEmailTemplateStatus(
     }
 
     if (!match) {
-      operations.push({ type: "create", local, reason: pendingGroupCreationReason });
+      // Check if this item was previously synced but has since been deleted remotely
+      const language = local.metadata.language || local.locale;
+      const name = local.metadata.name;
+      const remoteId = metadataMap
+        ? lookupEmailTemplateRemoteIdSync(metadataMap, language, name)
+        : undefined;
+      const matchId =
+        remoteId ?? (local.metadata.id != null ? Number(local.metadata.id) : undefined);
+      if (matchId != null && !remoteIdSet.has(matchId)) {
+        operations.push({ type: "remote-deleted", local });
+      } else {
+        operations.push({ type: "create", local, reason: pendingGroupCreationReason });
+      }
       continue;
     }
 
@@ -685,6 +702,21 @@ async function buildEmailTemplateStatus(
 
       if (!isMatchedById && !isMatchedByName) {
         operations.push({ type: "delete", remote });
+      }
+    }
+  } else {
+    const localNameKeys = new Set(
+      localTemplates.map((template) => {
+        const name = template.metadata.name;
+        const lang = template.metadata.language || template.locale;
+        return `${name}::${lang}`;
+      })
+    );
+
+    for (const remote of remoteTemplates) {
+      const remoteNameKey = `${remote.name}::${remote.language || defaultLanguage}`;
+      if (!localNameKeys.has(remoteNameKey)) {
+        operations.push({ type: "create", remote, reason: "New email template on remote" });
       }
     }
   }
@@ -840,12 +872,13 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
   }
 
   for (const op of createOps) {
-    const groupLabel = (op.local?.groupFolder || "ungrouped").padEnd(12);
-    const localeLabel = `[${op.local?.locale || defaultLanguage}]`.padEnd(6);
-    const nameLabel = op.local?.metadata?.name || "unknown";
+    const groupLabel = (op.local?.groupFolder || getRemoteGroupLabel(op.remote || {})).padEnd(12);
+    const localeLabel = `[${op.local?.locale || op.remote?.language || defaultLanguage}]`.padEnd(6);
+    const nameLabel = op.local?.metadata?.name || op.remote?.name || "unknown";
+    const createLabel = op.remote && !op.local ? "added remotely:" : "added locally: ";
     const reason = op.reason ? ` ${colorConsole.gray(`(${op.reason})`)}` : "";
     colorConsole.log(
-      `        ${statusColors.created("new:     ")}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)}${reason}`
+      `        ${statusColors.created(createLabel)}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)}${reason}`
     );
     await printDiffPreview(op);
   }
@@ -861,7 +894,7 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
         ? ` ${colorConsole.gray(`(${op.reason})`)}`
         : "";
     colorConsole.log(
-      `        ${statusColors.modified("modified:")}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${mergeHint}${colorConsole.gray(idLabel)}${note}`
+      `        ${statusColors.modified("updated locally:")}   ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${mergeHint}${colorConsole.gray(idLabel)}${note}`
     );
     await printDiffPreview(op);
   }
@@ -883,14 +916,15 @@ export async function statusEmailTemplates(options: StatusOptions = {}): Promise
     const nameLabel = op.remote?.name || "unknown";
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
     colorConsole.log(
-      `        ${statusColors.conflict("deleted:")}    ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+      `        ${statusColors.conflict("deleted locally:")}    ${groupLabel} ${localeLabel} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
     );
     await printDiffPreview(op);
   }
 
   const summary = operations.reduce(
     (acc, op) => {
-      acc[op.type] += 1;
+      const key = op.type === "remote-deleted" ? "delete" : op.type;
+      acc[key] = (acc[key] || 0) + 1;
       return acc;
     },
     { create: 0, update: 0, delete: 0, conflict: 0, skip: 0 }

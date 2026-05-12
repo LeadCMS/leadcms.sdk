@@ -10,14 +10,13 @@ describe("LeadCMS Data Service", () => {
   let originalEnv: NodeJS.ProcessEnv;
   let consoleLogSpy: jest.SpyInstance;
   let consoleErrorSpy: jest.SpyInstance;
-  let consoleWarnSpy: jest.SpyInstance;
 
   beforeEach(() => {
     originalEnv = process.env;
     setVerbose(true);
     consoleLogSpy = jest.spyOn(console, "log").mockImplementation();
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
-    consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
+    jest.spyOn(console, "warn").mockImplementation();
     jest.clearAllMocks();
   });
 
@@ -235,16 +234,13 @@ describe("LeadCMS Data Service", () => {
     it("should strip trailing slash from LEADCMS_URL", async () => {
       process.env.LEADCMS_URL = "https://api.example.com/";
 
-      mockedAxios.get.mockResolvedValue({
-        status: 200,
-        data: { items: [] },
-      });
+      mockedAxios.get.mockResolvedValue({ status: 200, data: [] });
 
       const service = new LeadCMSDataService();
       await service.getAllContent();
 
       expect(mockedAxios.get).toHaveBeenCalledWith(
-        "https://api.example.com/api/content/sync",
+        "https://api.example.com/api/content?filter%5Bskip%5D=0&filter%5Blimit%5D=100",
         expect.any(Object)
       );
     });
@@ -252,16 +248,13 @@ describe("LeadCMS Data Service", () => {
     it("should strip multiple trailing slashes from URL", async () => {
       process.env.LEADCMS_URL = "https://api.example.com///";
 
-      mockedAxios.get.mockResolvedValue({
-        status: 200,
-        data: { items: [] },
-      });
+      mockedAxios.get.mockResolvedValue({ status: 200, data: [] });
 
       const service = new LeadCMSDataService();
       await service.getAllContent();
 
       expect(mockedAxios.get).toHaveBeenCalledWith(
-        "https://api.example.com/api/content/sync",
+        "https://api.example.com/api/content?filter%5Bskip%5D=0&filter%5Blimit%5D=100",
         expect.any(Object)
       );
     });
@@ -269,82 +262,59 @@ describe("LeadCMS Data Service", () => {
     it("should fetch content from API", async () => {
       const mockContent = [{ id: 1, slug: "test", title: "Test", type: "article" }];
 
-      mockedAxios.get.mockResolvedValue({
-        status: 200,
-        data: { items: mockContent },
-      });
+      mockedAxios.get.mockResolvedValue({ status: 200, data: mockContent });
 
       const service = new LeadCMSDataService();
       const content = await service.getAllContent();
 
       expect(content).toEqual(mockContent);
-      expect(mockedAxios.get).toHaveBeenCalledWith("https://api.example.com/api/content/sync", {
-        headers: {
-          Authorization: "Bearer test-api-key",
-          "Content-Type": "application/json",
-        },
-      });
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        "https://api.example.com/api/content?filter%5Bskip%5D=0&filter%5Blimit%5D=100",
+        {
+          headers: {
+            Authorization: "Bearer test-api-key",
+            "Content-Type": "application/json",
+          },
+        }
+      );
     });
 
     it("should handle direct array response from API", async () => {
       const mockContent = [{ id: 1, slug: "test", title: "Test", type: "article" }];
 
-      mockedAxios.get.mockResolvedValue({
-        status: 200,
-        data: mockContent,
-      });
+      mockedAxios.get.mockResolvedValue({ status: 200, data: mockContent });
 
       const service = new LeadCMSDataService();
       const content = await service.getAllContent();
 
       expect(content).toEqual(mockContent);
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[API] Response data is direct array with 1 items")
-      );
     });
 
-    it("should handle 204 No Content response", async () => {
-      mockedAxios.get.mockResolvedValue({ status: 204 });
+    it("should return empty array when API returns empty array", async () => {
+      mockedAxios.get.mockResolvedValue({ status: 200, data: [] });
 
       const service = new LeadCMSDataService();
       const content = await service.getAllContent();
 
       expect(content).toEqual([]);
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[API DEBUG] Status 204 - No Content")
-      );
     });
 
     it("should handle empty response data", async () => {
-      mockedAxios.get.mockResolvedValue({
-        status: 200,
-        data: null,
-      });
+      mockedAxios.get.mockResolvedValue({ status: 200, data: null });
 
       const service = new LeadCMSDataService();
       const content = await service.getAllContent();
 
       expect(content).toEqual([]);
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[API DEBUG] No content data returned from API (data is falsy)")
-      );
     });
 
     it("should handle unexpected response format", async () => {
-      mockedAxios.get.mockResolvedValue({
-        status: 200,
-        data: { unexpected: "format" },
-      });
+      mockedAxios.get.mockResolvedValue({ status: 200, data: { unexpected: "format" } });
 
       const service = new LeadCMSDataService();
       const content = await service.getAllContent();
 
       expect(content).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        "[API] API returned unexpected data format:",
-        "object",
-        { unexpected: "format" }
-      );
     });
 
     it("should throw error when API fails", async () => {
@@ -577,7 +547,7 @@ describe("LeadCMS Data Service", () => {
       await service.getAllContent();
 
       expect(mockedAxios.get).toHaveBeenCalledWith(
-        "https://next.example.com/api/content/sync",
+        "https://next.example.com/api/content?filter%5Bskip%5D=0&filter%5Blimit%5D=100",
         expect.any(Object)
       );
     });
@@ -797,6 +767,133 @@ describe("LeadCMS Data Service", () => {
     it("should throw when getUserMe() is called without API key", async () => {
       const service = new LeadCMSDataService();
       await expect(service.getUserMe()).rejects.toThrow("No API key configured");
+    });
+  });
+
+  describe("Content API pagination", () => {
+    beforeEach(() => {
+      process.env.LEADCMS_USE_MOCK = "false";
+      process.env.NODE_ENV = "development";
+      process.env.LEADCMS_URL = "https://api.example.com";
+      process.env.LEADCMS_API_KEY = "test-api-key";
+    });
+
+    it("should fetch first page with filter[skip]=0 and filter[limit]=100", async () => {
+      const mockContent = [{ id: 1, slug: "test", title: "Test", type: "article" }];
+      mockedAxios.get.mockResolvedValueOnce({ data: mockContent });
+
+      const service = new LeadCMSDataService();
+      const content = await service.getAllContent();
+
+      expect(content).toEqual(mockContent);
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        "https://api.example.com/api/content?filter%5Bskip%5D=0&filter%5Blimit%5D=100",
+        expect.any(Object)
+      );
+    });
+
+    it("should paginate through multiple pages until a partial page", async () => {
+      const page1 = Array.from({ length: 100 }, (_, i) => ({
+        id: i + 1,
+        slug: `slug-${i + 1}`,
+        title: `Title ${i + 1}`,
+        type: "article",
+      }));
+      const page2 = [{ id: 101, slug: "slug-101", title: "Title 101", type: "article" }];
+
+      mockedAxios.get
+        .mockResolvedValueOnce({ data: page1 })
+        .mockResolvedValueOnce({ data: page2 });
+
+      const service = new LeadCMSDataService();
+      const content = await service.getAllContent();
+
+      expect(content).toHaveLength(101);
+      expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+      expect(mockedAxios.get).toHaveBeenNthCalledWith(
+        2,
+        "https://api.example.com/api/content?filter%5Bskip%5D=100&filter%5Blimit%5D=100",
+        expect.any(Object)
+      );
+    });
+
+    it("should return empty array when API returns no items", async () => {
+      mockedAxios.get.mockResolvedValueOnce({ data: [] });
+
+      const service = new LeadCMSDataService();
+      const content = await service.getAllContent();
+
+      expect(content).toEqual([]);
+      expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("Media API", () => {
+    beforeEach(() => {
+      process.env.LEADCMS_USE_MOCK = "false";
+      process.env.NODE_ENV = "development";
+      process.env.LEADCMS_URL = "https://api.example.com";
+      process.env.LEADCMS_API_KEY = "test-api-key";
+    });
+
+    it("should fetch media with filter[skip]=0 and filter[limit]=100 with auth headers", async () => {
+      const mockMedia = [{ id: 1, name: "image.png", url: "https://cdn.example.com/image.png" }];
+      mockedAxios.get.mockResolvedValueOnce({ data: mockMedia });
+
+      const service = new LeadCMSDataService();
+      const media = await service.getAllMedia();
+
+      expect(media).toEqual(mockMedia);
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        "https://api.example.com/api/media?filter%5Bskip%5D=0&filter%5Blimit%5D=100",
+        {
+          headers: {
+            Authorization: "Bearer test-api-key",
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    });
+
+    it("should filter by scopeUid when provided", async () => {
+      mockedAxios.get.mockResolvedValueOnce({ data: [] });
+
+      const service = new LeadCMSDataService();
+      await service.getAllMedia("scope-123");
+
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        "https://api.example.com/api/media?filter%5Bskip%5D=0&filter%5Blimit%5D=100&scopeUid=scope-123",
+        expect.any(Object)
+      );
+    });
+
+    it("should paginate through multiple pages until a partial page", async () => {
+      const page1 = Array.from({ length: 100 }, (_, i) => ({
+        id: i + 1,
+        name: `file-${i + 1}.png`,
+        url: `https://cdn.example.com/file-${i + 1}.png`,
+      }));
+      const page2 = [{ id: 101, name: "file-101.png", url: "https://cdn.example.com/file-101.png" }];
+
+      mockedAxios.get
+        .mockResolvedValueOnce({ data: page1 })
+        .mockResolvedValueOnce({ data: page2 });
+
+      const service = new LeadCMSDataService();
+      const media = await service.getAllMedia();
+
+      expect(media).toHaveLength(101);
+      expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+    });
+
+    it("should return empty array when API returns no media", async () => {
+      mockedAxios.get.mockResolvedValueOnce({ data: [] });
+
+      const service = new LeadCMSDataService();
+      const media = await service.getAllMedia();
+
+      expect(media).toEqual([]);
+      expect(mockedAxios.get).toHaveBeenCalledTimes(1);
     });
   });
 

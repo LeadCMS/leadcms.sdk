@@ -2,6 +2,7 @@ import "dotenv/config";
 import fs from "fs/promises";
 import path from "path";
 import axios, { AxiosResponse } from "axios";
+import matter from "gray-matter";
 import {
   leadCMSUrl,
   defaultLanguage,
@@ -24,7 +25,7 @@ interface ScriptError extends Error {
   code?: string;
   response?: {
     status?: number;
-    data?: { detail?: string; title?: string; message?: string; [key: string]: unknown } | null;
+    data?: { detail?: string; title?: string; message?: string;[key: string]: unknown } | null;
   };
   status?: number;
 }
@@ -231,6 +232,110 @@ async function pullContentSync(syncToken?: string, baseUrl?: string): Promise<Co
  */
 export type ContentIdIndex = Map<string, string[]>;
 
+interface ContentIdentityEntry {
+  filePath: string;
+  language: string;
+  slug: string;
+  id?: string;
+}
+
+type ContentIdentityIndex = Map<string, ContentIdentityEntry[]>;
+
+function contentIdentityKey(language: string, slug: string): string {
+  return `${language}/${slug}`;
+}
+
+function inferContentSlugFromPath(
+  filePath: string,
+  baseContentDir: string,
+  extension: string
+): string {
+  return path
+    .relative(baseContentDir, filePath)
+    .slice(0, -extension.length)
+    .split(path.sep)
+    .join("/");
+}
+
+function parseContentIdentityFromFile(
+  filePath: string,
+  raw: string,
+  language: string,
+  baseContentDir: string
+): ContentIdentityEntry | undefined {
+  const extension = path.extname(filePath);
+  const pathSlug = inferContentSlugFromPath(filePath, baseContentDir, extension);
+
+  if (extension === ".json") {
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const slug = typeof parsed.slug === "string" ? parsed.slug : pathSlug;
+      const itemLanguage = typeof parsed.language === "string" ? parsed.language : language;
+      const id = parsed.id == null ? undefined : String(parsed.id);
+      return { filePath, language: itemLanguage, slug, id };
+    } catch {
+      return { filePath, language, slug: pathSlug };
+    }
+  }
+
+  const parsed = matter(raw);
+  const slug = typeof parsed.data.slug === "string" ? parsed.data.slug : pathSlug;
+  const itemLanguage = typeof parsed.data.language === "string" ? parsed.data.language : language;
+  const id = parsed.data.id == null ? undefined : String(parsed.data.id);
+  return { filePath, language: itemLanguage, slug, id };
+}
+
+async function buildContentIdentityIndex(
+  dir: string,
+  cfgDefaultLanguage: string
+): Promise<ContentIdentityIndex> {
+  const index: ContentIdentityIndex = new Map();
+
+  async function walk(
+    currentDir: string,
+    language: string = cfgDefaultLanguage,
+    baseContentDir: string = dir
+  ): Promise<void> {
+    let entries;
+    try {
+      entries = await fs.readdir(currentDir, { withFileTypes: true });
+    } catch (_err: unknown) {
+      const err = _err as ScriptError;
+      if (err.code !== "ENOENT") {
+        console.warn(`Warning: Could not read directory ${currentDir}:`, err.message);
+      }
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        const isLocaleDir = currentDir === dir && /^[a-z]{2}(-[A-Z]{2})?$/.test(entry.name);
+        await walk(
+          fullPath,
+          isLocaleDir ? entry.name : language,
+          isLocaleDir ? fullPath : baseContentDir
+        );
+      } else if (entry.isFile() && (entry.name.endsWith(".mdx") || entry.name.endsWith(".json"))) {
+        try {
+          const raw = await fs.readFile(fullPath, "utf8");
+          const identity = parseContentIdentityFromFile(fullPath, raw, language, baseContentDir);
+          if (!identity) continue;
+          const key = contentIdentityKey(identity.language, identity.slug);
+          const existing = index.get(key) ?? [];
+          existing.push(identity);
+          index.set(key, existing);
+        } catch {
+          /* skip unreadable files */
+        }
+      }
+    }
+  }
+
+  await walk(dir);
+  return index;
+}
+
 /**
  * Build an index mapping content IDs to their local file paths.
  * Walks the directory tree once and parses every content file to extract its ID,
@@ -299,14 +404,16 @@ function extractContentId(content: string): string | undefined {
  * Delete all files associated with a given content ID using a pre-built index.
  * Also removes the entry from the index so subsequent calls stay consistent.
  */
-async function deleteContentFilesById(index: ContentIdIndex, idStr: string): Promise<void> {
+async function deleteContentFilesById(index: ContentIdIndex, idStr: string): Promise<number> {
   const paths = index.get(idStr);
-  if (!paths || paths.length === 0) return;
+  if (!paths || paths.length === 0) return 0;
 
+  let deletedCount = 0;
   for (const filePath of paths) {
     try {
       await fs.unlink(filePath);
       logger.verbose(`Deleted: ${filePath}`);
+      deletedCount++;
     } catch (_err: unknown) {
       const err = _err as ScriptError;
       if (err.code !== "ENOENT") {
@@ -315,6 +422,33 @@ async function deleteContentFilesById(index: ContentIdIndex, idStr: string): Pro
     }
   }
   index.delete(idStr);
+  return deletedCount;
+}
+
+async function deleteContentFilesByIdentity(
+  index: ContentIdentityIndex,
+  language: string,
+  slug: string
+): Promise<number> {
+  const key = contentIdentityKey(language, slug);
+  const entries = index.get(key);
+  if (!entries || entries.length === 0) return 0;
+
+  let deletedCount = 0;
+  for (const entry of entries) {
+    try {
+      await fs.unlink(entry.filePath);
+      logger.verbose(`Deleted: ${entry.filePath}`);
+      deletedCount++;
+    } catch (_err: unknown) {
+      const err = _err as ScriptError;
+      if (err.code !== "ENOENT") {
+        console.warn(`Warning: Could not delete ${entry.filePath}:`, err.message);
+      }
+    }
+  }
+  index.delete(key);
+  return deletedCount;
 }
 
 /**
@@ -328,19 +462,78 @@ async function deleteContentFilesBySlug(
   slug: string,
   language: string,
   cfgDefaultLanguage: string
-): Promise<void> {
+): Promise<number> {
   const dir = language === cfgDefaultLanguage ? contentDir : path.join(contentDir, language);
+  let deletedCount = 0;
   for (const ext of [".mdx", ".json"]) {
     const filePath = path.join(dir, `${slug}${ext}`);
     try {
       await fs.unlink(filePath);
       logger.verbose(`Deleted: ${filePath}`);
+      deletedCount++;
     } catch (_err: unknown) {
       const err = _err as ScriptError;
       if (err.code !== "ENOENT") {
         console.warn(`Warning: Could not delete ${filePath}:`, err.message);
       }
     }
+  }
+  return deletedCount;
+}
+
+async function cleanupStaleRemoteDeletedContent(
+  remoteCtx: RemoteContext | undefined,
+  metadataMap: import("../lib/remote-context.js").MetadataMap | undefined,
+  rcModule: typeof import("../lib/remote-context.js") | undefined
+): Promise<number> {
+  if (!remoteCtx || remoteCtx.isDefault || !metadataMap || !rcModule) return 0;
+
+  try {
+    const dataServiceModule = await import("../lib/data-service.js");
+    const service = dataServiceModule.leadCMSDataService as unknown as {
+      getAllContent?: () => Promise<
+        Array<{ id?: number | string; slug: string; language?: string }>
+      >;
+      isMockMode?: () => boolean;
+    };
+    if (service.isMockMode?.()) return 0;
+    if (typeof service.getAllContent !== "function") return 0;
+
+    const remoteItems = await service.getAllContent();
+    const remoteIds = new Set(
+      remoteItems.map((item) => item.id).filter((id): id is number | string => id != null)
+    );
+    const remoteKeys = new Set(
+      remoteItems.map((item) => contentIdentityKey(item.language || defaultLanguage, item.slug))
+    );
+    const localIndex = await buildContentIdentityIndex(CONTENT_DIR, getConfig().defaultLanguage);
+    let removed = 0;
+
+    for (const [key, entries] of Array.from(localIndex.entries())) {
+      const [language, ...slugParts] = key.split("/");
+      const slug = slugParts.join("/");
+      const remoteId = rcModule.lookupRemoteId(metadataMap, language, slug);
+      const wasSynced = remoteId != null || entries.some((entry) => entry.id != null);
+      if (!wasSynced) continue;
+
+      const missingRemoteId = remoteId != null && !remoteIds.has(remoteId);
+      const missingRemoteKey = remoteId == null && !remoteKeys.has(key);
+      if (!missingRemoteId && !missingRemoteKey) continue;
+
+      removed += await deleteContentFilesByIdentity(localIndex, language, slug);
+      if (metadataMap.content[language]?.[slug]) {
+        delete metadataMap.content[language][slug];
+        if (Object.keys(metadataMap.content[language]).length === 0) {
+          delete metadataMap.content[language];
+        }
+      }
+    }
+
+    return removed;
+  } catch (_error: unknown) {
+    const error = _error as Error;
+    logger.verbose(`[PULL] Skipping stale content cleanup: ${error.message}`);
+    return 0;
   }
 }
 
@@ -369,7 +562,7 @@ async function findAndDeleteContentFile(dir: string, idStr: string): Promise<voi
             await fs.unlink(fullPath);
             logger.verbose(`Deleted: ${fullPath}`);
           }
-        } catch {}
+        } catch { }
       }
     }
   } catch (_err: unknown) {
@@ -434,6 +627,10 @@ async function main(options: PullContentOptions = {}): Promise<void> {
     items.length > 0 || deleted.length > 0
       ? await buildContentIdIndex(CONTENT_DIR)
       : new Map<string, string[]>();
+  const contentIdentityIndex =
+    items.length > 0 || deleted.length > 0
+      ? await buildContentIdentityIndex(CONTENT_DIR, getConfig().defaultLanguage)
+      : new Map<string, ContentIdentityEntry[]>();
 
   // Save content files (with three-way merge support)
   const hasBaseItems = Object.keys(baseItems).length > 0;
@@ -449,7 +646,7 @@ async function main(options: PullContentOptions = {}): Promise<void> {
   }
 
   console.log(
-    `📄 Processing content sync (${items.length} updates, ${deleted.length} deletions)...`
+    `📄 Processing content sync (${items.length} remote update(s), ${deleted.length} remote deletion event(s))...`
   );
 
   // Load per-remote metadata for multi-remote support
@@ -643,9 +840,9 @@ async function main(options: PullContentOptions = {}): Promise<void> {
     }
   }
 
-  // Print merge summary
-  if (hasBaseItems && items.length > 0) {
-    console.log(`\n📊 Content sync summary:`);
+  // Print update summary
+  if (items.length > 0) {
+    console.log(`   ✅ Processed ${items.length} content update(s).`);
     if (newCount > 0) console.log(`   ✨ New: ${newCount}`);
     if (overwrittenCount > 0) console.log(`   📝 Updated (no local changes): ${overwrittenCount}`);
     if (mergedCount > 0) console.log(`   🔀 Auto-merged: ${mergedCount}`);
@@ -654,8 +851,11 @@ async function main(options: PullContentOptions = {}): Promise<void> {
   }
 
   // Remove deleted content files from all language directories
+  let deletedLocalFiles = 0;
+  let deletionEventsWithoutLocalFile = 0;
+  let deletionEventsUnknownToMetadata = 0;
   if (deleted.length > 0) {
-    console.log(`🗑️  Removing deleted content files (${deleted.length})...`);
+    console.log(`🗑️  Applying content deletions (${deleted.length} remote event(s))...`);
   }
   for (const id of deleted) {
     if (remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap) {
@@ -664,13 +864,25 @@ async function main(options: PullContentOptions = {}): Promise<void> {
       // match a different remote's ID.
       const entry = rcModule.findContentByRemoteId(metadataMap, id);
       if (entry) {
-        console.log(`   🗑️  ${entry.language}/${entry.slug} (deleted on remote)`);
-        await deleteContentFilesBySlug(
-          CONTENT_DIR,
-          entry.slug,
+        let deletedCount = await deleteContentFilesByIdentity(
+          contentIdentityIndex,
           entry.language,
-          getConfig().defaultLanguage
+          entry.slug
         );
+        if (deletedCount === 0) {
+          deletedCount = await deleteContentFilesBySlug(
+            CONTENT_DIR,
+            entry.slug,
+            entry.language,
+            getConfig().defaultLanguage
+          );
+        }
+        if (deletedCount > 0) {
+          console.log(`   🗑️  ${entry.language}/${entry.slug} (deleted on remote)`);
+          deletedLocalFiles += deletedCount;
+        } else {
+          deletionEventsWithoutLocalFile++;
+        }
         // Clean up the metadata entry for this deleted content
         if (metadataMap.content[entry.language]) {
           delete metadataMap.content[entry.language][entry.slug];
@@ -680,6 +892,9 @@ async function main(options: PullContentOptions = {}): Promise<void> {
         }
       }
       // If not found in metadata, skip — this ID was never synced to this remote locally
+      else {
+        deletionEventsUnknownToMetadata++;
+      }
     } else {
       const paths = contentIdIndex.get(String(id));
       if (paths && paths.length > 0) {
@@ -687,12 +902,48 @@ async function main(options: PullContentOptions = {}): Promise<void> {
           `   🗑️  ${paths.map((p) => path.relative(CONTENT_DIR, p)).join(", ")} (deleted on remote)`
         );
       }
-      await deleteContentFilesById(contentIdIndex, String(id));
+      const deletedCount = await deleteContentFilesById(contentIdIndex, String(id));
+      if (deletedCount > 0) {
+        deletedLocalFiles += deletedCount;
+      } else {
+        deletionEventsWithoutLocalFile++;
+      }
     }
   }
 
+  if (deleted.length > 0) {
+    if (deletedLocalFiles > 0) {
+      console.log(`   ✅ Removed ${deletedLocalFiles} local content file(s).`);
+    }
+    const skippedDeletionEvents = deletionEventsWithoutLocalFile + deletionEventsUnknownToMetadata;
+    if (skippedDeletionEvents > 0) {
+      console.log(
+        `   ℹ️  ${skippedDeletionEvents} remote deletion event(s) had no matching local file.`
+      );
+    }
+  }
+
+  const staleContentRemoved = await cleanupStaleRemoteDeletedContent(
+    remoteCtx,
+    metadataMap,
+    rcModule
+  );
+  if (staleContentRemoved > 0) {
+    if (deleted.length === 0) {
+      console.log(`🧹 Cleaning up stale content files...`);
+    }
+    console.log(
+      `   ✅ Removed ${staleContentRemoved} stale content file(s) from earlier remote deletions.`
+    );
+  }
+
   // Persist per-remote metadata after processing content items and/or deletions
-  if (remoteCtx && rcModule && metadataMap && (items.length > 0 || deleted.length > 0)) {
+  if (
+    remoteCtx &&
+    rcModule &&
+    metadataMap &&
+    (items.length > 0 || deleted.length > 0 || staleContentRemoved > 0)
+  ) {
     await rcModule.writeMetadataMap(remoteCtx, metadataMap);
     logger.verbose(`[PULL] Updated metadata-map for remote "${remoteCtx.name}"`);
   }

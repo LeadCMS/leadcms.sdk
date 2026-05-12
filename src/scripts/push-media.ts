@@ -9,6 +9,11 @@ import { loadConfig, LeadCMSConfig } from "../lib/config.js";
 import { success, error, warn, info } from "../lib/console-colors.js";
 import { logger } from "../lib/logger.js";
 import type { RemoteContext } from "../lib/remote-context.js";
+import {
+  pullMediaSync,
+  readMediaSyncTokenForStatus,
+  type MediaDeletedItem,
+} from "./pull-leadcms-media.js";
 
 /**
  * Represents a local media file with metadata
@@ -27,7 +32,7 @@ export interface LocalMediaFile {
  * Represents operation to perform on a media file
  */
 export interface MediaOperation {
-  type: "create" | "update" | "delete" | "skip";
+  type: "create" | "remote-created" | "update" | "delete" | "skip" | "remote-deleted";
   local?: LocalMediaFile;
   remote?: MediaItem;
   reason: string;
@@ -44,6 +49,8 @@ export interface MediaStatusResult {
     creates: number;
     updates: number;
     deletes: number;
+    remoteCreateds: number;
+    remoteDeleteds: number;
     skips: number;
     total: number;
   };
@@ -68,6 +75,8 @@ export interface MediaPushResult {
 export interface MediaDependencies {
   /** Function to fetch remote media - defaults to leadCMSDataService.getAllMedia */
   fetchRemoteMedia?: () => Promise<MediaItem[]>;
+  /** Function to fetch the read-only deleted-media sync delta for status. */
+  fetchDeletedMedia?: (remoteContext?: RemoteContext) => Promise<MediaDeletedItem[]>;
   /** Function to upload media - defaults to leadCMSDataService.uploadMedia */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   uploadMedia?: (formData: any) => Promise<MediaItem>;
@@ -109,6 +118,12 @@ function getDefaultDependencies(): Required<MediaDependencies> {
 
   return {
     fetchRemoteMedia: () => leadCMSDataService.getAllMedia(),
+    fetchDeletedMedia: async (remoteContext?: RemoteContext) => {
+      const baseUrl = remoteContext?.url;
+      const { token } = await readMediaSyncTokenForStatus(remoteContext);
+      const syncResult = await pullMediaSync(token, baseUrl);
+      return syncResult.deleted;
+    },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     uploadMedia: (formData: any) => leadCMSDataService.uploadMedia(formData),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -376,7 +391,9 @@ export async function reconcileLocalFile(
 export function matchMediaFiles(
   localFiles: LocalMediaFile[],
   remoteFiles: MediaItem[],
-  allowDelete: boolean = false
+  allowDelete: boolean = false,
+  remoteDeletedSet?: Set<string>,
+  detectRemoteCreated: boolean = false
 ): MediaOperation[] {
   const operations: MediaOperation[] = [];
 
@@ -400,12 +417,21 @@ export function matchMediaFiles(
     const remote = remoteMap.get(key);
 
     if (!remote) {
-      // New file - needs to be uploaded
-      operations.push({
-        type: "create",
-        local,
-        reason: "New file not present remotely",
-      });
+      // Check if this file was previously synced but has since been deleted remotely
+      if (remoteDeletedSet && remoteDeletedSet.has(key)) {
+        operations.push({
+          type: "remote-deleted",
+          local,
+          reason: "File was deleted from remote",
+        });
+      } else {
+        // New file - needs to be uploaded
+        operations.push({
+          type: "create",
+          local,
+          reason: "New file not present remotely",
+        });
+      }
     } else if (local.size !== remote.size) {
       // File size changed - needs update
       operations.push({
@@ -439,6 +465,19 @@ export function matchMediaFiles(
     }
   }
 
+  if (detectRemoteCreated) {
+    for (const remote of remoteFiles) {
+      const key = `${remote.scopeUid}/${remote.name}`.toLowerCase();
+      if (!localMap.has(key)) {
+        operations.push({
+          type: "remote-created",
+          remote,
+          reason: "New file on remote",
+        });
+      }
+    }
+  }
+
   return operations;
 }
 
@@ -457,6 +496,7 @@ export function displayMediaStatus(
   const logOk = deps?.logSuccess || success;
 
   const creates = operations.filter((op) => op.type === "create");
+  const remoteCreateds = operations.filter((op) => op.type === "remote-created");
   const updates = operations.filter((op) => op.type === "update");
   const deletes = showDelete ? operations.filter((op) => op.type === "delete") : [];
   const skips = operations.filter((op) => op.type === "skip");
@@ -469,6 +509,13 @@ export function displayMediaStatus(
     creates.forEach((op) => {
       const sizeKB = (op.local!.size / 1024).toFixed(2);
       console.log(`   + ${op.local!.scopeUid}/${op.local!.name} (${sizeKB}KB)`);
+    });
+  }
+
+  if (remoteCreateds.length > 0) {
+    log(`\n↩️  ${remoteCreateds.length} file(s) added remotely:`);
+    remoteCreateds.forEach((op) => {
+      console.log(`   + ${op.remote!.scopeUid}/${op.remote!.name}`);
     });
   }
 
@@ -494,7 +541,7 @@ export function displayMediaStatus(
 
   console.log("\n" + "─".repeat(80));
 
-  const totalOperations = creates.length + updates.length + deletes.length;
+  const totalOperations = creates.length + remoteCreateds.length + updates.length + deletes.length;
   if (totalOperations === 0) {
     logOk("All media files are in sync! ✨");
   } else {
@@ -689,6 +736,8 @@ export interface StatusMediaOptions {
   mediaDir?: string;
   /** When true, skip console output (return data only). Used by unified status renderer. */
   silent?: boolean;
+  /** Remote context for multi-remote support. */
+  remoteContext?: RemoteContext;
 }
 
 /**
@@ -700,6 +749,7 @@ export async function statusMedia(
 ): Promise<MediaStatusResult> {
   const defaults = getDefaultDependencies();
   const fetchRemoteMedia = deps?.fetchRemoteMedia || defaults.fetchRemoteMedia;
+  const fetchDeletedMedia = deps?.fetchDeletedMedia || defaults.fetchDeletedMedia;
   const logWarnFn = deps?.logWarn || defaults.logWarn;
   const logErrFn = deps?.logError || defaults.logError;
 
@@ -712,16 +762,6 @@ export async function statusMedia(
     logger.verbose(`Scanning local media: ${mediaDir}`);
     const localFiles = scanLocalMedia(mediaDir, config);
 
-    if (localFiles.length === 0) {
-      logWarnFn("No media files found locally.");
-      return {
-        operations: [],
-        localFiles: [],
-        remoteFiles: [],
-        summary: { creates: 0, updates: 0, deletes: 0, skips: 0, total: 0 },
-      };
-    }
-
     logger.verbose(`Fetching remote media from LeadCMS...`);
     const remoteFiles = await fetchRemoteMedia();
 
@@ -733,15 +773,56 @@ export async function statusMedia(
       filteredRemote = remoteFiles.filter((f) => f.scopeUid === options.scopeUid);
     }
 
+    if (filteredLocal.length === 0 && filteredRemote.length === 0) {
+      logWarnFn("No media files found locally or remotely.");
+      return {
+        operations: [],
+        localFiles: filteredLocal,
+        remoteFiles: filteredRemote,
+        summary: {
+          creates: 0,
+          updates: 0,
+          deletes: 0,
+          remoteCreateds: 0,
+          remoteDeleteds: 0,
+          skips: 0,
+          total: 0,
+        },
+      };
+    }
+
+    // Fetch the sync-deleted list (read-only: we don't save the token) so we can
+    // distinguish "never pushed" (create) from "deleted on remote" (remote-deleted).
+    // Cross-reference local files against the deleted set.
+    let remoteDeletedSet: Set<string> | undefined;
+    try {
+      const deletedMedia = await fetchDeletedMedia(options.remoteContext);
+      if (deletedMedia.length > 0) {
+        remoteDeletedSet = new Set(
+          deletedMedia.map((d) => `${d.scopeUid}/${d.name}`.toLowerCase())
+        );
+      }
+    } catch {
+      // Sync call failed (e.g. offline) — degrade gracefully, treat all unmatched as create
+    }
+
     // Show deletes only if showDelete flag is provided
-    const operations = matchMediaFiles(filteredLocal, filteredRemote, options.showDelete || false);
+    const operations = matchMediaFiles(
+      filteredLocal,
+      filteredRemote,
+      options.showDelete || false,
+      remoteDeletedSet,
+      !options.showDelete
+    );
     if (!options.silent) {
       displayMediaStatus(operations, false, options.showDelete || false, deps);
     }
 
     const creates = operations.filter((op) => op.type === "create").length;
+    const remoteCreateds = operations.filter((op) => op.type === "remote-created").length;
     const updates = operations.filter((op) => op.type === "update").length;
     const deletes = operations.filter((op) => op.type === "delete").length;
+    const remoteDeleteds = operations.filter((op) => op.type === "remote-deleted").length;
     const skips = operations.filter((op) => op.type === "skip").length;
 
     return {
@@ -750,10 +831,12 @@ export async function statusMedia(
       remoteFiles: filteredRemote,
       summary: {
         creates,
+        remoteCreateds,
         updates,
         deletes,
+        remoteDeleteds,
         skips,
-        total: creates + updates + deletes,
+        total: creates + remoteCreateds + updates + deletes + remoteDeleteds,
       },
     };
   } catch (_err: unknown) {

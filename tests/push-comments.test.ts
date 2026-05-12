@@ -80,6 +80,40 @@ describe("push-comments", () => {
     await fs.rm(tmpRoot, { recursive: true, force: true });
   });
 
+  it("reports remote-only comments as create when showDelete is false", async () => {
+    mockedPullCommentSync.mockResolvedValueOnce({
+      items: [
+        {
+          id: 22,
+          parentId: null,
+          authorName: "Remote Author",
+          authorEmail: "remote@example.com",
+          body: "Remote-only comment",
+          status: "Approved",
+          answerStatus: "Answered",
+          createdAt: "2024-01-01T00:00:00Z",
+          updatedAt: "2024-01-02T00:00:00Z",
+          commentableId: 110,
+          commentableType: "Content",
+          language: "en",
+          translationKey: "comment-22",
+          tags: [],
+        },
+      ],
+      deleted: [],
+      nextSyncToken: "sync-2",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    const result = await buildCommentStatus({ showDelete: false });
+
+    expect(result.operations).toHaveLength(1);
+    expect(result.operations[0].type).toBe("create");
+    expect(result.operations[0].local).toBeUndefined();
+    expect(result.operations[0].remote?.id).toBe(22);
+    expect(result.operations[0].reason).toBe("New comment on remote");
+  });
+
   it("builds comment status with create, update, conflict, and delete operations", async () => {
     await writeCommentFile("content/110.json", [
       {
@@ -597,7 +631,7 @@ describe("push-comments", () => {
     await statusComments();
 
     const output = logSpy.mock.calls.flat().join("\n");
-    expect(output).toContain("new:");
+    expect(output).toContain("added locally:");
     expect(output).toContain("Content #110");
     expect(output).toContain('"Brand new local reply with extra spaces"');
     expect(output).not.toContain("comment new");

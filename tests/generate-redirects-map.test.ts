@@ -267,6 +267,34 @@ describe("generateRedirectsMap", () => {
     await expect(fs.access(path.join(outputDir, "302.map"))).rejects.toThrow();
   });
 
+  it("deletes 301.map if it existed from a previous run but now has no permanent redirects", async () => {
+    // Pre-create a stale 301.map from a previous run
+    await fs.writeFile(path.join(outputDir, "301.map"), "# stale content\n", "utf8");
+
+    // Now only temporary redirects exist
+    await writeRedirectsYaml(tmpDir, [{ kind: "Temporary", fromPath: "/old", toPath: "/new" }]);
+
+    await generateRedirectsMap({ outputDir: outputDir });
+
+    // 302.map should be written, stale 301.map must be removed
+    await expect(fs.access(path.join(outputDir, "302.map"))).resolves.toBeUndefined();
+    await expect(fs.access(path.join(outputDir, "301.map"))).rejects.toThrow();
+  });
+
+  it("deletes 302.map if it existed from a previous run but now has no temporary redirects", async () => {
+    // Pre-create a stale 302.map from a previous run
+    await fs.writeFile(path.join(outputDir, "302.map"), "# stale content\n", "utf8");
+
+    // Now only permanent redirects exist
+    await writeRedirectsYaml(tmpDir, [{ kind: "Permanent", fromPath: "/old", toPath: "/new" }]);
+
+    await generateRedirectsMap({ outputDir: outputDir });
+
+    // 301.map should be written, stale 302.map must be removed
+    await expect(fs.access(path.join(outputDir, "301.map"))).resolves.toBeUndefined();
+    await expect(fs.access(path.join(outputDir, "302.map"))).rejects.toThrow();
+  });
+
   // ── Dry run ───────────────────────────────────────────────────────
 
   it("does not write any output files in dry run mode", async () => {

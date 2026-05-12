@@ -111,4 +111,29 @@ language: ru-RU
       "Email group 'webinar-growth-aho' will be created on push"
     );
   });
+
+  it("reports remote-only templates as create when showDelete is false", async () => {
+    mockGetAllEmailTemplates.mockResolvedValue([
+      {
+        id: 15,
+        name: "remote-template",
+        subject: "Remote template",
+        fromEmail: "team@example.com",
+        fromName: "Team",
+        language: "en",
+        emailGroupId: 5,
+        emailGroup: { id: 5, name: "remote-group", language: "en" },
+        bodyTemplate: "<body>Hello</body>",
+      },
+    ]);
+    mockGetAllEmailGroups.mockResolvedValue([{ id: 5, name: "remote-group", language: "en" }]);
+
+    const result = await buildEmailTemplateStatus({ showDelete: false });
+
+    expect(result.operations).toHaveLength(1);
+    expect(result.operations[0].type).toBe("create");
+    expect(result.operations[0].local).toBeUndefined();
+    expect(result.operations[0].remote?.name).toBe("remote-template");
+    expect(result.operations[0].reason).toBe("New email template on remote");
+  });
 });

@@ -43,11 +43,13 @@ export interface MatchOperation {
 
 export interface ContentOperations {
   create: MatchOperation[];
+  remoteCreated: MatchOperation[]; // Remote content not present locally
   update: MatchOperation[];
   rename: MatchOperation[]; // Slug changed but same content
   typeChange: MatchOperation[]; // Content type changed
   conflict: MatchOperation[];
   delete: MatchOperation[]; // Remote content not present locally
+  remoteDeleted: MatchOperation[]; // Local copy exists but item was deleted from remote
 }
 
 export interface PushOptions {
@@ -78,6 +80,9 @@ const CONTENT_STATUS_ALIASES: Record<string, ContentOperationKey> = {
   create: "create",
   created: "create",
   new: "create",
+  "remote-created": "remoteCreated",
+  remotecreated: "remoteCreated",
+  "new-remotely": "remoteCreated",
   update: "update",
   updated: "update",
   modify: "update",
@@ -96,6 +101,8 @@ const CONTENT_STATUS_ALIASES: Record<string, ContentOperationKey> = {
   deleted: "delete",
   remove: "delete",
   removed: "delete",
+  "remote-deleted": "remoteDeleted",
+  remotedeleted: "remoteDeleted",
 };
 
 function normalizeStatusAlias(value: string): string {
@@ -386,16 +393,24 @@ async function matchContent(
   remoteContent: RemoteContentItem[],
   typeMap?: Record<string, string>,
   allowDelete: boolean = false,
-  metadataMap?: MetadataMap
+  metadataMap?: MetadataMap,
+  detectRemoteCreated: boolean = false
 ): Promise<ContentOperations> {
   const operations: ContentOperations = {
     create: [],
+    remoteCreated: [],
     update: [],
     rename: [],
     typeChange: [],
     conflict: [],
     delete: [],
+    remoteDeleted: [],
   };
+
+  // Build a set of all remote IDs for O(1) remote-deleted detection
+  const remoteIdSet = new Set<number | string>(
+    remoteContent.map((r) => r.id).filter((id): id is number => id != null)
+  );
 
   // Track which remote items have already been claimed by a local item.
   // This prevents two local files from matching the same remote content
@@ -409,10 +424,10 @@ async function matchContent(
     // falling back to frontmatter ID for single-remote backward compatibility
     const remoteId = metadataMap
       ? (await import("../lib/remote-context.js")).lookupRemoteId(
-          metadataMap,
-          local.locale,
-          local.slug
-        )
+        metadataMap,
+        local.locale,
+        local.slug
+      )
       : undefined;
     const matchId = remoteId ?? local.metadata.id;
     if (matchId) {
@@ -468,17 +483,17 @@ async function matchContent(
       // the primary lookup by the new local slug returns nothing.
       const localUpdatedStr = metadataMap
         ? (
-            (await import("../lib/remote-context.js")).getMetadataForContent(
-              metadataMap,
-              local.locale,
-              local.slug
-            ) ??
-            (await import("../lib/remote-context.js")).getMetadataForContent(
-              metadataMap,
-              local.locale,
-              match.slug
-            )
-          )?.updatedAt
+          (await import("../lib/remote-context.js")).getMetadataForContent(
+            metadataMap,
+            local.locale,
+            local.slug
+          ) ??
+          (await import("../lib/remote-context.js")).getMetadataForContent(
+            metadataMap,
+            local.locale,
+            match.slug
+          )
+        )?.updatedAt
         : local.metadata.updatedAt;
       const localUpdated = localUpdatedStr ? new Date(localUpdatedStr) : new Date(0);
       const remoteUpdated = match.updatedAt ? new Date(match.updatedAt) : new Date(0);
@@ -488,13 +503,13 @@ async function matchContent(
       const typeChanged = match.type !== local.type;
 
       if (remoteUpdated > localUpdated) {
-        let conflictReason = "Remote content was updated after local content";
+        let conflictReason = "Remote content has newer changes";
         if (slugChanged && typeChanged) {
-          conflictReason = "Both slug and content type changed remotely";
+          conflictReason = "Slug and content type were updated remotely";
         } else if (slugChanged) {
-          conflictReason = "Slug changed remotely after local changes";
+          conflictReason = "Slug was updated remotely";
         } else if (typeChanged) {
-          conflictReason = "Content type changed remotely after local changes";
+          conflictReason = "Content type was updated remotely";
         }
 
         operations.conflict.push({
@@ -540,10 +555,16 @@ async function matchContent(
         // If no content changes, don't add to any operation (content is in sync)
       }
     } else {
-      // No match found, this is a new content item
-      operations.create.push({
-        local,
-      });
+      // No remote match found — check whether we previously synced this item and
+      // it was deleted from remote (remote-deleted) vs truly never pushed (create).
+      if (matchId != null && !remoteIdSet.has(matchId)) {
+        operations.remoteDeleted.push({ local });
+      } else {
+        // No match found, this is a new content item
+        operations.create.push({
+          local,
+        });
+      }
     }
   }
 
@@ -601,6 +622,38 @@ async function matchContent(
     }
   }
 
+  if (detectRemoteCreated) {
+    const localKeys = new Set(
+      localContent.map((local) => `${local.slug}:${local.locale || defaultLanguage}`)
+    );
+
+    for (const remote of remoteContent) {
+      const remoteLocale = remote.language || defaultLanguage;
+      const remoteKey = `${remote.slug}:${remoteLocale}`;
+      const isMatchedById = remote.id != null && matchedRemoteIds.has(remote.id);
+
+      if (!isMatchedById && !localKeys.has(remoteKey)) {
+        operations.remoteCreated.push({
+          local: {
+            filePath: "",
+            slug: remote.slug,
+            locale: remoteLocale,
+            type: remote.type,
+            metadata: {
+              id: remote.id,
+              slug: remote.slug,
+              updatedAt: remote.updatedAt,
+            },
+            body: "",
+            isLocal: false,
+          },
+          remote,
+          reason: "New content on remote",
+        });
+      }
+    }
+  }
+
   return operations;
 }
 
@@ -611,9 +664,11 @@ function countPushChanges(
 ): number {
   return (
     operations.create.length +
+    (operations.remoteCreated?.length || 0) +
     operations.update.length +
     operations.rename.length +
     operations.typeChange.length +
+    operations.remoteDeleted.length +
     (includeConflicts ? operations.conflict.length : 0) +
     (includeDeletes ? operations.delete.length : 0)
   );
@@ -926,11 +981,17 @@ function filterContentOperations(
 
   return {
     create: includesStatus("create") ? operations.create.filter(matchesTarget) : [],
+    remoteCreated: includesStatus("remoteCreated")
+      ? operations.remoteCreated.filter(matchesTarget)
+      : [],
     update: includesStatus("update") ? operations.update.filter(matchesTarget) : [],
     rename: includesStatus("rename") ? operations.rename.filter(matchesTarget) : [],
     typeChange: includesStatus("typeChange") ? operations.typeChange.filter(matchesTarget) : [],
     conflict: includesStatus("conflict") ? operations.conflict.filter(matchesTarget) : [],
     delete: includesStatus("delete") ? operations.delete.filter(matchesTarget) : [],
+    remoteDeleted: includesStatus("remoteDeleted")
+      ? operations.remoteDeleted.filter(matchesTarget)
+      : [],
   };
 }
 
@@ -963,8 +1024,8 @@ async function displayDetailedDiff(
     // Transform remote content to local format for comparison
     const transformedRemoteContent = remote
       ? stripTimestampMetadata(
-          await transformRemoteToLocalFormat(remote, typeMap as ContentTypeMap)
-        )
+        await transformRemoteToLocalFormat(remote, typeMap as ContentTypeMap)
+      )
       : "";
 
     if (localFileContent.trim() === transformedRemoteContent.trim()) {
@@ -1060,10 +1121,12 @@ async function displayStatus(
   const deleteCount = showDelete ? operations.delete.length : 0;
   const totalChanges =
     operations.create.length +
+    operations.remoteCreated.length +
     operations.update.length +
     operations.rename.length +
     operations.typeChange.length +
     operations.conflict.length +
+    operations.remoteDeleted.length +
     deleteCount;
   if (totalChanges === 0) {
     if (isSingleFile) {
@@ -1094,7 +1157,7 @@ async function displayStatus(
       });
     }
     for (const op of operations.conflict) {
-      await displayDetailedDiff(op, `Conflict: ${op.reason}`, typeMap, {
+      await displayDetailedDiff(op, `Updated remotely: ${op.reason}`, typeMap, {
         limitPreviewLines: false,
       });
     }
@@ -1107,16 +1170,20 @@ async function displayStatus(
   // Changes to be synced (like git's "Changes to be committed")
   if (
     operations.create.length > 0 ||
+    operations.remoteCreated.length > 0 ||
     operations.update.length > 0 ||
     operations.rename.length > 0 ||
     operations.typeChange.length > 0 ||
+    operations.remoteDeleted.length > 0 ||
     deleteOpsToShow.length > 0
   ) {
     const syncableChanges =
       operations.create.length +
+      operations.remoteCreated.length +
       operations.update.length +
       operations.rename.length +
       operations.typeChange.length +
+      operations.remoteDeleted.length +
       deleteOpsToShow.length;
     console.log(`Changes to be synced (${syncableChanges} files):`);
     if (!isStatusOnly) {
@@ -1141,7 +1208,17 @@ async function displayStatus(
       const typeLabel = (op.local.type || "unknown").padEnd(12);
       const localeLabel = `[${op.local.locale || "unknown"}]`.padEnd(6);
       colorConsole.log(
-        `        ${statusColors.created("new:     ")}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)}`
+        `        ${statusColors.created("added locally: ")}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)}`
+      );
+    }
+
+    // New remote content that needs to be pulled locally
+    for (const op of sortOperations([...operations.remoteCreated])) {
+      const typeLabel = (op.remote?.type || op.local.type || "unknown").padEnd(12);
+      const localeLabel = `[${op.remote?.language || op.local.locale || "unknown"}]`.padEnd(6);
+      const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
+      colorConsole.log(
+        `        ${statusColors.created("added remotely:")} ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.remote?.slug || op.local.slug)} ${colorConsole.gray(idLabel)}`
       );
     }
 
@@ -1151,7 +1228,7 @@ async function displayStatus(
       const localeLabel = `[${op.local.locale || "unknown"}]`.padEnd(6);
       const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
       colorConsole.log(
-        `        ${statusColors.modified("modified:")}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`
+        `        ${statusColors.modified("updated locally:")}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`
       );
     }
 
@@ -1182,7 +1259,16 @@ async function displayStatus(
       const localeLabel = `[${op.remote?.language || "unknown"}]`.padEnd(6);
       const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
       colorConsole.log(
-        `        ${statusColors.conflict("deleted:")}    ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.remote?.slug || "unknown")} ${colorConsole.gray(idLabel)}`
+        `        ${statusColors.conflict("deleted locally:")}    ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.remote?.slug || "unknown")} ${colorConsole.gray(idLabel)}`
+      );
+    }
+
+    // Remote-deleted content (local file exists but item was deleted from remote)
+    for (const op of sortOperations([...operations.remoteDeleted])) {
+      const typeLabel = (op.local.type || "unknown").padEnd(12);
+      const localeLabel = `[${op.local.locale || "unknown"}]`.padEnd(6);
+      colorConsole.log(
+        `        ${statusColors.conflict("deleted remotely:")} ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)}`
       );
     }
 
@@ -1208,11 +1294,11 @@ async function displayStatus(
     }
 
     console.log("");
-  } // Conflicts (like git's merge conflicts)
+  } // Remote updates that need pulling before local changes can be pushed
   if (operations.conflict.length > 0) {
-    colorConsole.warn(`⚠️  Unmerged conflicts (${operations.conflict.length} files):`);
     const remoteFlag = remoteName ? ` -r ${remoteName}` : "";
-    colorConsole.info(`  (use "leadcms pull-content${remoteFlag}" to merge remote changes)`);
+    colorConsole.info(`↩️  Updated remotely (${operations.conflict.length} files):`);
+    colorConsole.info(`  Run "leadcms pull-content${remoteFlag}" to sync remote changes locally.`);
     colorConsole.log("");
 
     // Sort conflicts by locale then slug as well
@@ -1228,33 +1314,42 @@ async function displayStatus(
       const localeLabel = `[${op.local.locale || "unknown"}]`.padEnd(6);
       const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
       colorConsole.log(
-        `        ${statusColors.conflict("conflict:")}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`
+        `        ${statusColors.modified("updated remotely:")} ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`
       );
-      colorConsole.log(`                    ${colorConsole.gray(op.reason || "Unknown conflict")}`);
+      colorConsole.log(
+        `                    ${colorConsole.gray(op.reason || "Remote content changed")}`
+      );
     }
     colorConsole.log("");
 
-    // Show detailed previews for conflicts if requested (and not in single file mode)
+    // Show detailed previews for remote updates if requested (and not in single file mode)
     if (showDetailedPreview && !isSingleFile && operations.conflict.length > 0) {
       console.log("");
-      console.log("📋 Detailed Conflict Previews:");
+      console.log("📋 Detailed Remote Update Previews:");
       console.log("");
 
       for (const op of sortedConflicts) {
-        await displayDetailedDiff(op, `Conflict: ${op.reason}`, typeMap);
+        await displayDetailedDiff(op, `Updated remotely: ${op.reason}`, typeMap);
       }
     }
 
     if (!isStatusOnly) {
-      colorConsole.important("💡 To resolve conflicts:");
+      colorConsole.important("💡 To continue safely:");
       colorConsole.info(`   • Run "leadcms pull-content${remoteFlag}" to pull latest changes`);
-      colorConsole.info("   • Resolve conflicts in local files");
+      colorConsole.info("   • Review the synced files locally");
       colorConsole.info(`   • Run "leadcms push-content${remoteFlag}" again`);
       colorConsole.warn(
         `   • Or use "leadcms push-content${remoteFlag} --force" to override remote changes (⚠️  data loss risk)`
       );
       colorConsole.log("");
     }
+  }
+
+  if (operations.remoteCreated.length > 0) {
+    const remoteFlag = remoteName ? ` -r ${remoteName}` : "";
+    colorConsole.info(`↩️  Added remotely (${operations.remoteCreated.length} files):`);
+    colorConsole.info(`  Run "leadcms pull-content${remoteFlag}" to sync remote content locally.`);
+    colorConsole.log("");
   }
 }
 
@@ -1265,9 +1360,11 @@ async function showDryRunOperations(operations: ContentOperations): Promise<void
   // Check if there are any operations to show
   const totalOperations =
     operations.create.length +
+    operations.remoteCreated.length +
     operations.update.length +
     operations.rename.length +
     operations.typeChange.length +
+    operations.remoteDeleted.length +
     operations.delete.length;
 
   if (totalOperations === 0) {
@@ -1417,7 +1514,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     // Read local content
     const localContent = await readLocalContent();
 
-    if (localContent.length === 0) {
+    if (localContent.length === 0 && !statusOnly) {
       console.log("📂 No local content found. Nothing to sync.");
       return;
     }
@@ -1522,7 +1619,8 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
       remoteContent,
       remoteTypeMap,
       shouldDetectDeletions,
-      metadataMap
+      metadataMap,
+      statusOnly && !showDelete
     );
 
     // Filter operations if targeting specific content
@@ -1984,14 +2082,6 @@ export async function getContentStatusData(
 
   const localContent = await readLocalContent();
 
-  if (localContent.length === 0) {
-    return {
-      operations: { create: [], update: [], rename: [], typeChange: [], conflict: [], delete: [] },
-      totalLocal: 0,
-      totalRemote: 0,
-    };
-  }
-
   const remoteTypes = await leadCMSDataService.getContentTypes();
   const remoteTypeMap: Record<string, string> = {};
   if (Array.isArray(remoteTypes)) {
@@ -2018,7 +2108,8 @@ export async function getContentStatusData(
     remoteContent,
     remoteTypeMap,
     options.showDelete || false,
-    metadataMap
+    metadataMap,
+    !options.showDelete
   );
 
   return {

@@ -434,6 +434,7 @@ export async function buildCommentStatus(
   }
 
   const operations: CommentOperation[] = [];
+  const matchedRemoteIds = new Set<number>();
 
   for (const local of localComments) {
     // Determine the remote ID for this comment:
@@ -480,6 +481,8 @@ export async function buildCommentStatus(
       continue;
     }
 
+    matchedRemoteIds.add(remote.id);
+
     if (hasEditableDifferences(local.comment, remote, canReparent)) {
       if (isRemoteNewer(local.comment, remote, metadataMap)) {
         operations.push({
@@ -509,7 +512,7 @@ export async function buildCommentStatus(
 
   if (showDelete) {
     // Collect all known remote IDs — both from local file IDs and metadata map
-    const knownRemoteIds = new Set<number>();
+    const knownRemoteIds = new Set<number>(matchedRemoteIds);
     for (const item of localComments) {
       if (item.comment.id != null) knownRemoteIds.add(item.comment.id);
       if (metadataMap && item.comment.translationKey && item.comment.language) {
@@ -522,6 +525,22 @@ export async function buildCommentStatus(
     for (const remote of remoteComments) {
       if (!knownRemoteIds.has(remote.id)) {
         operations.push({ type: "delete", remote });
+      }
+    }
+  } else {
+    const knownRemoteIds = new Set<number>(matchedRemoteIds);
+    for (const item of localComments) {
+      if (item.comment.id != null) knownRemoteIds.add(item.comment.id);
+      if (metadataMap && item.comment.translationKey && item.comment.language) {
+        const metaId =
+          metadataMap.comments?.[item.comment.language]?.[item.comment.translationKey]?.id;
+        if (metaId != null) knownRemoteIds.add(Number(metaId));
+      }
+    }
+
+    for (const remote of remoteComments) {
+      if (!knownRemoteIds.has(remote.id)) {
+        operations.push({ type: "create", remote, reason: "New comment on remote" });
       }
     }
   }
@@ -749,22 +768,26 @@ export async function statusComments(options: CommentStatusOptions = {}): Promis
     const locale = local?.language ?? remote?.language ?? DEFAULT_LANGUAGE;
     const commentableType = local?.commentableType ?? remote?.commentableType ?? "Unknown";
     const commentableId = local?.commentableId ?? remote?.commentableId ?? "unknown";
-    const commentRef = op.type === "create" ? "" : ` comment ${commentId}`;
-    const createPreview = op.type === "create" ? formatInlineCommentPreview(local?.body) : "";
+    const isRemoteCreate = op.type === "create" && remote && !local;
+    const commentRef = op.type === "create" && !isRemoteCreate ? "" : ` comment ${commentId}`;
+    const createPreview =
+      op.type === "create" ? formatInlineCommentPreview(local?.body ?? remote?.body) : "";
     const previewSuffix = createPreview ? ` - ${JSON.stringify(createPreview)}` : "";
     const line = `${formatCommentableLabel(commentableType, commentableId)} [${locale}]${commentRef}${previewSuffix}`;
 
     switch (op.type) {
       case "create":
-        colorConsole.log(`   ${statusColors.created("new:      ")} ${line}`);
+        colorConsole.log(
+          `   ${statusColors.created(isRemoteCreate ? "added remotely:" : "added locally: ")} ${line}`
+        );
         printCommentPreview(op);
         break;
       case "update":
-        colorConsole.log(`   ${statusColors.modified("modified: ")} ${line}`);
+        colorConsole.log(`   ${statusColors.modified("updated locally:")} ${line}`);
         printCommentPreview(op);
         break;
       case "delete":
-        colorConsole.log(`   ${statusColors.conflict("deleted:  ")} ${line}`);
+        colorConsole.log(`   ${statusColors.conflict("deleted locally:")} ${line}`);
         printCommentPreview(op);
         break;
       case "conflict":
@@ -895,7 +918,7 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
   // Count operations that actually result in an API call so we can emit
   // `[n/total]` progress prefixes similar to `push-media`.
   const totalOps = status.operations.reduce((count, op) => {
-    if (op.type === "create") return count + 1;
+    if (op.type === "create" && op.local) return count + 1;
     if (op.type === "update") return count + 1;
     if (op.type === "conflict" && force && op.local) return count + 1;
     if (op.type === "delete" && allowDelete) return count + 1;

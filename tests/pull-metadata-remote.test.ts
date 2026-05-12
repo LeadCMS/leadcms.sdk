@@ -142,7 +142,7 @@ describe("deleteContentFilesBySlug", () => {
     const filePath = path.join(contentDir, "test-article.mdx");
     await fs.writeFile(filePath, "---\ntitle: Test\n---\nContent");
 
-    await deleteContentFilesBySlug(contentDir, "test-article", "en", "en");
+    await expect(deleteContentFilesBySlug(contentDir, "test-article", "en", "en")).resolves.toBe(1);
 
     await expect(fs.access(filePath)).rejects.toThrow();
   });
@@ -151,7 +151,7 @@ describe("deleteContentFilesBySlug", () => {
     const filePath = path.join(contentDir, "widget.json");
     await fs.writeFile(filePath, JSON.stringify({ title: "Widget" }));
 
-    await deleteContentFilesBySlug(contentDir, "widget", "en", "en");
+    await expect(deleteContentFilesBySlug(contentDir, "widget", "en", "en")).resolves.toBe(1);
 
     await expect(fs.access(filePath)).rejects.toThrow();
   });
@@ -162,15 +162,13 @@ describe("deleteContentFilesBySlug", () => {
     const filePath = path.join(dir, "article.mdx");
     await fs.writeFile(filePath, "---\ntitle: Article\n---\nContenu");
 
-    await deleteContentFilesBySlug(contentDir, "article", "fr", "en");
+    await expect(deleteContentFilesBySlug(contentDir, "article", "fr", "en")).resolves.toBe(1);
 
     await expect(fs.access(filePath)).rejects.toThrow();
   });
 
   it("should not throw when file does not exist", async () => {
-    await expect(
-      deleteContentFilesBySlug(contentDir, "nonexistent", "en", "en")
-    ).resolves.toBeUndefined();
+    await expect(deleteContentFilesBySlug(contentDir, "nonexistent", "en", "en")).resolves.toBe(0);
   });
 });
 

@@ -59,7 +59,7 @@ export function resolveRemote(remoteName?: string, config?: LeadCMSConfig): Remo
     if (remoteName && remoteName !== "default") {
       throw new Error(
         `Remote "${remoteName}" is not configured. ` +
-          `Add a "remotes" block to your leadcms config file to use named remotes.`
+        `Add a "remotes" block to your leadcms config file to use named remotes.`
       );
     }
     return {
@@ -82,7 +82,7 @@ export function resolveRemote(remoteName?: string, config?: LeadCMSConfig): Remo
   if (!name) {
     throw new Error(
       `No remote specified and no "defaultRemote" configured. ` +
-        `Either pass --remote <name> or set "defaultRemote" in your config.`
+      `Either pass --remote <name> or set "defaultRemote" in your config.`
     );
   }
 

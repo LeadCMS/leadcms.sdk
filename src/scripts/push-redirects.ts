@@ -34,6 +34,7 @@ import {
   stripDefaultLanguage,
   injectDefaultLanguage,
 } from "../lib/automation-types.js";
+import { pullRedirectsSync, readRedirectSyncTokenForStatus } from "./pull-redirects.js";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -138,9 +139,7 @@ function remotePayloadKey(r: RedirectDetailsDto): string {
 
 // ── Plan operations ────────────────────────────────────────────────────
 
-async function readRedirectIdMap(
-  remoteCtx?: RemoteContext
-): Promise<Record<string, number>> {
+async function readRedirectIdMap(remoteCtx?: RemoteContext): Promise<Record<string, number>> {
   try {
     const rc = await import("../lib/remote-context.js");
     const ctx = remoteCtx ?? rc.resolveRemote();
@@ -190,6 +189,28 @@ function planOperations(
   }
 
   return ops;
+}
+
+function appendRemoteOnlyCreates(
+  ops: RedirectOperation[],
+  locals: LocalRedirect[],
+  remotes: RedirectDetailsDto[]
+): void {
+  const localKeys = new Set(locals.map((local) => redirectSurrogateKey(local)));
+  const existingOpKeys = new Set(
+    ops
+      .map((op) => op.local ?? op.remote)
+      .filter((redirect): redirect is LocalRedirect | RedirectDetailsDto => Boolean(redirect))
+      .map((redirect) => redirectSurrogateKey(redirect))
+  );
+
+  for (const remote of remotes) {
+    const key = redirectSurrogateKey(remote);
+    if (!localKeys.has(key) && !existingOpKeys.has(key)) {
+      ops.push({ type: "create", remote, reason: "New redirect on remote" });
+      existingOpKeys.add(key);
+    }
+  }
 }
 
 // ── Main export ────────────────────────────────────────────────────────
@@ -286,7 +307,7 @@ export interface RedirectStatusResult {
 
 function labelRedirect(local?: LocalRedirect, remote?: RedirectDetailsDto): string {
   const fmtSlug = (lang: string | null | undefined, slug: string | null | undefined) =>
-    slug ? (lang ? `[${lang}/${slug}]` : `[${slug}]`) : null;
+    slug ? (lang ? `[${lang}] ${slug}` : slug) : null;
 
   const from =
     local?.fromPath ??
@@ -319,6 +340,21 @@ export async function buildRedirectStatus(
   const remotes = await leadCMSDataService.getAllRedirects();
   const idMap = await readRedirectIdMap(remoteContext);
   const ops = planOperations(locals, remotes, showDelete, idMap);
+
+  if (!showDelete) {
+    appendRemoteOnlyCreates(ops, locals, remotes);
+  }
+
+  try {
+    const syncToken = await readRedirectSyncTokenForStatus(remoteContext);
+    if (syncToken) {
+      const syncResult = await pullRedirectsSync(syncToken, remoteContext?.url);
+      appendRemoteOnlyCreates(ops, locals, syncResult.items);
+    }
+  } catch {
+    // Status should still work offline or against older servers without sync support.
+  }
+
   return {
     operations: ops.filter((o) => o.type !== "skip"),
     totalLocal: locals.length,
@@ -347,27 +383,36 @@ export async function statusRedirects(
     const label = labelRedirect(op.local, op.remote);
     const idLabel = op.remote?.id ? colorConsole.gray(`(ID: ${op.remote.id})`) : "";
     switch (op.type) {
-      case "create":
+      case "create": {
+        const createLabel = op.remote && !op.local ? "added remotely:" : "added locally: ";
         colorConsole.log(
-          `   ${statusColors.created("new:      ")} ${colorConsole.highlight(label)}`
+          `   ${statusColors.created(createLabel)} ${colorConsole.highlight(label)}`
         );
         break;
+      }
       case "update":
         colorConsole.log(
-          `   ${statusColors.modified("modified: ")} ${colorConsole.highlight(label)} ${idLabel}`
+          `   ${statusColors.modified("updated locally:")} ${colorConsole.highlight(label)} ${idLabel}`
         );
         break;
       case "delete":
         colorConsole.log(
-          `   ${statusColors.conflict("deleted:  ")} ${colorConsole.highlight(label)} ${idLabel}`
+          `   ${statusColors.conflict("deleted locally:")} ${colorConsole.highlight(label)} ${idLabel}`
         );
         break;
       case "remote-deleted":
         colorConsole.log(
-          `   ${statusColors.conflict("to delete:")} ${colorConsole.highlight(label)}`
+          `   ${statusColors.conflict("deleted remotely:")} ${colorConsole.highlight(label)}`
         );
         break;
     }
+  }
+  if (operations.some((op) => op.type === "create" && op.remote && !op.local)) {
+    const remoteFlag = options.remoteContext?.name ? ` -r ${options.remoteContext.name}` : "";
+    colorConsole.log("");
+    colorConsole.info(
+      `Run "leadcms pull-redirects${remoteFlag}" to sync remote redirects locally.`
+    );
   }
   colorConsole.log("");
 }

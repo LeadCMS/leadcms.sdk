@@ -25,7 +25,7 @@ interface ScriptError extends Error {
   code?: string;
   response?: {
     status?: number;
-    data?: { detail?: string; title?: string; message?: string; [key: string]: unknown } | null;
+    data?: { detail?: string; title?: string; message?: string;[key: string]: unknown } | null;
   };
   status?: number;
 }
@@ -51,6 +51,67 @@ async function readFileOrUndefined(filePath: string): Promise<string | undefined
   } catch {
     return undefined;
   }
+}
+
+interface EmailTemplateIdentityEntry {
+  filePath: string;
+  language: string;
+  name: string;
+  id?: string;
+}
+
+type EmailTemplateIdentityIndex = Map<string, EmailTemplateIdentityEntry[]>;
+
+function emailTemplateIdentityKey(language: string, name: string): string {
+  return `${language}/${name}`;
+}
+
+async function buildEmailTemplateIdentityIndex(dir: string): Promise<EmailTemplateIdentityIndex> {
+  const index: EmailTemplateIdentityIndex = new Map();
+
+  async function walk(
+    currentDir: string,
+    locale: string = defaultLanguage,
+    baseDir: string = dir
+  ): Promise<void> {
+    let entries;
+    try {
+      entries = await fs.readdir(currentDir, { withFileTypes: true });
+    } catch (_err: unknown) {
+      const err = _err as ScriptError;
+      if (err.code !== "ENOENT") {
+        console.warn(`[EMAIL_TEMPLATES] Could not read directory ${currentDir}:`, err.message);
+      }
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        const isLocaleDir = currentDir === dir && /^[a-z]{2}(-[A-Z]{2})?$/.test(entry.name);
+        await walk(fullPath, isLocaleDir ? entry.name : locale, isLocaleDir ? fullPath : baseDir);
+      } else if (entry.isFile() && entry.name.endsWith(".html")) {
+        try {
+          const content = await fs.readFile(fullPath, "utf8");
+          const parsed = parseEmailTemplateFileContent(content);
+          const metadata = parsed.metadata || {};
+          const name =
+            typeof metadata.name === "string" ? metadata.name : path.basename(fullPath, ".html");
+          const language = typeof metadata.language === "string" ? metadata.language : locale;
+          const id = metadata.id == null ? undefined : String(metadata.id);
+          const key = emailTemplateIdentityKey(language, name);
+          const existing = index.get(key) ?? [];
+          existing.push({ filePath: fullPath, language, name, id });
+          index.set(key, existing);
+        } catch {
+          /* skip unreadable files */
+        }
+      }
+    }
+  }
+
+  await walk(dir);
+  return index;
 }
 
 /**
@@ -245,19 +306,107 @@ async function buildEmailTemplateIdIndex(dir: string): Promise<Map<string, strin
 async function deleteEmailTemplateFilesById(
   index: Map<string, string[]>,
   id: string
-): Promise<void> {
+): Promise<number> {
   const paths = index.get(id);
-  if (!paths) return;
+  if (!paths) return 0;
 
+  let deletedCount = 0;
   for (const filePath of paths) {
     try {
       await fs.unlink(filePath);
+      deletedCount++;
     } catch {
       // ignore missing files
     }
   }
 
   index.delete(id);
+  return deletedCount;
+}
+
+async function deleteEmailTemplateFilesByIdentity(
+  index: EmailTemplateIdentityIndex,
+  language: string,
+  name: string
+): Promise<number> {
+  const key = emailTemplateIdentityKey(language, name);
+  const entries = index.get(key);
+  if (!entries || entries.length === 0) return 0;
+
+  let deletedCount = 0;
+  for (const entry of entries) {
+    try {
+      await fs.unlink(entry.filePath);
+      deletedCount++;
+    } catch {
+      // ignore missing files
+    }
+  }
+
+  index.delete(key);
+  return deletedCount;
+}
+
+async function cleanupStaleRemoteDeletedEmailTemplates(
+  remoteCtx: RemoteContext | undefined,
+  metadataMap: MetadataMap | undefined,
+  rcModule: typeof import("../lib/remote-context.js") | undefined
+): Promise<number> {
+  if (!remoteCtx || remoteCtx.isDefault || !metadataMap || !rcModule) return 0;
+
+  try {
+    const dataServiceModule = await import("../lib/data-service.js");
+    const service = dataServiceModule.leadCMSDataService as unknown as {
+      getAllEmailTemplates?: () => Promise<
+        Array<{ id?: number | string; name?: string; language?: string }>
+      >;
+      isMockMode?: () => boolean;
+    };
+    if (service.isMockMode?.()) return 0;
+    if (typeof service.getAllEmailTemplates !== "function") return 0;
+
+    const remoteTemplates = await service.getAllEmailTemplates();
+    const remoteIds = new Set(
+      remoteTemplates
+        .map((template) => template.id)
+        .filter((id): id is number | string => id != null)
+    );
+    const remoteKeys = new Set(
+      remoteTemplates
+        .filter((template) => template.name)
+        .map((template) =>
+          emailTemplateIdentityKey(template.language || defaultLanguage, template.name!)
+        )
+    );
+    const localIndex = await buildEmailTemplateIdentityIndex(EMAIL_TEMPLATES_DIR);
+    let removed = 0;
+
+    for (const [key, entries] of Array.from(localIndex.entries())) {
+      const [language, ...nameParts] = key.split("/");
+      const name = nameParts.join("/");
+      const remoteId = metadataMap.emailTemplates?.[language]?.[name]?.id;
+      const wasSynced = remoteId != null || entries.some((entry) => entry.id != null);
+      if (!wasSynced) continue;
+
+      const missingRemoteId = remoteId != null && !remoteIds.has(remoteId);
+      const missingRemoteKey = remoteId == null && !remoteKeys.has(key);
+      if (!missingRemoteId && !missingRemoteKey) continue;
+
+      removed += await deleteEmailTemplateFilesByIdentity(localIndex, language, name);
+      if (metadataMap.emailTemplates?.[language]?.[name]) {
+        delete metadataMap.emailTemplates[language][name];
+        if (Object.keys(metadataMap.emailTemplates[language]).length === 0) {
+          delete metadataMap.emailTemplates[language];
+        }
+      }
+    }
+
+    return removed;
+  } catch (_error: unknown) {
+    const error = _error as Error;
+    logger.verbose(`[PULL] Skipping stale email template cleanup: ${error.message}`);
+    return 0;
+  }
 }
 
 export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Promise<void> {
@@ -320,6 +469,14 @@ export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Prom
     items.length > 0 || deleted.length > 0
       ? await buildEmailTemplateIdIndex(EMAIL_TEMPLATES_DIR)
       : new Map<string, string[]>();
+  const identityIndex =
+    items.length > 0 || deleted.length > 0
+      ? await buildEmailTemplateIdentityIndex(EMAIL_TEMPLATES_DIR)
+      : new Map<string, EmailTemplateIdentityEntry[]>();
+
+  console.log(
+    `📧 Processing email template sync (${items.length} remote update(s), ${deleted.length} remote deletion event(s))...`
+  );
 
   const hasBaseItems = Object.keys(baseItems).length > 0;
   let mergedCount = 0;
@@ -453,8 +610,8 @@ export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Prom
     }
   }
 
-  if (hasBaseItems && items.length > 0) {
-    console.log(`\n📊 Email templates sync summary:`);
+  if (items.length > 0) {
+    console.log(`   ✅ Processed ${items.length} email template update(s).`);
     if (newCount > 0) console.log(`   ✨ New: ${newCount}`);
     if (overwrittenCount > 0) console.log(`   📝 Updated (no local changes): ${overwrittenCount}`);
     if (mergedCount > 0) console.log(`   🔀 Auto-merged: ${mergedCount}`);
@@ -462,41 +619,123 @@ export async function pullLeadCMSEmailTemplates(remoteCtx?: RemoteContext): Prom
       console.log(`   ⚠️  Conflicts (need manual resolution): ${conflictCount}`);
   }
 
+  let deletedLocalTemplates = 0;
+  let deletionEventsWithoutLocalFile = 0;
+  let deletionEventsUnknownToMetadata = 0;
   if (deleted.length > 0) {
-    console.log(`🗑️  Removing deleted email templates (${deleted.length})...`);
+    console.log(`🗑️  Applying email template deletions (${deleted.length} remote event(s))...`);
   }
   for (const id of deleted) {
     if (remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap) {
       // Non-default remote: resolve ID → name via metadata.
       const entry = rcModule.findEmailTemplateByRemoteId(metadataMap, id);
       if (entry) {
-        const oldTemplate = {
-          name: entry.name,
-          language: entry.language,
-        } as EmailTemplateRemoteData;
-        const filePath = getEmailTemplateFilePath(oldTemplate);
-        console.log(`   🗑️  ${path.basename(filePath)} (deleted on remote)`);
-        try {
-          await fs.unlink(filePath);
-        } catch {
-          /* ignore */
+        let eventDeletedCount = await deleteEmailTemplateFilesByIdentity(
+          identityIndex,
+          entry.language,
+          entry.name
+        );
+        if (eventDeletedCount > 0) {
+          console.log(`   🗑️  ${entry.name} (deleted on remote)`);
+          deletedLocalTemplates += eventDeletedCount;
+        }
+
+        // If identity lookup misses, use the default remote's ID to look up the
+        // actual file path in idIndex because local frontmatter stores that ID.
+        const defaultId = defaultMetadataMap?.emailTemplates?.[entry.language]?.[entry.name]?.id;
+        const indexKey = defaultId != null ? String(defaultId) : null;
+        const paths = eventDeletedCount === 0 && indexKey ? idIndex.get(indexKey) : undefined;
+        if (paths && paths.length > 0) {
+          console.log(
+            `   🗑️  ${paths.map((p) => path.basename(p)).join(", ")} (deleted on remote)`
+          );
+          for (const filePath of paths) {
+            try {
+              await fs.unlink(filePath);
+              eventDeletedCount++;
+              deletedLocalTemplates++;
+            } catch {
+              /* ignore */
+            }
+          }
+          if (indexKey) idIndex.delete(indexKey);
+        } else if (eventDeletedCount === 0) {
+          // Fallback: construct path from name/language (emailGroup unknown — may miss grouped templates)
+          const oldTemplate = {
+            name: entry.name,
+            language: entry.language,
+          } as EmailTemplateRemoteData;
+          const filePath = getEmailTemplateFilePath(oldTemplate);
+          try {
+            await fs.unlink(filePath);
+            eventDeletedCount++;
+            deletedLocalTemplates++;
+            console.log(`   🗑️  ${path.basename(filePath)} (deleted on remote)`);
+          } catch {
+            /* ignore */
+          }
+        }
+        if (eventDeletedCount === 0) {
+          deletionEventsWithoutLocalFile++;
         }
         // Clean up metadata entry
         if (metadataMap.emailTemplates?.[entry.language]?.[entry.name]) {
           delete metadataMap.emailTemplates[entry.language][entry.name];
         }
+      } else {
+        deletionEventsUnknownToMetadata++;
       }
     } else {
       const paths = idIndex.get(String(id));
       if (paths && paths.length > 0) {
         console.log(`   🗑️  ${paths.map((p) => path.basename(p)).join(", ")} (deleted on remote)`);
       }
-      await deleteEmailTemplateFilesById(idIndex, String(id));
+      const deletedCount = await deleteEmailTemplateFilesById(idIndex, String(id));
+      if (deletedCount > 0) {
+        deletedLocalTemplates += deletedCount;
+      } else {
+        deletionEventsWithoutLocalFile++;
+      }
     }
   }
 
+  if (deleted.length > 0) {
+    if (deletedLocalTemplates > 0) {
+      console.log(`   ✅ Removed ${deletedLocalTemplates} local email template file(s).`);
+    }
+    const skippedDeletionEvents = deletionEventsWithoutLocalFile + deletionEventsUnknownToMetadata;
+    if (skippedDeletionEvents > 0) {
+      console.log(
+        `   ℹ️  ${skippedDeletionEvents} remote deletion event(s) had no matching local file.`
+      );
+    }
+  }
+
+  const staleTemplatesRemoved = await cleanupStaleRemoteDeletedEmailTemplates(
+    remoteCtx,
+    metadataMap,
+    rcModule
+  );
+  if (staleTemplatesRemoved > 0) {
+    if (deleted.length === 0) {
+      console.log(`🧹 Cleaning up stale email template files...`);
+    }
+    console.log(
+      `   ✅ Removed ${staleTemplatesRemoved} stale email template file(s) from earlier remote deletions.`
+    );
+  }
+
+  if (items.length === 0 && deleted.length === 0 && staleTemplatesRemoved === 0) {
+    console.log(`No email template changes detected.`);
+  }
+
   // Persist per-remote metadata after processing all templates
-  if (remoteCtx && rcModule && metadataMap && (items.length > 0 || deleted.length > 0)) {
+  if (
+    remoteCtx &&
+    rcModule &&
+    metadataMap &&
+    (items.length > 0 || deleted.length > 0 || staleTemplatesRemoved > 0)
+  ) {
     await rcModule.writeMetadataMap(remoteCtx, metadataMap);
     logger.verbose(`[PULL] Updated metadata-map for remote "${remoteCtx.name}"`);
   }

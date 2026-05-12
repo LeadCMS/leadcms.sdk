@@ -210,7 +210,9 @@ export async function buildSegmentStatus(
     const match = getRemoteMatch(segment, remoteSegments, metadataMap);
 
     if (!match) {
-      const remoteIds = new Set(remoteSegments.map((s) => s.id).filter((id): id is number => id != null));
+      const remoteIds = new Set(
+        remoteSegments.map((s) => s.id).filter((id): id is number => id != null)
+      );
       if (segment.id != null && !remoteIds.has(segment.id as number)) {
         operations.push({ type: "remote-deleted", local: segment, filePath });
       } else {
@@ -247,6 +249,16 @@ export async function buildSegmentStatus(
     for (const remote of remoteSegments) {
       if (!localNames.has(remote.name) && (remote.id == null || !localIds.has(remote.id))) {
         operations.push({ type: "delete", remote });
+      }
+    }
+  } else {
+    const localNames = new Set(localFiles.map((f) => f.segment.name));
+    const localIds = new Set(
+      localFiles.map((f) => f.segment.id).filter((id): id is number => id != null)
+    );
+    for (const remote of remoteSegments) {
+      if (!localNames.has(remote.name) && (remote.id == null || !localIds.has(remote.id))) {
+        operations.push({ type: "create", remote, reason: "New segment on remote" });
       }
     }
   }
@@ -362,14 +374,16 @@ export async function statusSegments(options: StatusOptions = {}): Promise<void>
     const nameLabel = op.local?.name || op.remote?.name || "unknown";
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
     switch (op.type) {
-      case "create":
+      case "create": {
+        const createLabel = op.remote && !op.local ? "added remotely:" : "added locally: ";
         colorConsole.log(
-          `   ${statusColors.created("new:      ")} ${colorConsole.highlight(nameLabel)}`
+          `   ${statusColors.created(createLabel)} ${colorConsole.highlight(nameLabel)}`
         );
         break;
+      }
       case "update":
         colorConsole.log(
-          `   ${statusColors.modified("modified: ")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+          `   ${statusColors.modified("updated locally:")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
         );
         break;
       case "conflict":
@@ -380,12 +394,12 @@ export async function statusSegments(options: StatusOptions = {}): Promise<void>
         break;
       case "delete":
         colorConsole.log(
-          `   ${statusColors.conflict("deleted:  ")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+          `   ${statusColors.conflict("deleted locally:")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
         );
         break;
       case "remote-deleted":
         colorConsole.log(
-          `   ${statusColors.conflict("to delete:")} ${colorConsole.highlight(nameLabel)}`
+          `   ${statusColors.conflict("deleted remotely:")} ${colorConsole.highlight(nameLabel)}`
         );
         break;
     }

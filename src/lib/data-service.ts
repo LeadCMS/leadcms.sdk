@@ -464,59 +464,44 @@ class LeadCMSDataService {
 
     if (this.useMock && this.mockData) {
       logger.verbose("[MOCK] Returning mock content data");
-      // Simulate network delay
       return [...this.mockData.remoteContent];
     }
 
-    try {
-      logger.verbose("[API] Fetching content from LeadCMS...");
-
-      if (!this.baseURL) {
-        throw new Error(
-          "LeadCMS URL is not configured. Please set LEADCMS_URL or NEXT_PUBLIC_LEADCMS_URL in your .env file."
-        );
-      }
-
-      const fullUrl = `${this.baseURL}/api/content/sync`;
-
-      const response: AxiosResponse = await axios.get(fullUrl, {
-        headers: this.getApiHeaders(),
-      });
-
-      // Ensure we always return an array
-      if (response.status === 204) {
-        logger.verbose("[API DEBUG] Status 204 - No Content");
-        return [];
-      }
-
-      const data = response.data;
-      if (!data) {
-        logger.verbose("[API DEBUG] No content data returned from API (data is falsy)");
-        return [];
-      }
-
-      // Check if response has 'items' property (API wrapper format)
-      let items: ContentItem[];
-      if (data.items && Array.isArray(data.items)) {
-        logger.verbose(
-          `[API] Found items array in response wrapper with ${data.items.length} items`
-        );
-        items = data.items;
-      } else if (Array.isArray(data)) {
-        logger.verbose(`[API] Response data is direct array with ${data.length} items`);
-        items = data;
-      } else {
-        console.warn("[API] API returned unexpected data format:", typeof data, data);
-        return [];
-      }
-
-      logger.verbose(`[API DEBUG] Successfully parsed ${items.length} content items`);
-      return items;
-    } catch (_error: unknown) {
-      const error = _error as ApiAxiosError;
-      console.error("[API] Failed to fetch content:", error.message);
-      throw error;
+    if (!this.baseURL) {
+      throw new Error(
+        "LeadCMS URL is not configured. Please set LEADCMS_URL or NEXT_PUBLIC_LEADCMS_URL in your .env file."
+      );
     }
+
+    const allContent: ContentItem[] = [];
+    const limit = 100;
+    let skip = 0;
+
+    while (true) {
+      try {
+        const url = new URL(`${this.baseURL}/api/content`);
+        url.searchParams.set("filter[skip]", String(skip));
+        url.searchParams.set("filter[limit]", String(limit));
+
+        logger.verbose(`[API] Fetching content (skip=${skip}, limit=${limit})`);
+
+        const response: AxiosResponse<ContentItem[]> = await axios.get(url.toString(), {
+          headers: this.getApiHeaders(),
+        });
+
+        const batch: ContentItem[] = Array.isArray(response.data) ? response.data : [];
+        allContent.push(...batch);
+
+        if (batch.length < limit) break;
+        skip += batch.length;
+      } catch (_error: unknown) {
+        const error = _error as ApiAxiosError;
+        console.error("[API] Failed to fetch content:", error.message);
+        throw error;
+      }
+    }
+
+    return allContent;
   }
 
   /**
@@ -2092,51 +2077,43 @@ class LeadCMSDataService {
       return media;
     }
 
-    try {
-      logger.verbose("[API] Fetching media from LeadCMS using sync API...");
-
-      if (!this.baseURL) {
-        throw new Error("LeadCMS URL is not configured.");
-      }
-
-      const allMedia: MediaItem[] = [];
-      let syncToken = "";
-
-      // Paginate through all media using sync API
-      while (true) {
-        const url = new URL("/api/media/sync", this.baseURL);
-        url.searchParams.set("filter[limit]", "100");
-        url.searchParams.set("syncToken", syncToken);
-        if (scopeUid) {
-          url.searchParams.set("query", `scopeUid=${scopeUid}`);
-        }
-
-        const response = await axios.get(url.toString());
-
-        if (response.status === 204) {
-          break; // No more data
-        }
-
-        const data = response.data;
-        if (data.items && Array.isArray(data.items)) {
-          allMedia.push(...data.items);
-        }
-
-        const nextToken = response.headers["x-next-sync-token"] || syncToken;
-        if (!nextToken || nextToken === syncToken) {
-          break; // No more pages
-        }
-
-        syncToken = nextToken;
-      }
-
-      logger.verbose(`[API] Fetched ${allMedia.length} media items`);
-      return allMedia;
-    } catch (_error: unknown) {
-      const error = _error as ApiAxiosError;
-      console.error("[API] Failed to fetch media:", error.message);
-      throw error;
+    if (!this.baseURL) {
+      throw new Error("LeadCMS URL is not configured.");
     }
+
+    const allMedia: MediaItem[] = [];
+    const limit = 100;
+    let skip = 0;
+
+    while (true) {
+      try {
+        const url = new URL(`${this.baseURL}/api/media`);
+        url.searchParams.set("filter[skip]", String(skip));
+        url.searchParams.set("filter[limit]", String(limit));
+        if (scopeUid) {
+          url.searchParams.set("scopeUid", scopeUid);
+        }
+
+        logger.verbose(`[API] Fetching media (skip=${skip}, limit=${limit})`);
+
+        const response: AxiosResponse<MediaItem[]> = await axios.get(url.toString(), {
+          headers: this.getApiHeaders(),
+        });
+
+        const batch: MediaItem[] = Array.isArray(response.data) ? response.data : [];
+        allMedia.push(...batch);
+
+        if (batch.length < limit) break;
+        skip += batch.length;
+      } catch (_error: unknown) {
+        const error = _error as ApiAxiosError;
+        console.error("[API] Failed to fetch media:", error.message);
+        throw error;
+      }
+    }
+
+    logger.verbose(`[API] Fetched ${allMedia.length} media items`);
+    return allMedia;
   }
 
   /**

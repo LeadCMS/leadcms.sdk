@@ -34,6 +34,7 @@ const silentDeps: Partial<MediaDependencies> = {
   logWarn: jest.fn(),
   logError: jest.fn(),
   logSuccess: jest.fn(),
+  fetchDeletedMedia: async () => [],
 };
 
 describe("statusMedia - SDK top-level function", () => {
@@ -244,6 +245,8 @@ describe("statusMedia - SDK top-level function", () => {
       // Without showDelete
       const resultWithout = await statusMedia({ mediaDir: FIXTURES_MEDIA_DIR }, deps);
       expect(resultWithout.summary.deletes).toBe(0);
+      expect(resultWithout.summary.remoteCreateds).toBe(2);
+      expect(resultWithout.operations.filter((op) => op.type === "remote-created")).toHaveLength(2);
 
       // With showDelete
       const resultWith = await statusMedia(

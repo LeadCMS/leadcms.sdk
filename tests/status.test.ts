@@ -184,7 +184,7 @@ describe("LeadCMS Status Analysis (Real SDK Logic)", () => {
 
       expect(ops.conflict).toHaveLength(1);
       expect(ops.conflict[0].local.slug).toBe("conflicted");
-      expect(ops.conflict[0].reason).toContain("Remote content was updated after local content");
+      expect(ops.conflict[0].reason).toContain("Remote content has newer changes");
       expect(ops.update).toHaveLength(0);
     });
 
@@ -225,7 +225,7 @@ describe("LeadCMS Status Analysis (Real SDK Logic)", () => {
       const ops = await (matchContent as any)(local, remote);
 
       expect(ops.conflict).toHaveLength(1);
-      expect(ops.conflict[0].reason).toContain("Slug changed remotely");
+      expect(ops.conflict[0].reason).toContain("Slug was updated remotely");
     });
 
     it("should detect language-specific conflicts independently", async () => {
@@ -497,6 +497,24 @@ describe("LeadCMS Status Analysis (Real SDK Logic)", () => {
 
       expect(ops.delete).toHaveLength(0);
     });
+
+    it("should detect remote-only content as remote-created in status mode", async () => {
+      const remote = [
+        makeRemote({
+          id: 100,
+          slug: "only-on-remote",
+          title: "Remote Only Article",
+        }),
+      ];
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ops = await (matchContent as any)([], remote, undefined, false, undefined, true);
+
+      expect(ops.delete).toHaveLength(0);
+      expect(ops.remoteCreated).toHaveLength(1);
+      expect(ops.remoteCreated[0].remote?.slug).toBe("only-on-remote");
+      expect(ops.remoteCreated[0].reason).toBe("New content on remote");
+    });
   });
 
   describe("countPushChanges", () => {
@@ -508,6 +526,8 @@ describe("LeadCMS Status Analysis (Real SDK Logic)", () => {
         typeChange: [{ local: {} }],
         conflict: [{ local: {} }, { local: {} }],
         delete: [],
+        remoteCreated: [],
+        remoteDeleted: [],
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -519,11 +539,14 @@ describe("LeadCMS Status Analysis (Real SDK Logic)", () => {
     it("should return 0 for empty operations", () => {
       const ops = {
         create: [],
+        remoteCreated: [],
         update: [],
         rename: [],
         typeChange: [],
         conflict: [],
         delete: [],
+        remoteCreated: [],
+        remoteDeleted: [],
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -913,7 +936,7 @@ describe("LeadCMS Status Analysis (Real SDK Logic)", () => {
       const ops = await (matchContent as any)(local, remote, undefined, false, metadataMap);
 
       expect(ops.conflict).toHaveLength(1);
-      expect(ops.conflict[0].reason).toContain("Slug changed remotely");
+      expect(ops.conflict[0].reason).toContain("Slug was updated remotely");
       expect(ops.rename).toHaveLength(0);
     });
 
@@ -1358,6 +1381,8 @@ describe("LeadCMS Status Analysis (Real SDK Logic)", () => {
           { local: {}, remote: {} },
           { local: {}, remote: {} },
         ],
+        remoteCreated: [],
+        remoteDeleted: [],
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1372,10 +1397,76 @@ describe("LeadCMS Status Analysis (Real SDK Logic)", () => {
         typeChange: [],
         conflict: [],
         delete: [{ local: {}, remote: {} }],
+        remoteCreated: [],
+        remoteDeleted: [],
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect(countPushChanges(ops as any, false)).toBe(1);
     });
+  });
+});
+
+// ── Remote-deleted detection ─────────────────────────────────────────────────
+
+describe("matchContent - remote-deleted detection", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "leadcms-rd-test-"));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("classifies local item as remoteDeleted when its ID is absent from remote", async () => {
+    const local = [makeLocal({ slug: "deleted-article", metadata: { id: 42, type: "article" } })];
+    // Remote returns nothing — the item was deleted
+    const result = await matchContent(local, [], {}, false);
+
+    expect(result.remoteDeleted).toHaveLength(1);
+    expect(result.remoteDeleted[0].local.slug).toBe("deleted-article");
+    expect(result.create).toHaveLength(0);
+  });
+
+  it("classifies local item as create when it has no ID (never pushed)", async () => {
+    const local = [makeLocal({ slug: "brand-new", metadata: { type: "article" } })];
+    const result = await matchContent(local, [], {}, false);
+
+    expect(result.create).toHaveLength(1);
+    expect(result.create[0].local.slug).toBe("brand-new");
+    expect(result.remoteDeleted).toHaveLength(0);
+  });
+
+  it("does not classify as remoteDeleted when the ID still exists on remote", async () => {
+    const filePath = path.join(tmpDir, "still-live.mdx");
+    await fs.writeFile(
+      filePath,
+      matter.stringify("# Live Article", { title: "Live", type: "article" })
+    );
+    const local = [
+      makeLocal({ slug: "still-live", filePath, metadata: { id: 7, type: "article" } }),
+    ];
+    const remote = [makeRemote({ id: 7, slug: "still-live" })];
+
+    const result = await matchContent(local, remote, {}, false);
+
+    expect(result.remoteDeleted).toHaveLength(0);
+    expect(result.create).toHaveLength(0);
+  });
+
+  it("counts remoteDeleted items in countPushChanges", async () => {
+    const ops = {
+      create: [],
+      update: [],
+      rename: [],
+      typeChange: [],
+      conflict: [],
+      delete: [],
+      remoteDeleted: [{ local: makeLocal({ slug: "gone" }) }],
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(countPushChanges(ops as any)).toBe(1);
   });
 });

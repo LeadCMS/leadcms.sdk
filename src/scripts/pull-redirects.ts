@@ -152,8 +152,12 @@ async function triggerDiscover(): Promise<void> {
   }
 }
 
-async function pullRedirectsSync(syncToken?: string): Promise<RedirectSyncResult> {
-  if (!leadCMSUrl) {
+async function pullRedirectsSync(
+  syncToken?: string,
+  baseUrl?: string
+): Promise<RedirectSyncResult> {
+  const effectiveUrl = baseUrl || leadCMSUrl;
+  if (!effectiveUrl) {
     throw new Error("LeadCMS URL is not configured.");
   }
   if (!leadCMSApiKey) {
@@ -166,7 +170,7 @@ async function pullRedirectsSync(syncToken?: string): Promise<RedirectSyncResult
   let nextSyncToken = token;
 
   while (true) {
-    const url = new URL("/api/redirects/sync", leadCMSUrl);
+    const url = new URL("/api/redirects/sync", effectiveUrl);
     url.searchParams.set("filter[limit]", "100");
     url.searchParams.set("syncToken", token);
 
@@ -295,7 +299,7 @@ export async function pullLeadCMSRedirects(
     await writeLocalRedirectsFile(merged);
     await writeIdMap(idMap, metadataCtx);
     console.log(
-      `   ✅ ${items.length} redirect(s) updated, ${deleted.length} deleted. Total: ${merged.length}`
+      `   ✅ Redirects synced: ${items.length} added/updated, ${deleted.length} removed. Total: ${merged.length}`
     );
   } else {
     // Still write id-map if it doesn't exist yet (first run against existing YAML)
@@ -308,3 +312,5 @@ export async function pullLeadCMSRedirects(
     await writeSyncToken(nextSyncToken, remoteCtx);
   }
 }
+
+export { pullRedirectsSync, readSyncToken as readRedirectSyncTokenForStatus };

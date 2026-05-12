@@ -16,7 +16,7 @@ interface ScriptError extends Error {
   code?: string;
   response?: {
     status?: number;
-    data?: { detail?: string; title?: string; message?: string; [key: string]: unknown } | null;
+    data?: { detail?: string; title?: string; message?: string;[key: string]: unknown } | null;
   };
   status?: number;
 }
@@ -255,7 +255,7 @@ async function main(options: PullMediaOptions = {}): Promise<void> {
 
   // Download new/updated media files
   console.log(
-    `🖼️  Processing media sync (${mediaItems.length} downloads, ${mediaDeleted.length} deletions)...`
+    `🖼️  Processing media sync (${mediaItems.length} download(s), ${mediaDeleted.length} remote deletion event(s))...`
   );
   if (mediaItems.length > 0) {
     logger.verbose(`\nProcessing media changes...`);
@@ -287,15 +287,16 @@ async function main(options: PullMediaOptions = {}): Promise<void> {
         }
       }
     }
-    console.log(`Done. ${downloaded} media files downloaded.`);
+    console.log(`   ✅ Downloaded ${downloaded} media file(s).`);
   } else if (mediaDeleted.length === 0) {
     console.log(`No media changes detected.`);
   }
 
   // Remove deleted media files from local filesystem
   if (mediaDeleted.length > 0) {
-    console.log(`Removing ${mediaDeleted.length} deleted media files...`);
+    console.log(`🗑️  Applying media deletions (${mediaDeleted.length} remote event(s))...`);
     let removedCount = 0;
+    let missingCount = 0;
     for (const deletedMedia of mediaDeleted) {
       const relPath = deletedMedia.scopeUid
         ? path.join(deletedMedia.scopeUid, deletedMedia.name)
@@ -307,12 +308,19 @@ async function main(options: PullMediaOptions = {}): Promise<void> {
         removedCount++;
       } catch (_err: unknown) {
         const err = _err as ScriptError;
-        if (err.code !== "ENOENT") {
+        if (err.code === "ENOENT") {
+          missingCount++;
+        } else {
           console.warn(`Warning: Could not delete media file ${fullPath}:`, err.message);
         }
       }
     }
-    console.log(`Done. ${removedCount} media files removed.`);
+    if (removedCount > 0) {
+      console.log(`   ✅ Removed ${removedCount} local media file(s).`);
+    }
+    if (missingCount > 0) {
+      console.log(`   ℹ️  ${missingCount} remote deletion event(s) had no matching local file.`);
+    }
   }
 
   // Save sync token
@@ -331,4 +339,8 @@ async function main(options: PullMediaOptions = {}): Promise<void> {
   }
 }
 
-export { main as pullLeadCMSMedia };
+export {
+  main as pullLeadCMSMedia,
+  pullMediaSync,
+  readMediaSyncToken as readMediaSyncTokenForStatus,
+};

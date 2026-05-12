@@ -646,7 +646,7 @@ describe("matchContent with multi-remote metadata (Phases 3+4)", () => {
       const ops = await (matchContent as any)(local, remote, undefined, false, metadataMap);
 
       expect(ops.conflict).toHaveLength(1);
-      expect(ops.conflict[0].reason).toContain("Remote content was updated after local content");
+      expect(ops.conflict[0].reason).toContain("Remote content has newer changes");
     });
   });
 

@@ -277,7 +277,9 @@ export async function buildSequenceStatus(
     const match = getRemoteMatch(sequence, remoteSequences, metadataMap);
 
     if (!match) {
-      const remoteIds = new Set(remoteSequences.map((s) => s.id).filter((id): id is number => id != null));
+      const remoteIds = new Set(
+        remoteSequences.map((s) => s.id).filter((id): id is number => id != null)
+      );
       if (sequence.id != null && !remoteIds.has(sequence.id as number)) {
         operations.push({ type: "remote-deleted", local: sequence, filePath });
       } else {
@@ -321,6 +323,14 @@ export async function buildSequenceStatus(
       const key = `${remote.language}:${remote.name}`;
       if (!localKeys.has(key)) {
         operations.push({ type: "delete", remote });
+      }
+    }
+  } else {
+    const localKeys = new Set(localFiles.map((f) => `${f.sequence.language}:${f.sequence.name}`));
+    for (const remote of remoteSequences) {
+      const key = `${remote.language}:${remote.name}`;
+      if (!localKeys.has(key)) {
+        operations.push({ type: "create", remote, reason: "New sequence on remote" });
       }
     }
   }
@@ -434,14 +444,16 @@ export async function statusSequences(options: StatusOptions = {}): Promise<void
     const nameLabel = op.local?.name || op.remote?.name || "unknown";
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
     switch (op.type) {
-      case "create":
+      case "create": {
+        const createLabel = op.remote && !op.local ? "added remotely:" : "added locally: ";
         colorConsole.log(
-          `   ${statusColors.created("new:      ")} ${colorConsole.highlight(nameLabel)}`
+          `   ${statusColors.created(createLabel)} ${colorConsole.highlight(nameLabel)}`
         );
         break;
+      }
       case "update":
         colorConsole.log(
-          `   ${statusColors.modified("modified: ")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+          `   ${statusColors.modified("updated locally:")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
         );
         break;
       case "conflict":
@@ -452,12 +464,12 @@ export async function statusSequences(options: StatusOptions = {}): Promise<void
         break;
       case "delete":
         colorConsole.log(
-          `   ${statusColors.conflict("deleted:  ")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
+          `   ${statusColors.conflict("deleted locally:")} ${colorConsole.highlight(nameLabel)} ${colorConsole.gray(idLabel)}`
         );
         break;
       case "remote-deleted":
         colorConsole.log(
-          `   ${statusColors.conflict("to delete:")} ${colorConsole.highlight(nameLabel)}`
+          `   ${statusColors.conflict("deleted remotely:")} ${colorConsole.highlight(nameLabel)}`
         );
         break;
     }

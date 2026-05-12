@@ -374,6 +374,43 @@ describe("pull from non-default remote: frontmatter metadata from defaultRemote"
     // Body should be updated from v2
     expect(parsed.content.trim()).toContain("# V2");
   });
+
+  it("deletes content files by slug/language for non-default remote deletions", async () => {
+    await writeProdMetadata({
+      en: {
+        "remote-deleted": {
+          id: 42,
+          createdAt: "2025-01-01T00:00:00Z",
+          updatedAt: "2025-06-15T12:00:00Z",
+        },
+      },
+    });
+
+    const remoteContent = {
+      id: 999,
+      slug: "remote-deleted",
+      type: "article",
+      language: "en",
+      title: "Remote Deleted",
+      description: "Deleted later",
+      body: "# Delete me",
+      author: "test-author",
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-03-01T00:00:00Z",
+    };
+
+    harness.addContentSync([remoteContent], [], "content-token-delete-1");
+    harness.addContentSync([], [999], "content-token-delete-2");
+
+    await pullLeadCMSContent({ remoteContext: makeLocalCtx() });
+
+    const filePath = path.join(contentDir, "remote-deleted.mdx");
+    await expect(fs.access(filePath)).resolves.toBeUndefined();
+
+    await pullLeadCMSContent({ remoteContext: makeLocalCtx() });
+
+    await expect(fs.access(filePath)).rejects.toThrow();
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════════
@@ -488,6 +525,46 @@ describe("pull email templates from non-default remote: frontmatter metadata fro
     expect(localMeta.emailTemplates["en"]["WelcomeEmail"].id).toBe(999);
     expect(localMeta.emailTemplates["en"]["WelcomeEmail"].createdAt).toBe("2026-01-01T00:00:00Z");
     expect(localMeta.emailTemplates["en"]["WelcomeEmail"].updatedAt).toBe("2026-03-01T00:00:00Z");
+  });
+
+  it("deletes grouped email template files by name/language for non-default remote deletions", async () => {
+    await writeProdMetadata(
+      {},
+      {
+        en: {
+          Contact_Us: {
+            id: 42,
+            createdAt: "2025-01-01T00:00:00Z",
+            updatedAt: "2025-06-15T12:00:00Z",
+          },
+        },
+      }
+    );
+
+    const remoteTemplate = {
+      id: 999,
+      name: "Contact_Us",
+      subject: "Contact us",
+      bodyTemplate: "<p>Hello</p>",
+      fromEmail: "noreply@example.com",
+      fromName: "Test",
+      language: "en",
+      emailGroup: { id: 7, name: "Transactional", language: "en" },
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-03-01T00:00:00Z",
+    };
+
+    harness.addEmailTemplateSync([remoteTemplate], [], "et-token-delete-1");
+    harness.addEmailTemplateSync([], [999], "et-token-delete-2");
+
+    await pullLeadCMSEmailTemplates(makeLocalCtx());
+
+    const filePath = path.join(emailTemplatesDir, "transactional", "contact_us.html");
+    await expect(fs.access(filePath)).resolves.toBeUndefined();
+
+    await pullLeadCMSEmailTemplates(makeLocalCtx());
+
+    await expect(fs.access(filePath)).rejects.toThrow();
   });
 });
 

@@ -219,6 +219,8 @@ coverImageUrl: /media/blog/covers/test-article.jpg
           { local: {}, remote: {} },
         ],
         delete: [],
+        remoteCreated: [],
+        remoteDeleted: [],
       };
 
       expect(countPushChanges(operations, false)).toBe(0);
@@ -237,6 +239,8 @@ coverImageUrl: /media/blog/covers/test-article.jpg
         typeChange: [{ local: {}, remote: {}, oldType: "old", newType: "new" }],
         conflict: [{ local: {}, remote: {} }],
         delete: [],
+        remoteCreated: [],
+        remoteDeleted: [],
       };
 
       expect(countPushChanges(operations, false)).toBe(5);

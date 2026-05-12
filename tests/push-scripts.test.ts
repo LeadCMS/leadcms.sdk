@@ -164,6 +164,8 @@ describe("push-leadcms-content - Pure Functions", () => {
       typeChange: [makeOp("type-changed", 3, 3)],
       conflict: [makeOp("conflicted", 4, 4)],
       delete: [],
+      remoteCreated: [],
+      remoteDeleted: [],
     };
 
     it("should return all operations when no filter specified", () => {
@@ -235,6 +237,8 @@ describe("push-leadcms-content - Pure Functions", () => {
         typeChange: [],
         conflict: [],
         delete: [],
+        remoteCreated: [],
+        remoteDeleted: [],
       };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = (filterContentOperations as any)(opsWithRemoteOnlyId, "121", undefined);
@@ -250,6 +254,8 @@ describe("push-leadcms-content - Pure Functions", () => {
         typeChange: [],
         conflict: [],
         delete: [],
+        remoteCreated: [],
+        remoteDeleted: [],
       };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = (filterContentOperations as any)(ops, "999", undefined);
