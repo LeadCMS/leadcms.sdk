@@ -216,7 +216,6 @@ describe("pushRedirects", () => {
   // ── Delete ────────────────────────────────────────────────────────
 
   it("deletes remote-only redirect when allowDelete=true", async () => {
-    // Local has redirect #1; remote also has #5 (not in local) → #5 should be deleted
     const local = makeLocal({ id: 1, fromPath: "/existing", toUrl: "https://example.com" });
     await writeLocalRedirects(tmpDir, [local]);
     const remoteMatch = makeRemote({ id: 1, fromPath: "/existing", toUrl: "https://example.com" });
@@ -227,6 +226,24 @@ describe("pushRedirects", () => {
     await pushRedirects({ allowDelete: true, dryRun: false });
 
     expect(mockDeleteRedirect).toHaveBeenCalledWith(5);
+  });
+
+  it("suppresses sync plan and success lines in quiet mode", async () => {
+    const local = makeLocal({ id: 1, fromPath: "/existing", toUrl: "https://example.com" });
+    await writeLocalRedirects(tmpDir, [local]);
+    const remoteMatch = makeRemote({ id: 1, fromPath: "/existing", toUrl: "https://example.com" });
+    const remoteExtra = makeRemote({ id: 5, fromPath: "/remote-only", toUrl: "https://other.com" });
+    mockGetAllRedirects.mockResolvedValueOnce([remoteMatch, remoteExtra]);
+    mockDeleteRedirect.mockResolvedValueOnce(undefined);
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await pushRedirects({ allowDelete: true, dryRun: false, quiet: true });
+
+    expect(mockDeleteRedirect).toHaveBeenCalledWith(5);
+    expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining("Redirect sync plan"));
+    expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining("Deleted redirect"));
+
+    logSpy.mockRestore();
   });
 
   it("does NOT delete remote-only redirect when allowDelete is false", async () => {
@@ -304,6 +321,19 @@ describe("pushRedirects", () => {
     // No local redirects means nothing to create or update; no delete without allowDelete
     expect(mockCreateRedirect).not.toHaveBeenCalled();
     expect(mockDeleteRedirect).not.toHaveBeenCalled();
+  });
+
+  it("deletes all remote redirects when local file is absent and allowDelete=true", async () => {
+    // tmpDir is empty — no redirects.yaml; all remote redirects should be deleted
+    mockGetAllRedirects.mockResolvedValueOnce([
+      makeRemote({ id: 1, fromPath: "/old-a" }),
+      makeRemote({ id: 2, fromPath: "/old-b" }),
+    ]);
+
+    await pushRedirects({ dryRun: false, allowDelete: true });
+
+    expect(mockDeleteRedirect).toHaveBeenCalledTimes(2);
+    expect(mockCreateRedirect).not.toHaveBeenCalled();
   });
 
   // ── Multiple redirects ────────────────────────────────────────────
@@ -474,6 +504,7 @@ describe("buildRedirectStatus", () => {
         toSlug: "news/world-cup-2026",
       }),
     ]);
+    mockReadMetadataMap.mockResolvedValueOnce({ redirects: { "slug:/News": 12 } });
 
     const result = await buildRedirectStatus({ showDelete: true });
 

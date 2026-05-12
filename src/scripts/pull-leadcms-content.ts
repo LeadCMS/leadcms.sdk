@@ -717,10 +717,19 @@ async function main(options: PullContentOptions = {}): Promise<void> {
       if (remoteCtx && !remoteCtx.isDefault) {
         const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = content;
         const lang = content.language || defaultLanguage;
-        const defaultId = defaultMetadataMap?.content[lang]?.[content.slug]?.id;
-        const defaultMeta = defaultMetadataMap?.content[lang]?.[content.slug];
+        // Primary lookup: find default remote metadata by current slug
+        let defaultMeta = defaultMetadataMap?.content[lang]?.[content.slug];
+        // Fallback: if the item was renamed on the non-default remote but the
+        // default remote still knows it under the OLD slug, look up by ID so we
+        // don't strip id/createdAt/updatedAt from the written file.
+        if (!defaultMeta && content.id != null && rcModule && defaultMetadataMap) {
+          const defaultEntry = rcModule.findContentByRemoteId(defaultMetadataMap, content.id);
+          if (defaultEntry) {
+            defaultMeta = defaultMetadataMap.content[defaultEntry.language]?.[defaultEntry.slug];
+          }
+        }
         contentToSave = {
-          ...(defaultId != null ? { id: defaultId } : {}),
+          ...(defaultMeta?.id != null ? { id: defaultMeta.id } : {}),
           ...(defaultMeta?.createdAt ? { createdAt: defaultMeta.createdAt } : {}),
           ...(defaultMeta?.updatedAt ? { updatedAt: defaultMeta.updatedAt } : {}),
           ...rest,

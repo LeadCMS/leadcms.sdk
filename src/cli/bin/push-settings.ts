@@ -16,6 +16,7 @@ parseRemoteFlag(args);
 
 const force = args.includes("--force") || args.includes("-f");
 const dryRun = args.includes("--dry-run") || args.includes("-d");
+const allowDelete = args.includes("--delete");
 
 // Parse --name flag
 let targetName: string | undefined;
@@ -31,7 +32,7 @@ if (!dryRun) {
 }
 
 const spinner = startSpinner("Pushing settings to LeadCMS…");
-pushSettings({ targetName, dryRun, force })
+pushSettings({ targetName, dryRun, force, allowDelete })
   .then(() => spinner.stop())
   .catch((error: unknown) => {
     spinner.fail("Settings push failed");

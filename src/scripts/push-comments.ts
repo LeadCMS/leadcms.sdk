@@ -11,11 +11,7 @@ import { compareVersions } from "../lib/auth.js";
 import { isValidLocaleCode } from "../lib/locale-utils.js";
 import { colorConsole, diffColors, statusColors } from "../lib/console-colors.js";
 import { logger } from "../lib/logger.js";
-import {
-  pullCommentSync,
-  pullLeadCMSComments,
-  saveCommentsForEntity,
-} from "./pull-leadcms-comments.js";
+import { pullCommentSync, saveCommentsForEntity } from "./pull-leadcms-comments.js";
 
 import type { Comment, StoredComment } from "../lib/comment-types.js";
 import type { CommentCreateItem, CommentUpdateItem } from "../lib/data-service.js";
@@ -333,13 +329,8 @@ async function updateLocalFileFromResponse(
     // into the local file — those fields belong to the default remote. We also
     // intentionally KEEP authorEmail: the same local entry still needs to be
     // CREATE-able on the default remote later, and create requires authorEmail.
-    // The anonymous pull that runs after the default-remote push is what
-    // finally strips authorEmail (pull replaces the local entry entirely and
-    // authorEmail is not part of StoredComment).
-    //
-    // We only stamp translationKey (and refresh parentId/authorName/language)
-    // so the post-push anonymous pull can merge by translationKey instead of
-    // creating a duplicate row.
+    // We only stamp translationKey plus stable routing fields; default-remote
+    // pushes persist the full server response directly into the local file.
     Object.assign(local.comment, {
       ...local.comment,
       parentId: remote.parentId ?? null,
@@ -896,7 +887,6 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
     remoteContext: remoteCtx,
   });
   const { supported: canReparent } = await checkReparentingSupport();
-  let didMutate = false;
   let failureCount = 0;
 
   // Resolve Content id -> slug for user-facing messages (best-effort, offline-first).
@@ -980,7 +970,6 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
         const createdTarget = formatCommentable(created.commentableType, created.commentableId);
         console.log(`${progress()} ✅ Created comment ${created.id} in ${createdTarget}`);
         await updateLocalFileFromResponse(operation.local, created, remoteCtx);
-        didMutate = true;
       } catch (_error: unknown) {
         const error = _error as Error;
         const { message, isNotFound } = formatCommentApiError(error);
@@ -1015,7 +1004,6 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
         const updated = await leadCMSDataService.updateComment(operation.remote.id, payload);
         console.log(`${progress()} ✅ Updated comment ${updated.id} in ${target}`);
         await updateLocalFileFromResponse(operation.local, updated, remoteCtx);
-        didMutate = true;
       } catch (_error: unknown) {
         const error = _error as Error;
         const { message, isNotFound } = formatCommentApiError(error);
@@ -1074,7 +1062,6 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
         const updated = await leadCMSDataService.updateComment(remoteId, payload);
         console.log(`${progress()} ✅ Force-updated comment ${updated.id} in ${target}`);
         await updateLocalFileFromResponse(operation.local, updated, remoteCtx);
-        didMutate = true;
       } catch (_error: unknown) {
         const error = _error as Error;
         const { message, isNotFound } = formatCommentApiError(error);
@@ -1109,7 +1096,6 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
       try {
         await leadCMSDataService.deleteComment(operation.remote.id);
         console.log(`${progress()} ✅ Deleted remote comment ${operation.remote.id} in ${target}`);
-        didMutate = true;
       } catch (_error: unknown) {
         const error = _error as Error;
         const { message } = formatCommentApiError(error);
@@ -1119,11 +1105,6 @@ export async function pushComments(options: PushCommentsOptions = {}): Promise<v
         failureCount++;
       }
     }
-  }
-
-  if (!dryRun && didMutate) {
-    console.log("🔄 Refreshing local comments anonymously...");
-    await pullLeadCMSComments(remoteCtx);
   }
 
   if (failureCount > 0) {

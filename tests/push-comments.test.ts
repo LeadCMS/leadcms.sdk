@@ -250,7 +250,7 @@ describe("push-comments", () => {
       commentableType: "Content",
       language: "ru-RU",
     });
-    expect(mockedPullLeadCMSComments).toHaveBeenCalledTimes(1);
+    expect(mockedPullLeadCMSComments).not.toHaveBeenCalled();
 
     const saved = JSON.parse(await fs.readFile(filePath, "utf8"));
     expect(saved[0].id).toBe(1001);
@@ -260,7 +260,7 @@ describe("push-comments", () => {
     expect(saved[0].avatarUrl).toBe("https://example.com/avatars/peter.png");
   });
 
-  it("stamps translationKey and clears authorEmail on non-default remote create so the post-push pull can merge without duplicating", async () => {
+  it("stamps translationKey on non-default remote create without running a broad pull", async () => {
     const filePath = await writeCommentFile("ru-RU/content/162.json", [
       {
         parentId: 864,
@@ -307,11 +307,11 @@ describe("push-comments", () => {
     const saved = JSON.parse(await fs.readFile(filePath, "utf8"));
     // Single entry — no duplicate row created by push
     expect(saved).toHaveLength(1);
-    // translationKey is stamped so the post-push anonymous pull can merge by key
+    // translationKey is stamped so future pulls can merge by key
     expect(saved[0].translationKey).toBe("comment_content_162_27b170fc_a4906d49");
     // authorEmail MUST be preserved so the same entry can still be CREATE-d on
-    // the default remote later (create requires authorEmail). It's the pull
-    // after the default-remote push that finally strips it.
+    // the default remote later (create requires authorEmail). A default-remote
+    // create strips it when persisting that server response.
     expect(saved[0].authorEmail).toBe("peter@xltools.net");
     // id/createdAt/updatedAt remain the default remote's responsibility, so not written
     expect(saved[0]).not.toHaveProperty("id");
@@ -402,7 +402,7 @@ describe("push-comments", () => {
       answerStatus: "Answered",
     });
     expect(dataServiceMock.deleteComment).toHaveBeenCalledWith(21);
-    expect(mockedPullLeadCMSComments).toHaveBeenCalledTimes(1);
+    expect(mockedPullLeadCMSComments).not.toHaveBeenCalled();
   });
 
   it("skips conflicting updates unless force is enabled", async () => {
@@ -472,7 +472,7 @@ describe("push-comments", () => {
       commentableId: 110,
       status: "Approved",
     });
-    expect(mockedPullLeadCMSComments).toHaveBeenCalledTimes(1);
+    expect(mockedPullLeadCMSComments).not.toHaveBeenCalled();
   });
 
   it("does not treat avatarUrl-only local edits as client-side updates", async () => {
@@ -520,7 +520,7 @@ describe("push-comments", () => {
     expect(result.operations).toHaveLength(0);
   });
 
-  it("removes authorEmail locally after create before anonymous refresh completes", async () => {
+  it("removes authorEmail locally from the create response without anonymous refresh", async () => {
     const filePath = await writeCommentFile("content/110.json", [
       {
         parentId: 864,
@@ -546,7 +546,8 @@ describe("push-comments", () => {
     });
     mockedPullLeadCMSComments.mockRejectedValue(new Error("refresh failed"));
 
-    await expect(pushComments()).rejects.toThrow("refresh failed");
+    await expect(pushComments()).resolves.toBeUndefined();
+    expect(mockedPullLeadCMSComments).not.toHaveBeenCalled();
 
     const saved = JSON.parse(await fs.readFile(filePath, "utf8"));
     expect(saved[0].id).toBe(1002);
@@ -834,7 +835,7 @@ describe("push-comments", () => {
     });
   });
 
-  it("passes remoteContext to pullLeadCMSComments during post-push refresh", async () => {
+  it("updates remote metadata from comment create response without broad pull", async () => {
     await writeCommentFile("content/110.json", [
       {
         parentId: null,
@@ -868,8 +869,7 @@ describe("push-comments", () => {
 
     await pushComments({ remoteContext });
 
-    expect(mockedPullLeadCMSComments).toHaveBeenCalledTimes(1);
-    expect(mockedPullLeadCMSComments).toHaveBeenCalledWith(remoteContext);
+    expect(mockedPullLeadCMSComments).not.toHaveBeenCalled();
   });
 
   it("supports updating parentId for comments", async () => {
@@ -1204,7 +1204,7 @@ describe("push-comments", () => {
     // No uncaught errors logged that would indicate a crash
     expect(errors).toEqual([]);
 
-    // Post-push refresh still ran because at least one create succeeded
-    expect(mockedPullLeadCMSComments).toHaveBeenCalledTimes(1);
+    // No broad post-push refresh is needed; successful creates are persisted from responses.
+    expect(mockedPullLeadCMSComments).not.toHaveBeenCalled();
   });
 });

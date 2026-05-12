@@ -222,6 +222,7 @@ Usage:
     --name <key>         - Push a specific setting by key name
     --dry-run            - Show what would be pushed without pushing
     --force              - Push all tracked settings even if unchanged
+    --delete             - Delete remote settings not present locally
   leadcms push-redirects [options] - Push local redirects to LeadCMS
     --force              - Override remote changes (skip conflict check)
     --dry-run            - Show what would be pushed without making changes
@@ -253,6 +254,7 @@ Usage:
     --id <template-id>   - Show detailed status for specific template by ID
   leadcms status-settings [options] - Show settings sync status
     --name <key>         - Show status for a specific setting by key name
+    --delete             - Show settings deletion operations
   leadcms status-redirects [options] - Show redirect sync status only
     --delete             - Show redirect deletion operations
   leadcms watch          - Watch for real-time updates via Server-Sent Events

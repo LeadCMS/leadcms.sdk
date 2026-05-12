@@ -4,7 +4,7 @@
  * Covers:
  *  - hasMergeConflictMarkers: detecting standard Git conflict markers
  *  - validateMergeConflicts: filtering content items with unresolved conflicts
- *  - Push integration: verifying files with conflicts are skipped
+ *  - Push integration: verifying files with conflicts stop local content reads
  */
 
 import fs from "fs/promises";
@@ -21,11 +21,15 @@ jest.mock("../src/lib/data-service.js", () => ({
 }));
 
 import {
+  getContentStatusData,
   hasMergeConflictMarkers,
+  readLocalContent,
   validateMergeConflicts,
 } from "../src/scripts/push-leadcms-content";
 
 describe("Merge Conflict Detection", () => {
+  const configuredContentDir = "/tmp/test-content";
+
   describe("hasMergeConflictMarkers", () => {
     it("should detect standard merge conflict markers in MDX body", () => {
       const content = `---
@@ -357,6 +361,57 @@ B
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (validateMergeConflicts as any)(items);
       expect(result).toHaveLength(2);
+    });
+  });
+
+  describe("readLocalContent parse failures", () => {
+    beforeEach(async () => {
+      await fs.rm(configuredContentDir, { recursive: true, force: true });
+      await fs.mkdir(configuredContentDir, { recursive: true });
+    });
+
+    afterEach(async () => {
+      await fs.rm(configuredContentDir, { recursive: true, force: true });
+    });
+
+    it("should fail loudly when merge conflict markers are in frontmatter", async () => {
+      const filePath = path.join(configuredContentDir, "booking.mdx");
+      const content = [
+        "---",
+        "id: 129",
+        `${"<".repeat(7)} local`,
+        "updatedAt: '2026-05-04T12:12:12.544847Z'",
+        "title: Local title",
+        "=======",
+        "updatedAt: '2026-05-04T12:12:12.544847Z'",
+        "title: Remote title",
+        `${">".repeat(7)} remote`,
+        "slug: booking",
+        "type: landing",
+        "language: ru-RU",
+        "---",
+        "",
+        "# Booking",
+        "",
+      ].join("\n");
+      await fs.writeFile(filePath, content, "utf8");
+
+      await expect(readLocalContent()).rejects.toThrow(/booking\.mdx/);
+      await expect(readLocalContent()).rejects.toThrow(/unresolved merge conflict markers/i);
+    });
+
+    it("should fail loudly when a local JSON content file cannot be parsed", async () => {
+      const filePath = path.join(configuredContentDir, "broken.json");
+      await fs.writeFile(filePath, `{ "title": "Broken", "type": "page", `, "utf8");
+
+      await expect(readLocalContent()).rejects.toThrow(/broken\.json/);
+    });
+
+    it("should fail content status data instead of treating broken local files as missing", async () => {
+      const filePath = path.join(configuredContentDir, "broken.json");
+      await fs.writeFile(filePath, `{ "title": "Broken", "type": "page", `, "utf8");
+
+      await expect(getContentStatusData()).rejects.toThrow(/broken\.json/);
     });
   });
 });

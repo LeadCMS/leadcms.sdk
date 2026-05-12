@@ -1901,7 +1901,7 @@ describe("selectOperationsForPush", () => {
     expect(selected[1].type).toBe("create");
   });
 
-  it("includes delete operations when force=false", () => {
+  it("excludes delete operations when allowDelete=false", () => {
     const ops = [
       {
         type: "unchanged" as const,
@@ -1922,12 +1922,10 @@ describe("selectOperationsForPush", () => {
     ];
 
     const selected = selectOperationsForPush(ops, false);
-    expect(selected).toHaveLength(1);
-    expect(selected[0].type).toBe("delete");
-    expect(selected[0].key).toBe("Media.Cover.Dimensions");
+    expect(selected).toHaveLength(0);
   });
 
-  it("includes delete operations when force=true", () => {
+  it("includes delete operations when allowDelete=true", () => {
     const ops = [
       {
         type: "unchanged" as const,
@@ -1947,8 +1945,39 @@ describe("selectOperationsForPush", () => {
       },
     ];
 
-    const selected = selectOperationsForPush(ops, true);
-    expect(selected).toHaveLength(2);
-    expect(selected.find((op) => op.type === "delete")).toBeDefined();
+    const selected = selectOperationsForPush(ops, false, true);
+    expect(selected).toHaveLength(1);
+    expect(selected[0].type).toBe("delete");
+    expect(selected[0].key).toBe("Media.Cover.Dimensions");
+  });
+
+  it("includes delete operations with force=true only when allowDelete=true", () => {
+    const ops = [
+      {
+        type: "unchanged" as const,
+        key: "Content.MinTitleLength",
+        language: null,
+        localValue: "9",
+        remoteValue: "9",
+        remoteId: 1,
+      },
+      {
+        type: "delete" as const,
+        key: "Media.Cover.Dimensions",
+        language: "en-US",
+        localValue: "",
+        remoteValue: "360x300",
+        remoteId: 2,
+      },
+    ];
+
+    const withoutDelete = selectOperationsForPush(ops, true);
+    expect(withoutDelete).toHaveLength(1);
+    expect(withoutDelete[0].type).toBe("update");
+
+    const withDelete = selectOperationsForPush(ops, true, true);
+    expect(withDelete).toHaveLength(2);
+    expect(withDelete[0].type).toBe("update");
+    expect(withDelete.find((op) => op.type === "delete")).toBeDefined();
   });
 });

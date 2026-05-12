@@ -562,7 +562,8 @@ export async function executeMediaPush(
   operations: MediaOperation[],
   dryRun: boolean = false,
   deps?: Partial<MediaDependencies>,
-  mediaDir?: string
+  mediaDir?: string,
+  quiet: boolean = false
 ): Promise<MediaPushResult> {
   const defaults = getDefaultDependencies();
   const uploadMedia = deps?.uploadMedia || defaults.uploadMedia;
@@ -580,7 +581,7 @@ export async function executeMediaPush(
   };
 
   if (dryRun) {
-    displayMediaStatus(operations, true, true, deps);
+    if (!quiet) displayMediaStatus(operations, true, true, deps);
     result.executed.skipped = operations.length;
     return result;
   }
@@ -614,7 +615,9 @@ export async function executeMediaPush(
       formData.append("ScopeUid", op.local!.scopeUid);
 
       const serverResponse = await uploadMedia(formData);
-      logOk(`[${completedOps}/${totalOps}] ✓ Uploaded ${op.local!.scopeUid}/${op.local!.name}`);
+      if (!quiet) {
+        logOk(`[${completedOps}/${totalOps}] ✓ Uploaded ${op.local!.scopeUid}/${op.local!.name}`);
+      }
       result.executed.successful++;
 
       // Post-upload reconciliation: sync local file with server response
@@ -627,7 +630,7 @@ export async function executeMediaPush(
             downloadMediaFile
           );
           if (reconcileResult.changed) {
-            logOk(`  ↳ Reconciled: ${reconcileResult.reason}`);
+            if (!quiet) logOk(`  ↳ Reconciled: ${reconcileResult.reason}`);
           }
         } catch (_reconcileErr: unknown) {
           const reconcileErr = _reconcileErr as Error;
@@ -664,7 +667,9 @@ export async function executeMediaPush(
       formData.append("FileName", op.local!.name);
 
       const serverResponse = await updateMedia(formData);
-      logOk(`[${completedOps}/${totalOps}] ✓ Updated ${op.local!.scopeUid}/${op.local!.name}`);
+      if (!quiet) {
+        logOk(`[${completedOps}/${totalOps}] ✓ Updated ${op.local!.scopeUid}/${op.local!.name}`);
+      }
       result.executed.successful++;
 
       // Post-update reconciliation: sync local file with server response
@@ -677,7 +682,7 @@ export async function executeMediaPush(
             downloadMediaFile
           );
           if (reconcileResult.changed) {
-            logOk(`  ↳ Reconciled: ${reconcileResult.reason}`);
+            if (!quiet) logOk(`  ↳ Reconciled: ${reconcileResult.reason}`);
           }
         } catch (_reconcileErr: unknown) {
           const reconcileErr = _reconcileErr as Error;
@@ -700,7 +705,7 @@ export async function executeMediaPush(
     try {
       const pathToFile = `${op.remote!.scopeUid}/${op.remote!.name}`;
       await deleteMedia(pathToFile);
-      logOk(`[${completedOps}/${totalOps}] ✓ Deleted ${pathToFile}`);
+      if (!quiet) logOk(`[${completedOps}/${totalOps}] ✓ Deleted ${pathToFile}`);
       result.executed.successful++;
     } catch (_err: unknown) {
       const err = _err as Error;
@@ -712,16 +717,17 @@ export async function executeMediaPush(
     }
   }
 
-  // Summary
-  console.log("\n" + "─".repeat(80));
-  if (result.executed.failed === 0) {
-    logOk(`\n✨ Media push complete! ${result.executed.successful} operation(s) successful.`);
-  } else {
-    logWarning(
-      `\n⚠️  Media push completed with errors: ${result.executed.successful} succeeded, ${result.executed.failed} failed.`
-    );
+  if (!quiet) {
+    console.log("\n" + "─".repeat(80));
+    if (result.executed.failed === 0) {
+      logOk(`\n✨ Media push complete! ${result.executed.successful} operation(s) successful.`);
+    } else {
+      logWarning(
+        `\n⚠️  Media push completed with errors: ${result.executed.successful} succeeded, ${result.executed.failed} failed.`
+      );
+    }
+    console.log("");
   }
-  console.log("");
 
   return result;
 }
@@ -963,7 +969,7 @@ export async function pushMedia(
       }
     }
 
-    return await executeMediaPush(operations, false, deps, mediaDir);
+    return await executeMediaPush(operations, false, deps, mediaDir, Boolean(options.quiet));
   } catch (_err: unknown) {
     const err = _err as Error;
     logErrFn(`Media push failed: ${err.message}`);

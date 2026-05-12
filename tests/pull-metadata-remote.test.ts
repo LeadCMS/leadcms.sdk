@@ -12,6 +12,7 @@
 import path from "path";
 import os from "os";
 import fs from "fs/promises";
+import matter from "gray-matter";
 import { listContentFiles, createSyncTestHarness } from "./test-helpers";
 
 import type { RemoteContext, MetadataMap } from "../src/lib/remote-context";
@@ -480,5 +481,99 @@ language: en
     // Production article should be untouched
     const prodContent = await fs.readFile(prodPath, "utf-8");
     expect(prodContent).toContain("Production content");
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// Bug regression: Pull from non-default remote after rename must not
+// strip id/createdAt/updatedAt from the saved file (Bug 1)
+// ════════════════════════════════════════════════════════════════════════
+describe("Pull from non-default remote: id/createdAt/updatedAt preserved after rename (Bug 1)", () => {
+  it("should keep id/createdAt/updatedAt in file when item was renamed on non-default remote but default map uses old slug", async () => {
+    const devCtx = makeDevCtx();
+    const prodCtx = makeProdCtx();
+
+    // The item was previously pulled from both remotes; both share the same ID (e.g. staging seeded from prod).
+    // The file exists at the new slug path after being renamed locally and pushed to dev.
+    const filePath = path.join(contentDir, "new-slug.mdx");
+    await fs.writeFile(
+      filePath,
+      `---
+id: 200
+createdAt: '2024-01-01T00:00:00Z'
+updatedAt: '2024-01-01T00:00:00Z'
+title: Renamed Article
+slug: new-slug
+type: article
+language: en
+---
+# Body`
+    );
+
+    // Production metadata still knows the item under the OLD slug (before rename was pushed to prod)
+    // Both remotes share the same ID (200) — typical when staging is seeded from prod data.
+    await writeMetadataFile(prodCtx, {
+      content: {
+        en: {
+          "old-slug": {
+            id: 200,
+            createdAt: "2024-01-01T00:00:00Z",
+            updatedAt: "2024-01-01T00:00:00Z",
+          },
+        },
+      },
+      emailTemplates: {},
+      comments: {},
+      segments: {},
+      sequences: {},
+    });
+
+    // Develop metadata already has the renamed slug (rename was pushed to dev, deduplication
+    // removed the old 'old-slug → 200' entry and wrote 'new-slug → 200')
+    await writeMetadataFile(devCtx, {
+      content: {
+        en: {
+          "new-slug": {
+            id: 200,
+            createdAt: "2024-02-01T00:00:00Z",
+            updatedAt: "2024-03-01T00:00:00Z",
+          },
+        },
+      },
+      emailTemplates: {},
+      comments: {},
+      segments: {},
+      sequences: {},
+    });
+
+    // Dev sync returns the renamed item (same id=200 as prod, different slug)
+    harness.addContentSync(
+      [
+        {
+          id: 200,
+          slug: "new-slug",
+          type: "article",
+          language: "en",
+          title: "Renamed Article",
+          description: "Renamed",
+          body: "# Body",
+          createdAt: "2024-02-01T00:00:00Z",
+          updatedAt: "2024-03-01T00:00:00Z",
+        },
+      ],
+      [],
+      "dev-token-1"
+    );
+
+    await pullLeadCMSContent({ remoteContext: devCtx });
+
+    // File should preserve id/createdAt/updatedAt from the default (prod) metadata.
+    // Primary slug lookup fails (prod has 'old-slug', not 'new-slug'), so the
+    // ID-based fallback kicks in: findContentByRemoteId(defaultMap, 200) → 'old-slug' entry.
+    const saved = await fs.readFile(filePath, "utf-8");
+    const parsed = matter(saved);
+    expect(parsed.data.id).toBe(200);
+    expect(parsed.data.createdAt).toBeTruthy();
+    expect(parsed.data.updatedAt).toBeTruthy();
   });
 });

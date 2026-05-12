@@ -361,6 +361,8 @@ coverImageUrl: /media/blog/covers/test-article.jpg
         slug: "test-article",
         type: "article",
         title: "Test Article",
+        body: "# Server-normalized content",
+        language: "en",
         updatedAt: "2024-06-15T12:00:00Z", // New timestamp from API
         createdAt: "2024-01-01T00:00:00Z",
       };
@@ -373,6 +375,7 @@ coverImageUrl: /media/blog/covers/test-article.jpg
 
       expect(parsed.data.id).toBe(42);
       expect(parsed.data.updatedAt).toBe("2024-06-15T12:00:00Z");
+      expect(parsed.content.trim()).toBe("# Server-normalized content");
     });
 
     it("should update updatedAt in local JSON file after successful push", async () => {
@@ -427,6 +430,8 @@ coverImageUrl: /media/blog/covers/test-article.jpg
         slug: "test-page",
         type: "page",
         title: "Test Page",
+        body: JSON.stringify({ serverNormalized: true }),
+        language: "en",
         updatedAt: "2024-06-15T12:00:00Z",
         createdAt: "2024-01-01T00:00:00Z",
       };
@@ -438,6 +443,7 @@ coverImageUrl: /media/blog/covers/test-article.jpg
 
       expect(parsed.id).toBe(99);
       expect(parsed.updatedAt).toBe("2024-06-15T12:00:00Z");
+      expect(parsed.serverNormalized).toBe(true);
     });
   });
 

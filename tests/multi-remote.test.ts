@@ -679,11 +679,13 @@ describe("matchContent with multi-remote metadata (Phases 3+4)", () => {
       const metadataMap: MetadataMap = { content: { en: { kept: { id: 42 } } } };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ops = await (matchContent as any)(local, remote, undefined, true, metadataMap);
+      const ops = await (matchContent as any)(local, remote, undefined, true, metadataMap, true);
 
-      // "orphaned" (id 99) is NOT in the metadata map → should be detected as deletion
+      // "orphaned" (id 99) is not represented locally, so --delete treats it
+      // as a deletion candidate even though it is absent from the metadata map.
       expect(ops.delete).toHaveLength(1);
       expect(ops.delete[0].remote.slug).toBe("orphaned");
+      expect(ops.remoteCreated).toHaveLength(0);
     });
   });
 });

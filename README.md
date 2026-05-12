@@ -402,6 +402,18 @@ npx leadcms pull-media
 # Pull only comments
 npx leadcms pull-comments
 
+# Pull email templates
+npx leadcms pull-email-templates
+
+# Pull segments
+npx leadcms pull-segments
+
+# Pull sequences
+npx leadcms pull-sequences
+
+# Pull redirects (triggers server-side auto-discovery first)
+npx leadcms pull-redirects
+
 # Reset and pull everything from scratch
 npx leadcms pull --reset
 ```
@@ -415,6 +427,10 @@ What each command does:
 - `npx leadcms pull-content` - Downloads only content entities (MDX/JSON files) and updates local metadata.
 - `npx leadcms pull-media` - Downloads media files to your `mediaDir` (e.g., `public/media`). Use this when you changed media or want to refresh assets separately from content.
 - `npx leadcms pull-comments` - Downloads comments to the comments directory (e.g., `.leadcms/comments/`). Useful when you only need comment updates.
+- `npx leadcms pull-email-templates` - Downloads email templates to `.leadcms/email-templates/`.
+- `npx leadcms pull-segments` - Downloads contact segments to `.leadcms/segments/`.
+- `npx leadcms pull-sequences` - Downloads automation sequences to `.leadcms/sequences/`.
+- `npx leadcms pull-redirects` - Posts a server-side discover request, then pulls all redirect rules into `redirects/redirects.yaml`. Use `--reset` to clear local state and pull from scratch.
 
 **Intelligent sync handling:**
 
@@ -422,6 +438,21 @@ What each command does:
 - **Rename & type-change cleanup** — When content is renamed (slug change), moved to a different type, or switched format (MDX ↔ JSON), the old file is automatically removed before the new version is written.
 - **Deleted content removal** — Content and media deleted on the server are removed locally during the next pull.
 - **Sync token migration** — When upgrading from SDK ≤ 3.1, legacy sync tokens are automatically migrated to their new location inside each data directory.
+
+### Create a new content file locally
+
+```bash
+npx leadcms add-content [slug]
+```
+
+Interactive wizard that creates a new MDX or JSON content file locally. It:
+
+1. Prompts for a slug (or accepts one as a positional argument)
+2. Fetches available content types from remote and lets you choose
+3. Prompts for required frontmatter fields (title, description, author, language, category, tags)
+4. Writes the file to the correct directory and format
+
+The resulting file is ready to push with `npx leadcms push`.
 
 ### Push local content to LeadCMS
 
@@ -432,7 +463,7 @@ npx leadcms push [options]
 Push your local content changes to LeadCMS. This command will:
 
 - Analyze local MDX/JSON files and compare with remote content
-- Detect new content, updates, and conflicts using `updatedAt` timestamps
+- Detect new content, updates, conflicts, and remotely-deleted items using `updatedAt` timestamps
 - Prompt for confirmation before making changes
 - Support for creating missing content types automatically
 - Update local files with remote metadata (id, createdAt, updatedAt) after sync
@@ -440,6 +471,18 @@ Push your local content changes to LeadCMS. This command will:
 **Options:**
 
 - `--force` - Override remote changes (skip conflict check)
+- `--delete` - Also push local deletions to remote. When this flag is passed, local files are treated as the source of truth and remote items missing locally are deletion candidates.
+- `--dry-run` - Show what would be changed without making any modifications
+
+Focused push commands are also available for individual entity types:
+
+```bash
+npx leadcms push-email-templates [--delete] [--dry-run] [--force]
+npx leadcms push-segments        [--delete] [--dry-run] [--force]
+npx leadcms push-sequences       [--delete] [--dry-run] [--force]
+npx leadcms push-comments        [--dry-run] [--force]
+npx leadcms push-redirects       [--delete] [--dry-run] [--force]
+```
 
 **Content frontmatter / metadata (required and optional fields):**
 
@@ -465,9 +508,104 @@ Notes:
 npx leadcms status
 ```
 
-Shows the current sync status between local and remote **content** without making any changes.
+Shows the current sync status between local files and the remote, covering all entity types: content, media, email templates, segments, sequences, comments, redirects, and settings. No changes are made.
 
-**Note:** The `status` command currently only supports content. Media and comments do not have sync status checking yet.
+Focused status commands are also available:
+
+```bash
+npx leadcms status-content
+npx leadcms status-media
+npx leadcms status-email-templates
+npx leadcms status-segments
+npx leadcms status-sequences
+npx leadcms status-comments
+npx leadcms status-redirects
+npx leadcms status-settings
+```
+
+All status commands show records that exist only on the remote (labeled `added remotely:`) without requiring `--delete`, so you can see everything that needs pulling before deciding to act.
+
+Pass `--delete` to status or push commands when you want the local files to be treated as the source of truth. In that mode, remote records that do not exist locally are shown as `deleted locally:` and can be removed from LeadCMS by the matching push command.
+
+### Redirects management
+
+Redirects are a first-class entity in LeadCMS. Pull them from the server, edit locally as YAML, push back, and generate nginx map files for deployment.
+
+#### Pull redirects
+
+```bash
+npx leadcms pull-redirects          # Discover + pull redirects.yaml
+npx leadcms pull-redirects --reset  # Delete local file and sync token, then pull fresh
+```
+
+Redirects are stored in `redirects/redirects.yaml` (path configured by `redirects.dir` in your config). The YAML groups entries by kind (`permanent` for 301, `temporary` for 302). Each item uses named fields for source and target — `sourceType` and `targetType` are **never written to disk**; they are auto-detected from which fields are populated when you push.
+
+```yaml
+permanent: # 301 redirects
+  - fromPath: /old-page # InternalPath source
+    toPath: /new-page # InternalPath target
+
+  - fromSlug: old-article # ContentSlug source (fromLanguage optional if single-language)
+    fromLanguage: en
+    toSlug: new-article # ContentSlug target
+    toLanguage: en
+
+  - fromContentId: 42 # ContentId source
+    toPath: /new-page
+
+temporary: # 302 redirects
+  - fromPath: /promo # InternalPath source
+    toUrl: https://example.com/sale # ExternalUrl target
+```
+
+**Source field rules** (exactly one set must be present):
+
+| Field(s)                               | Detected as    |
+| -------------------------------------- | -------------- |
+| `fromPath`                             | `InternalPath` |
+| `fromSlug` (+ optional `fromLanguage`) | `ContentSlug`  |
+| `fromContentId`                        | `ContentId`    |
+
+**Target field rules** (exactly one set must be present):
+
+| Field(s)                           | Detected as    |
+| ---------------------------------- | -------------- |
+| `toUrl`                            | `ExternalUrl`  |
+| `toPath`                           | `InternalPath` |
+| `toSlug` (+ optional `toLanguage`) | `ContentSlug`  |
+| `toContentId`                      | `ContentId`    |
+
+#### Push redirects
+
+```bash
+npx leadcms push-redirects
+npx leadcms push-redirects --force    # Override remote changes
+npx leadcms push-redirects --delete   # Also delete remote redirects not present locally
+npx leadcms push-redirects --dry-run  # Preview changes without applying
+```
+
+#### Check redirect status
+
+```bash
+npx leadcms status-redirects
+npx leadcms status-redirects --delete  # Also show redirect deletions
+```
+
+#### Generate nginx redirect maps
+
+```bash
+npx leadcms generate-redirects-map
+```
+
+Generates nginx `map` files from your local `redirects.yaml` without connecting to the remote. By default writes to `redirects/nginx.map` (or split into `301.map` / `302.map` depending on configuration).
+
+**Options:**
+
+- `--output, -o <file>` — Override output file path
+- `--language, -l <lang>` — Filter to a specific language only
+- `--dry-run, -d` — Print the map without writing the file
+
+For `ContentSlug` and `ContentId` sources, the SDK resolves paths using the `redirects.pathPattern` config option (e.g., `"/blog/:slug"`).
 
 ### Watch for real-time updates
 
@@ -570,10 +708,7 @@ const published = getCMSContentBySlugForLocale("home", "en");
 // Returns: null if content has no publishedAt
 
 // Preview slug with GUID - automatically enables draft access
-const preview = getCMSContentBySlugForLocale(
-  "home-550e8400-e29b-41d4-a716-446655440000",
-  "en",
-);
+const preview = getCMSContentBySlugForLocale("home-550e8400-e29b-41d4-a716-446655440000", "en");
 // Returns: draft content even without publishedAt
 ```
 

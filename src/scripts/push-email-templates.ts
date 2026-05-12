@@ -58,6 +58,7 @@ interface PushOptions {
   allowDelete?: boolean;
   targetId?: string;
   targetName?: string;
+  quiet?: boolean;
   /** Remote context for multi-remote support. When provided, API calls target this remote. */
   remoteContext?: RemoteContext;
 }
@@ -675,49 +676,31 @@ async function buildEmailTemplateStatus(
     }
   }
 
-  if (showDelete) {
-    const localIds = new Set(
-      localTemplates
-        .map((template) => template.metadata.id)
-        .filter((id) => id != null)
-        .map((id) => Number(id))
-    );
-    // Build a set of local name+language keys for matching (like slug+locale in content)
-    const localNameKeys = new Set(
-      localTemplates.map((template) => {
-        const name = template.metadata.name;
-        const lang = template.metadata.language || template.locale;
-        return `${name}::${lang}`;
-      })
-    );
+  const localIds = new Set(
+    localTemplates
+      .map((template) => template.metadata.id)
+      .filter((id) => id != null)
+      .map((id) => Number(id))
+  );
+  const localNameKeys = new Set(
+    localTemplates.map((template) => {
+      const name = template.metadata.name;
+      const lang = template.metadata.language || template.locale;
+      return `${name}::${lang}`;
+    })
+  );
 
-    for (const remote of remoteTemplates) {
-      if (remote.id == null) {
+  for (const remote of remoteTemplates) {
+    const remoteNameKey = `${remote.name}::${remote.language || defaultLanguage}`;
+    const isMatchedById = remote.id != null && localIds.has(Number(remote.id));
+    const isMatchedByName = localNameKeys.has(remoteNameKey);
+
+    if (!isMatchedByName && !isMatchedById) {
+      if (showDelete) {
+        operations.push({ type: "delete", remote });
         continue;
       }
-
-      const isMatchedById = localIds.has(Number(remote.id));
-      const remoteNameKey = `${remote.name}::${remote.language || defaultLanguage}`;
-      const isMatchedByName = localNameKeys.has(remoteNameKey);
-
-      if (!isMatchedById && !isMatchedByName) {
-        operations.push({ type: "delete", remote });
-      }
-    }
-  } else {
-    const localNameKeys = new Set(
-      localTemplates.map((template) => {
-        const name = template.metadata.name;
-        const lang = template.metadata.language || template.locale;
-        return `${name}::${lang}`;
-      })
-    );
-
-    for (const remote of remoteTemplates) {
-      const remoteNameKey = `${remote.name}::${remote.language || defaultLanguage}`;
-      if (!localNameKeys.has(remoteNameKey)) {
-        operations.push({ type: "create", remote, reason: "New email template on remote" });
-      }
+      operations.push({ type: "create", remote, reason: "New email template on remote" });
     }
   }
 
@@ -978,7 +961,8 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
     return;
   }
 
-  const { force, dryRun, allowDelete, targetId, targetName, remoteContext: remoteCtx } = options;
+  const { force, dryRun, allowDelete, targetId, targetName, quiet, remoteContext: remoteCtx } =
+    options;
 
   // Configure data service for the target remote (multi-remote support)
   if (remoteCtx) {
@@ -1007,7 +991,7 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
       return;
     }
 
-    console.log(`🔍 Pushing email template with ID ${targetId}`);
+    if (!quiet) console.log(`🔍 Pushing email template with ID ${targetId}`);
   } else if (targetName) {
     localTemplates = localTemplates.filter((t) => {
       return t.metadata.name === targetName;
@@ -1018,7 +1002,7 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
       return;
     }
 
-    console.log(`🔍 Pushing email template "${targetName}"`);
+    if (!quiet) console.log(`🔍 Pushing email template "${targetName}"`);
   }
   const remoteTemplates = await leadCMSDataService.getAllEmailTemplates();
   const emailGroups = await leadCMSDataService.getAllEmailGroups();
@@ -1105,12 +1089,12 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
 
     if (!match) {
       if (dryRun) {
-        console.log(`🟡 [DRY RUN] Create email template: ${payload.name}`);
+        if (!quiet) console.log(`🟡 [DRY RUN] Create email template: ${payload.name}`);
         continue;
       }
 
       const created = await leadCMSDataService.createEmailTemplate(payload);
-      console.log(`✅ Created email template: ${payload.name}`);
+      console.log(`    ✅ Created email template: ${payload.name}`);
       await updateLocalFileFromResponse(local, created, emailGroups, remoteCtx);
       continue;
     }
@@ -1125,13 +1109,13 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
 
     if (dryRun) {
       const label = autoMerged ? "[DRY RUN] Auto-merge + update" : "[DRY RUN] Update";
-      console.log(`🟡 ${label} email template: ${payload.name} (ID ${match.id})`);
+      if (!quiet) console.log(`🟡 ${label} email template: ${payload.name} (ID ${match.id})`);
       continue;
     }
 
     const updated = await leadCMSDataService.updateEmailTemplate(Number(match.id), payload);
     const label = autoMerged ? "🔀 Auto-merged and updated" : "✅ Updated";
-    console.log(`${label} email template: ${payload.name}`);
+    console.log(`    ${label} email template: ${payload.name}`);
     await updateLocalFileFromResponse(local, updated, emailGroups, remoteCtx);
   }
 
@@ -1165,12 +1149,12 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
 
     if (!isMatchedById && !isMatchedByName) {
       if (dryRun) {
-        console.log(`🟡 [DRY RUN] Delete email template: ${remote.name || remote.id}`);
+        if (!quiet) console.log(`🟡 [DRY RUN] Delete email template: ${remote.name || remote.id}`);
         continue;
       }
 
       await leadCMSDataService.deleteEmailTemplate(Number(remote.id));
-      console.log(`🗑️  Deleted email template: ${remote.name || remote.id}`);
+      console.log(`    🗑️  Deleted email template: ${remote.name || remote.id}`);
     }
   }
 }

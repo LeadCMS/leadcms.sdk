@@ -483,6 +483,33 @@ describe("LeadCMS Status Analysis (Real SDK Logic)", () => {
       expect(ops.delete[0].remote?.slug).toBe("only-on-remote");
     });
 
+    it("should detect metadata-backed missing local content when allowDelete is true", async () => {
+      const remote = [
+        makeRemote({
+          id: 100,
+          slug: "deleted-locally",
+          title: "Deleted Locally Article",
+        }),
+      ];
+      const metadataMap = {
+        content: {
+          en: {
+            "deleted-locally": {
+              id: 100,
+              updatedAt: "2024-01-01T00:00:00Z",
+            },
+          },
+        },
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ops = await (matchContent as any)([], remote, undefined, true, metadataMap);
+
+      expect(ops.delete).toHaveLength(1);
+      expect(ops.delete[0].remote?.slug).toBe("deleted-locally");
+      expect(ops.delete[0].reason).toBe("Content removed locally");
+    });
+
     it("should NOT detect deletions when allowDelete is false", async () => {
       const remote = [
         makeRemote({
@@ -515,6 +542,97 @@ describe("LeadCMS Status Analysis (Real SDK Logic)", () => {
       expect(ops.remoteCreated[0].remote?.slug).toBe("only-on-remote");
       expect(ops.remoteCreated[0].reason).toBe("New content on remote");
     });
+
+    it("should treat remote-only content as deletion when allowDelete and status detection are both enabled", async () => {
+      const remote = [
+        makeRemote({
+          id: 100,
+          slug: "only-on-remote",
+          title: "Remote Only Article",
+        }),
+      ];
+      const metadataMap = { content: {} };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ops = await (matchContent as any)([], remote, undefined, true, metadataMap, true);
+
+      expect(ops.delete).toHaveLength(1);
+      expect(ops.delete[0].remote?.slug).toBe("only-on-remote");
+      expect(ops.remoteCreated).toHaveLength(0);
+    });
+
+    it("should not also report metadata-backed local deletions as remote-created", async () => {
+      const remote = [
+        makeRemote({
+          id: 100,
+          slug: "deleted-locally",
+          title: "Deleted Locally Article",
+        }),
+      ];
+      const metadataMap = {
+        content: {
+          en: {
+            "deleted-locally": {
+              id: 100,
+              updatedAt: "2024-01-01T00:00:00Z",
+            },
+          },
+        },
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ops = await (matchContent as any)([], remote, undefined, true, metadataMap, true);
+
+      expect(ops.delete).toHaveLength(1);
+      expect(ops.remoteCreated).toHaveLength(0);
+    });
+
+    it("should NOT mark renamed content as a deletion when allowDelete is true", async () => {
+      const filePath = path.join(tmpDir, "new-slug.mdx");
+      await fs.writeFile(
+        filePath,
+        matter.stringify("Article body", {
+          title: "Renamed Article",
+          type: "post",
+          id: 107,
+          updatedAt: "2024-06-15T00:00:00Z",
+        })
+      );
+
+      const local = [
+        makeLocal({
+          slug: "new-slug",
+          filePath,
+          type: "post",
+          metadata: {
+            id: 107,
+            title: "Renamed Article",
+            type: "post",
+            updatedAt: "2024-06-15T00:00:00Z",
+          },
+        }),
+      ];
+
+      const remote = [
+        makeRemote({
+          id: 107,
+          slug: "old-slug",
+          type: "post",
+          title: "Renamed Article",
+          updatedAt: "2024-01-01T00:00:00Z",
+        }),
+      ];
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ops = await (matchContent as any)(local, remote, undefined, true);
+
+      // Correctly detected as a rename
+      expect(ops.rename).toHaveLength(1);
+      expect(ops.rename[0].oldSlug).toBe("old-slug");
+      expect(ops.rename[0].local.slug).toBe("new-slug");
+      // Critically: the renamed item must NOT also appear in deletions
+      expect(ops.delete).toHaveLength(0);
+    });
   });
 
   describe("countPushChanges", () => {
@@ -545,7 +663,6 @@ describe("LeadCMS Status Analysis (Real SDK Logic)", () => {
         typeChange: [],
         conflict: [],
         delete: [],
-        remoteCreated: [],
         remoteDeleted: [],
       };
 

@@ -62,16 +62,46 @@ export interface PushOptions {
   dryRun?: boolean; // Show API calls without executing them
   allowDelete?: boolean; // Allow deletion of remote content not present locally
   showDelete?: boolean; // Show deletion operations in status output
-  allowConflictMarkers?: boolean; // Allow pushing content with unresolved merge conflict markers
   /** Suppress status display and confirmation prompt (used by push-all orchestrator). */
   quiet?: boolean;
+  /** Optionally run a broad content/media pull after successful push. Response refresh is always used for touched records. */
+  syncAfterPush?: boolean;
   /** Remote context for multi-remote support. When provided, API calls target this remote. */
   remoteContext?: import("../lib/remote-context.js").RemoteContext;
 }
 
-interface ExecutionOptions {
+export interface ExecutionOptions {
   force?: boolean;
   remoteCtx?: RemoteContext;
+  syncAfterPush?: boolean;
+  quiet?: boolean;
+  contentTypeMap?: ContentTypeMap;
+}
+
+interface LocalContentReadIssue {
+  filePath: string;
+  message: string;
+  isMergeConflict: boolean;
+}
+
+class LocalContentReadError extends Error {
+  issues: LocalContentReadIssue[];
+
+  constructor(issues: LocalContentReadIssue[]) {
+    const detail = issues
+      .map((issue) => {
+        const reason = issue.isMergeConflict
+          ? "unresolved merge conflict markers"
+          : issue.message;
+        return `   - ${issue.filePath}: ${reason}`;
+      })
+      .join("\n");
+    super(
+      `Cannot read local content because ${issues.length} file(s) need attention:\n${detail}`
+    );
+    this.name = "LocalContentReadError";
+    this.issues = issues;
+  }
 }
 
 type ContentOperationKey = keyof ContentOperations;
@@ -190,6 +220,7 @@ async function isLocaleDirectory(dirPath: string, parentDir: string): Promise<bo
 async function readLocalContent(): Promise<LocalContentItem[]> {
   logger.verbose(`[LOCAL] Reading content from: ${CONTENT_DIR}`);
   const localContent: LocalContentItem[] = [];
+  const issues: LocalContentReadIssue[] = [];
 
   async function walkDirectory(
     dir: string,
@@ -216,13 +247,27 @@ async function readLocalContent(): Promise<LocalContentItem[]> {
           (entry.name.endsWith(".mdx") || entry.name.endsWith(".json"))
         ) {
           try {
+            const raw = await fs.readFile(fullPath, "utf-8");
+            if (hasMergeConflictMarkers(raw)) {
+              issues.push({
+                filePath: fullPath,
+                message: "Unresolved merge conflict markers detected",
+                isMergeConflict: true,
+              });
+              continue;
+            }
+
             const content = await parseContentFile(fullPath, locale, baseContentDir);
             if (content) {
               localContent.push(content);
             }
           } catch (_error: unknown) {
             const error = _error as Error;
-            logger.verbose(`[LOCAL] Failed to parse ${fullPath}: ${error.message}`);
+            issues.push({
+              filePath: fullPath,
+              message: error.message,
+              isMergeConflict: false,
+            });
           }
         }
       }
@@ -233,6 +278,9 @@ async function readLocalContent(): Promise<LocalContentItem[]> {
   }
 
   await walkDirectory(CONTENT_DIR);
+  if (issues.length > 0) {
+    throw new LocalContentReadError(issues);
+  }
   logger.verbose(`[LOCAL] Found ${localContent.length} local content files`);
   return localContent;
 }
@@ -568,13 +616,12 @@ async function matchContent(
     }
   }
 
-  // Check for deleted content (remote but not local) if deletion is allowed
+  // Check for deleted content (remote but not local) if deletion is allowed.
+  // With --delete, local files are treated as the source of truth: any remote
+  // item that is not represented locally is a deletion candidate.
   if (allowDelete) {
-    // Build a set of IDs from the remote-specific id-map (or frontmatter for single-remote)
     const localIds = new Set<number | string>();
     if (metadataMap) {
-      // Multi-remote: only include IDs for content that still has a local file.
-      // Stale metadata entries (files deleted locally) must NOT suppress deletion detection.
       const localContentKeys = new Set<string>();
       for (const local of localContent) {
         localContentKeys.add(`${local.locale}:${local.slug}`);
@@ -587,24 +634,26 @@ async function matchContent(
         }
       }
     } else {
-      // Single-remote: use frontmatter IDs
       for (const c of localContent) {
         if (c.metadata.id != null) localIds.add(c.metadata.id);
       }
     }
-    const localSlugs = new Map<string, string>();
+
+    const localSlugs = new Set<string>();
     for (const local of localContent) {
-      const key = `${local.slug}:${local.locale}`;
-      localSlugs.set(key, local.slug);
+      localSlugs.add(`${local.slug}:${local.locale}`);
     }
 
     for (const remote of remoteContent) {
-      const isMatchedById = remote.id && localIds.has(remote.id);
+      // Skip items already claimed by a rename, update, or type-change in the main pass
+      if (remote.id != null && matchedRemoteIds.has(remote.id)) {
+        continue;
+      }
+      const isMatchedById = remote.id != null && localIds.has(remote.id);
       const key = `${remote.slug}:${remote.language || defaultLanguage}`;
       const isMatchedBySlug = localSlugs.has(key);
 
       if (!isMatchedById && !isMatchedBySlug) {
-        // This remote content doesn't exist locally anymore
         operations.delete.push({
           local: {
             filePath: "",
@@ -623,6 +672,12 @@ async function matchContent(
   }
 
   if (detectRemoteCreated) {
+    const deletedRemoteIds = new Set(
+      operations.delete
+        .map((op) => op.remote?.id)
+        .filter((id): id is number => id != null)
+        .map((id) => String(id))
+    );
     const localKeys = new Set(
       localContent.map((local) => `${local.slug}:${local.locale || defaultLanguage}`)
     );
@@ -631,8 +686,9 @@ async function matchContent(
       const remoteLocale = remote.language || defaultLanguage;
       const remoteKey = `${remote.slug}:${remoteLocale}`;
       const isMatchedById = remote.id != null && matchedRemoteIds.has(remote.id);
+      const isMarkedForDeletion = remote.id != null && deletedRemoteIds.has(String(remote.id));
 
-      if (!isMatchedById && !localKeys.has(remoteKey)) {
+      if (!isMatchedById && !isMarkedForDeletion && !localKeys.has(remoteKey)) {
         operations.remoteCreated.push({
           local: {
             filePath: "",
@@ -1472,8 +1528,8 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     dryRun = false,
     allowDelete = false,
     showDelete = false,
-    allowConflictMarkers = false,
     quiet = false,
+    syncAfterPush = false,
     remoteContext: remoteCtx,
   } = options;
 
@@ -1517,38 +1573,6 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     if (localContent.length === 0 && !statusOnly) {
       console.log("📂 No local content found. Nothing to sync.");
       return;
-    }
-
-    // Validate content for unresolved merge conflict markers
-    if (!allowConflictMarkers) {
-      const conflictFiles = await validateMergeConflicts(localContent);
-      if (conflictFiles.length > 0) {
-        for (const item of conflictFiles) {
-          colorConsole.error(
-            `❌ Merge conflict markers detected: ${colorConsole.highlight(item.filePath)}`
-          );
-        }
-        colorConsole.error(
-          `\n⚠️  ${conflictFiles.length} file(s) skipped due to unresolved merge conflicts.`
-        );
-        colorConsole.error(
-          "   Resolve the conflicts or use --allow-conflict-markers to override.\n"
-        );
-        // Remove conflicted files from the push set
-        const conflictPaths = new Set(conflictFiles.map((f) => f.filePath));
-        const originalCount = localContent.length;
-        const cleaned = localContent.filter((c) => !conflictPaths.has(c.filePath));
-        // Replace contents in-place so downstream code sees the filtered list
-        localContent.length = 0;
-        localContent.push(...cleaned);
-        if (localContent.length === 0) {
-          console.log("📂 No pushable content remaining after merge-conflict filtering.");
-          return;
-        }
-        logger.verbose(
-          `[PUSH] Filtered out ${originalCount - localContent.length} file(s) with merge conflicts`
-        );
-      }
     }
 
     // Fetch remote content types for content transformation
@@ -1620,7 +1644,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
       remoteTypeMap,
       shouldDetectDeletions,
       metadataMap,
-      statusOnly && !showDelete
+      statusOnly || dryRun
     );
 
     // Filter operations if targeting specific content
@@ -1714,7 +1738,13 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     }
 
     // Execute the sync
-    const results = await executePush(finalOperations, { force, remoteCtx });
+    const results = await executePush(finalOperations, {
+      force,
+      remoteCtx,
+      syncAfterPush,
+      quiet,
+      contentTypeMap: remoteTypeMap as ContentTypeMap,
+    });
 
     // Display final message based on results (skip in quiet mode)
     if (!quiet) {
@@ -1744,15 +1774,21 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
 /**
  * Execute the actual push operations
  */
-async function executePush(
+export async function executePush(
   operations: ContentOperations,
   options: ExecutionOptions = {}
 ): Promise<{ successful: number; failed: number }> {
-  const { force = false, remoteCtx } = options;
+  const {
+    force = false,
+    remoteCtx,
+    syncAfterPush = false,
+    quiet = false,
+    contentTypeMap = {},
+  } = options;
 
   // Handle force updates for conflicts
   if (force && operations.conflict.length > 0) {
-    console.log(`\n🔄 Force updating ${operations.conflict.length} conflicted items...`);
+    if (!quiet) console.log(`\n🔄 Force updating ${operations.conflict.length} conflicted items...`);
     for (const conflict of operations.conflict) {
       operations.update.push({
         local: conflict.local,
@@ -1762,7 +1798,13 @@ async function executePush(
   }
 
   // Use individual operations
-  return await executeIndividualOperations(operations, { force, remoteCtx });
+  return await executeIndividualOperations(operations, {
+    force,
+    remoteCtx,
+    syncAfterPush,
+    quiet,
+    contentTypeMap,
+  });
 }
 
 /**
@@ -1772,18 +1814,24 @@ async function executeIndividualOperations(
   operations: ContentOperations,
   options: ExecutionOptions = {}
 ): Promise<{ successful: number; failed: number }> {
-  const { force: _force = false, remoteCtx } = options;
+  const {
+    force: _force = false,
+    remoteCtx,
+    syncAfterPush = false,
+    quiet = false,
+    contentTypeMap = {},
+  } = options;
   let successful = 0;
   let failed = 0;
 
   // Create new content
   if (operations.create.length > 0) {
-    console.log(`\n🆕 Creating ${operations.create.length} new items...`);
+    if (!quiet) console.log(`\n🆕 Creating ${operations.create.length} new items...`);
     for (const op of operations.create) {
       try {
         const result = await leadCMSDataService.createContent(formatContentForAPI(op.local));
         if (result) {
-          await updateLocalMetadata(op.local, result, remoteCtx);
+          await updateLocalMetadata(op.local, result, remoteCtx, contentTypeMap);
           successful++;
           colorConsole.success(
             `✅ Created: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`
@@ -1806,7 +1854,7 @@ async function executeIndividualOperations(
 
   // Update existing content
   if (operations.update.length > 0) {
-    console.log(`\n🔄 Updating ${operations.update.length} existing items...`);
+    if (!quiet) console.log(`\n🔄 Updating ${operations.update.length} existing items...`);
     for (const op of operations.update) {
       try {
         if (op.remote?.id) {
@@ -1815,10 +1863,10 @@ async function executeIndividualOperations(
             formatContentForAPI(op.local)
           );
           if (result) {
-            await updateLocalMetadata(op.local, result, remoteCtx);
+            await updateLocalMetadata(op.local, result, remoteCtx, contentTypeMap);
             successful++;
             colorConsole.success(
-              `✅ Updated: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`
+              `    ✅ Updated: ${colorConsole.highlight(`${op.local.type}/${op.local.slug}`)}`
             );
           } else {
             failed++;
@@ -1844,7 +1892,7 @@ async function executeIndividualOperations(
 
   // Handle renamed content (slug changed)
   if (operations.rename.length > 0) {
-    console.log(`\n📝 Renaming ${operations.rename.length} items...`);
+    if (!quiet) console.log(`\n📝 Renaming ${operations.rename.length} items...`);
     for (const op of operations.rename) {
       try {
         if (op.remote?.id) {
@@ -1853,9 +1901,9 @@ async function executeIndividualOperations(
             formatContentForAPI(op.local)
           );
           if (result) {
-            await updateLocalMetadata(op.local, result, remoteCtx);
+            await updateLocalMetadata(op.local, result, remoteCtx, contentTypeMap);
             successful++;
-            colorConsole.success(`✅ Renamed: ${op.oldSlug} -> ${op.local.slug}`);
+            colorConsole.success(`    ✅ Renamed: ${op.oldSlug} -> ${op.local.slug}`);
           } else {
             failed++;
             colorConsole.error(`❌ Failed to rename: ${op.oldSlug} -> ${op.local.slug}`);
@@ -1874,7 +1922,9 @@ async function executeIndividualOperations(
 
   // Handle content type changes
   if (operations.typeChange.length > 0) {
-    console.log(`\n🔄 Changing content types for ${operations.typeChange.length} items...`);
+    if (!quiet) {
+      console.log(`\n🔄 Changing content types for ${operations.typeChange.length} items...`);
+    }
     for (const op of operations.typeChange) {
       try {
         if (op.remote?.id) {
@@ -1883,10 +1933,10 @@ async function executeIndividualOperations(
             formatContentForAPI(op.local)
           );
           if (result) {
-            await updateLocalMetadata(op.local, result, remoteCtx);
+            await updateLocalMetadata(op.local, result, remoteCtx, contentTypeMap);
             successful++;
             colorConsole.success(
-              `✅ Type changed: ${op.local.slug} (${op.oldType} -> ${op.newType})`
+              `    ✅ Type changed: ${op.local.slug} (${op.oldType} -> ${op.newType})`
             );
           } else {
             failed++;
@@ -1908,14 +1958,14 @@ async function executeIndividualOperations(
 
   // Delete remote content
   if (operations.delete.length > 0) {
-    console.log(`\n🗑️  Deleting ${operations.delete.length} remote items...`);
+    if (!quiet) console.log(`\n🗑️  Deleting ${operations.delete.length} remote items...`);
     for (const op of operations.delete) {
       try {
         if (op.remote?.id) {
           await leadCMSDataService.deleteContent(op.remote.id);
           successful++;
           colorConsole.success(
-            `✅ Deleted: ${colorConsole.highlight(`${op.remote.type}/${op.remote.slug}`)}`
+            `    ✅ Deleted: ${colorConsole.highlight(`${op.remote.type}/${op.remote.slug}`)}`
           );
         } else {
           failed++;
@@ -1933,10 +1983,12 @@ async function executeIndividualOperations(
     }
   }
 
-  console.log(`\n📊 Results: ${successful} successful, ${failed} failed`);
+  if (!quiet || failed > 0) {
+    console.log(`\n📊 Results: ${successful} successful, ${failed} failed`);
+  }
 
   // If any updates were successful, automatically pull latest changes to sync local store
-  if (successful > 0) {
+  if (successful > 0 && syncAfterPush) {
     logger.info(`\n🔄 Syncing latest changes from LeadCMS to local store...`);
     try {
       const { pullLeadCMSContent } = await import("./pull-leadcms-content.js");
@@ -1959,14 +2011,15 @@ async function executeIndividualOperations(
  */
 
 /**
- * Update local file with metadata from LeadCMS response.
+ * Update local file from LeadCMS response.
  * In multi-remote mode, saves IDs and timestamps to per-remote map files.
  * Frontmatter is only updated for the default remote (or in single-remote mode).
  */
 async function updateLocalMetadata(
   localContent: LocalContentItem,
   remoteResponse: ContentItem,
-  remoteCtx?: RemoteContext
+  remoteCtx?: RemoteContext,
+  contentTypeMap: ContentTypeMap = {}
 ): Promise<void> {
   const { filePath } = localContent;
   const ext = path.extname(filePath);
@@ -1990,41 +2043,48 @@ async function updateLocalMetadata(
     }
   }
 
-  // Only update frontmatter in single-remote mode or for the default remote
+  // Only update frontmatter in single-remote mode or for the default remote.
+  // Exception: for non-default remotes, still update the slug field when it is
+  // stale in the frontmatter.  Without this, a renamed file keeps the old slug
+  // in frontmatter and every subsequent status check detects a false change.
   if (remoteCtx && !remoteCtx.isDefault) {
+    if (remoteResponse.slug) {
+      try {
+        if (ext === ".mdx") {
+          const raw = await fs.readFile(filePath, "utf-8");
+          const parsed = matter(raw);
+          if (parsed.data.slug !== undefined && parsed.data.slug !== remoteResponse.slug) {
+            parsed.data.slug = remoteResponse.slug;
+            await fs.writeFile(filePath, matter.stringify(parsed.content, parsed.data), "utf-8");
+          }
+        } else if (ext === ".json") {
+          const raw = await fs.readFile(filePath, "utf-8");
+          const json = JSON.parse(raw) as Record<string, unknown>;
+          if (json.slug !== undefined && json.slug !== remoteResponse.slug) {
+            json.slug = remoteResponse.slug;
+            await fs.writeFile(filePath, JSON.stringify(json, null, 2), "utf-8");
+          }
+        }
+      } catch (_error: unknown) {
+        const error = _error as Error;
+        console.warn(`Failed to update slug in local file for ${filePath}:`, error.message);
+      }
+    }
     return;
   }
 
   try {
-    if (ext === ".mdx") {
-      const fileContent = await fs.readFile(filePath, "utf-8");
-      const parsed = matter(fileContent);
-
-      // Update metadata with response data
-      parsed.data.id = remoteResponse.id;
-      // Sync updatedAt so future conflict detection uses the correct baseline
-      if (remoteResponse.updatedAt) {
-        parsed.data.updatedAt = remoteResponse.updatedAt;
+    if (ext === ".mdx" || ext === ".json") {
+      const effectiveTypeMap = { ...contentTypeMap };
+      if (ext === ".json" && !effectiveTypeMap[remoteResponse.type]) {
+        effectiveTypeMap[remoteResponse.type] = "JSON";
       }
-
-      // Rebuild the file
-      const newContent = matter.stringify(parsed.content, parsed.data);
-      await fs.writeFile(filePath, newContent, "utf-8");
-    } else if (ext === ".json") {
-      const jsonData = JSON.parse(await fs.readFile(filePath, "utf-8"));
-
-      // Update metadata
-      jsonData.id = remoteResponse.id;
-      // Sync updatedAt so future conflict detection uses the correct baseline
-      if (remoteResponse.updatedAt) {
-        jsonData.updatedAt = remoteResponse.updatedAt;
-      }
-
-      await fs.writeFile(filePath, JSON.stringify(jsonData, null, 2), "utf-8");
+      const syncedContent = await transformRemoteToLocalFormat(remoteResponse, effectiveTypeMap);
+      await fs.writeFile(filePath, syncedContent, "utf-8");
     }
   } catch (_error: unknown) {
     const error = _error as Error;
-    console.warn(`Failed to update local metadata for ${filePath}:`, error.message);
+    console.warn(`Failed to update local content from push response for ${filePath}:`, error.message);
   }
 }
 
@@ -2109,7 +2169,7 @@ export async function getContentStatusData(
     remoteTypeMap,
     options.showDelete || false,
     metadataMap,
-    !options.showDelete
+    true
   );
 
   return {

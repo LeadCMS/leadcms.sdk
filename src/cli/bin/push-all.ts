@@ -25,6 +25,11 @@ import { buildSegmentStatus, pushSegments } from "../../scripts/push-segments.js
 import { buildSequenceStatus, pushSequences } from "../../scripts/push-sequences.js";
 import { buildRedirectStatus, pushRedirects } from "../../scripts/push-redirects.js";
 import {
+  countActionablePushOperations,
+  countActionableSettingsComparisons,
+  subtractRemoteCreates,
+} from "../../scripts/push-all-counts.js";
+import {
   requireAuthenticatedUser,
   defaultLanguage,
   leadCMSApiKey,
@@ -183,7 +188,7 @@ function renderContentSection(ops: ContentOperations): number {
     const localeLabel = `[${op.local.locale || "unknown"}]`.padEnd(6);
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
     colorConsole.log(
-      `        ${statusColors.renamed("renamed:  ")}   ${typeLabel} ${localeLabel} ${colorConsole.gray(op.oldSlug || "unknown")} -> ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`
+      `        ${statusColors.renamed("renamed locally:")} ${typeLabel} ${localeLabel} ${colorConsole.gray(op.oldSlug || "unknown")} -> ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`
     );
   }
   for (const op of typeChanges) {
@@ -192,7 +197,7 @@ function renderContentSection(ops: ContentOperations): number {
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
     const typeChangeLabel = `(${colorConsole.gray(op.oldType || "unknown")} -> ${colorConsole.highlight(op.newType || "unknown")})`;
     colorConsole.log(
-      `        ${statusColors.typeChange("type chg: ")}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${typeChangeLabel} ${colorConsole.gray(idLabel)}`
+      `        ${statusColors.typeChange("type changed locally:")} ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${typeChangeLabel} ${colorConsole.gray(idLabel)}`
     );
   }
   for (const op of conflicts) {
@@ -501,19 +506,25 @@ function renderSummaryLine(
     renames?: number;
     typeChanges?: number;
     conflicts: number;
+    remoteCreates?: number;
+    remoteDeletes?: number;
     deletes: number;
     skips?: number;
   }
 ): string {
   const parts: string[] = [];
-  if (counts.creates > 0) parts.push(`${counts.creates} new`);
-  if (counts.updates > 0) parts.push(`${counts.updates} modified`);
-  if (counts.renames && counts.renames > 0) parts.push(`${counts.renames} renamed`);
+  if (counts.creates > 0) parts.push(`${counts.creates} added locally`);
+  if (counts.updates > 0) parts.push(`${counts.updates} updated locally`);
+  if (counts.renames && counts.renames > 0) parts.push(`${counts.renames} renamed locally`);
   if (counts.typeChanges && counts.typeChanges > 0)
-    parts.push(`${counts.typeChanges} type changed`);
+    parts.push(`${counts.typeChanges} type changed locally`);
   if (counts.conflicts > 0)
     parts.push(`${counts.conflicts} conflict${counts.conflicts > 1 ? "s" : ""}`);
-  if (counts.deletes > 0) parts.push(`${counts.deletes} to delete`);
+  if (counts.remoteCreates && counts.remoteCreates > 0)
+    parts.push(`${counts.remoteCreates} added remotely`);
+  if (counts.deletes > 0) parts.push(`${counts.deletes} deleted locally`);
+  if (counts.remoteDeletes && counts.remoteDeletes > 0)
+    parts.push(`${counts.remoteDeletes} deleted remotely`);
   if (counts.skips && counts.skips > 0) parts.push(`${counts.skips} up to date`);
 
   if (parts.length === 0) return `   ${label} up to date`;
@@ -550,7 +561,7 @@ async function pushAll() {
         sequenceResult,
         redirectResult,
       ] = await Promise.all([
-        getContentStatusData({ showDelete: allowDelete, remoteContext }).catch(() => null),
+        getContentStatusData({ showDelete: allowDelete, remoteContext }),
         buildCommentStatus({ showDelete: allowDelete, remoteContext }).catch(() => null),
         statusMedia({ scopeUid, showDelete: allowDelete, silent: true, remoteContext }).catch(
           () => null
@@ -558,7 +569,9 @@ async function pushAll() {
         canCheckEmailTemplates
           ? buildEmailTemplateStatus({ showDelete: allowDelete, remoteContext }).catch(() => null)
           : Promise.resolve(null),
-        canCheckEmailTemplates ? getSettingsStatusData().catch(() => null) : Promise.resolve(null),
+        canCheckEmailTemplates
+          ? getSettingsStatusData({ showDelete: allowDelete }).catch(() => null)
+          : Promise.resolve(null),
         canCheckEmailTemplates
           ? buildSegmentStatus({ showDelete: allowDelete, remoteContext }).catch(() => null)
           : Promise.resolve(null),
@@ -627,6 +640,28 @@ async function pushAll() {
       ? redirectOps.filter((op) => (allowDelete ? true : op.type !== "delete")).length
       : 0;
 
+    const contentPushChanges = contentOps
+      ? subtractRemoteCreates(contentChanges, contentOps.remoteCreated.length)
+      : 0;
+
+    const mediaPushChanges = mediaResult
+      ? subtractRemoteCreates(mediaChanges, mediaResult.summary.remoteCreateds)
+      : 0;
+
+    const commentPushChanges = countActionablePushOperations(commentOps, allowDelete);
+
+    const emailPushChanges = countActionablePushOperations(emailOps, allowDelete);
+
+    const settingsPushChanges = settingsResult
+      ? countActionableSettingsComparisons(settingsResult.comparisons, allowDelete)
+      : 0;
+
+    const segmentPushChanges = countActionablePushOperations(segmentOps, allowDelete);
+
+    const sequencePushChanges = countActionablePushOperations(sequenceOps, allowDelete);
+
+    const redirectPushChanges = countActionablePushOperations(redirectOps, allowDelete);
+
     const contentSkips = contentResult ? contentResult.totalLocal - contentChanges : 0;
     const mediaSkips = mediaResult ? mediaResult.summary.skips : 0;
     const commentSkips = commentResult ? commentResult.totalLocal - commentChanges : 0;
@@ -647,6 +682,16 @@ async function pushAll() {
       segmentChanges +
       sequenceChanges +
       redirectChanges;
+
+    const totalPushChanges =
+      contentPushChanges +
+      commentPushChanges +
+      mediaPushChanges +
+      emailPushChanges +
+      settingsPushChanges +
+      segmentPushChanges +
+      sequencePushChanges +
+      redirectPushChanges;
 
     // ── Phase 3: Display unified status ──────────────────────────────────
 
@@ -757,11 +802,14 @@ async function pushAll() {
               `        ${statusColors.created("added locally: ")}   ${colorConsole.highlight(label)} ${colorConsole.gray(`= ${formatSettingValue(entry.key, entry.localValue)}`)}`
             );
             break;
-          case "remote-only":
+          case "remote-only": {
+            const labelText = allowDelete ? "deleted locally:" : "added remotely:";
+            const labelColor = allowDelete ? statusColors.conflict : statusColors.created;
             colorConsole.log(
-              `        ${statusColors.conflict("remote:   ")}   ${colorConsole.highlight(label)} ${colorConsole.gray(`= ${formatSettingValue(entry.key, entry.remoteValue)}`)}`
+              `        ${labelColor(labelText)} ${colorConsole.highlight(label)} ${colorConsole.gray(`= ${formatSettingValue(entry.key, entry.remoteValue)}`)}`
             );
             break;
+          }
         }
       }
       console.log("");
@@ -802,7 +850,9 @@ async function pushAll() {
           renames: contentOps.rename.length,
           typeChanges: contentOps.typeChange.length,
           conflicts: contentOps.conflict.length,
-          deletes: (allowDelete ? contentOps.delete.length : 0) + contentOps.remoteDeleted.length,
+          remoteCreates: contentOps.remoteCreated.length,
+          deletes: allowDelete ? contentOps.delete.length : 0,
+          remoteDeletes: contentOps.remoteDeleted.length,
           skips: contentSkips,
         })
       );
@@ -822,10 +872,11 @@ async function pushAll() {
       console.log(
         renderSummaryLine("📷 Media:           ", {
           creates: mediaResult.summary.creates,
+          remoteCreates: mediaResult.summary.remoteCreateds,
           updates: mediaResult.summary.updates,
           conflicts: 0,
-          deletes:
-            (allowDelete ? mediaResult.summary.deletes : 0) + mediaResult.summary.remoteDeleteds,
+          deletes: allowDelete ? mediaResult.summary.deletes : 0,
+          remoteDeletes: mediaResult.summary.remoteDeleteds,
           skips: mediaSkips,
         })
       );
@@ -840,10 +891,13 @@ async function pushAll() {
       );
       console.log(
         renderSummaryLine("📧 Email Templates: ", {
-          creates: counts.create || 0,
+          creates: emailOps.filter((op) => op.type === "create" && op.local).length,
+          remoteCreates: emailOps.filter((op) => op.type === "create" && op.remote && !op.local)
+            .length,
           updates: counts.update || 0,
           conflicts: counts.conflict || 0,
-          deletes: (allowDelete ? counts.delete || 0 : 0) + (counts["remote-deleted"] || 0),
+          deletes: allowDelete ? counts.delete || 0 : 0,
+          remoteDeletes: counts["remote-deleted"] || 0,
           skips: emailSkips,
         })
       );
@@ -858,8 +912,9 @@ async function pushAll() {
         renderSummaryLine("⚙️  Settings:        ", {
           creates: localOnly,
           updates: modified,
-          conflicts: remoteOnly,
-          deletes: 0,
+          remoteCreates: allowDelete ? 0 : remoteOnly,
+          conflicts: 0,
+          deletes: allowDelete ? remoteOnly : 0,
           skips: settingsInSync,
         })
       );
@@ -874,10 +929,13 @@ async function pushAll() {
       );
       console.log(
         renderSummaryLine("🔖 Segments:        ", {
-          creates: counts.create || 0,
+          creates: segmentOps.filter((op) => op.type === "create" && op.local).length,
+          remoteCreates: segmentOps.filter((op) => op.type === "create" && op.remote && !op.local)
+            .length,
           updates: counts.update || 0,
           conflicts: counts.conflict || 0,
           deletes: allowDelete ? counts.delete || 0 : 0,
+          remoteDeletes: counts["remote-deleted"] || 0,
           skips: segmentSkips,
         })
       );
@@ -892,10 +950,13 @@ async function pushAll() {
       );
       console.log(
         renderSummaryLine("🔗 Sequences:       ", {
-          creates: counts.create || 0,
+          creates: sequenceOps.filter((op) => op.type === "create" && op.local).length,
+          remoteCreates: sequenceOps.filter((op) => op.type === "create" && op.remote && !op.local)
+            .length,
           updates: counts.update || 0,
           conflicts: counts.conflict || 0,
           deletes: allowDelete ? counts.delete || 0 : 0,
+          remoteDeletes: counts["remote-deleted"] || 0,
           skips: sequenceSkips,
         })
       );
@@ -910,10 +971,13 @@ async function pushAll() {
       );
       console.log(
         renderSummaryLine("🔀 Redirects:       ", {
-          creates: counts.create || 0,
+          creates: redirectOps.filter((op) => op.type === "create" && op.local).length,
+          remoteCreates: redirectOps.filter((op) => op.type === "create" && op.remote && !op.local)
+            .length,
           updates: counts.update || 0,
           conflicts: 0,
-          deletes: (allowDelete ? counts.delete || 0 : 0) + (counts["remote-deleted"] || 0),
+          deletes: allowDelete ? counts.delete || 0 : 0,
+          remoteDeletes: counts["remote-deleted"] || 0,
           skips: redirectSkips,
         })
       );
@@ -925,13 +989,18 @@ async function pushAll() {
 
     if (dryRun) {
       colorConsole.important(
-        `\n💡 Dry run — ${totalChanges} change(s) would be pushed. Use without --dry-run to execute.`
+        `\n💡 Dry run — ${totalPushChanges} change(s) would be pushed. Use without --dry-run to execute.`
       );
       return;
     }
 
+    if (totalPushChanges === 0) {
+      colorConsole.success("\n✅ Nothing to push. Remote-only changes are shown above for visibility.");
+      return;
+    }
+
     const confirmed = await promptConfirm(
-      `Proceed with pushing ${totalChanges} change(s) to LeadCMS? (y/N): `
+      `Proceed with pushing ${totalPushChanges} change(s) to LeadCMS? (y/N): `
     );
     if (!confirmed) {
       console.log("🚫 Push cancelled.");
@@ -942,12 +1011,12 @@ async function pushAll() {
 
     console.log("");
 
-    if (settingsChanges > 0) {
+    if (settingsPushChanges > 0) {
       colorConsole.important("  ⚙️  Pushing settings…");
-      await pushSettings({ dryRun, force, quiet: true });
+      await pushSettings({ dryRun, force, allowDelete, quiet: true });
     }
 
-    if (contentChanges > 0) {
+    if (contentPushChanges > 0) {
       colorConsole.important("  📝 Pushing content…");
       await pushLeadCMSContent({
         statusOnly: false,
@@ -956,42 +1025,43 @@ async function pushAll() {
         targetSlug,
         dryRun,
         allowDelete,
+        syncAfterPush: false,
         remoteContext,
         quiet: true,
       });
     }
 
-    if (emailChanges > 0) {
+    if (emailPushChanges > 0) {
       colorConsole.important("  📧 Pushing email templates…");
-      await pushEmailTemplates({ dryRun, force, allowDelete, remoteContext });
+      await pushEmailTemplates({ dryRun, force, allowDelete, quiet: true, remoteContext });
     }
 
-    if (commentChanges > 0) {
+    if (commentPushChanges > 0) {
       colorConsole.important("  💬 Pushing comments…");
       await pushComments({ dryRun, force, allowDelete, remoteContext });
     }
 
-    if (mediaChanges > 0) {
+    if (mediaPushChanges > 0) {
       colorConsole.important("  📷 Pushing media…");
       await pushMedia({ dryRun, force, scopeUid, allowDelete, remoteContext, quiet: true });
     }
 
-    if (segmentChanges > 0) {
+    if (segmentPushChanges > 0) {
       colorConsole.important("  🔖 Pushing segments…");
-      await pushSegments({ dryRun, force, allowDelete, remoteContext });
+      await pushSegments({ dryRun, force, allowDelete, quiet: true, remoteContext });
     }
 
-    if (sequenceChanges > 0) {
+    if (sequencePushChanges > 0) {
       colorConsole.important("  🔗 Pushing sequences…");
-      await pushSequences({ dryRun, force, allowDelete, remoteContext });
+      await pushSequences({ dryRun, force, allowDelete, quiet: true, remoteContext });
     }
 
-    if (redirectChanges > 0) {
+    if (redirectPushChanges > 0) {
       colorConsole.important("  🔀 Pushing redirects…");
-      await pushRedirects({ dryRun, force, allowDelete, remoteContext });
+      await pushRedirects({ dryRun, force, allowDelete, quiet: true, remoteContext });
     }
 
-    colorConsole.success("\n✔ Push completed successfully!");
+    colorConsole.success("\n✔ Push completed successfully! Local files refreshed from push responses.");
   } catch (_error: unknown) {
     const error = _error as Error;
     console.error("\n❌ Push failed:", error.message);

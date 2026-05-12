@@ -25,6 +25,7 @@ interface PushOptions {
   force?: boolean;
   dryRun?: boolean;
   allowDelete?: boolean;
+  quiet?: boolean;
   remoteContext?: RemoteContext;
 }
 
@@ -241,25 +242,18 @@ export async function buildSegmentStatus(
     }
   }
 
-  if (showDelete) {
-    const localNames = new Set(localFiles.map((f) => f.segment.name));
-    const localIds = new Set(
-      localFiles.map((f) => f.segment.id).filter((id): id is number => id != null)
-    );
-    for (const remote of remoteSegments) {
-      if (!localNames.has(remote.name) && (remote.id == null || !localIds.has(remote.id))) {
+  const localNames = new Set(localFiles.map((f) => f.segment.name));
+  const localIds = new Set(
+    localFiles.map((f) => f.segment.id).filter((id): id is number => id != null)
+  );
+
+  for (const remote of remoteSegments) {
+    if (!localNames.has(remote.name) && (remote.id == null || !localIds.has(remote.id))) {
+      if (showDelete) {
         operations.push({ type: "delete", remote });
+        continue;
       }
-    }
-  } else {
-    const localNames = new Set(localFiles.map((f) => f.segment.name));
-    const localIds = new Set(
-      localFiles.map((f) => f.segment.id).filter((id): id is number => id != null)
-    );
-    for (const remote of remoteSegments) {
-      if (!localNames.has(remote.name) && (remote.id == null || !localIds.has(remote.id))) {
-        operations.push({ type: "create", remote, reason: "New segment on remote" });
-      }
+      operations.push({ type: "create", remote, reason: "New segment on remote" });
     }
   }
 
@@ -420,7 +414,7 @@ export async function pushSegments(options: PushOptions = {}): Promise<void> {
     return;
   }
 
-  const { force, dryRun, allowDelete, remoteContext: remoteCtx } = options;
+  const { force, dryRun, allowDelete, quiet, remoteContext: remoteCtx } = options;
 
   if (remoteCtx) {
     leadCMSDataService.configureForRemote(remoteCtx.url, remoteCtx.apiKey);
@@ -443,11 +437,11 @@ export async function pushSegments(options: PushOptions = {}): Promise<void> {
 
     if (!match) {
       if (dryRun) {
-        console.log(`🟡 [DRY RUN] Create segment: ${segment.name}`);
+        if (!quiet) console.log(`🟡 [DRY RUN] Create segment: ${segment.name}`);
         continue;
       }
       const created = await leadCMSDataService.createSegment(toCreatePayload(segment));
-      console.log(`✅ Created segment: ${segment.name}`);
+      console.log(`    ✅ Created segment: ${segment.name}`);
       await updateLocalFileAfterPush(filePath, created, remoteCtx);
       continue;
     }
@@ -465,12 +459,12 @@ export async function pushSegments(options: PushOptions = {}): Promise<void> {
     if (!hasSegmentChanges(segment, match)) continue;
 
     if (dryRun) {
-      console.log(`🟡 [DRY RUN] Update segment: ${segment.name} (ID ${match.id})`);
+      if (!quiet) console.log(`🟡 [DRY RUN] Update segment: ${segment.name} (ID ${match.id})`);
       continue;
     }
 
     const updated = await leadCMSDataService.updateSegment(match.id!, toUpdatePayload(segment));
-    console.log(`✅ Updated segment: ${segment.name}`);
+    console.log(`    ✅ Updated segment: ${segment.name}`);
     await updateLocalFileAfterPush(filePath, updated, remoteCtx);
   }
 
@@ -485,11 +479,11 @@ export async function pushSegments(options: PushOptions = {}): Promise<void> {
     if (localNames.has(remote.name) || (remote.id != null && localIds.has(remote.id))) continue;
 
     if (dryRun) {
-      console.log(`🟡 [DRY RUN] Delete segment: ${remote.name || remote.id}`);
+      if (!quiet) console.log(`🟡 [DRY RUN] Delete segment: ${remote.name || remote.id}`);
       continue;
     }
 
     await leadCMSDataService.deleteSegment(remote.id!);
-    console.log(`🗑️  Deleted segment: ${remote.name || remote.id}`);
+    console.log(`    🗑️  Deleted segment: ${remote.name || remote.id}`);
   }
 }

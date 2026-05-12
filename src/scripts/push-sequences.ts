@@ -30,6 +30,7 @@ interface PushOptions {
   force?: boolean;
   dryRun?: boolean;
   allowDelete?: boolean;
+  quiet?: boolean;
   remoteContext?: RemoteContext;
 }
 
@@ -317,21 +318,16 @@ export async function buildSequenceStatus(
     }
   }
 
-  if (showDelete) {
-    const localKeys = new Set(localFiles.map((f) => `${f.sequence.language}:${f.sequence.name}`));
-    for (const remote of remoteSequences) {
-      const key = `${remote.language}:${remote.name}`;
-      if (!localKeys.has(key)) {
+  const localKeys = new Set(localFiles.map((f) => `${f.sequence.language}:${f.sequence.name}`));
+
+  for (const remote of remoteSequences) {
+    const key = `${remote.language}:${remote.name}`;
+    if (!localKeys.has(key)) {
+      if (showDelete) {
         operations.push({ type: "delete", remote });
+        continue;
       }
-    }
-  } else {
-    const localKeys = new Set(localFiles.map((f) => `${f.sequence.language}:${f.sequence.name}`));
-    for (const remote of remoteSequences) {
-      const key = `${remote.language}:${remote.name}`;
-      if (!localKeys.has(key)) {
-        operations.push({ type: "create", remote, reason: "New sequence on remote" });
-      }
+      operations.push({ type: "create", remote, reason: "New sequence on remote" });
     }
   }
 
@@ -490,7 +486,7 @@ export async function pushSequences(options: PushOptions = {}): Promise<void> {
     return;
   }
 
-  const { force, dryRun, allowDelete, remoteContext: remoteCtx } = options;
+  const { force, dryRun, allowDelete, quiet, remoteContext: remoteCtx } = options;
 
   if (remoteCtx) {
     leadCMSDataService.configureForRemote(remoteCtx.url, remoteCtx.apiKey);
@@ -522,7 +518,7 @@ export async function pushSequences(options: PushOptions = {}): Promise<void> {
 
     if (!match) {
       if (dryRun) {
-        console.log(`🟡 [DRY RUN] Create sequence: ${sequence.name}`);
+        if (!quiet) console.log(`🟡 [DRY RUN] Create sequence: ${sequence.name}`);
         continue;
       }
 
@@ -535,7 +531,7 @@ export async function pushSequences(options: PushOptions = {}): Promise<void> {
         throw new Error(`Failed to create sequence "${sequence.name}": ${reason}`);
       }
 
-      console.log(`✅ Created sequence: ${sequence.name}`);
+      console.log(`    ✅ Created sequence: ${sequence.name}`);
       await updateLocalFileAfterPush(filePath, created, segIdNameMap, tplIdNameMap, remoteCtx);
       continue;
     }
@@ -563,7 +559,7 @@ export async function pushSequences(options: PushOptions = {}): Promise<void> {
     if (!hasSequenceChanges(sequence, match, segIdNameMap, tplIdNameMap)) continue;
 
     if (dryRun) {
-      console.log(`🟡 [DRY RUN] Update sequence: ${sequence.name} (ID ${match.id})`);
+      if (!quiet) console.log(`🟡 [DRY RUN] Update sequence: ${sequence.name} (ID ${match.id})`);
       continue;
     }
 
@@ -577,7 +573,7 @@ export async function pushSequences(options: PushOptions = {}): Promise<void> {
       throw new Error(`Failed to update sequence "${sequence.name}" (ID ${match.id}): ${reason}`);
     }
 
-    console.log(`✅ Updated sequence: ${sequence.name}`);
+    console.log(`    ✅ Updated sequence: ${sequence.name}`);
     await updateLocalFileAfterPush(filePath, updated, segIdNameMap, tplIdNameMap, remoteCtx);
   }
 
@@ -590,11 +586,11 @@ export async function pushSequences(options: PushOptions = {}): Promise<void> {
     if (localKeys.has(key)) continue;
 
     if (dryRun) {
-      console.log(`🟡 [DRY RUN] Delete sequence: ${remote.name || remote.id}`);
+      if (!quiet) console.log(`🟡 [DRY RUN] Delete sequence: ${remote.name || remote.id}`);
       continue;
     }
 
     await leadCMSDataService.deleteSequence(remote.id!);
-    console.log(`🗑️  Deleted sequence: ${remote.name || remote.id}`);
+    console.log(`    🗑️  Deleted sequence: ${remote.name || remote.id}`);
   }
 }

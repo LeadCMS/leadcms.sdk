@@ -148,7 +148,7 @@ function renderContentSection(ops: ContentOperations): number {
     const localeLabel = `[${op.local.locale || "unknown"}]`.padEnd(6);
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
     colorConsole.log(
-      `        ${statusColors.renamed("renamed:  ")}   ${typeLabel} ${localeLabel} ${colorConsole.gray(op.oldSlug || "unknown")} -> ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`
+      `        ${statusColors.renamed("renamed locally:")} ${typeLabel} ${localeLabel} ${colorConsole.gray(op.oldSlug || "unknown")} -> ${colorConsole.highlight(op.local.slug)} ${colorConsole.gray(idLabel)}`
     );
   }
   for (const op of typeChanges) {
@@ -157,7 +157,7 @@ function renderContentSection(ops: ContentOperations): number {
     const idLabel = op.remote?.id ? `(ID: ${op.remote.id})` : "";
     const typeChangeLabel = `(${colorConsole.gray(op.oldType || "unknown")} -> ${colorConsole.highlight(op.newType || "unknown")})`;
     colorConsole.log(
-      `        ${statusColors.typeChange("type chg: ")}   ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${typeChangeLabel} ${colorConsole.gray(idLabel)}`
+      `        ${statusColors.typeChange("type changed locally:")} ${typeLabel} ${localeLabel} ${colorConsole.highlight(op.local.slug)} ${typeChangeLabel} ${colorConsole.gray(idLabel)}`
     );
   }
   for (const op of conflicts) {
@@ -448,23 +448,26 @@ function renderSummaryLine(
     conflicts: number;
     remoteCreates?: number;
     remoteUpdates?: number;
+    remoteDeletes?: number;
     deletes: number;
     skips?: number;
   }
 ): string {
   const parts: string[] = [];
-  if (counts.creates > 0) parts.push(`${counts.creates} new`);
-  if (counts.updates > 0) parts.push(`${counts.updates} modified`);
-  if (counts.renames && counts.renames > 0) parts.push(`${counts.renames} renamed`);
+  if (counts.creates > 0) parts.push(`${counts.creates} added locally`);
+  if (counts.updates > 0) parts.push(`${counts.updates} updated locally`);
+  if (counts.renames && counts.renames > 0) parts.push(`${counts.renames} renamed locally`);
   if (counts.typeChanges && counts.typeChanges > 0)
-    parts.push(`${counts.typeChanges} type changed`);
+    parts.push(`${counts.typeChanges} type changed locally`);
   if (counts.conflicts > 0)
     parts.push(`${counts.conflicts} conflict${counts.conflicts > 1 ? "s" : ""}`);
   if (counts.remoteUpdates && counts.remoteUpdates > 0)
     parts.push(`${counts.remoteUpdates} updated remotely`);
   if (counts.remoteCreates && counts.remoteCreates > 0)
     parts.push(`${counts.remoteCreates} added remotely`);
-  if (counts.deletes > 0) parts.push(`${counts.deletes} to delete`);
+  if (counts.deletes > 0) parts.push(`${counts.deletes} deleted locally`);
+  if (counts.remoteDeletes && counts.remoteDeletes > 0)
+    parts.push(`${counts.remoteDeletes} deleted remotely`);
   if (counts.skips && counts.skips > 0) parts.push(`${counts.skips} up to date`);
 
   if (parts.length === 0) return `   ${label} up to date`;
@@ -522,7 +525,7 @@ async function statusAll() {
           })
           : Promise.resolve(null),
         canCheckEmailTemplates
-          ? getSettingsStatusData().catch((_err: unknown) => {
+          ? getSettingsStatusData({ showDelete }).catch((_err: unknown) => {
             spinner.update("Fetching status… (settings failed)");
             return null;
           })
@@ -742,11 +745,14 @@ async function statusAll() {
               `        ${statusColors.created("added locally: ")}   ${colorConsole.highlight(label)} ${colorConsole.gray(`= ${formatSettingValue(entry.key, entry.localValue)}`)}`
             );
             break;
-          case "remote-only":
+          case "remote-only": {
+            const labelText = showDelete ? "deleted locally:" : "added remotely:";
+            const labelColor = showDelete ? statusColors.conflict : statusColors.created;
             colorConsole.log(
-              `        ${statusColors.conflict("remote:   ")}   ${colorConsole.highlight(label)} ${colorConsole.gray(`= ${formatSettingValue(entry.key, entry.remoteValue)}`)}`
+              `        ${labelColor(labelText)} ${colorConsole.highlight(label)} ${colorConsole.gray(`= ${formatSettingValue(entry.key, entry.remoteValue)}`)}`
             );
             break;
+          }
         }
       }
       console.log("");
@@ -841,6 +847,7 @@ async function statusAll() {
           remoteCreates: contentOps.remoteCreated.length,
           remoteUpdates: contentOps.conflict.length,
           deletes: showDelete ? contentOps.delete.length : 0,
+          remoteDeletes: contentOps.remoteDeleted.length,
           skips: contentSkips,
         })
       );
@@ -865,8 +872,8 @@ async function statusAll() {
           remoteCreates: mediaResult.summary.remoteCreateds,
           updates: mediaResult.summary.updates,
           conflicts: 0,
-          deletes:
-            (showDelete ? mediaResult.summary.deletes : 0) + mediaResult.summary.remoteDeleteds,
+          deletes: showDelete ? mediaResult.summary.deletes : 0,
+          remoteDeletes: mediaResult.summary.remoteDeleteds,
           skips: mediaSkips,
         })
       );
@@ -882,10 +889,13 @@ async function statusAll() {
       );
       console.log(
         renderSummaryLine("📧 Email Templates: ", {
-          creates: counts.create || 0,
+          creates: emailOps.filter((op) => op.type === "create" && op.local).length,
+          remoteCreates: emailOps.filter((op) => op.type === "create" && op.remote && !op.local)
+            .length,
           updates: counts.update || 0,
           conflicts: counts.conflict || 0,
-          deletes: (showDelete ? counts.delete || 0 : 0) + (counts["remote-deleted"] || 0),
+          deletes: showDelete ? counts.delete || 0 : 0,
+          remoteDeletes: counts["remote-deleted"] || 0,
           skips: emailSkips,
         })
       );
@@ -901,8 +911,9 @@ async function statusAll() {
         renderSummaryLine("⚙️  Settings:        ", {
           creates: localOnly,
           updates: modified,
-          conflicts: remoteOnly,
-          deletes: 0,
+          remoteCreates: showDelete ? 0 : remoteOnly,
+          conflicts: 0,
+          deletes: showDelete ? remoteOnly : 0,
           skips: settingsInSync,
         })
       );
@@ -918,10 +929,13 @@ async function statusAll() {
       );
       console.log(
         renderSummaryLine("🔖 Segments:        ", {
-          creates: counts.create || 0,
+          creates: segmentOps.filter((op) => op.type === "create" && op.local).length,
+          remoteCreates: segmentOps.filter((op) => op.type === "create" && op.remote && !op.local)
+            .length,
           updates: counts.update || 0,
           conflicts: counts.conflict || 0,
-          deletes: (showDelete ? counts.delete || 0 : 0) + (counts["remote-deleted"] || 0),
+          deletes: showDelete ? counts.delete || 0 : 0,
+          remoteDeletes: counts["remote-deleted"] || 0,
           skips: segmentSkips,
         })
       );
@@ -937,10 +951,13 @@ async function statusAll() {
       );
       console.log(
         renderSummaryLine("🔗 Sequences:       ", {
-          creates: counts.create || 0,
+          creates: sequenceOps.filter((op) => op.type === "create" && op.local).length,
+          remoteCreates: sequenceOps.filter((op) => op.type === "create" && op.remote && !op.local)
+            .length,
           updates: counts.update || 0,
           conflicts: counts.conflict || 0,
           deletes: showDelete ? counts.delete || 0 : 0,
+          remoteDeletes: counts["remote-deleted"] || 0,
           skips: sequenceSkips,
         })
       );
@@ -956,10 +973,13 @@ async function statusAll() {
       );
       console.log(
         renderSummaryLine("🔀 Redirects:       ", {
-          creates: counts.create || 0,
+          creates: redirectOps.filter((op) => op.type === "create" && op.local).length,
+          remoteCreates: redirectOps.filter((op) => op.type === "create" && op.remote && !op.local)
+            .length,
           updates: counts.update || 0,
           conflicts: 0,
           deletes: showDelete ? counts.delete || 0 : 0,
+          remoteDeletes: counts["remote-deleted"] || 0,
           skips: redirectSkips,
         })
       );

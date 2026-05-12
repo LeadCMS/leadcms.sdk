@@ -13,6 +13,7 @@ import { parseRemoteFlag } from "./remote-flag.js";
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
 parseRemoteFlag(args);
+const showDelete = args.includes("--delete");
 
 // Parse --name flag
 let targetName: string | undefined;
@@ -24,7 +25,7 @@ if (nameIndex !== -1 && args[nameIndex + 1]) {
 await resolveIdentity();
 
 const spinner = startSpinner("Checking settings status…");
-statusSettings({ targetName })
+statusSettings({ targetName, showDelete })
   .then(() => spinner.stop())
   .catch((error: unknown) => {
     spinner.fail("Failed to check settings status");

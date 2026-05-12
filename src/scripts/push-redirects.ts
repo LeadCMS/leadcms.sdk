@@ -42,6 +42,7 @@ export interface PushRedirectsOptions {
   force?: boolean;
   dryRun?: boolean;
   allowDelete?: boolean;
+  quiet?: boolean;
   remoteContext?: RemoteContext;
 }
 
@@ -216,7 +217,8 @@ function appendRemoteOnlyCreates(
 // ── Main export ────────────────────────────────────────────────────────
 
 export async function pushRedirects(options: PushRedirectsOptions = {}): Promise<void> {
-  const { force: _force, dryRun = false, allowDelete = false, remoteContext } = options;
+  const { force: _force, dryRun = false, allowDelete = false, quiet = false, remoteContext } =
+    options;
 
   if (remoteContext) {
     leadCMSDataService.configureForRemote(remoteContext.url, remoteContext.apiKey);
@@ -224,7 +226,7 @@ export async function pushRedirects(options: PushRedirectsOptions = {}): Promise
 
   const locals = await readLocalRedirects();
 
-  if (locals.length === 0) {
+  if (locals.length === 0 && !allowDelete) {
     console.log("   ℹ️  No local redirects found — nothing to push.");
     return;
   }
@@ -238,18 +240,21 @@ export async function pushRedirects(options: PushRedirectsOptions = {}): Promise
     throw error;
   }
 
-  const ops = planOperations(locals, remotes, allowDelete);
+  const idMap = await readRedirectIdMap(remoteContext);
+  const ops = planOperations(locals, remotes, allowDelete, idMap);
 
   const creates = ops.filter((o) => o.type === "create");
   const updates = ops.filter((o) => o.type === "update");
   const deletes = ops.filter((o) => o.type === "delete");
   const skips = ops.filter((o) => o.type === "skip");
 
-  console.log(`\n   📊 Redirect sync plan:`);
-  console.log(`      Create:  ${creates.length}`);
-  console.log(`      Update:  ${updates.length}`);
-  console.log(`      Delete:  ${deletes.length}`);
-  console.log(`      Skip:    ${skips.length}`);
+  if (!quiet) {
+    console.log(`\n   📊 Redirect sync plan:`);
+    console.log(`      Create:  ${creates.length}`);
+    console.log(`      Update:  ${updates.length}`);
+    console.log(`      Delete:  ${deletes.length}`);
+    console.log(`      Skip:    ${skips.length}`);
+  }
 
   if (dryRun) {
     colorConsole.info(`\n   🔍 Dry run — no changes applied`);
@@ -261,7 +266,7 @@ export async function pushRedirects(options: PushRedirectsOptions = {}): Promise
     const dto = toRedirectCreateDto(op.local!);
     try {
       const created = await leadCMSDataService.createRedirect(dto);
-      colorConsole.success(`   + Created redirect #${created.id} (${created.kind})`);
+      colorConsole.success(`    + Created redirect #${created.id} (${created.kind})`);
     } catch (_error: unknown) {
       const error = _error as Error;
       colorConsole.error(`   ❌ Failed to create redirect: ${error.message}`);
@@ -273,7 +278,7 @@ export async function pushRedirects(options: PushRedirectsOptions = {}): Promise
     const dto = toRedirectUpdateDto(op.local!);
     try {
       const updated = await leadCMSDataService.updateRedirect(op.remote!.id, dto);
-      colorConsole.info(`   ~ Updated redirect #${updated.id} (${updated.kind})`);
+      colorConsole.info(`    ~ Updated redirect #${updated.id} (${updated.kind})`);
     } catch (_error: unknown) {
       const error = _error as Error;
       colorConsole.error(`   ❌ Failed to update redirect #${op.remote!.id}: ${error.message}`);
@@ -284,7 +289,7 @@ export async function pushRedirects(options: PushRedirectsOptions = {}): Promise
   for (const op of deletes) {
     try {
       await leadCMSDataService.deleteRedirect(op.remote!.id);
-      colorConsole.warn(`   - Deleted redirect #${op.remote!.id}`);
+      colorConsole.warn(`    - Deleted redirect #${op.remote!.id}`);
     } catch (_error: unknown) {
       const error = _error as Error;
       colorConsole.error(`   ❌ Failed to delete redirect #${op.remote!.id}: ${error.message}`);
@@ -341,9 +346,7 @@ export async function buildRedirectStatus(
   const idMap = await readRedirectIdMap(remoteContext);
   const ops = planOperations(locals, remotes, showDelete, idMap);
 
-  if (!showDelete) {
-    appendRemoteOnlyCreates(ops, locals, remotes);
-  }
+  appendRemoteOnlyCreates(ops, locals, remotes);
 
   try {
     const syncToken = await readRedirectSyncTokenForStatus(remoteContext);

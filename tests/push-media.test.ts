@@ -9,6 +9,7 @@ import {
   getMimeType,
   getFileCategory,
   matchMediaFiles,
+  executeMediaPush,
 } from "../src/scripts/push-media";
 import { leadCMSDataService } from "../src/lib/data-service";
 
@@ -255,6 +256,40 @@ describe("Media Push Feature", () => {
       // Should have no delete operations when allowDelete is false
       const deleteOps = operations.filter((op) => op.type === "delete");
       expect(deleteOps).toHaveLength(0);
+    });
+  });
+
+  describe("Quiet execution", () => {
+    it("suppresses success output while still executing deletes", async () => {
+      const deleteMedia = jest.fn().mockResolvedValue(undefined);
+      const logSuccess = jest.fn();
+
+      const result = await executeMediaPush(
+        [
+          {
+            type: "delete",
+            reason: "File removed locally",
+            remote: {
+              id: 1,
+              location: "test/old.png",
+              name: "old.png",
+              scopeUid: "test",
+              size: 123,
+              extension: ".png",
+              mimeType: "image/png",
+              createdAt: "2024-01-01T00:00:00Z",
+            },
+          },
+        ],
+        false,
+        { deleteMedia, logSuccess },
+        undefined,
+        true
+      );
+
+      expect(deleteMedia).toHaveBeenCalledWith("test/old.png");
+      expect(result.executed.successful).toBe(1);
+      expect(logSuccess).not.toHaveBeenCalled();
     });
   });
 

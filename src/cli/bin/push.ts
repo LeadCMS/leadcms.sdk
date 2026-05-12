@@ -15,7 +15,6 @@ const statusOnly = args.includes("--status");
 const force = args.includes("--force");
 const dryRun = args.includes("--dry-run");
 const allowDelete = args.includes("--delete");
-const allowConflictMarkers = args.includes("--allow-conflict-markers");
 
 if (!statusOnly && !dryRun) {
   await requireAuthenticatedUser(remoteContext?.apiKey);
@@ -44,7 +43,6 @@ pushLeadCMSContent({
   targetSlug,
   dryRun,
   allowDelete,
-  allowConflictMarkers,
   remoteContext,
 }).catch((error: unknown) => {
   console.error("Error running LeadCMS push:", (error as Error).message);

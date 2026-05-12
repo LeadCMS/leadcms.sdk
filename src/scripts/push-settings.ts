@@ -20,7 +20,7 @@ interface ScriptError extends Error {
   code?: string;
   response?: {
     status?: number;
-    data?: { detail?: string; title?: string; message?: string; [key: string]: unknown } | null;
+    data?: { detail?: string; title?: string; message?: string;[key: string]: unknown } | null;
   };
   status?: number;
 }
@@ -32,19 +32,26 @@ export interface PushSettingsOptions {
   dryRun?: boolean;
   /** Force push even if unchanged */
   force?: boolean;
+  /** Delete remote settings that are not present locally */
+  allowDelete?: boolean;
   /** Suppress status display (used by push-all orchestrator). */
   quiet?: boolean;
 }
 
 export function selectOperationsForPush(
   operations: ReturnType<typeof buildSettingsPushOperations>,
-  force: boolean
+  force: boolean,
+  allowDelete: boolean = false
 ): ReturnType<typeof buildSettingsPushOperations> {
+  const allowedOperations = allowDelete
+    ? operations
+    : operations.filter((op) => op.type !== "delete");
+
   if (!force) {
-    return operations.filter((op) => op.type !== "unchanged");
+    return allowedOperations.filter((op) => op.type !== "unchanged");
   }
 
-  return operations.map((op) => {
+  return allowedOperations.map((op) => {
     if (op.type !== "unchanged") return op;
     return {
       ...op,
@@ -57,7 +64,7 @@ export function selectOperationsForPush(
  * Push local settings to LeadCMS.
  */
 export async function pushSettings(options: PushSettingsOptions = {}): Promise<void> {
-  const { targetName, dryRun, force, quiet } = options;
+  const { targetName, dryRun, force, allowDelete, quiet } = options;
 
   if (!leadCMSApiKey) {
     if (!quiet) console.log("⏭️  Skipping settings push (no API key configured)");
@@ -75,18 +82,22 @@ export async function pushSettings(options: PushSettingsOptions = {}): Promise<v
     }
 
     // Fetch remote settings for comparison
-    const allRemote = await fetchRemoteSettings(leadCMSUrl, leadCMSApiKey);
+    let allRemote = await fetchRemoteSettings(leadCMSUrl, leadCMSApiKey);
+
+    if (targetName) {
+      allRemote = allRemote.filter((s) => s.key === targetName);
+    }
 
     // Build operations (includes delete for remote-only settings)
     const operations = buildSettingsPushOperations(localSettings, allRemote);
-    const changes = operations.filter((op) => op.type !== "unchanged");
+    const changes = selectOperationsForPush(operations, Boolean(force), Boolean(allowDelete));
 
-    if (changes.length === 0 && !force) {
+    if (changes.length === 0) {
       if (!quiet) console.log(`   ✅ All settings are in sync, nothing to push`);
       return;
     }
 
-    const toPush = selectOperationsForPush(operations, Boolean(force));
+    const toPush = changes;
 
     if (toPush.length === 0) {
       if (!quiet) console.log(`   ✅ All settings are in sync, nothing to push`);
@@ -135,8 +146,10 @@ export async function pushSettings(options: PushSettingsOptions = {}): Promise<v
 /**
  * Show settings status (local vs remote comparison).
  */
-export async function statusSettings(options: { targetName?: string } = {}): Promise<void> {
-  const { targetName } = options;
+export async function statusSettings(
+  options: { targetName?: string; showDelete?: boolean } = {}
+): Promise<void> {
+  const { targetName, showDelete } = options;
 
   if (!leadCMSApiKey) {
     console.log("⏭️  Skipping settings status (no API key configured)");
@@ -148,7 +161,7 @@ export async function statusSettings(options: { targetName?: string } = {}): Pro
 
     if (!statusResult) return;
 
-    renderSettingsStatus(statusResult, targetName);
+    renderSettingsStatus(statusResult, targetName, showDelete);
   } catch (_error: unknown) {
     const error = _error as ScriptError;
     console.error(`   ❌ Failed to check settings status: ${error.message}`);
@@ -160,7 +173,7 @@ export async function statusSettings(options: { targetName?: string } = {}): Pro
  * Get settings status data without rendering (for unified status view).
  */
 export async function getSettingsStatusData(
-  options: { targetName?: string } = {}
+  options: { targetName?: string; showDelete?: boolean } = {}
 ): Promise<SettingsStatusResult | null> {
   const { targetName } = options;
 
@@ -189,7 +202,8 @@ export async function getSettingsStatusData(
  */
 export function renderSettingsStatus(
   statusResult: SettingsStatusResult,
-  targetName?: string
+  targetName?: string,
+  showDelete: boolean = false
 ): void {
   const { comparisons } = statusResult;
 
@@ -242,7 +256,7 @@ export function renderSettingsStatus(
         break;
       case "remote-only":
         console.log(
-          `  ${statusColors.conflict("-")} ${label.padEnd(50)} ${colorConsole.gray(formatSettingValue(entry.key, entry.remoteValue))} ${colorConsole.gray("(remote only)")}`
+          `  ${statusColors.conflict(showDelete ? "D" : "R")} ${label.padEnd(50)} ${colorConsole.gray(formatSettingValue(entry.key, entry.remoteValue))} ${colorConsole.gray(showDelete ? "(deleted locally)" : "(added remotely)")}`
         );
         break;
     }
@@ -251,7 +265,7 @@ export function renderSettingsStatus(
   console.log("");
   console.log("─".repeat(80));
   console.log(
-    `  ${inSync.length} in sync, ${modified.length} modified, ${localOnly.length} local only, ${remoteOnly.length} remote only`
+    `  ${inSync.length} in sync, ${modified.length} updated locally, ${localOnly.length} added locally, ${remoteOnly.length} ${showDelete ? "deleted locally" : "added remotely"}`
   );
   console.log("");
 }
