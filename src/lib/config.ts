@@ -44,6 +44,13 @@ export interface LeadCMSConfig {
      * Tokens: {language}, {slug}, {domain}. Default: "/{language}/{slug}"
      */
     pathPattern?: string;
+    /**
+     * Controls whether generated map entries match paths with and without a trailing slash.
+     * - "strict" (default): emit only the exact resolved path
+     * - "both": emit two entries per redirect — one with trailing slash and one without,
+     *   so `/news/1/` and `/news/1` both trigger the redirect
+     */
+    trailingSlash?: "strict" | "both";
   };
   /** Enable draft content support */
   enableDrafts: boolean;

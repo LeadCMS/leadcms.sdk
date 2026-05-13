@@ -482,4 +482,110 @@ describe("generateRedirectsMap", () => {
     // Sanity: the function wrote to outputDir, not to defaultDir
     expect(outputDir).not.toEqual(defaultDir);
   });
+
+  // ── trailingSlash:"both" ───────────────────────────────────────────
+
+  it('trailingSlash:"both" emits entries for both with and without trailing slash', async () => {
+    (getConfig as jest.Mock).mockReturnValueOnce({
+      url: "https://test.leadcms.com",
+      apiKey: "test-key",
+      defaultLanguage: "en",
+      contentDir: "/tmp/test-content",
+      mediaDir: "/tmp/test-media",
+      commentsDir: "/tmp/test-comments",
+      emailTemplatesDir: "/tmp/test-email-templates",
+      redirectsDir: redirectsDir,
+      redirects: {
+        outputDir: undefined,
+        pathPattern: "/{slug}/",
+        trailingSlash: "both",
+      },
+      languageDomains: undefined,
+    });
+
+    await writeRedirectsYaml(tmpDir, [
+      { kind: "Permanent", fromPath: "/old/", toPath: "/new/" },
+    ]);
+
+    await generateRedirectsMap({ outputDir: outputDir });
+
+    const content = await fs.readFile(path.join(outputDir, "301.map"), "utf8");
+    expect(content).toContain('"/old/" "/new/";');
+    expect(content).toContain('"/old" "/new/";');
+  });
+
+  it('trailingSlash:"both" also adds trailing slash variant when source has no slash', async () => {
+    (getConfig as jest.Mock).mockReturnValueOnce({
+      url: "https://test.leadcms.com",
+      apiKey: "test-key",
+      defaultLanguage: "en",
+      contentDir: "/tmp/test-content",
+      mediaDir: "/tmp/test-media",
+      commentsDir: "/tmp/test-comments",
+      emailTemplatesDir: "/tmp/test-email-templates",
+      redirectsDir: redirectsDir,
+      redirects: {
+        outputDir: undefined,
+        pathPattern: "/{slug}",
+        trailingSlash: "both",
+      },
+      languageDomains: undefined,
+    });
+
+    await writeRedirectsYaml(tmpDir, [
+      { kind: "Temporary", fromPath: "/promo", toUrl: "https://example.com/sale" },
+    ]);
+
+    await generateRedirectsMap({ outputDir: outputDir });
+
+    const content = await fs.readFile(path.join(outputDir, "302.map"), "utf8");
+    expect(content).toContain('"/promo" "https://example.com/sale";');
+    expect(content).toContain('"/promo/" "https://example.com/sale";');
+  });
+
+  it('trailingSlash:"both" does not create duplicate entries when alt path already exists', async () => {
+    (getConfig as jest.Mock).mockReturnValueOnce({
+      url: "https://test.leadcms.com",
+      apiKey: "test-key",
+      defaultLanguage: "en",
+      contentDir: "/tmp/test-content",
+      mediaDir: "/tmp/test-media",
+      commentsDir: "/tmp/test-comments",
+      emailTemplatesDir: "/tmp/test-email-templates",
+      redirectsDir: redirectsDir,
+      redirects: {
+        outputDir: undefined,
+        pathPattern: "/{slug}",
+        trailingSlash: "both",
+      },
+      languageDomains: undefined,
+    });
+
+    // Both /page and /page/ exist as separate source entries
+    await writeRedirectsYaml(tmpDir, [
+      { kind: "Permanent", fromPath: "/page", toPath: "/dest-a" },
+      { kind: "Permanent", fromPath: "/page/", toPath: "/dest-b" },
+    ]);
+
+    await generateRedirectsMap({ outputDir: outputDir });
+
+    const content = await fs.readFile(path.join(outputDir, "301.map"), "utf8");
+    const lines = content.split("\n").filter((l) => l.includes('"/page'));
+    // Both explicit entries present, no third duplicate added
+    expect(lines).toHaveLength(2);
+    expect(lines.some((l) => l.includes('"/page" "/dest-a"'))).toBe(true);
+    expect(lines.some((l) => l.includes('"/page/" "/dest-b"'))).toBe(true);
+  });
+
+  it('trailingSlash:"strict" (default) emits only the exact resolved path', async () => {
+    await writeRedirectsYaml(tmpDir, [
+      { kind: "Permanent", fromPath: "/exact/", toPath: "/dest/" },
+    ]);
+
+    await generateRedirectsMap({ outputDir: outputDir });
+
+    const content = await fs.readFile(path.join(outputDir, "301.map"), "utf8");
+    expect(content).toContain('"/exact/" "/dest/";');
+    expect(content).not.toContain('"/exact" ');
+  });
 });

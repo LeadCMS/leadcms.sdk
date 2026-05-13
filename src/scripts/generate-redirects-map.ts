@@ -299,6 +299,21 @@ export async function generateRedirectsMap(
     resolved.push({ from, to, kind: r.kind });
   }
 
+  // When trailingSlash:"both" is configured, emit an extra entry for each redirect
+  // with the alternate slash variant so both "/path/" and "/path" trigger the redirect.
+  if (config.redirects?.trailingSlash === "both") {
+    const seen = new Set(resolved.map((r) => r.from));
+    const extra: ResolvedRedirect[] = [];
+    for (const r of resolved) {
+      const alt = r.from.endsWith("/") ? r.from.slice(0, -1) : r.from + "/";
+      if (!seen.has(alt)) {
+        seen.add(alt);
+        extra.push({ ...r, from: alt });
+      }
+    }
+    resolved.push(...extra);
+  }
+
   const permanent = resolved.filter((r) => r.kind === "Permanent");
   const temporary = resolved.filter((r) => r.kind === "Temporary");
 

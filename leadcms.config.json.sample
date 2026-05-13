@@ -14,7 +14,9 @@
   },
   "redirects": {
     "outputDir": "redirects",
-    "pathPattern": "/{language}/{slug}/"
+    "pathPattern": "/{language}/{slug}/",
+    "_comment_trailingSlash": "Set to 'both' to emit entries for both '/path/' and '/path' in the map.",
+    "trailingSlash": "strict"
   },
 
   "_comment_remotes": "Multi-remote setup (optional). Omit 'remotes' for single-remote mode.",
