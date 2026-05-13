@@ -3,6 +3,7 @@
  * LeadCMS Push Segments CLI Entry Point
  */
 
+import "dotenv/config";
 import { pushSegments } from "../../scripts/push-segments.js";
 import { requireAuthenticatedUser, resolveIdentity } from "../../scripts/leadcms-helpers.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";

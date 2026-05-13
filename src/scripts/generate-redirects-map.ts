@@ -18,8 +18,13 @@
  * If config.languageDomains is set, the {domain} token is also resolved.
  *
  * Language filtering:
- *   - If LEADCMS_DEFAULT_LANGUAGE env var or --language flag is set, only redirects
- *     whose resolved source language matches are included for ContentSlug and ContentId.
+ *   - If pathPattern contains {language} (multi-language-per-domain setup) and no explicit
+ *     --language flag is given, ALL language folders are included in the map so a single nginx
+ *     instance can serve every language via path-prefixed URLs.
+ *   - If pathPattern does NOT contain {language} (one language per domain), only redirects
+ *     matching the active language are included (from --language flag, LEADCMS_DEFAULT_LANGUAGE
+ *     env var, or config.defaultLanguage).
+ *   - An explicit --language flag always narrows the output regardless of pathPattern.
  *   - InternalPath redirects are always included regardless of language filter.
  *
  * No remote connection is required — generation works entirely from local files.
@@ -30,7 +35,7 @@ import "dotenv/config";
 import fs from "fs/promises";
 import path from "path";
 import yaml from "js-yaml";
-import { REDIRECTS_DIR, singleLanguage } from "./leadcms-helpers.js";
+import { REDIRECTS_DIR, defaultLanguage } from "./leadcms-helpers.js";
 import { getConfig } from "../lib/config.js";
 import { leadCMSDataService } from "../lib/data-service.js";
 import { logger } from "../lib/logger.js";
@@ -59,23 +64,41 @@ interface ResolvedRedirect {
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
-function getRedirectsFilePath(): string {
+function getRedirectsFilePath(lang?: string): string {
+  if (lang) {
+    return path.join(REDIRECTS_DIR, lang, "redirects.yaml");
+  }
   return path.join(REDIRECTS_DIR, "redirects.yaml");
 }
 
-async function readLocalRedirects(): Promise<LocalRedirect[]> {
-  const filePath = getRedirectsFilePath();
+async function readOneLanguageFile(lang: string | undefined): Promise<LocalRedirect[]> {
+  const filePath = getRedirectsFilePath(lang);
   try {
     const raw = await fs.readFile(filePath, "utf8");
     const parsed = yaml.load(raw) as LocalRedirectsFile | null;
-    if (parsed && typeof parsed === "object") {
-      const flat = flattenRedirectsFile(parsed);
-      return singleLanguage ? injectDefaultLanguage(flat, singleLanguage) : flat;
+    if (!parsed || typeof parsed !== "object") return [];
+    const flat = flattenRedirectsFile(parsed);
+    const folderLang = lang ?? defaultLanguage;
+    return folderLang ? injectDefaultLanguage(flat, folderLang) : flat;
+  } catch {
+    return [];
+  }
+}
+
+async function readLocalRedirects(): Promise<LocalRedirect[]> {
+  const all: LocalRedirect[] = [];
+  all.push(...(await readOneLanguageFile(undefined)));
+  try {
+    const entries = await fs.readdir(REDIRECTS_DIR, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        all.push(...(await readOneLanguageFile(entry.name)));
+      }
     }
   } catch {
-    /* file doesn't exist */
+    /* REDIRECTS_DIR doesn't exist yet */
   }
-  return [];
+  return all;
 }
 
 function applyPathPattern(
@@ -233,8 +256,14 @@ export async function generateRedirectsMap(
   const config = getConfig();
   const pathPattern = config.redirects?.pathPattern ?? "/{language}/{slug}";
   const languageDomains = config.languageDomains;
-  const filterLanguage =
+
+  // If pathPattern contains {language}, a single server handles all languages via path prefix —
+  // include every language folder. An explicit --language flag still narrows the output.
+  const patternHasLanguage = pathPattern.includes("{language}");
+  const rawFilterLanguage =
     languageArg || process.env.LEADCMS_DEFAULT_LANGUAGE || config.defaultLanguage;
+  const effectiveFilterLanguage =
+    patternHasLanguage && !languageArg ? undefined : rawFilterLanguage || undefined;
 
   const outputDir = path.resolve(outputDirArg ?? config.redirects?.outputDir ?? "redirects");
   const file301 = path.join(outputDir, "301.map");
@@ -248,14 +277,18 @@ export async function generateRedirectsMap(
   }
 
   logger.verbose(`[generate-redirects-map] Processing ${locals.length} redirects`);
-  if (filterLanguage) {
-    logger.verbose(`[generate-redirects-map] Language filter: ${filterLanguage}`);
+  if (effectiveFilterLanguage) {
+    logger.verbose(`[generate-redirects-map] Language filter: ${effectiveFilterLanguage}`);
+  } else if (patternHasLanguage) {
+    logger.verbose(
+      `[generate-redirects-map] Multi-language mode: all language folders included`
+    );
   }
 
   const resolved: ResolvedRedirect[] = [];
 
   for (const r of locals) {
-    const from = await resolveFrom(r, pathPattern, languageDomains, filterLanguage || undefined);
+    const from = await resolveFrom(r, pathPattern, languageDomains, effectiveFilterLanguage);
     if (!from) continue;
 
     const to = await resolveTo(r, pathPattern, languageDomains);

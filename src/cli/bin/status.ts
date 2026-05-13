@@ -3,6 +3,7 @@
  * LeadCMS Status CLI Entry Point
  */
 
+import "dotenv/config";
 import { statusLeadCMSContent } from "../../scripts/status-leadcms-content.js";
 import { resolveIdentity } from "../../scripts/leadcms-helpers.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";

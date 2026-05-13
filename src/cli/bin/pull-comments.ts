@@ -3,6 +3,7 @@
  * LeadCMS Pull Comments CLI Entry Point
  */
 
+import "dotenv/config";
 import { pullComments } from "../../scripts/pull-comments.js";
 import { resolveIdentity } from "../../scripts/leadcms-helpers.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";

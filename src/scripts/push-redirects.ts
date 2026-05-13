@@ -13,7 +13,7 @@ import "dotenv/config";
 import fs from "fs/promises";
 import path from "path";
 import yaml from "js-yaml";
-import { REDIRECTS_DIR, singleLanguage } from "./leadcms-helpers.js";
+import { REDIRECTS_DIR, defaultLanguage } from "./leadcms-helpers.js";
 import { leadCMSDataService } from "../lib/data-service.js";
 import { colorConsole, statusColors } from "../lib/console-colors.js";
 import { logger } from "../lib/logger.js";
@@ -55,28 +55,63 @@ export interface RedirectOperation {
 
 // ── Local file reading ─────────────────────────────────────────────────
 
-function getRedirectsFilePath(): string {
+function getRedirectsFilePath(lang?: string): string {
+  if (lang) {
+    return path.join(REDIRECTS_DIR, lang, "redirects.yaml");
+  }
   return path.join(REDIRECTS_DIR, "redirects.yaml");
 }
 
-async function readLocalRedirects(): Promise<LocalRedirect[]> {
-  const filePath = getRedirectsFilePath();
+async function readOneLanguageFile(lang: string | undefined): Promise<LocalRedirect[]> {
+  const filePath = getRedirectsFilePath(lang);
   try {
     const raw = await fs.readFile(filePath, "utf8");
     const parsed = yaml.load(raw) as LocalRedirectsFile | null;
-    if (parsed && typeof parsed === "object") {
-      const flat = flattenRedirectsFile(parsed);
-      return singleLanguage ? injectDefaultLanguage(flat, singleLanguage) : flat;
-    }
+    if (!parsed || typeof parsed !== "object") return [];
+    const flat = flattenRedirectsFile(parsed);
+    const folderLang = lang ?? defaultLanguage;
+    return folderLang ? injectDefaultLanguage(flat, folderLang) : flat;
   } catch {
     /* file doesn't exist */
+    return [];
   }
-  return [];
 }
 
-async function writeLocalRedirects(redirects: LocalRedirect[]): Promise<void> {
-  await fs.mkdir(REDIRECTS_DIR, { recursive: true });
-  // Strip any legacy server-managed fields and sort by surrogate key within each section
+async function readLocalRedirects(): Promise<LocalRedirect[]> {
+  const all: LocalRedirect[] = [];
+  all.push(...(await readOneLanguageFile(undefined)));
+  try {
+    const entries = await fs.readdir(REDIRECTS_DIR, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        all.push(...(await readOneLanguageFile(entry.name)));
+      }
+    }
+  } catch {
+    /* REDIRECTS_DIR doesn't exist yet */
+  }
+  return all;
+}
+
+async function writeOneLanguageFile(
+  redirects: LocalRedirect[],
+  lang: string | undefined
+): Promise<void> {
+  const folderLang = lang ?? defaultLanguage;
+  const dir = lang ? path.join(REDIRECTS_DIR, lang) : REDIRECTS_DIR;
+  const filePath = getRedirectsFilePath(lang);
+
+  if (redirects.length === 0) {
+    try {
+      await fs.unlink(filePath);
+      if (lang) {
+        try { await fs.rmdir(dir); } catch { /* not empty or already gone */ }
+      }
+    } catch { /* file doesn't exist */ }
+    return;
+  }
+
+  await fs.mkdir(dir, { recursive: true });
   const cleaned = redirects.map((r) => {
     const {
       id: _id,
@@ -89,7 +124,7 @@ async function writeLocalRedirects(redirects: LocalRedirect[]): Promise<void> {
   const sorted = [...cleaned].sort((a, b) =>
     redirectSurrogateKey(a).localeCompare(redirectSurrogateKey(b))
   );
-  const stripped = singleLanguage ? stripDefaultLanguage(sorted, singleLanguage) : sorted;
+  const stripped = folderLang ? stripDefaultLanguage(sorted, folderLang) : sorted;
   const file = buildRedirectsFile(stripped);
   const content = yaml.dump(file, {
     indent: 2,
@@ -97,7 +132,41 @@ async function writeLocalRedirects(redirects: LocalRedirect[]): Promise<void> {
     noRefs: true,
     sortKeys: false,
   });
-  await fs.writeFile(getRedirectsFilePath(), content, "utf8");
+  await fs.writeFile(filePath, content, "utf8");
+}
+
+async function writeLocalRedirects(redirects: LocalRedirect[]): Promise<void> {
+  const defaultItems: LocalRedirect[] = [];
+  const langGroups = new Map<string, LocalRedirect[]>();
+
+  for (const r of redirects) {
+    const lang = r.fromLanguage ?? null;
+    if (lang === null || lang === defaultLanguage) {
+      defaultItems.push(r);
+    } else {
+      if (!langGroups.has(lang)) langGroups.set(lang, []);
+      langGroups.get(lang)!.push(r);
+    }
+  }
+
+  const existingLangDirs = new Set<string>();
+  try {
+    const entries = await fs.readdir(REDIRECTS_DIR, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) existingLangDirs.add(entry.name);
+    }
+  } catch { /* directory doesn't exist yet */ }
+
+  await writeOneLanguageFile(defaultItems, undefined);
+
+  for (const [lang, items] of langGroups) {
+    existingLangDirs.delete(lang);
+    await writeOneLanguageFile(items, lang);
+  }
+
+  for (const lang of existingLangDirs) {
+    await writeOneLanguageFile([], lang);
+  }
 }
 
 // ── Change detection ───────────────────────────────────────────────────

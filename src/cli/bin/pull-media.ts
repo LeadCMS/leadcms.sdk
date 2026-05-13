@@ -3,6 +3,7 @@
  * LeadCMS Pull Media CLI Entry Point
  */
 
+import "dotenv/config";
 import { pullMedia } from "../../scripts/pull-media.js";
 import { resolveIdentity } from "../../scripts/leadcms-helpers.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";

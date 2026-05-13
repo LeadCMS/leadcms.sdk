@@ -3,6 +3,7 @@
  * LeadCMS Pull All CLI Entry Point
  */
 
+import "dotenv/config";
 import { pullAll } from "../../scripts/pull-all.js";
 import { resolveIdentity } from "../../scripts/leadcms-helpers.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";

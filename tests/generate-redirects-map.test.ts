@@ -28,6 +28,7 @@ jest.mock("../src/scripts/leadcms-helpers.js", () => ({
   },
   leadCMSUrl: "https://test.leadcms.com",
   leadCMSApiKey: "test-api-key",
+  defaultLanguage: "en",
 }));
 
 const mockGetContentById = jest.fn();
@@ -68,6 +69,7 @@ jest.mock("../src/lib/spinner.js", () => ({
 }));
 
 import { buildRedirectsFile } from "../src/lib/automation-types.js";
+import { getConfig } from "../src/lib/config.js";
 import { generateRedirectsMap } from "../src/scripts/generate-redirects-map.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -76,6 +78,15 @@ async function writeRedirectsYaml(dir: string, redirects: any[]): Promise<void> 
   const file = buildRedirectsFile(redirects);
   const content = yaml.dump(file, { indent: 2 });
   await fs.writeFile(path.join(dir, "redirects.yaml"), content, "utf8");
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function writeLangRedirectsYaml(dir: string, lang: string, redirects: any[]): Promise<void> {
+  const langDir = path.join(dir, lang);
+  await fs.mkdir(langDir, { recursive: true });
+  const file = buildRedirectsFile(redirects);
+  const content = yaml.dump(file, { indent: 2 });
+  await fs.writeFile(path.join(langDir, "redirects.yaml"), content, "utf8");
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────
@@ -364,5 +375,75 @@ describe("generateRedirectsMap", () => {
     await generateRedirectsMap({ outputDir: outputDir });
 
     await expect(fs.access(path.join(outputDir, "301.map"))).rejects.toThrow();
+  });
+
+  // ── Multi-language mode ────────────────────────────────────────────
+
+  it("includes redirects from all language folders when pathPattern contains {language}", async () => {
+    // Write English redirects to the root (default language folder)
+    await writeRedirectsYaml(tmpDir, [
+      { kind: "Permanent", fromSlug: "en-article", fromLanguage: "en", toPath: "/en-dest" },
+    ]);
+    // Write German redirects to the de/ subfolder
+    await writeLangRedirectsYaml(tmpDir, "de", [
+      { kind: "Permanent", fromSlug: "de-artikel", fromLanguage: "de", toPath: "/de-dest" },
+    ]);
+
+    // Default config has pathPattern "/{language}/{slug}" — no explicit language flag
+    await generateRedirectsMap({ outputDir: outputDir });
+
+    const content = await fs.readFile(path.join(outputDir, "301.map"), "utf8");
+    expect(content).toContain("/en/en-article");
+    expect(content).toContain("/de/de-artikel");
+  });
+
+  it("respects explicit --language flag even when pathPattern contains {language}", async () => {
+    await writeRedirectsYaml(tmpDir, [
+      { kind: "Permanent", fromSlug: "en-article", fromLanguage: "en", toPath: "/en-dest" },
+    ]);
+    await writeLangRedirectsYaml(tmpDir, "de", [
+      { kind: "Permanent", fromSlug: "de-artikel", fromLanguage: "de", toPath: "/de-dest" },
+    ]);
+
+    // Explicit language: "en" should narrow results even though pathPattern has {language}
+    await generateRedirectsMap({ outputDir: outputDir, language: "en" });
+
+    const content = await fs.readFile(path.join(outputDir, "301.map"), "utf8");
+    expect(content).toContain("/en/en-article");
+    expect(content).not.toContain("/de/de-artikel");
+  });
+
+  it("applies default language filter when pathPattern does not contain {language}", async () => {
+    // Override config: pathPattern without {language} → single-language-per-domain mode
+    (getConfig as jest.Mock).mockReturnValueOnce({
+      url: "https://test.leadcms.com",
+      apiKey: "test-key",
+      defaultLanguage: "en",
+      contentDir: "/tmp/test-content",
+      mediaDir: "/tmp/test-media",
+      commentsDir: "/tmp/test-comments",
+      emailTemplatesDir: "/tmp/test-email-templates",
+      redirectsDir: redirectsDir,
+      redirects: {
+        outputDir: undefined,
+        pathPattern: "/{slug}",
+      },
+      languageDomains: undefined,
+    });
+
+    await writeRedirectsYaml(tmpDir, [
+      { kind: "Permanent", fromSlug: "en-article", fromLanguage: "en", toPath: "/en-dest" },
+    ]);
+    await writeLangRedirectsYaml(tmpDir, "de", [
+      { kind: "Permanent", fromSlug: "de-artikel", fromLanguage: "de", toPath: "/de-dest" },
+    ]);
+
+    // No explicit language flag — should fall back to defaultLanguage "en"
+    await generateRedirectsMap({ outputDir: outputDir });
+
+    const content = await fs.readFile(path.join(outputDir, "301.map"), "utf8");
+    // en slug resolved without language prefix (pathPattern has no {language})
+    expect(content).toContain("/en-article");
+    expect(content).not.toContain("/de-artikel");
   });
 });

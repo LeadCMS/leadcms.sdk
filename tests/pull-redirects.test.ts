@@ -28,6 +28,7 @@ jest.mock("../src/scripts/leadcms-helpers.js", () => ({
   },
   leadCMSUrl: "https://test.leadcms.com",
   leadCMSApiKey: "test-api-key",
+  defaultLanguage: "en",
 }));
 
 jest.mock("../src/lib/remote-context.js", () => ({
@@ -433,5 +434,242 @@ describe("pullLeadCMSRedirects", () => {
     const raw = await fs.readFile(path.join(tmpDir, "redirects.yaml"), "utf8");
     const items = flattenRedirectsFile(yaml.load(raw) as LocalRedirectsFile);
     expect(items).toHaveLength(2);
+  });
+
+  // ── Language folder structure ─────────────────────────────────────
+
+  it("writes non-default-language redirect to language subfolder", async () => {
+    const dto = makeDto({
+      id: 10,
+      sourceType: "ContentSlug",
+      targetType: "ContentSlug",
+      fromPath: null,
+      fromLanguage: "de",
+      fromSlug: "de-artikel",
+      toUrl: null,
+      toLanguage: "de",
+      toSlug: "de-neuer-artikel",
+    });
+
+    mockAxiosGet
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { items: [dto], deleted: [] },
+        headers: { "x-next-sync-token": "token-lang" },
+      })
+      .mockResolvedValueOnce({ status: 204, data: {}, headers: {} });
+
+    const { pullLeadCMSRedirects } = await import("../src/scripts/pull-redirects");
+    await pullLeadCMSRedirects();
+
+    // Must exist in de subfolder
+    const langFilePath = path.join(tmpDir, "de", "redirects.yaml");
+    const raw = await fs.readFile(langFilePath, "utf8");
+    const items = flattenRedirectsFile(yaml.load(raw) as LocalRedirectsFile);
+
+    expect(items).toHaveLength(1);
+    // fromLanguage is stripped from file (implied by folder)
+    expect(items[0].fromLanguage).toBeUndefined();
+    // toLanguage is stripped when equal to folder language
+    expect(items[0].toLanguage).toBeUndefined();
+    expect(items[0].fromSlug).toBe("de-artikel");
+    // Default folder should have no content
+    await expect(
+      fs.readFile(path.join(tmpDir, "redirects.yaml"), "utf8")
+    ).rejects.toThrow();
+  });
+
+  it("writes default-language redirect to root folder, strips fromLanguage", async () => {
+    const dto = makeDto({
+      id: 11,
+      sourceType: "ContentSlug",
+      targetType: "ContentSlug",
+      fromPath: null,
+      fromLanguage: "en",
+      fromSlug: "en-article",
+      toUrl: null,
+      toLanguage: "en",
+      toSlug: "en-new-article",
+    });
+
+    mockAxiosGet
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { items: [dto], deleted: [] },
+        headers: { "x-next-sync-token": "token-en" },
+      })
+      .mockResolvedValueOnce({ status: 204, data: {}, headers: {} });
+
+    const { pullLeadCMSRedirects } = await import("../src/scripts/pull-redirects");
+    await pullLeadCMSRedirects();
+
+    const raw = await fs.readFile(path.join(tmpDir, "redirects.yaml"), "utf8");
+    const items = flattenRedirectsFile(yaml.load(raw) as LocalRedirectsFile);
+
+    expect(items).toHaveLength(1);
+    // fromLanguage and toLanguage stripped (both equal to folder language "en")
+    expect(items[0].fromLanguage).toBeUndefined();
+    expect(items[0].toLanguage).toBeUndefined();
+    expect(items[0].fromSlug).toBe("en-article");
+    // No de subfolder created
+    await expect(fs.access(path.join(tmpDir, "de"))).rejects.toThrow();
+  });
+
+  it("keeps toLanguage when it differs from fromLanguage (cross-language redirect)", async () => {
+    const dto = makeDto({
+      id: 12,
+      sourceType: "ContentSlug",
+      targetType: "ContentSlug",
+      fromPath: null,
+      fromLanguage: "de",
+      fromSlug: "de-artikel",
+      toUrl: null,
+      toLanguage: "en",
+      toSlug: "en-article",
+    });
+
+    mockAxiosGet
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { items: [dto], deleted: [] },
+        headers: { "x-next-sync-token": "token-cross" },
+      })
+      .mockResolvedValueOnce({ status: 204, data: {}, headers: {} });
+
+    const { pullLeadCMSRedirects } = await import("../src/scripts/pull-redirects");
+    await pullLeadCMSRedirects();
+
+    const langFilePath = path.join(tmpDir, "de", "redirects.yaml");
+    const raw = await fs.readFile(langFilePath, "utf8");
+    const items = flattenRedirectsFile(yaml.load(raw) as LocalRedirectsFile);
+
+    expect(items).toHaveLength(1);
+    // fromLanguage stripped (implied by de/ folder)
+    expect(items[0].fromLanguage).toBeUndefined();
+    // toLanguage kept because it differs from folder language "de"
+    expect(items[0].toLanguage).toBe("en");
+    expect(items[0].toSlug).toBe("en-article");
+  });
+
+  it("splits mixed-language redirects into separate folder files", async () => {
+    const dtoEn = makeDto({
+      id: 1,
+      sourceType: "ContentSlug",
+      targetType: "InternalPath",
+      fromPath: null,
+      fromLanguage: "en",
+      fromSlug: "en-article",
+      toUrl: null,
+      toPath: "/en-dest",
+    });
+    const dtoDe = makeDto({
+      id: 2,
+      sourceType: "ContentSlug",
+      targetType: "InternalPath",
+      fromPath: null,
+      fromLanguage: "de",
+      fromSlug: "de-artikel",
+      toUrl: null,
+      toPath: "/de-dest",
+    });
+    const dtoPath = makeDto({ id: 3, fromPath: "/static", toPath: "/new-static" });
+
+    mockAxiosGet
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { items: [dtoEn, dtoDe, dtoPath], deleted: [] },
+        headers: { "x-next-sync-token": "token-mixed" },
+      })
+      .mockResolvedValueOnce({ status: 204, data: {}, headers: {} });
+
+    const { pullLeadCMSRedirects } = await import("../src/scripts/pull-redirects");
+    await pullLeadCMSRedirects();
+
+    // Default folder: en (language-agnostic stripped) + path-based
+    const defaultRaw = await fs.readFile(path.join(tmpDir, "redirects.yaml"), "utf8");
+    const defaultItems = flattenRedirectsFile(yaml.load(defaultRaw) as LocalRedirectsFile);
+    expect(defaultItems).toHaveLength(2);
+    const slugs = defaultItems.map((r) => r.fromSlug ?? r.fromPath);
+    expect(slugs).toContain("en-article");
+    expect(slugs).toContain("/static");
+
+    // de/ folder: de redirect only
+    const deRaw = await fs.readFile(path.join(tmpDir, "de", "redirects.yaml"), "utf8");
+    const deItems = flattenRedirectsFile(yaml.load(deRaw) as LocalRedirectsFile);
+    expect(deItems).toHaveLength(1);
+    expect(deItems[0].fromSlug).toBe("de-artikel");
+  });
+
+  it("cleans up stale language folder when all its redirects are deleted", async () => {
+    // Pre-populate: one de redirect in de/ subfolder
+    await fs.mkdir(path.join(tmpDir, "de"), { recursive: true });
+    const existingFile = buildRedirectsFile([
+      { kind: "Permanent", fromSlug: "de-artikel", toPath: "/de-dest" },
+    ]);
+    await fs.writeFile(
+      path.join(tmpDir, "de", "redirects.yaml"),
+      yaml.dump(existingFile),
+      "utf8"
+    );
+    metadataStore.set(tmpDir, { content: {}, redirects: { "slug:de/de-artikel": 99 } });
+
+    // Remote deletes it
+    mockAxiosGet
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { items: [], deleted: [99] },
+        headers: { "x-next-sync-token": "token-cleanup" },
+      })
+      .mockResolvedValueOnce({ status: 204, data: {}, headers: {} });
+
+    const { pullLeadCMSRedirects } = await import("../src/scripts/pull-redirects");
+    await pullLeadCMSRedirects();
+
+    // de/redirects.yaml should be deleted
+    await expect(
+      fs.readFile(path.join(tmpDir, "de", "redirects.yaml"), "utf8")
+    ).rejects.toThrow();
+  });
+
+  it("reads existing redirects from language subfolders on merge", async () => {
+    // Pre-populate: de/ subfolder already has a redirect (fromLanguage stripped, implied by folder)
+    await fs.mkdir(path.join(tmpDir, "de"), { recursive: true });
+    const deFile = buildRedirectsFile([
+      { kind: "Permanent", fromSlug: "alt-artikel", toPath: "/de-dest" },
+    ]);
+    await fs.writeFile(path.join(tmpDir, "de", "redirects.yaml"), yaml.dump(deFile), "utf8");
+
+    // Sync brings in a new en redirect
+    const dtoEn = makeDto({
+      id: 5,
+      sourceType: "ContentSlug",
+      targetType: "InternalPath",
+      fromPath: null,
+      fromLanguage: "en",
+      fromSlug: "new-article",
+      toUrl: null,
+      toPath: "/en-dest",
+    });
+
+    mockAxiosGet
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { items: [dtoEn], deleted: [] },
+        headers: { "x-next-sync-token": "token-merge" },
+      })
+      .mockResolvedValueOnce({ status: 204, data: {}, headers: {} });
+
+    const { pullLeadCMSRedirects } = await import("../src/scripts/pull-redirects");
+    await pullLeadCMSRedirects();
+
+    // de redirect must still be there
+    const deRaw = await fs.readFile(path.join(tmpDir, "de", "redirects.yaml"), "utf8");
+    const deItems = flattenRedirectsFile(yaml.load(deRaw) as LocalRedirectsFile);
+    expect(deItems.map((r) => r.fromSlug)).toContain("alt-artikel");
+
+    // en redirect is in default folder
+    const enRaw = await fs.readFile(path.join(tmpDir, "redirects.yaml"), "utf8");
+    const enItems = flattenRedirectsFile(yaml.load(enRaw) as LocalRedirectsFile);
+    expect(enItems.map((r) => r.fromSlug)).toContain("new-article");
   });
 });

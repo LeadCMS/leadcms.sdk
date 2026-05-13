@@ -3,6 +3,7 @@
  * LeadCMS Pull Email Templates CLI Entry Point
  */
 
+import "dotenv/config";
 import { pullEmailTemplates } from "../../scripts/pull-email-templates.js";
 import { resolveIdentity } from "../../scripts/leadcms-helpers.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";

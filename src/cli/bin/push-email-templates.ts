@@ -3,6 +3,7 @@
  * LeadCMS Push Email Templates CLI Entry Point
  */
 
+import "dotenv/config";
 import { pushEmailTemplates } from "../../scripts/push-email-templates.js";
 import { requireAuthenticatedUser, resolveIdentity } from "../../scripts/leadcms-helpers.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";

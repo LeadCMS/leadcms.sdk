@@ -3,6 +3,7 @@
  * LeadCMS Pull Redirects CLI Entry Point
  */
 
+import "dotenv/config";
 import { pullLeadCMSRedirects } from "../../scripts/pull-redirects.js";
 import { resolveIdentity } from "../../scripts/leadcms-helpers.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";

@@ -6,6 +6,7 @@
  * Writes {outputDir}/301.map and {outputDir}/302.map with bare "from" "to" pairs.
  */
 
+import "dotenv/config";
 import { generateRedirectsMap } from "../../scripts/generate-redirects-map.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";
 import { startSpinner } from "../../lib/spinner.js";

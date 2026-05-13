@@ -11,6 +11,7 @@
  *   leadcms remote reset <name>      - Reset sync tokens and metadata for a remote
  */
 
+import "dotenv/config";
 import fs from "fs";
 import path from "path";
 import { listRemotes, resolveRemote, metadataMapPath } from "../../lib/remote-context.js";

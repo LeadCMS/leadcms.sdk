@@ -14,7 +14,7 @@
   },
   "redirects": {
     "outputDir": "redirects",
-    "pathPattern": "/{language}/{slug}"
+    "pathPattern": "/{language}/{slug}/"
   },
 
   "_comment_remotes": "Multi-remote setup (optional). Omit 'remotes' for single-remote mode.",

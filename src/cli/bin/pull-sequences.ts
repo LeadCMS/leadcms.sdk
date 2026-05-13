@@ -3,6 +3,7 @@
  * LeadCMS Pull Sequences CLI Entry Point
  */
 
+import "dotenv/config";
 import { pullLeadCMSSequences } from "../../scripts/pull-sequences.js";
 import { resolveIdentity } from "../../scripts/leadcms-helpers.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";

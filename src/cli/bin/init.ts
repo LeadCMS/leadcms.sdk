@@ -3,6 +3,7 @@
  * LeadCMS Init CLI Entry Point
  */
 
+import "dotenv/config";
 import { initLeadCMS } from "../../scripts/init-leadcms.js";
 
 initLeadCMS().catch((error) => {

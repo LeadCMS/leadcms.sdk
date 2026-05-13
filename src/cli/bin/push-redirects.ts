@@ -3,6 +3,7 @@
  * LeadCMS Push Redirects CLI Entry Point
  */
 
+import "dotenv/config";
 import { pushRedirects } from "../../scripts/push-redirects.js";
 import { requireAuthenticatedUser, resolveIdentity } from "../../scripts/leadcms-helpers.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";

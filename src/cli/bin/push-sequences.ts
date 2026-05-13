@@ -3,6 +3,7 @@
  * LeadCMS Push Sequences CLI Entry Point
  */
 
+import "dotenv/config";
 import { pushSequences } from "../../scripts/push-sequences.js";
 import { requireAuthenticatedUser, resolveIdentity } from "../../scripts/leadcms-helpers.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";

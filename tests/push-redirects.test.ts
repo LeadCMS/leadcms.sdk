@@ -23,6 +23,7 @@ jest.mock("../src/scripts/leadcms-helpers.js", () => ({
   },
   leadCMSUrl: "https://test.leadcms.com",
   leadCMSApiKey: "test-api-key",
+  defaultLanguage: "en",
 }));
 
 // ── Mock data service ─────────────────────────────────────────────────
@@ -583,5 +584,138 @@ describe("buildRedirectStatus", () => {
 
     expect(result.operations).toHaveLength(1);
     expect(result.operations[0].type).toBe("update");
+  });
+});
+
+// ── Language folder structure ─────────────────────────────────────────────────
+
+describe("pushRedirects – language folder structure", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "leadcms-push-red-lang-"));
+    redirectsDir = tmpDir;
+    mockGetAllRedirects.mockReset();
+    mockCreateRedirect.mockReset();
+    mockUpdateRedirect.mockReset();
+    mockDeleteRedirect.mockReset();
+    mockConfigureForRemote.mockReset();
+    mockReadMetadataMap.mockResolvedValue({});
+    mockResolveRemote.mockReturnValue({ name: "default", stateDir: tmpDir });
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("reads redirects from language subfolder and pushes them", async () => {
+    // Write a de redirect to de/ subfolder (fromLanguage omitted — implied by folder)
+    await fs.mkdir(path.join(tmpDir, "de"), { recursive: true });
+    const deFile = buildRedirectsFile([
+      { kind: "Permanent", fromSlug: "de-artikel", toPath: "/de-dest" },
+    ]);
+    await fs.writeFile(
+      path.join(tmpDir, "de", "redirects.yaml"),
+      yaml.dump(deFile),
+      "utf8"
+    );
+
+    mockGetAllRedirects.mockResolvedValueOnce([]);
+    mockCreateRedirect.mockResolvedValueOnce(
+      makeRemote({ id: 20, fromLanguage: "de", fromSlug: "de-artikel" })
+    );
+
+    await pushRedirects({ dryRun: false });
+
+    expect(mockCreateRedirect).toHaveBeenCalledTimes(1);
+    const arg = mockCreateRedirect.mock.calls[0][0];
+    // fromLanguage injected from folder name
+    expect(arg.fromLanguage).toBe("de");
+    expect(arg.fromSlug).toBe("de-artikel");
+  });
+
+  it("writes non-default redirect back to language subfolder after push", async () => {
+    await fs.mkdir(path.join(tmpDir, "de"), { recursive: true });
+    const deFile = buildRedirectsFile([
+      { kind: "Permanent", fromSlug: "de-artikel", toPath: "/de-dest" },
+    ]);
+    await fs.writeFile(
+      path.join(tmpDir, "de", "redirects.yaml"),
+      yaml.dump(deFile),
+      "utf8"
+    );
+
+    mockGetAllRedirects.mockResolvedValueOnce([]);
+    mockCreateRedirect.mockResolvedValueOnce(
+      makeRemote({ id: 21, fromLanguage: "de", fromSlug: "de-artikel" })
+    );
+
+    await pushRedirects({ dryRun: false });
+
+    // Should write back to de/ subfolder, not root
+    const deRaw = await fs.readFile(path.join(tmpDir, "de", "redirects.yaml"), "utf8");
+    const items = flattenRedirectsFile(yaml.load(deRaw) as LocalRedirectsFile);
+    expect(items).toHaveLength(1);
+    // fromLanguage stripped from file (implied by folder)
+    expect(items[0].fromLanguage).toBeUndefined();
+    expect(items[0].fromSlug).toBe("de-artikel");
+  });
+
+  it("keeps toLanguage in file when cross-language redirect", async () => {
+    // de/redirects.yaml: de slug → en slug (cross-language, toLanguage must be kept)
+    await fs.mkdir(path.join(tmpDir, "de"), { recursive: true });
+    const deFile = buildRedirectsFile([
+      {
+        kind: "Permanent",
+        fromSlug: "de-artikel",
+        toSlug: "en-article",
+        toLanguage: "en",
+      },
+    ]);
+    await fs.writeFile(
+      path.join(tmpDir, "de", "redirects.yaml"),
+      yaml.dump(deFile),
+      "utf8"
+    );
+
+    mockGetAllRedirects.mockResolvedValueOnce([]);
+    mockCreateRedirect.mockResolvedValueOnce(
+      makeRemote({ id: 22, fromLanguage: "de", fromSlug: "de-artikel" })
+    );
+
+    await pushRedirects({ dryRun: false });
+
+    // After write-back, toLanguage must still be in the file
+    const deRaw = await fs.readFile(path.join(tmpDir, "de", "redirects.yaml"), "utf8");
+    const items = flattenRedirectsFile(yaml.load(deRaw) as LocalRedirectsFile);
+    expect(items[0].toLanguage).toBe("en");
+  });
+
+  it("reads redirects from both default folder and language subfolder", async () => {
+    // Default folder: en/path redirect
+    const defaultFile = buildRedirectsFile([
+      { kind: "Permanent", fromPath: "/old", toPath: "/new" },
+    ]);
+    await fs.mkdir(tmpDir, { recursive: true });
+    await fs.writeFile(path.join(tmpDir, "redirects.yaml"), yaml.dump(defaultFile), "utf8");
+
+    // de/ subfolder
+    await fs.mkdir(path.join(tmpDir, "de"), { recursive: true });
+    const deFile = buildRedirectsFile([
+      { kind: "Permanent", fromSlug: "de-artikel", toPath: "/de-dest" },
+    ]);
+    await fs.writeFile(path.join(tmpDir, "de", "redirects.yaml"), yaml.dump(deFile), "utf8");
+
+    mockGetAllRedirects.mockResolvedValueOnce([]);
+    mockCreateRedirect.mockResolvedValue(makeRemote({ id: 30 }));
+
+    await pushRedirects({ dryRun: false });
+
+    // Both redirects should have been scheduled for create
+    expect(mockCreateRedirect).toHaveBeenCalledTimes(2);
+    const args = mockCreateRedirect.mock.calls.map((c) => c[0]);
+    const fromValues = args.map((a) => a.fromPath ?? a.fromSlug);
+    expect(fromValues).toContain("/old");
+    expect(fromValues).toContain("de-artikel");
   });
 });

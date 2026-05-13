@@ -3,6 +3,7 @@
  * LeadCMS Pull Segments CLI Entry Point
  */
 
+import "dotenv/config";
 import { pullLeadCMSSegments } from "../../scripts/pull-segments.js";
 import { resolveIdentity } from "../../scripts/leadcms-helpers.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";

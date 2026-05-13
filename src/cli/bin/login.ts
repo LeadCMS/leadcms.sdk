@@ -3,6 +3,7 @@
  * LeadCMS Login CLI Entry Point
  */
 
+import "dotenv/config";
 import { loginLeadCMS } from "../../scripts/login-leadcms.js";
 
 loginLeadCMS(process.argv.slice(2)).catch((error) => {
