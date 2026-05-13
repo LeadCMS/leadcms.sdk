@@ -21,6 +21,14 @@ COPY out /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY scripts/inject-runtime-env.sh /app/scripts/inject-runtime-env.sh
 
+# Install LeadCMS redirect maps.
+# COPY out above already brought redirects/ into /usr/share/nginx/html/redirects/.
+# touch creates empty fallbacks so nginx starts even if a map type has no entries.
+RUN touch /etc/nginx/301.map /etc/nginx/302.map && \
+    cp /usr/share/nginx/html/redirects/301.map /etc/nginx/301.map 2>/dev/null || true && \
+    cp /usr/share/nginx/html/redirects/302.map /etc/nginx/302.map 2>/dev/null || true && \
+    rm -rf /usr/share/nginx/html/redirects
+
 # Set appropriate permissions
 RUN chmod -R 755 /usr/share/nginx/html && chmod +x /app/scripts/inject-runtime-env.sh
 

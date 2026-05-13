@@ -11,7 +11,7 @@
 # docker build -f preview/Dockerfile -t my-leadcms-site-preview .
 # docker run -p 80:80 -e LEADCMS_URL=... -e LEADCMS_API_KEY=... my-leadcms-site-preview
 
-FROM node:20-alpine
+FROM node:24-alpine
 
 # Install nginx and supervisor for multi-service management
 RUN apk add --no-cache nginx supervisor wget
@@ -47,6 +47,12 @@ COPY . .
 
 # Copy nginx configuration for development proxy
 COPY preview/nginx.conf /etc/nginx/nginx.conf
+
+# Install LeadCMS redirect maps. COPY . . already brought redirects/ into /app/redirects/.
+# touch creates empty fallbacks so nginx starts even if a map type has no entries.
+RUN touch /etc/nginx/301.map /etc/nginx/302.map && \
+    cp /app/redirects/301.map /etc/nginx/301.map 2>/dev/null || true && \
+    cp /app/redirects/302.map /etc/nginx/302.map 2>/dev/null || true
 
 # Copy supervisor configuration for multi-service management
 COPY preview/supervisord.conf /etc/supervisor/conf.d/supervisord.conf

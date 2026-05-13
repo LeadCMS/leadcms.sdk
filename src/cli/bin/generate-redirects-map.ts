@@ -14,11 +14,11 @@ import { startSpinner } from "../../lib/spinner.js";
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
 
-const dryRun = args.includes("--dry-run") || args.includes("-n");
+const dryRun = args.includes("--dry-run") || args.includes("-d") || args.includes("-n");
 
-// Parse --output-dir <dir> flag
+// Parse --output <dir> / -o <dir> flag
 let outputDir: string | undefined;
-const outputIdx = args.findIndex((a) => a === "--output-dir" || a === "-d");
+const outputIdx = args.findIndex((a) => a === "--output" || a === "-o");
 if (outputIdx !== -1 && args[outputIdx + 1]) {
   outputDir = args[outputIdx + 1];
 }
