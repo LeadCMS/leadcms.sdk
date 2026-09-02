@@ -502,6 +502,56 @@ Notes:
 - `publishedAt` is optional. Omitting it is a valid way to create draft or scheduled content depending on your LeadCMS workflow.
 - `updatedAt` is typically set and maintained by the LeadCMS server after content is created or updated. The SDK will use `updatedAt` when present for conflict detection, but you should not rely on it being set for brand-new local files.
 
+### Live preview: picking up content edits
+
+Content is read from disk at request time and never imported, so a bundler has
+no idea those files exist. Editing an MDX file produces no module change, the
+dev server has nothing to push, and the page the author is looking at stays
+stale until they reload by hand.
+
+`watch-content` fixes that. It watches the content directory and writes its
+revision into a small generated module; importing that module from a page gives
+the graph a real change, which the dev server turns into an update.
+
+```jsonc
+// package.json
+{
+  "scripts": {
+    // Run it alongside your dev server.
+    "dev": "concurrently \"next dev\" \"leadcms watch-content\"",
+    // Create the module for production builds, which import it like any other.
+    "prebuild": "leadcms generate-content-revision"
+  }
+}
+```
+
+Point `contentRevisionFile` somewhere your bundler resolves, and import it from
+a page or a module a page already pulls in:
+
+```jsonc
+// leadcms.config.json
+{ "contentRevisionFile": "src/lib/content-revision.js" }
+```
+
+```js
+import { CONTENT_REVISION } from "./content-revision";
+
+// Re-exported, not merely imported, so the binding is used and the module is
+// never tree-shaken out of the page's graph.
+export const contentRevision = CONTENT_REVISION;
+```
+
+Add the generated file to `.gitignore`. Both commands are local-only and need no
+`url` or API key, so they work on a checkout with no LeadCMS instance reachable.
+
+The same behaviour is available programmatically:
+
+```typescript
+import { watchContentRevision, computeContentRevision } from "@leadcms/sdk";
+
+const stop = watchContentRevision({ onChange: (rev) => console.log(rev) });
+```
+
 ### Check sync status
 
 ```bash

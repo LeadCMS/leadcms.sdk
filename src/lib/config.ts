@@ -26,6 +26,12 @@ export interface LeadCMSConfig {
   /** Redirects directory path (relative to project root) */
   redirectsDir: string;
   /**
+   * Module written by `leadcms watch-content` so a dev server notices content
+   * edits. Point this somewhere the site's bundler will resolve, and import it
+   * from a page. Relative to the project root.
+   */
+  contentRevisionFile?: string;
+  /**
    * Language → base URL mapping for domain-per-language deployments.
    * Key = language code, value = full base URL (no trailing slash).
    * Example: { "en": "https://en.example.com", "de": "https://de.example.com" }
@@ -91,6 +97,7 @@ const DEFAULT_CONFIG: Partial<LeadCMSConfig> = {
   segmentsDir: ".leadcms/segments",
   sequencesDir: ".leadcms/sequences",
   redirectsDir: ".leadcms/redirects",
+  contentRevisionFile: ".leadcms/content-revision.js",
   enableDrafts: false,
 };
 
@@ -101,7 +108,25 @@ const DEFAULT_CONFIG: Partial<LeadCMSConfig> = {
  * 3. Environment variables
  * 4. Default values
  */
+/**
+ * Resolve configuration without requiring a remote.
+ *
+ * Commands that only touch local files — watching content, generating the
+ * revision module — have no use for `url`/`apiKey`, and demanding them would
+ * lock out projects that develop against committed content with no CMS
+ * reachable. Use `loadConfig()` whenever the remote is actually needed.
+ */
+export function loadLocalConfig(): LeadCMSConfig {
+  return buildConfig();
+}
+
 export function loadConfig(): LeadCMSConfig {
+  const cleanConfig = buildConfig();
+  validateConfig(cleanConfig);
+  return cleanConfig;
+}
+
+function buildConfig(): LeadCMSConfig {
   const cwd = process.cwd();
 
   // 1. Try to load from config file
@@ -132,6 +157,8 @@ export function loadConfig(): LeadCMSConfig {
     segmentsDir: mergedConfig.segmentsDir || DEFAULT_CONFIG.segmentsDir!,
     sequencesDir: mergedConfig.sequencesDir || DEFAULT_CONFIG.sequencesDir!,
     redirectsDir: mergedConfig.redirectsDir || DEFAULT_CONFIG.redirectsDir!,
+    contentRevisionFile:
+      mergedConfig.contentRevisionFile || DEFAULT_CONFIG.contentRevisionFile!,
     languageDomains: mergedConfig.languageDomains,
     redirects: mergedConfig.redirects,
     enableDrafts: mergedConfig.enableDrafts || DEFAULT_CONFIG.enableDrafts!,
@@ -140,7 +167,6 @@ export function loadConfig(): LeadCMSConfig {
     defaultRemote: mergedConfig.defaultRemote,
   };
 
-  validateConfig(cleanConfig);
   return cleanConfig;
 }
 

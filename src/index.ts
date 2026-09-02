@@ -2,6 +2,7 @@
 export * from "./lib/cms.js";
 export * from "./lib/config.js";
 export * from "./lib/locale-utils.js";
+export * from "./lib/content-revision.js";
 export * from "./lib/comment-types.js";
 export * from "./lib/cms-config-types.js";
 

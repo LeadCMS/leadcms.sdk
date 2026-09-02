@@ -23,16 +23,75 @@ export interface FooterConfig {
 // Default language - internal fallback only when configuration is not available
 const DEFAULT_LANGUAGE = "en";
 
-// Content cache to avoid repeated file reads
+// Content cache to avoid repeated file reads.
+//
+// Entries are validated against the file itself rather than expired on a timer.
+// A time-based cache made configuration go stale during development: an edit to
+// header.json was invisible for up to the TTL, with nothing the site could call
+// to invalidate it, which broke live preview for every JSON-backed component.
+// Comparing the file's mtime and size costs one stat and is always correct, in
+// development and at build time alike.
 interface ContentCache<T> {
   content: T | null;
-  timestamp: number;
+  /** File signature when the entry was cached; null when the file was absent. */
+  signature: string | null;
   filePath: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const contentCache = new Map<string, ContentCache<any>>();
-const CONTENT_CACHE_TTL = 30000; // 30 seconds cache TTL for content files
+
+/**
+ * Cheap identity for a file: its mtime and size, or null when it does not
+ * exist. Size is included because mtime granularity is one second on some
+ * filesystems, which would otherwise hide a rewrite made within the same second.
+ */
+function fileSignature(filePath: string): string | null {
+  try {
+    const { mtimeMs, size } = fs.statSync(filePath);
+    return `${mtimeMs}:${size}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Look up a cached file, returning a miss when the file has changed, appeared
+ * or been deleted since it was cached.
+ */
+function readContentCache<T>(
+  cacheKey: string,
+  filePath: string
+): { hit: boolean; content: T | null; signature: string | null } {
+  const signature = fileSignature(filePath);
+  const cached = contentCache.get(cacheKey);
+
+  if (cached && cached.signature === signature) {
+    return { hit: true, content: cached.content as T | null, signature };
+  }
+
+  return { hit: false, content: null, signature };
+}
+
+function writeContentCache<T>(
+  cacheKey: string,
+  filePath: string,
+  content: T | null,
+  signature: string | null
+): void {
+  contentCache.set(cacheKey, { content, signature, filePath });
+}
+
+/**
+ * Drop every cached configuration file.
+ *
+ * Cache entries are self-invalidating, so this is rarely needed — it exists for
+ * long-lived processes that relocate the content directory at runtime, and for
+ * tests.
+ */
+export function clearContentCache(): void {
+  contentCache.clear();
+}
 
 /**
  * Check if content is a draft based on publishedAt field
@@ -984,26 +1043,18 @@ function loadConfigWithDraftSupport<T>(
       const draftConfigPath = path.join(localeContentDir, `${configName}-${userUid}.json`);
       cacheKey = `${draftConfigPath}:${locale}:${configName}:${userUid}`;
 
-      // Check cache first for draft
-      const cached = contentCache.get(cacheKey);
-      const now = Date.now();
+      const draft = readContentCache<T>(cacheKey, draftConfigPath);
 
-      if (cached && now - cached.timestamp < CONTENT_CACHE_TTL) {
-        return cached.content;
-      }
-
-      if (fs.existsSync(draftConfigPath)) {
+      // A cached miss means the draft genuinely does not exist; fall through.
+      if (draft.hit) {
+        if (draft.content !== null) return draft.content;
+      } else if (draft.signature !== null) {
         const draftConfigContent = fs.readFileSync(draftConfigPath, "utf-8");
         const parsed = JSON.parse(draftConfigContent) as T;
-
-        // Cache the result
-        contentCache.set(cacheKey, {
-          content: parsed,
-          timestamp: now,
-          filePath: draftConfigPath,
-        });
-
+        writeContentCache(cacheKey, draftConfigPath, parsed, draft.signature);
         return parsed;
+      } else {
+        writeContentCache<T>(cacheKey, draftConfigPath, null, null);
       }
     }
 
@@ -1011,21 +1062,16 @@ function loadConfigWithDraftSupport<T>(
     const configPath = path.join(localeContentDir, `${configName}.json`);
     cacheKey = `${configPath}:${locale}:${configName}`;
 
-    // Check cache for regular config
-    const cached = contentCache.get(cacheKey);
-    const now = Date.now();
+    const regular = readContentCache<T>(cacheKey, configPath);
 
-    if (cached && now - cached.timestamp < CONTENT_CACHE_TTL) {
-      return cached.content;
+    if (regular.hit && regular.content !== null) {
+      return regular.content;
     }
 
-    if (!fs.existsSync(configPath)) {
-      // Cache the null result too to avoid repeated file system checks
-      contentCache.set(cacheKey, {
-        content: null,
-        timestamp: now,
-        filePath: configPath,
-      });
+    if (regular.signature === null) {
+      // Cache the absence too, so a missing file is not stat-ed then read on
+      // every call. The signature check above notices if it later appears.
+      writeContentCache<T>(cacheKey, configPath, null, null);
 
       // Provide detailed error information about what's missing
       const error = new Error(
@@ -1041,13 +1087,7 @@ function loadConfigWithDraftSupport<T>(
 
     const configContent = fs.readFileSync(configPath, "utf-8");
     const parsed = JSON.parse(configContent) as T;
-
-    // Cache the result
-    contentCache.set(cacheKey, {
-      content: parsed,
-      timestamp: now,
-      filePath: configPath,
-    });
+    writeContentCache(cacheKey, configPath, parsed, regular.signature);
 
     return parsed;
   } catch (error) {

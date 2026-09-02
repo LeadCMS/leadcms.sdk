@@ -131,6 +131,12 @@ switch (command) {
   case "generate-env":
     runScript("generate-env.js");
     break;
+  case "watch-content":
+    runScript("watch-content.js", commandArgs);
+    break;
+  case "generate-content-revision":
+    runScript("generate-content-revision.js", commandArgs);
+    break;
   case "init":
   case "config":
     runScript("init.js");
@@ -261,6 +267,14 @@ Usage:
 
   Utilities:
   leadcms generate-env   - Generate environment variables file
+  leadcms watch-content [options] - Watch local content so a dev server picks up
+                           edits without a manual browser refresh. Run it
+                           alongside your dev server.
+    --revision-file <path> - Where to write the generated revision module
+                           (default: contentRevisionFile from config)
+  leadcms generate-content-revision [options] - Create the revision module if
+                           absent; run from a prebuild step
+    --revision-file <path> - Where to write the generated revision module
 
   Global options:
   --verbose, -V          - Show detailed debug output (API calls, sync tokens, etc.)
