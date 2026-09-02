@@ -6,6 +6,7 @@ import {
   watchContentRevision,
 } from "../lib/content-revision.js";
 import { colorConsole } from "../lib/console-colors.js";
+import { acquireContentWatchLock, readContentWatchLock } from "../lib/watch-lock.js";
 import type { RemoteContext } from "../lib/remote-context.js";
 
 export interface WatchOptions {
@@ -36,34 +37,56 @@ export async function watch(options: WatchOptions = {}): Promise<void> {
   const revisionFile =
     options.revisionFile ?? config.contentRevisionFile ?? DEFAULT_CONTENT_REVISION_FILE;
 
-  const stopRevisionWatch = watchContentRevision({
-    contentDir: config.contentDir,
-    revisionFile,
-    onChange: (revision) => {
-      colorConsole.log(
-        `${colorConsole.cyan("[watch]")} content changed → ${colorConsole.highlight(revision)}`
-      );
-    },
-    onError: (error) => {
-      colorConsole.warn(
-        `[watch] recursive watching unavailable (${error.message}); polling instead`
-      );
-    },
-  });
+  // Only one process should watch a given content directory. A preview
+  // container commonly supervises the watcher separately from the dev server,
+  // and wiring both here would put two recursive watchers on the same tree.
+  const lock = acquireContentWatchLock(config.contentDir);
+  let stopRevisionWatch: (() => void) | null = null;
 
-  colorConsole.log(
-    `${colorConsole.cyan("[watch]")} watching ${colorConsole.highlight(path.resolve(config.contentDir))}`
-  );
+  if (lock) {
+    stopRevisionWatch = watchContentRevision({
+      contentDir: config.contentDir,
+      revisionFile,
+      onChange: (revision) => {
+        colorConsole.log(
+          `${colorConsole.cyan("[watch]")} content changed → ${colorConsole.highlight(revision)}`
+        );
+      },
+      onError: (error) => {
+        colorConsole.warn(
+          `[watch] recursive watching unavailable (${error.message}); polling instead`
+        );
+      },
+    });
+
+    colorConsole.log(
+      `${colorConsole.cyan("[watch]")} watching ${colorConsole.highlight(path.resolve(config.contentDir))}`
+    );
+  } else {
+    const holder = readContentWatchLock(config.contentDir);
+    colorConsole.log(
+      `${colorConsole.cyan("[watch]")} another watcher already covers ${colorConsole.highlight(
+        path.resolve(config.contentDir)
+      )}${holder ? ` (pid ${holder.pid})` : ""} — not starting a second one`
+    );
+  }
 
   const shutdown = (): void => {
-    stopRevisionWatch();
+    stopRevisionWatch?.();
+    lock?.release();
     process.exit(0);
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 
   const remoteUrl = options.remoteContext?.url || config.url;
-  if (options.localOnly || !remoteUrl) {
+  if (options.localOnly) {
+    colorConsole.log(
+      `${colorConsole.cyan("[watch]")} --local requested — not connecting to LeadCMS`
+    );
+    return;
+  }
+  if (!remoteUrl) {
     colorConsole.log(
       `${colorConsole.cyan("[watch]")} no LeadCMS instance configured — watching local content only`
     );
