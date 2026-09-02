@@ -1,6 +1,6 @@
 {
   "name": "@leadcms/sdk",
-  "version": "3.7.0",
+  "version": "3.8.0",
   "description": "Official SDK and CLI tools for LeadCMS - framework-agnostic content management for static site generators",
   "type": "module",
   "main": "dist/index.js",
@@ -27,7 +27,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:cli": "pnpm run build && node dist/cli/index.js --help > /dev/null && echo '\u2705 CLI tests passed'",
+    "test:cli": "pnpm run build && node dist/cli/index.js --help > /dev/null && echo '✅ CLI tests passed'",
     "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\"",
     "lint:fix": "eslint \"src/**/*.ts\" \"tests/**/*.ts\" --fix",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
