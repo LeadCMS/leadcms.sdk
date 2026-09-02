@@ -275,6 +275,24 @@ describe("compareVersions", () => {
     expect(compareVersions("1.2.88", "invalid")).toBe(1);
     expect(compareVersions("invalid", "invalid")).toBe(0);
   });
+
+  it("should handle build metadata", () => {
+    expect(compareVersions("1.2.88+2262cd7935d28ace", "1.2.88")).toBe(0);
+    expect(compareVersions("1.2.88-pre+abc123", "1.2.88")).toBe(0);
+  });
+
+  it("should treat missing minor/patch components as zero", () => {
+    expect(compareVersions("1.5", "1.2.88")).toBe(1);
+    expect(compareVersions("1.5+2262cd7935d28ace", "1.2.88")).toBe(1);
+    expect(compareVersions("1.5", "1.5.0")).toBe(0);
+    expect(compareVersions("1.5", "1.5.16-pre")).toBe(-1);
+    expect(compareVersions("2", "1.9.9")).toBe(1);
+  });
+
+  it("should tolerate a leading v prefix", () => {
+    expect(compareVersions("v1.2.89", "1.2.88")).toBe(1);
+    expect(compareVersions("v1.2.88", "v1.2.88")).toBe(0);
+  });
 });
 
 describe("supportsDeviceAuth", () => {
@@ -290,6 +308,11 @@ describe("supportsDeviceAuth", () => {
     expect(supportsDeviceAuth("1.2.87")).toBe(false);
     expect(supportsDeviceAuth("1.1.99")).toBe(false);
     expect(supportsDeviceAuth("1.0.0")).toBe(false);
+  });
+
+  it("should return true for two-part versions with build metadata", () => {
+    expect(supportsDeviceAuth("1.5+2262cd7935d28aceec13a7770d057770863f0ae5")).toBe(true);
+    expect(supportsDeviceAuth("1.5")).toBe(true);
   });
 
   it("should return false for null or invalid versions", () => {

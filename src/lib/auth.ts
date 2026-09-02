@@ -72,11 +72,13 @@ export async function getLeadCMSVersion(url: string): Promise<string | null> {
  * Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
  */
 export function compareVersions(v1: string, v2: string): number {
-  // Extract version numbers (ignore pre-release tags and git hashes)
+  // Extract version numbers (ignore pre-release tags and build metadata such
+  // as git hashes). Missing minor/patch components are treated as 0, so
+  // two-part versions like "1.5+2262cd79" compare as 1.5.0.
   const extractVersion = (v: string): number[] => {
-    const match = v.match(/^(\d+)\.(\d+)\.(\d+)/);
+    const match = v.match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
     if (!match) return [0, 0, 0];
-    return [parseInt(match[1]), parseInt(match[2]), parseInt(match[3])];
+    return [parseInt(match[1]), parseInt(match[2] ?? "0"), parseInt(match[3] ?? "0")];
   };
 
   const parts1 = extractVersion(v1);
