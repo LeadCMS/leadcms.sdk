@@ -131,9 +131,6 @@ switch (command) {
   case "generate-env":
     runScript("generate-env.js");
     break;
-  case "watch-content":
-    runScript("watch-content.js", commandArgs);
-    break;
   case "generate-content-revision":
     runScript("generate-content-revision.js", commandArgs);
     break;
@@ -263,15 +260,16 @@ Usage:
     --delete             - Show settings deletion operations
   leadcms status-redirects [options] - Show redirect sync status only
     --delete             - Show redirect deletion operations
-  leadcms watch          - Watch for real-time updates via Server-Sent Events
+  leadcms watch [options] - Watch content and keep the dev server in step.
+                           Streams updates from LeadCMS when one is configured,
+                           and always tracks local edits so they reach the
+                           browser without a manual refresh.
+    --local              - Watch local files only; do not connect to LeadCMS
+    --revision-file <path> - Where to write the generated revision module
+                           (default: contentRevisionFile from config)
 
   Utilities:
   leadcms generate-env   - Generate environment variables file
-  leadcms watch-content [options] - Watch local content so a dev server picks up
-                           edits without a manual browser refresh. Run it
-                           alongside your dev server.
-    --revision-file <path> - Where to write the generated revision module
-                           (default: contentRevisionFile from config)
   leadcms generate-content-revision [options] - Create the revision module if
                            absent; run from a prebuild step
     --revision-file <path> - Where to write the generated revision module

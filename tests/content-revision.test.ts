@@ -9,7 +9,20 @@ import {
   writeContentRevision,
 } from "../src/lib/content-revision.js";
 
-const settle = (ms = 400) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Poll until `predicate` holds. Filesystem events have no bounded latency, so a
+ * fixed sleep makes these tests flaky — wait for the outcome instead.
+ */
+async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await sleep(25);
+  }
+  return predicate();
+}
 
 describe("content revision tracking", () => {
   let tmpRoot: string;
@@ -95,15 +108,15 @@ describe("content revision tracking", () => {
         contentDir,
         revisionFile,
         debounceMs: 20,
+        pollMs: 100,
         onChange: (revision) => changes.push(revision),
       });
 
       try {
         const initial = fs.readFileSync(revisionFile, "utf-8");
         fs.writeFileSync(path.join(contentDir, "home.mdx"), "# home edited");
-        await settle();
 
-        expect(changes.length).toBeGreaterThan(0);
+        expect(await waitFor(() => changes.length > 0)).toBe(true);
         expect(fs.readFileSync(revisionFile, "utf-8")).not.toBe(initial);
       } finally {
         stop();
@@ -116,13 +129,21 @@ describe("content revision tracking", () => {
         contentDir,
         revisionFile,
         debounceMs: 20,
+        pollMs: 100,
         onChange: (revision) => changes.push(revision),
       });
+
+      // Prove events are flowing first, so the assertion after stop() cannot
+      // pass merely because the watcher had not warmed up yet.
+      fs.writeFileSync(path.join(contentDir, "home.mdx"), "# home edited");
+      expect(await waitFor(() => changes.length > 0)).toBe(true);
+
       stop();
+      const afterStop = changes.length;
 
       fs.writeFileSync(path.join(contentDir, "home.mdx"), "# changed after stop");
-      await settle();
-      expect(changes).toHaveLength(0);
+      await sleep(500);
+      expect(changes).toHaveLength(afterStop);
     });
   });
 });

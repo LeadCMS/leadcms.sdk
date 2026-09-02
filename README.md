@@ -507,42 +507,49 @@ Notes:
 Content is read from disk at request time and never imported, so a bundler has
 no idea those files exist. Editing an MDX file produces no module change, the
 dev server has nothing to push, and the page the author is looking at stays
-stale until they reload by hand.
+stale until they reload by hand. The same is true of content streamed down from
+LeadCMS: `watch` writes the file, but nothing tells the bundler.
 
-`watch-content` fixes that. It watches the content directory and writes its
-revision into a small generated module; importing that module from a page gives
-the graph a real change, which the dev server turns into an update.
+`leadcms watch` handles both. It watches the content directory — covering edits
+made by hand and its own writes from the Server-Sent Events stream — and records
+the content's revision in a small generated module. Importing that module from a
+page gives the graph a real change, which the dev server turns into an update.
 
 ```jsonc
 // package.json
 {
   "scripts": {
     // Run it alongside your dev server.
-    "dev": "concurrently \"next dev\" \"leadcms watch-content\"",
+    "dev": "concurrently \"next dev\" \"leadcms watch\"",
     // Create the module for production builds, which import it like any other.
     "prebuild": "leadcms generate-content-revision"
   }
 }
 ```
 
-Point `contentRevisionFile` somewhere your bundler resolves, and import it from
-a page or a module a page already pulls in:
+The stream is started only when a remote is configured, so this works on a
+project with no LeadCMS instance reachable; pass `--local` to skip it
+deliberately.
 
-```jsonc
-// leadcms.config.json
-{ "contentRevisionFile": "src/lib/content-revision.js" }
-```
+**One import is required.** The module defaults to
+`.leadcms/content-revision.js`; import it from a page, or from anything a page
+already pulls in:
 
 ```js
-import { CONTENT_REVISION } from "./content-revision";
+import { CONTENT_REVISION } from "@/.leadcms/content-revision";
 
 // Re-exported, not merely imported, so the binding is used and the module is
 // never tree-shaken out of the page's graph.
 export const contentRevision = CONTENT_REVISION;
 ```
 
-Add the generated file to `.gitignore`. Both commands are local-only and need no
-`url` or API key, so they work on a checkout with no LeadCMS instance reachable.
+Set `contentRevisionFile` in `leadcms.config.json` to put it somewhere your
+bundler resolves more naturally, and add the generated file to `.gitignore`.
+
+> Why an import at all? A bundler will only push an update for a module it can
+> see. Turbopack has no plugin API, so the SDK cannot inject one into the graph
+> on your behalf — the import is what makes the content directory visible to the
+> dev server. It is inert at runtime and costs nothing in production.
 
 The same behaviour is available programmatically:
 

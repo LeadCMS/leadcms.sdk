@@ -19,6 +19,8 @@ import { loadLocalConfig } from "./config.js";
  */
 
 /** Default location of the generated module, relative to the project root. */
+// Lives beside the content directory rather than inside it: `pull --reset`
+// clears `contentDir`, and this module must survive that.
 export const DEFAULT_CONTENT_REVISION_FILE = ".leadcms/content-revision.js";
 
 /**
@@ -102,6 +104,16 @@ export interface WatchContentRevisionOptions {
   revisionFile?: string;
   /** Coalesce bursts of filesystem events, in milliseconds. */
   debounceMs?: number;
+  /**
+   * Interval of the safety-net re-check, in milliseconds.
+   *
+   * Filesystem notifications are not guaranteed: FSEvents in particular can
+   * drop events for a directory that was only just created, which would leave
+   * the watcher silent until the next edit. Re-checking on a slow timer bounds
+   * how long a missed event can go unnoticed. Set to 0 to rely on
+   * notifications alone.
+   */
+  pollMs?: number;
   onChange?: (revision: string) => void;
   onError?: (error: Error) => void;
 }
@@ -115,6 +127,7 @@ export function watchContentRevision(options: WatchContentRevisionOptions = {}):
   const contentDir = path.resolve(options.contentDir ?? loadLocalConfig().contentDir);
   const revisionFile = path.resolve(options.revisionFile ?? DEFAULT_CONTENT_REVISION_FILE);
   const debounceMs = options.debounceMs ?? 150;
+  const pollMs = options.pollMs ?? 2000;
 
   let revision = computeContentRevision(contentDir);
   writeContentRevision(revision, revisionFile);
@@ -136,12 +149,17 @@ export function watchContentRevision(options: WatchContentRevisionOptions = {}):
 
   try {
     watcher = fs.watch(contentDir, { recursive: true }, onFsEvent);
+    // Notifications drive the fast path; the timer only catches what they miss.
+    if (pollMs > 0) poll = setInterval(onFsEvent, pollMs);
   } catch (error) {
     // Recursive watching is unsupported on some platforms; fall back to polling
-    // so live preview still works, just a little less promptly.
+    // alone so live preview still works, just a little less promptly.
     options.onError?.(error as Error);
-    poll = setInterval(onFsEvent, 1000);
+    poll = setInterval(onFsEvent, Math.min(pollMs || 1000, 1000));
   }
+
+  // A backstop timer should not by itself keep a process alive.
+  poll?.unref?.();
 
   return () => {
     if (timer) clearTimeout(timer);

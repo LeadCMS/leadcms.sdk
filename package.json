@@ -36,9 +36,8 @@
     "leadcms:pull": "node dist/scripts/pull-leadcms-content.js",
     "leadcms:push": "node dist/scripts/push-leadcms-content.js",
     "leadcms:status": "node dist/scripts/status-leadcms-content.js",
-    "leadcms:watch": "node dist/scripts/sse-watcher.js",
-    "leadcms:generate-env": "node dist/scripts/generate-env-js.js",
-    "leadcms:watch-content": "node dist/scripts/watch-content.js"
+    "leadcms:watch": "node dist/scripts/watch.js",
+    "leadcms:generate-env": "node dist/scripts/generate-env-js.js"
   },
   "dependencies": {
     "axios": "^1.13.2",

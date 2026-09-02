@@ -26,9 +26,9 @@ export interface LeadCMSConfig {
   /** Redirects directory path (relative to project root) */
   redirectsDir: string;
   /**
-   * Module written by `leadcms watch-content` so a dev server notices content
-   * edits. Point this somewhere the site's bundler will resolve, and import it
-   * from a page. Relative to the project root.
+   * Module written by `leadcms watch` so a dev server notices content edits.
+   * Point this somewhere the site's bundler will resolve, and import it from a
+   * page. Relative to the project root.
    */
   contentRevisionFile?: string;
   /**
