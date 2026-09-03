@@ -221,16 +221,18 @@ describe("toLocalSequence step metadata stripping", () => {
     expect(local.steps![0]).not.toHaveProperty("updatedAt");
   });
 
-  it("should preserve sequence-level id, createdAt, updatedAt", () => {
+  it("should not write sequence-level id, createdAt, updatedAt", () => {
+    // Server-managed fields live in the remote metadata map, never in the file.
     const remote = makeRemoteSequence({
       id: 99,
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-02-01T00:00:00Z",
     });
     const local = toLocalSequence(remote, emptySegmentMap, emptyTemplateIdNameMap);
-    expect(local.id).toBe(99);
-    expect(local.createdAt).toBe("2026-01-01T00:00:00Z");
-    expect(local.updatedAt).toBe("2026-02-01T00:00:00Z");
+    expect(local.id).toBeUndefined();
+    expect(local.createdAt).toBeUndefined();
+    expect(local.updatedAt).toBeUndefined();
+    expect(local.name).toBe(remote.name);
   });
 });
 

@@ -542,21 +542,19 @@ export function toLocalSequence(
   segmentMap: SegmentIdNameMap,
   templateMap: EmailTemplateIdNameMap
 ): LocalSequenceDto {
+  // id/createdAt/updatedAt are server-managed: each remote records them in its
+  // metadata map, and push resolves the remote id from there. Keeping them in
+  // the file would pin one remote's values and dirty it on every push.
   const local: LocalSequenceDto = {
-    id: remote.id,
     name: remote.name,
     language: remote.language,
     stopOnReply: remote.stopOnReply,
     useContactTimeZone: remote.useContactTimeZone,
     timeZone: remote.timeZone,
-    createdAt: remote.createdAt,
   };
 
   if (remote.description != null) {
     local.description = remote.description;
-  }
-  if (remote.updatedAt != null) {
-    local.updatedAt = remote.updatedAt;
   }
 
   if (remote.enrollment) {

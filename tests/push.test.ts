@@ -373,8 +373,9 @@ coverImageUrl: /media/blog/covers/test-article.jpg
       const updatedFile = await fs.readFile(filePath, "utf-8");
       const parsed = matter(updatedFile);
 
-      expect(parsed.data.id).toBe(42);
-      expect(parsed.data.updatedAt).toBe("2024-06-15T12:00:00Z");
+      // Server-managed fields are never written to the file
+      expect(parsed.data.id).toBeUndefined();
+      expect(parsed.data.updatedAt).toBeUndefined();
       expect(parsed.content.trim()).toBe("# Server-normalized content");
     });
 
@@ -441,8 +442,9 @@ coverImageUrl: /media/blog/covers/test-article.jpg
       const updatedFile = await fs.readFile(filePath, "utf-8");
       const parsed = JSON.parse(updatedFile);
 
-      expect(parsed.id).toBe(99);
-      expect(parsed.updatedAt).toBe("2024-06-15T12:00:00Z");
+      // Server-managed fields are never written to the file
+      expect(parsed.id).toBeUndefined();
+      expect(parsed.updatedAt).toBeUndefined();
       expect(parsed.serverNormalized).toBe(true);
     });
   });

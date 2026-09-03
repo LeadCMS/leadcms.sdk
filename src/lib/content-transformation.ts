@@ -224,9 +224,9 @@ function transformToMDXFormat(remote: RemoteContentData): string {
   // Merge frontmatter, body frontmatter takes precedence over content metadata
   const mergedFrontmatter = { ...remote, ...bodyFrontmatter };
 
-  // Exclude system/internal fields that should not appear in local files
-  // Only exclude truly internal fields, not user content fields like timestamps
-  const systemFields = ["body", "isLocal"];
+  // Exclude internal fields, and the server-managed ones that live in the
+  // per-remote metadata map rather than in the file.
+  const systemFields = ["body", "isLocal", ...SERVER_MANAGED_FIELDS];
   systemFields.forEach((field) => delete mergedFrontmatter[field]);
 
   // Convert API SEO metadata to frontmatter format, stripping default values
@@ -238,11 +238,8 @@ function transformToMDXFormat(remote: RemoteContentData): string {
   // Filter out empty arrays (e.g. tags: []) — they add no value to frontmatter
   const compactFrontmatter = filterEmptyArrays(filteredFrontmatter);
 
-  // Ensure id/createdAt/updatedAt always appear first in frontmatter
-  const orderedFrontmatter = hoistMetadataFields(compactFrontmatter);
-
   // Apply media path replacements to both frontmatter and body content
-  const cleanedFrontmatter = replaceApiMediaPaths(orderedFrontmatter);
+  const cleanedFrontmatter = replaceApiMediaPaths(compactFrontmatter);
   const cleanedContent = replaceApiMediaPaths(bodyContent);
 
   // Use gray-matter's stringify to build frontmatter + content, adding extra newline for consistency
@@ -265,9 +262,9 @@ function transformToJSONFormat(remote: RemoteContentData): string {
   const transformedBodyObj = replaceApiMediaPaths(bodyObj);
   const merged = { ...transformedBodyObj };
 
-  // Exclude system/internal fields that should not appear in local files
-  // Only exclude truly internal fields, not user content fields like timestamps
-  const systemFields = ["body", "isLocal"];
+  // Exclude internal fields, and the server-managed ones that live in the
+  // per-remote metadata map rather than in the file.
+  const systemFields: string[] = ["body", "isLocal", ...SERVER_MANAGED_FIELDS];
 
   for (const [k, v] of Object.entries(remote)) {
     if (!systemFields.includes(k)) {
@@ -337,11 +334,16 @@ export function replaceLocalMediaPaths(obj: unknown): unknown {
 }
 
 /**
- * Normalize content for comparison by handling whitespace and timestamp precision differences
+ * Normalize content for comparison by handling whitespace and timestamp precision differences.
+ *
+ * Server-managed fields (id/createdAt/updatedAt) are stripped from both sides:
+ * they are no longer written to local files, but files from older SDK versions
+ * still carry them, and the remote rendering always does. A change in those
+ * fields alone is never a content change.
  */
 export function normalizeContentForComparison(content: string): string {
   return (
-    content
+    stripTimestampMetadata(content)
       .trim()
       .replace(/\r\n/g, "\n") // Normalize line endings
       .replace(/\s+\n/g, "\n") // Remove trailing whitespace on lines
@@ -364,6 +366,18 @@ export function hasContentDifferences(content1: string, content2: string): boole
   const normalized2 = normalizeContentForComparison(content2);
   return normalized1 !== normalized2;
 }
+
+/**
+ * Fields the server owns. They are never written into local files: each remote
+ * records them in its own `metadata.json`, so keeping them in frontmatter would
+ * only pin one remote's values into a file shared by all of them — and
+ * `updatedAt` changes on every push, dirtying the file each time it is synced.
+ *
+ * Push resolves the remote id from the per-remote metadata map and falls back to
+ * frontmatter only for files written by older SDK versions, so dropping them
+ * here does not break matching.
+ */
+export const SERVER_MANAGED_FIELDS = ["id", "createdAt", "updatedAt"] as const;
 
 /**
  * Strip id/createdAt/updatedAt lines from content so server-managed metadata

@@ -102,13 +102,13 @@ describe("toLocalSequence", () => {
     expect(local).not.toHaveProperty("updatedAt");
   });
 
-  it("should include updatedAt when present", () => {
+  it("should not write updatedAt even when present", () => {
     const remote = makeRemoteSequence({ updatedAt: "2026-03-22T10:00:00Z" });
     const local = toLocalSequence(remote, emptySegmentMap, idToName);
-    expect(local.updatedAt).toBe("2026-03-22T10:00:00Z");
+    expect(local.updatedAt).toBeUndefined();
   });
 
-  it("should keep id, createdAt, updatedAt at the top-level in stable order", () => {
+  it("should keep top-level fields in stable order without server-managed ones", () => {
     const remote = makeRemoteSequence({
       description: "A real description",
       updatedAt: "2026-03-22T10:00:00Z",
@@ -117,9 +117,6 @@ describe("toLocalSequence", () => {
     const local = toLocalSequence(remote, emptySegmentMap, idToName);
 
     expect(Object.keys(local)).toEqual([
-      "id",
-      "createdAt",
-      "updatedAt",
       "name",
       "language",
       "stopOnReply",

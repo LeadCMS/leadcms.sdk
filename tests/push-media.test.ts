@@ -287,7 +287,7 @@ describe("Media Push Feature", () => {
         true
       );
 
-      expect(deleteMedia).toHaveBeenCalledWith("test/old.png");
+      expect(deleteMedia).toHaveBeenCalledWith("test/old.png", 1);
       expect(result.executed.successful).toBe(1);
       expect(logSuccess).not.toHaveBeenCalled();
     });

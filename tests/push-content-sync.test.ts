@@ -151,8 +151,9 @@ describe("content push post-push sync", () => {
     expect(pullLeadCMSMedia).not.toHaveBeenCalled();
 
     const synced = matter(await fs.readFile(filePath, "utf-8"));
-    expect(synced.data.id).toBe(7);
-    expect(synced.data.updatedAt).toBe("2024-06-15T12:00:00Z");
+    // Server-managed fields are recorded in the remote metadata map, not the file
+    expect(synced.data.id).toBeUndefined();
+    expect(synced.data.updatedAt).toBeUndefined();
     expect(synced.content.trim()).toBe("# Server body");
   });
 });

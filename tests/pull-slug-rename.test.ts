@@ -63,14 +63,14 @@ describe("Pull: remote slug rename scenario", () => {
     harness.addContentSync([remoteContentV2], [], "token-2");
 
     // ── First pull ─────────────────────────────────────────────────────
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const filesAfterFirstPull = await listContentFiles(contentDir);
     expect(filesAfterFirstPull).toHaveLength(1);
     expect(filesAfterFirstPull[0]).toContain("old-slug.mdx");
 
     // ── Second pull (slug was renamed remotely) ────────────────────────
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     // ── Verify: only ONE file should remain (new-slug.mdx) ────────────
     const filesAfterSecondPull = await listContentFiles(contentDir);

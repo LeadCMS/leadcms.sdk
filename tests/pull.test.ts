@@ -508,8 +508,8 @@ slug: test
 
 # Content`;
 
-      // Without stripping, timestamps differ
-      expect(hasContentDifferences(content1, content2)).toBe(true);
+      // Server-managed timestamps are ignored by comparison itself now
+      expect(hasContentDifferences(content1, content2)).toBe(false);
 
       // After stripping, no differences
       expect(
@@ -575,8 +575,8 @@ slug: test
         2
       );
 
-      // Without stripping, the fields differ
-      expect(hasContentDifferences(content1, content2)).toBe(true);
+      // Server-managed fields are ignored by comparison itself now
+      expect(hasContentDifferences(content1, content2)).toBe(false);
 
       // After stripping, no differences
       expect(

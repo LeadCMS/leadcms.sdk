@@ -161,9 +161,9 @@ describe("pullLeadCMSSequences with reset", () => {
       path.join(sequencesDir, "fresh-sequence.json"),
       "utf8"
     );
-    expect(savedSequence).toContain(
-      '{\n  "id": 1,\n  "createdAt": "2026-03-01T00:00:00Z",\n  "name": "Fresh Sequence"'
-    );
+    // Server-managed id/createdAt are kept in the remote metadata map, not the file
+    expect(savedSequence).toContain('{\n  "name": "Fresh Sequence"');
+    expect(savedSequence).not.toContain('"createdAt"');
   });
 
   it("should NOT clear state when reset is false/absent", async () => {

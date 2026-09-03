@@ -169,6 +169,9 @@ async function updateLocalFileAfterPush(
 
   try {
     const {
+      id: _id,
+      createdAt: _createdAt,
+      updatedAt: _updatedAt,
       contactCount: _contactCount,
       createdById: _createdById,
       updatedById: _updatedById,
@@ -485,5 +488,17 @@ export async function pushSegments(options: PushOptions = {}): Promise<void> {
 
     await leadCMSDataService.deleteSegment(remote.id!);
     console.log(`    🗑️  Deleted segment: ${remote.name || remote.id}`);
+    if (remoteCtx && remote.name) {
+      try {
+        const rc = await import("../lib/remote-context.js");
+        const metaMap = await rc.readMetadataMap(remoteCtx);
+        if (metaMap.segments?.[remote.name]) {
+          delete metaMap.segments[remote.name];
+          await rc.writeMetadataMap(remoteCtx, metaMap);
+        }
+      } catch (_metaError: unknown) {
+        console.warn(`Failed to prune metadata for deleted segment ${remote.name}: ${(_metaError as Error).message}`);
+      }
+    }
   }
 }

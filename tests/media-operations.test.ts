@@ -412,7 +412,7 @@ describe("pushMedia - SDK top-level function", () => {
       );
 
       expect(deleteMock).toHaveBeenCalledTimes(1);
-      expect(deleteMock).toHaveBeenCalledWith("old/deleted.jpg");
+      expect(deleteMock).toHaveBeenCalledWith("old/deleted.jpg", 99);
     });
   });
 

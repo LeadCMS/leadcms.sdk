@@ -215,7 +215,7 @@ LEADCMS_API_KEY=your-api-key
 # Optional - can also be set via environment variables
 LEADCMS_DEFAULT_LANGUAGE=en
 LEADCMS_CONTENT_DIR=.leadcms/content
-LEADCMS_MEDIA_DIR=public/media
+LEADCMS_MEDIA_DIR=public/media   # keep files in sub-folders (public/media/<folder>/...); LeadCMS has no root scope
 LEADCMS_EMAIL_TEMPLATES_DIR=.leadcms/email-templates
 LEADCMS_ENABLE_DRAFTS=true
 
@@ -466,7 +466,7 @@ Push your local content changes to LeadCMS. This command will:
 - Detect new content, updates, conflicts, and remotely-deleted items using `updatedAt` timestamps
 - Prompt for confirmation before making changes
 - Support for creating missing content types automatically
-- Update local files with remote metadata (id, createdAt, updatedAt) after sync
+- Record the remote's `id`, `createdAt` and `updatedAt` in `.leadcms/remotes/<name>/metadata.json` after sync. These server-managed fields are never written into content files, so a push does not dirty files in git and one working tree can serve several remotes
 
 **Options:**
 
@@ -493,14 +493,13 @@ title: "Article Title" # required: Content title
 slug: "article-slug" # required: URL slug (unique per locale)
 language: "en" # required: Content language
 publishedAt: "2024-10-29T10:00:00Z" # optional: Publication date (omit to create a draft or schedule a future publish)
-# updatedAt: "2024-10-29T10:00:00Z"   # optional: maintained by the server; do not set for new content
 ---
 ```
 
 Notes:
 
 - `publishedAt` is optional. Omitting it is a valid way to create draft or scheduled content depending on your LeadCMS workflow.
-- `updatedAt` is typically set and maintained by the LeadCMS server after content is created or updated. The SDK will use `updatedAt` when present for conflict detection, but you should not rely on it being set for brand-new local files.
+- `id`, `createdAt` and `updatedAt` are maintained by the LeadCMS server and kept per remote in `.leadcms/remotes/<name>/metadata.json`, not in the file. Conflict detection compares the remote's current `updatedAt` with the value recorded there. Files written by older SDK versions may still carry these fields; they are ignored for comparison and dropped the next time the file is rewritten.
 
 ### Live preview: picking up content edits
 

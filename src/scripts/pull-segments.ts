@@ -135,9 +135,15 @@ function getSegmentFilePath(segment: SegmentDetailsDto): string {
   return path.join(SEGMENTS_DIR, `${slug}.json`);
 }
 
-/** Strip runtime-only fields from a segment DTO for local persistence. */
+/**
+ * Strip runtime-only and server-managed fields from a segment DTO for local
+ * persistence. id/createdAt/updatedAt live in the remote metadata map.
+ */
 function toLocalSegment(segment: SegmentDetailsDto): SegmentDetailsDto {
   const {
+    id: _id,
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
     contactCount: _contactCount,
     createdById: _createdById,
     updatedById: _updatedById,
@@ -208,8 +214,11 @@ export async function pullLeadCMSSegments(
 
     // Capture old entry BEFORE updating metadata so we can detect renames
     // using the correct remote's IDs (not the default remote's file IDs).
+    // Files no longer carry the server id, so this remote's metadata is the
+    // reliable source for every remote; the frontmatter index below is only a
+    // fallback for files written by older SDK versions.
     const oldEntry =
-      remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap && idStr
+      remoteCtx && rcModule && metadataMap && idStr
         ? rcModule.findSegmentByRemoteId(metadataMap, idStr)
         : undefined;
 
@@ -223,24 +232,23 @@ export async function pullLeadCMSSegments(
       });
     }
 
-    // Remove old file if ID is already mapped to a different path
-    if (remoteCtx && !remoteCtx.isDefault) {
-      // Non-default remote: use metadata-based lookup to avoid
-      // matching against the default remote's IDs in local files.
-      if (oldEntry) {
-        const oldSlug = slugify(oldEntry.name) || `segment-${idStr}`;
-        const oldPath = path.join(SEGMENTS_DIR, `${oldSlug}.json`);
-        const newPath = getSegmentFilePath(segment);
-        if (oldPath !== newPath) {
-          console.log(`   🗑️  ${path.basename(oldPath)} → ${path.basename(newPath)} (renamed)`);
-          try {
-            await fs.unlink(oldPath);
-          } catch {
-            /* ignore */
-          }
+    // Remove the old file when the segment was renamed. The metadata entry is
+    // the reliable source for every remote; the id index only finds files
+    // written by older SDK versions that still carry the server id.
+    if (oldEntry) {
+      const oldSlug = slugify(oldEntry.name) || `segment-${idStr}`;
+      const oldPath = path.join(SEGMENTS_DIR, `${oldSlug}.json`);
+      const newPath = getSegmentFilePath(segment);
+      if (oldPath !== newPath) {
+        console.log(`   🗑️  ${path.basename(oldPath)} → ${path.basename(newPath)} (renamed)`);
+        try {
+          await fs.unlink(oldPath);
+        } catch {
+          /* ignore */
         }
       }
-    } else if (idStr && idIndex.has(idStr)) {
+    }
+    if ((!remoteCtx || remoteCtx.isDefault) && idStr && idIndex.has(idStr)) {
       const oldPath = idIndex.get(idStr)!;
       const newPath = getSegmentFilePath(segment);
       if (oldPath !== newPath) {
@@ -256,8 +264,7 @@ export async function pullLeadCMSSegments(
     const { filePath, content } = saveSegmentFile(segment);
     await fs.mkdir(path.dirname(filePath), { recursive: true });
 
-    const existed =
-      remoteCtx && !remoteCtx.isDefault ? !!oldEntry : idStr ? idIndex.has(idStr) : false;
+    const existed = !!oldEntry || (idStr ? idIndex.has(idStr) : false);
     await fs.writeFile(filePath, content, "utf8");
 
     if (existed) {
@@ -269,10 +276,10 @@ export async function pullLeadCMSSegments(
 
   // Handle deletions
   for (const id of deleted) {
-    if (remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap) {
-      // Non-default remote: resolve ID → name via metadata.
-      const entry = rcModule.findSegmentByRemoteId(metadataMap, id);
-      if (entry) {
+    const entry =
+      remoteCtx && rcModule && metadataMap ? rcModule.findSegmentByRemoteId(metadataMap, id) : undefined;
+    if (entry && metadataMap) {
+      {
         const slug = slugify(entry.name) || `segment-${id}`;
         const filePath = path.join(SEGMENTS_DIR, `${slug}.json`);
         console.log(`   🗑️  ${path.basename(filePath)} (deleted on remote)`);

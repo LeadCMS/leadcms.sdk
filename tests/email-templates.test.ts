@@ -406,8 +406,8 @@ emailGroupId: 12
       expect(result.merged).toContain("subject: Welcome aboard");
       // Remote body change preserved
       expect(result.merged).toContain("We are glad to have you");
-      // Server-controlled updatedAt takes remote value
-      expect(result.merged).toContain("2026-02-01");
+      // Server-managed timestamps are never written to the file
+      expect(result.merged).not.toContain("updatedAt");
     });
 
     it("detects conflict when both sides change the same field", () => {
@@ -455,8 +455,8 @@ emailGroupId: 12
       // updatedAt differs on both sides but should be auto-resolved as server-controlled
       expect(result.success).toBe(true);
       expect(result.hasConflicts).toBe(false);
-      // Remote updatedAt wins
-      expect(result.merged).toContain("2026-02-15");
+      // Server-managed timestamps are never written to the file
+      expect(result.merged).not.toContain("updatedAt");
       // Local subject change preserved
       expect(result.merged).toContain("subject: Updated locally");
     });
@@ -484,8 +484,8 @@ emailGroupId: 12
       const local1 = transformEmailTemplateRemoteToLocalFormat(remote1);
       const local2 = transformEmailTemplateRemoteToLocalFormat(remote2);
 
-      // Without stripping, timestamps differ
-      expect(hasContentDifferences(local1, local2)).toBe(true);
+      // Server-managed timestamps are ignored by comparison itself now
+      expect(hasContentDifferences(local1, local2)).toBe(false);
 
       // After stripping timestamp metadata, no differences
       expect(

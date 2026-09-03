@@ -215,23 +215,6 @@ export async function pullLeadCMSSequences(
     metadataMap = await rcModule.readMetadataMap(remoteCtx);
   }
 
-  // Load defaultRemote's maps so local files always reflect the default
-  // remote's ids and timestamps, even when pulling from another remote.
-  let defaultMetadataMap: MetadataMap | undefined;
-  if (remoteCtx && !remoteCtx.isDefault && rcModule) {
-    const cfg = getConfig();
-    if (cfg.defaultRemote) {
-      const defaultStateDir = path.join(path.dirname(remoteCtx.stateDir), cfg.defaultRemote);
-      const defaultCtx: import("../lib/remote-context.js").RemoteContext = {
-        name: cfg.defaultRemote,
-        url: cfg.remotes?.[cfg.defaultRemote]?.url || "",
-        isDefault: true,
-        stateDir: defaultStateDir,
-      };
-      defaultMetadataMap = await rcModule.readMetadataMap(defaultCtx);
-    }
-  }
-
   const idIndex =
     items.length > 0 || deleted.length > 0
       ? await buildSequenceIdIndex(SEQUENCES_DIR)
@@ -265,7 +248,7 @@ export async function pullLeadCMSSequences(
     // Capture old entry BEFORE updating metadata so we can detect renames
     // using the correct remote's IDs (not the default remote's file IDs).
     const oldEntry =
-      remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap && idStr
+      remoteCtx && rcModule && metadataMap && idStr
         ? rcModule.findSequenceByRemoteId(metadataMap, idStr)
         : undefined;
 
@@ -280,28 +263,27 @@ export async function pullLeadCMSSequences(
       });
     }
 
-    // Remove old file if ID maps to a different path (e.g. rename)
-    if (remoteCtx && !remoteCtx.isDefault) {
-      // Non-default remote: use metadata-based lookup to avoid
-      // matching against the default remote's IDs in local files.
-      if (oldEntry) {
-        const oldSlug = slugify(oldEntry.name) || `sequence-${idStr}`;
-        const cfg = getConfig();
-        const oldLang = oldEntry.language || cfg.defaultLanguage;
-        const oldDir =
-          oldLang === cfg.defaultLanguage ? SEQUENCES_DIR : path.join(SEQUENCES_DIR, oldLang);
-        const oldPath = path.join(oldDir, `${oldSlug}.json`);
-        const newPath = getSequenceFilePath(sequence);
-        if (oldPath !== newPath) {
-          console.log(`   🗑️  ${path.basename(oldPath)} → ${path.basename(newPath)} (renamed)`);
-          try {
-            await fs.unlink(oldPath);
-          } catch {
-            /* ignore */
-          }
+    // Remove the old file when the sequence was renamed. The metadata entry is
+    // the reliable source for every remote; the id index only finds files
+    // written by older SDK versions that still carry the server id.
+    if (oldEntry) {
+      const oldSlug = slugify(oldEntry.name) || `sequence-${idStr}`;
+      const cfg = getConfig();
+      const oldLang = oldEntry.language || cfg.defaultLanguage;
+      const oldDir =
+        oldLang === cfg.defaultLanguage ? SEQUENCES_DIR : path.join(SEQUENCES_DIR, oldLang);
+      const oldPath = path.join(oldDir, `${oldSlug}.json`);
+      const newPath = getSequenceFilePath(sequence);
+      if (oldPath !== newPath) {
+        console.log(`   🗑️  ${path.basename(oldPath)} → ${path.basename(newPath)} (renamed)`);
+        try {
+          await fs.unlink(oldPath);
+        } catch {
+          /* ignore */
         }
       }
-    } else if (idStr && idIndex.has(idStr)) {
+    }
+    if ((!remoteCtx || remoteCtx.isDefault) && idStr && idIndex.has(idStr)) {
       const oldPath = idIndex.get(idStr)!;
       const newPath = getSequenceFilePath(sequence);
       if (oldPath !== newPath) {
@@ -317,22 +299,9 @@ export async function pullLeadCMSSequences(
     // Transform to local shape
     const localDto = toLocalSequence(sequence, segmentMap, templateMap);
 
-    // For non-default remotes, replace server-generated fields with the
-    // defaultRemote's values so local files always reflect prod ids/dates.
-    // The current remote's values are already stored in its per-remote maps.
-    let localToSave = localDto;
-    if (remoteCtx && !remoteCtx.isDefault) {
-      const { id: _id, createdAt: _ca, updatedAt: _ua, ...rest } = localDto;
-      const lang = sequence.language || "en";
-      const name = sequence.name;
-      const defaultMeta = defaultMetadataMap?.sequences?.[lang]?.[name];
-      localToSave = orderLocalSequenceFields({
-        ...(defaultMeta?.id != null ? { id: Number(defaultMeta.id) } : {}),
-        ...(defaultMeta?.createdAt ? { createdAt: defaultMeta.createdAt } : {}),
-        ...(defaultMeta?.updatedAt ? { updatedAt: defaultMeta.updatedAt } : {}),
-        ...rest,
-      } as LocalSequenceDto);
-    }
+    // Server-managed ids/timestamps are kept in this remote's metadata map
+    // (written above), never in the file, so the same file serves every remote.
+    const localToSave = orderLocalSequenceFields(localDto);
 
     const filePath = getSequenceFilePath(sequence);
     const content = JSON.stringify(localToSave, null, 2) + "\n";
@@ -346,7 +315,7 @@ export async function pullLeadCMSSequences(
     logger.verbose(`[PULL]   → ${filePath}`);
 
     const existed =
-      remoteCtx && !remoteCtx.isDefault ? !!oldEntry : idStr ? idIndex.has(idStr) : false;
+      !!oldEntry || (idStr ? idIndex.has(idStr) : false);
     await fs.writeFile(filePath, content, "utf8");
 
     if (existed) {
@@ -358,10 +327,10 @@ export async function pullLeadCMSSequences(
 
   // Handle deletions
   for (const id of deleted) {
-    if (remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap) {
-      // Non-default remote: resolve ID → name via metadata.
-      const entry = rcModule.findSequenceByRemoteId(metadataMap, id);
-      if (entry) {
+    const entry =
+      remoteCtx && rcModule && metadataMap ? rcModule.findSequenceByRemoteId(metadataMap, id) : undefined;
+    if (entry && metadataMap) {
+      {
         const slug = slugify(entry.name) || `sequence-${id}`;
         const cfg = getConfig();
         const lang = entry.language || cfg.defaultLanguage;

@@ -417,9 +417,9 @@ describe("Content Type Auto-Detection", () => {
       expect(normalizeFormat(" mdx ")).toBe("MDX");
     });
 
-    it("should use fallback for invalid input", () => {
-      expect(normalizeFormat("yaml")).toBe("MDX");
-      expect(normalizeFormat("yaml", "JSON")).toBe("JSON");
+    it("should reject invalid input instead of guessing", () => {
+      expect(normalizeFormat("yaml")).toBeNull();
+      expect(normalizeFormat("yaml", "JSON")).toBeNull();
     });
   });
 });

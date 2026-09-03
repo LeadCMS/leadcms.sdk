@@ -24,7 +24,19 @@ export interface EmailTemplateLocalData {
 }
 
 const HTML_FRONTMATTER_REGEX = /^\s*<!--\s*---\n([\s\S]*?)\n---\s*-->\s*/;
-const SYSTEM_FIELDS = new Set(["bodyTemplate", "isLocal", "emailGroup", "emailGroupId"]);
+// id/createdAt/updatedAt are server-managed: each remote records them in its own
+// metadata map, and push resolves the remote id from there (falling back to the
+// file only for templates written by older SDK versions). Keeping them in the
+// file would pin one remote's values and dirty the file on every push.
+const SYSTEM_FIELDS = new Set([
+  "bodyTemplate",
+  "isLocal",
+  "emailGroup",
+  "emailGroupId",
+  "id",
+  "createdAt",
+  "updatedAt",
+]);
 
 /**
  * Extract YAML frontmatter from an HTML comment block at the start of the file.

@@ -171,6 +171,18 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
 
   const tmpRoot = path.dirname(contentDir);
 
+  // Remote context for pull/push calls. The CLI always resolves one (a
+  // synthesised "default" in single-remote mode), and server-managed
+  // ids/timestamps are recorded in its metadata map rather than in files, so
+  // tests that exercise renames and deletions need it too. Kept under tmpRoot
+  // so cleanup() isolates it per test.
+  const remoteContext = {
+    name: "default",
+    url: "https://test.leadcms.com",
+    isDefault: true,
+    stateDir: path.join(tmpRoot, "remotes", "default"),
+  };
+
   // ── Internal state (mutated by helper methods, read by axios mock) ──
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const state = {
@@ -365,6 +377,7 @@ export function createSyncTestHarness(options: SyncTestHarnessOptions) {
   const legacyMediaSyncTokenPath = path.join(path.dirname(contentDir), "media-sync-token.txt");
 
   return {
+    remoteContext,
     /** Config object — pass to jest.mock factory: `getConfig: () => harness.config` */
     config,
 

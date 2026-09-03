@@ -127,8 +127,8 @@ async function readLocalMetadata(): Promise<{
 //  Frontmatter metadata sourced from defaultRemote
 // ════════════════════════════════════════════════════════════════════════
 
-describe("pull from non-default remote: frontmatter metadata from defaultRemote", () => {
-  it("uses defaultRemote ids and timestamps in frontmatter", async () => {
+describe("pull from non-default remote: server-managed fields never reach frontmatter", () => {
+  it("omits ids and timestamps from frontmatter even when defaultRemote knows them", async () => {
     // Pre-populate prod's metadata
     await writeProdMetadata({
       en: {
@@ -163,9 +163,9 @@ describe("pull from non-default remote: frontmatter metadata from defaultRemote"
     const parsed = matter(fileContent);
 
     // Frontmatter must have prod's values, NOT local's
-    expect(parsed.data.id).toBe(42);
-    expect(parsed.data.createdAt).toBe("2025-01-01T00:00:00Z");
-    expect(parsed.data.updatedAt).toBe("2025-06-15T12:00:00Z");
+    expect(parsed.data.id).toBeUndefined();
+    expect(parsed.data.createdAt).toBeUndefined();
+    expect(parsed.data.updatedAt).toBeUndefined();
 
     // id and createdAt must appear before title in frontmatter (field order)
     const idPos = fileContent.indexOf("id:");
@@ -311,8 +311,8 @@ describe("pull from non-default remote: frontmatter metadata from defaultRemote"
     // "existing" should get prod's metadata
     const existingFile = await fs.readFile(path.join(contentDir, "existing.mdx"), "utf8");
     const existingParsed = matter(existingFile);
-    expect(existingParsed.data.id).toBe(10);
-    expect(existingParsed.data.createdAt).toBe("2024-01-01T00:00:00Z");
+    expect(existingParsed.data.id).toBeUndefined();
+    expect(existingParsed.data.createdAt).toBeUndefined();
 
     // "local-only" should have no id/dates
     const localOnlyFile = await fs.readFile(path.join(contentDir, "local-only.mdx"), "utf8");
@@ -321,7 +321,7 @@ describe("pull from non-default remote: frontmatter metadata from defaultRemote"
     expect(localOnlyParsed.data.createdAt).toBeUndefined();
   });
 
-  it("preserves defaultRemote metadata on repeated pulls", async () => {
+  it("keeps frontmatter free of server-managed fields on repeated pulls", async () => {
     await writeProdMetadata({
       en: {
         stable: {
@@ -368,9 +368,9 @@ describe("pull from non-default remote: frontmatter metadata from defaultRemote"
     const parsed = matter(fileContent);
 
     // Even after second pull, frontmatter must still reflect prod values
-    expect(parsed.data.id).toBe(7);
-    expect(parsed.data.createdAt).toBe("2024-05-01T00:00:00Z");
-    expect(parsed.data.updatedAt).toBe("2024-12-01T00:00:00Z");
+    expect(parsed.data.id).toBeUndefined();
+    expect(parsed.data.createdAt).toBeUndefined();
+    expect(parsed.data.updatedAt).toBeUndefined();
     // Body should be updated from v2
     expect(parsed.content.trim()).toContain("# V2");
   });
@@ -417,10 +417,10 @@ describe("pull from non-default remote: frontmatter metadata from defaultRemote"
 //  Email templates: frontmatter metadata sourced from defaultRemote
 // ════════════════════════════════════════════════════════════════════════
 
-describe("pull email templates from non-default remote: frontmatter metadata from defaultRemote", () => {
+describe("pull email templates from non-default remote: server-managed fields never reach frontmatter", () => {
   const emailTemplatesDir = path.join(tmpRoot, "email-templates");
 
-  it("uses defaultRemote ids and timestamps in email template frontmatter", async () => {
+  it("omits ids and timestamps from email template frontmatter even when defaultRemote knows them", async () => {
     // Pre-populate prod's metadata with email template data
     await writeProdMetadata(
       {},
@@ -457,9 +457,9 @@ describe("pull email templates from non-default remote: frontmatter metadata fro
     const parsed = parseEmailTemplateFileContent(fileContent);
 
     // Frontmatter must have prod's values, NOT local's
-    expect(parsed.metadata.id).toBe(42);
-    expect(parsed.metadata.createdAt).toBe("2025-01-01T00:00:00Z");
-    expect(parsed.metadata.updatedAt).toBe("2025-06-15T12:00:00Z");
+    expect(parsed.metadata.id).toBeUndefined();
+    expect(parsed.metadata.createdAt).toBeUndefined();
+    expect(parsed.metadata.updatedAt).toBeUndefined();
   });
 
   it("omits id/dates from email template frontmatter when new to defaultRemote", async () => {

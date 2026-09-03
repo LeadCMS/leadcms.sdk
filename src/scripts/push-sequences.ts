@@ -592,5 +592,18 @@ export async function pushSequences(options: PushOptions = {}): Promise<void> {
 
     await leadCMSDataService.deleteSequence(remote.id!);
     console.log(`    🗑️  Deleted sequence: ${remote.name || remote.id}`);
+    if (remoteCtx && remote.name) {
+      try {
+        const rc = await import("../lib/remote-context.js");
+        const metaMap = await rc.readMetadataMap(remoteCtx);
+        const lang = remote.language || "en";
+        if (metaMap.sequences?.[lang]?.[remote.name]) {
+          delete metaMap.sequences[lang][remote.name];
+          await rc.writeMetadataMap(remoteCtx, metaMap);
+        }
+      } catch (_metaError: unknown) {
+        console.warn(`Failed to prune metadata for deleted sequence ${remote.name}: ${(_metaError as Error).message}`);
+      }
+    }
   }
 }

@@ -432,14 +432,13 @@ describe("LeadCMS SDK Core Functionality", () => {
     const {
       transformRemoteToLocalFormat,
       transformRemoteForComparison,
+      hasContentDifferences,
     } = require("../src/lib/content-transformation");
 
-    it("should preserve createdAt and publishedAt in content transformation", async () => {
+    it("should keep publishedAt but omit server-managed fields in content transformation", async () => {
       // Create a local file that matches real-world structure
       const localFilePath = path.join(tempDir, "test-content.mdx");
       const localContent = `---
-id: 51
-createdAt: '2025-09-10T09:32:54.223364Z'
 title: Test Content
 description: A test article
 slug: test-content
@@ -481,14 +480,15 @@ This is test content.`,
       // Should be identical after transformation
       expect(localFileContent.trim()).toBe(transformedRemote.trim());
 
-      // Verify that timestamp fields are preserved
-      expect(transformedRemote).toContain("createdAt");
+      // publishedAt is user content and stays; id/createdAt are server-managed and
+      // live in the remote metadata map instead
       expect(transformedRemote).toContain("publishedAt");
-      expect(transformedRemote).toContain("2025-09-10T09:32:54.223364Z");
       expect(transformedRemote).toContain("2025-09-09T18:30:00Z");
+      expect(transformedRemote).not.toContain("createdAt");
+      expect(transformedRemote).not.toMatch(/^id:/m);
     });
 
-    it("should detect legitimate updatedAt differences as changes", async () => {
+    it("should not treat an updatedAt-only difference as a change", async () => {
       // Local file without updatedAt
       const localFilePath = path.join(tempDir, "updated-content.mdx");
       const localContent = `---
@@ -517,14 +517,14 @@ publishedAt: '2025-09-09T18:30:00Z'
       const transformedRemote = await transformRemoteToLocalFormat(remoteContent, typeMap);
       const localFileContent = await fs.readFile(localFilePath, "utf-8");
 
-      // Should detect difference due to updatedAt
-      const hasChanges = localFileContent.trim() !== transformedRemote.trim();
-      expect(hasChanges).toBe(true);
-      expect(transformedRemote).toContain("updatedAt");
+      // updatedAt is server-managed: it is not written to the file, and the
+      // legacy id/createdAt lines in the local file are ignored by comparison
+      expect(transformedRemote).not.toContain("updatedAt");
       expect(localFileContent).not.toContain("updatedAt");
+      expect(hasContentDifferences(localFileContent, transformedRemote)).toBe(false);
     });
 
-    it("should exclude only truly internal fields from transformation", async () => {
+    it("should exclude internal and server-managed fields from transformation", async () => {
       const remoteContent = {
         id: 51,
         title: "Test",
@@ -540,9 +540,11 @@ publishedAt: '2025-09-09T18:30:00Z'
       const typeMap = { doc: "MDX" as const };
       const result = await transformRemoteToLocalFormat(remoteContent, typeMap);
 
-      // Should include user content fields and timestamps
-      expect(result).toContain("createdAt");
-      expect(result).toContain("updatedAt");
+      // Should include user content fields; server-managed timestamps are kept in
+      // the remote metadata map, not the file
+      expect(result).not.toContain("createdAt");
+      expect(result).not.toContain("updatedAt");
+      expect(result).not.toMatch(/^id:/m);
       expect(result).toContain("publishedAt");
       expect(result).toContain("customField");
       expect(result).toContain("title");
@@ -557,7 +559,6 @@ publishedAt: '2025-09-09T18:30:00Z'
       // Test with identical content except for whitespace normalization
       const localFilePath = path.join(tempDir, "whitespace-test.mdx");
       const localContent = `---
-id: 51
 title: Test
 ---
 

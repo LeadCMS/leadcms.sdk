@@ -69,13 +69,13 @@ describe("Pull: content type change (MDX → JSON)", () => {
     harness.addContentSync([v1], [], "token-1");
     harness.addContentSync([v2], [], "token-2");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(1);
     expect(afterFirst[0]).toContain("hero-section.mdx");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     // Expectation: only hero-section.json should exist
     const afterSecond = await listContentFiles(contentDir);
@@ -114,7 +114,7 @@ describe("Pull: content language change", () => {
     harness.addContentSync([v1], [], "token-1");
     harness.addContentSync([v2], [], "token-2");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(1);
@@ -122,7 +122,7 @@ describe("Pull: content language change", () => {
     // Should be in root (default language)
     expect(afterFirst[0]).not.toContain("/fr/");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     // Expectation: only one file, in the fr/ subdirectory
     const afterSecond = await listContentFiles(contentDir);
@@ -164,13 +164,13 @@ describe("Pull: slug + type + language change simultaneously", () => {
     harness.addContentSync([v1], [], "token-1");
     harness.addContentSync([v2], [], "token-2");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(1);
     expect(afterFirst[0]).toContain("old-nav.mdx");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     // Expectation: only one file: de/new-navigation.json
     const afterSecond = await listContentFiles(contentDir);
@@ -201,13 +201,13 @@ describe("Pull: remote content deletion", () => {
     // Second pull: no items, but id=40 in deleted list
     harness.addContentSync([], [40], "token-2");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(1);
     expect(afterFirst[0]).toContain("temp-article.mdx");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     // Expectation: NO content files remain
     const afterSecond = await listContentFiles(contentDir);
@@ -228,13 +228,13 @@ describe("Pull: remote content deletion", () => {
     harness.addContentSync([v1], [], "token-1");
     harness.addContentSync([], [41], "token-2");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(1);
     expect(afterFirst[0]).toContain("footer-config.json");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const afterSecond = await listContentFiles(contentDir);
     expect(afterSecond).toHaveLength(0);
@@ -261,13 +261,13 @@ describe("Pull: non-default language content deletion", () => {
     harness.addContentSync([v1], [], "token-1");
     harness.addContentSync([], [50], "token-2");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(1);
     expect(afterFirst[0]).toContain("/es/");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const afterSecond = await listContentFiles(contentDir);
     expect(afterSecond).toHaveLength(0);
@@ -301,8 +301,8 @@ describe("Pull: content update (same slug)", () => {
     harness.addContentSync([v1], [], "token-1");
     harness.addContentSync([v2], [], "token-2");
 
-    await pullLeadCMSContent();
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const files = await listContentFiles(contentDir);
     expect(files).toHaveLength(1);
@@ -347,7 +347,7 @@ describe("Pull: mixed operations in single sync", () => {
     // First pull: two articles
     harness.addContentSync([item1, item2], [], "token-1");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(2);
@@ -374,7 +374,7 @@ describe("Pull: mixed operations in single sync", () => {
 
     harness.addContentSync([item1Updated, item3], [71], "token-2");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const afterSecond = await listContentFiles(contentDir);
     // Should have page-one.mdx (updated) and page-three.mdx (new), NOT page-two.mdx
@@ -419,13 +419,13 @@ describe("Pull: nested slug rename", () => {
     harness.addContentSync([v1], [], "token-1");
     harness.addContentSync([v2], [], "token-2");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(1);
     expect(afterFirst[0]).toContain("my-first-post.mdx");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const afterSecond = await listContentFiles(contentDir);
     expect(afterSecond).toHaveLength(1);
@@ -541,7 +541,7 @@ describe("Pull: same slug in multiple languages", () => {
 
     harness.addContentSync([enContent, frContent], [], "token-1");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const files = await listContentFiles(contentDir);
     expect(files).toHaveLength(2);
@@ -557,7 +557,7 @@ describe("Pull: same slug in multiple languages", () => {
     // Now delete only the French version
     harness.addContentSync([], [91], "token-2");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const afterDelete = await listContentFiles(contentDir);
     // Only English should remain
@@ -599,7 +599,7 @@ describe("Pull: slug collision after rename", () => {
 
     harness.addContentSync([itemA, itemB], [], "token-1");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const afterFirst = await listContentFiles(contentDir);
     expect(afterFirst).toHaveLength(2);
@@ -618,7 +618,7 @@ describe("Pull: slug collision after rename", () => {
 
     harness.addContentSync([itemARenamed, itemBRenamed], [], "token-2");
 
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const afterSecond = await listContentFiles(contentDir);
     // Should have exactly 2 files with new names, no old ones

@@ -755,7 +755,7 @@ describe("updateLocalMetadata with multi-remote context", () => {
     expect(parsed.data.updatedAt).toBeUndefined();
   });
 
-  it("writes to metadata AND frontmatter for default remote", async () => {
+  it("writes to metadata but not frontmatter for default remote", async () => {
     const stateDir = path.join(tmpDir, "state");
     const ctx = makeRemoteCtx({ stateDir, isDefault: true, name: "production" });
 
@@ -794,14 +794,14 @@ describe("updateLocalMetadata with multi-remote context", () => {
     const metaMap = await readMetadataMap(ctx);
     expect(lookupRemoteId(metaMap, "en", "my-post")).toBe(42);
 
-    // Verify frontmatter WAS updated (default remote)
+    // Server-managed fields live only in the metadata map, never in the file
     const fileContent = await fs.readFile(filePath, "utf-8");
     const parsed = matter(fileContent);
-    expect(parsed.data.id).toBe(42);
-    expect(parsed.data.updatedAt).toBe("2024-06-15T12:00:00Z");
+    expect(parsed.data.id).toBeUndefined();
+    expect(parsed.data.updatedAt).toBeUndefined();
   });
 
-  it("writes to frontmatter in single-remote mode (no remoteCtx)", async () => {
+  it("keeps server-managed fields out of frontmatter in single-remote mode (no remoteCtx)", async () => {
     const filePath = path.join(tmpDir, "my-post.mdx");
     const originalContent = matter.stringify("# Test", {
       title: "My Post",
@@ -834,11 +834,11 @@ describe("updateLocalMetadata with multi-remote context", () => {
     // No remoteCtx — single-remote backward compat
     await updateLocalMetadata(localContent, remoteResponse);
 
-    // Verify frontmatter was updated
+    // Server-managed fields are never written to the file
     const fileContent = await fs.readFile(filePath, "utf-8");
     const parsed = matter(fileContent);
-    expect(parsed.data.id).toBe(42);
-    expect(parsed.data.updatedAt).toBe("2024-06-15T12:00:00Z");
+    expect(parsed.data.id).toBeUndefined();
+    expect(parsed.data.updatedAt).toBeUndefined();
   });
 
   it("writes JSON frontmatter for non-default remote correctly", async () => {

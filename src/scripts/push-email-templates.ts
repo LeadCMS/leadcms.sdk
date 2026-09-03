@@ -1155,6 +1155,24 @@ export async function pushEmailTemplates(options: PushOptions = {}): Promise<voi
 
       await leadCMSDataService.deleteEmailTemplate(Number(remote.id));
       console.log(`    🗑️  Deleted email template: ${remote.name || remote.id}`);
+      // Drop the deleted template from this remote's metadata map (see the
+      // matching note in push-leadcms-content.ts).
+      if (remoteCtx && remote.name) {
+        try {
+          const rc = await import("../lib/remote-context.js");
+          const metaMap = await rc.readMetadataMap(remoteCtx);
+          const lang = remote.language || defaultLanguage;
+          const templates = metaMap.emailTemplates;
+          if (templates?.[lang]?.[remote.name]) {
+            delete templates[lang][remote.name];
+            if (Object.keys(templates[lang]).length === 0) delete templates[lang];
+            await rc.writeMetadataMap(remoteCtx, metaMap);
+          }
+        } catch (_metaError: unknown) {
+          const metaError = _metaError as Error;
+          console.warn(`Failed to prune metadata for deleted template ${remote.name}: ${metaError.message}`);
+        }
+      }
     }
   }
 }

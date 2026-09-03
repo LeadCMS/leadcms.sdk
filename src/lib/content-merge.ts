@@ -515,14 +515,18 @@ function mergeObjects(
     const inLocal = key in local;
     const inRemote = key in remote;
 
-    // Server-controlled fields: always take remote value
+    // Server-controlled fields: always take remote value.
     if (SERVER_CONTROLLED_FIELDS.has(key)) {
       if (inRemote) {
         merged[key] = remote[key];
-      } else if (inLocal) {
+      } else if (inLocal && key === "publishedAt") {
+        // publishedAt is still part of the file; keep a local value the remote
+        // simply did not send.
         merged[key] = local[key];
       }
-      // If only in base, it was deleted from both → omit
+      // updatedAt/createdAt are never written to local files any more (they
+      // live in the remote metadata map), so a value that survives only in an
+      // older local file is dropped rather than carried forward.
       continue;
     }
 

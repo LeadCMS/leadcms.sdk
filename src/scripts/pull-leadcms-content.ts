@@ -681,11 +681,14 @@ async function main(options: PullContentOptions = {}): Promise<void> {
     if (content && typeof content === "object") {
       const idStr = content.id != null ? String(content.id) : undefined;
 
-      // For non-default remotes, look up the old slug *before* updating
-      // metadata so we can clean up old files on slug/type/language changes.
-      // setRemoteId deduplicates (removes the old entry), so we must read first.
+      // Look up the old slug *before* updating metadata so we can clean up old
+      // files on slug/type/language changes. This is the only reliable source
+      // for every remote: local files no longer carry the server id, so the
+      // frontmatter index below is just a fallback for files written by older
+      // SDK versions. setRemoteId deduplicates (removes the old entry), so we
+      // must read first.
       let oldContentEntry: { language: string; slug: string } | undefined;
-      if (remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap && content.id != null) {
+      if (remoteCtx && rcModule && metadataMap && content.id != null) {
         oldContentEntry = rcModule.findContentByRemoteId(metadataMap, content.id);
       }
 
@@ -778,6 +781,27 @@ async function main(options: PullContentOptions = {}): Promise<void> {
             getConfig().defaultLanguage
           );
         } else if (!remoteCtx || remoteCtx.isDefault) {
+          // Default remote: same metadata-driven cleanup as above. Deleting by
+          // slug/language is unconditional so a type change (MDX <-> JSON)
+          // under the same slug also removes the old file.
+          if (oldContentEntry) {
+            const oldSlugChanged = oldContentEntry.slug !== content.slug;
+            const oldLangChanged =
+              oldContentEntry.language !== (content.language || defaultLanguage);
+            if (oldSlugChanged || oldLangChanged) {
+              console.log(
+                `   🗑️  Removing old content file: ${oldContentEntry.language}/${oldContentEntry.slug} (renamed to ${content.language || defaultLanguage}/${content.slug})`
+              );
+            }
+            await deleteContentFilesBySlug(
+              CONTENT_DIR,
+              oldContentEntry.slug,
+              oldContentEntry.language,
+              getConfig().defaultLanguage
+            );
+          }
+          // Legacy fallback: files written by older SDK versions still carry
+          // the server id in frontmatter, so they can be found without metadata.
           const oldPaths = contentIdIndex.get(idStr);
           if (oldPaths && oldPaths.length > 0 && !oldPaths.some((p) => p === expectedPath)) {
             console.log(
@@ -867,10 +891,10 @@ async function main(options: PullContentOptions = {}): Promise<void> {
     console.log(`🗑️  Applying content deletions (${deleted.length} remote event(s))...`);
   }
   for (const id of deleted) {
-    if (remoteCtx && !remoteCtx.isDefault && rcModule && metadataMap) {
-      // Non-default remote: resolve the slug via this remote's metadata so
-      // we never accidentally delete a file whose frontmatter ID happens to
-      // match a different remote's ID.
+    if (remoteCtx && rcModule && metadataMap) {
+      // Resolve the slug via this remote's metadata: local files no longer
+      // carry the server id, and for non-default remotes a frontmatter id
+      // would belong to a different remote anyway.
       const entry = rcModule.findContentByRemoteId(metadataMap, id);
       if (entry) {
         let deletedCount = await deleteContentFilesByIdentity(
@@ -900,9 +924,18 @@ async function main(options: PullContentOptions = {}): Promise<void> {
           }
         }
       }
-      // If not found in metadata, skip — this ID was never synced to this remote locally
-      else {
+      // Not in metadata: for the default remote, fall back to the legacy
+      // frontmatter-id index (files written by older SDK versions). For other
+      // remotes the id was never synced here, so there is nothing to delete.
+      else if (!remoteCtx.isDefault) {
         deletionEventsUnknownToMetadata++;
+      } else {
+        const deletedCount = await deleteContentFilesById(contentIdIndex, String(id));
+        if (deletedCount > 0) {
+          deletedLocalFiles += deletedCount;
+        } else {
+          deletionEventsUnknownToMetadata++;
+        }
       }
     } else {
       const paths = contentIdIndex.get(String(id));

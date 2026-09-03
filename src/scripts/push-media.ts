@@ -84,7 +84,7 @@ export interface MediaDependencies {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateMedia?: (formData: any) => Promise<MediaItem>;
   /** Function to delete media - defaults to leadCMSDataService.deleteMedia */
-  deleteMedia?: (pathToFile: string) => Promise<void>;
+  deleteMedia?: (pathToFile: string, id?: number) => Promise<void>;
   /** Logger for info messages - defaults to console info */
   logInfo?: (message: string) => void;
   /** Logger for warnings - defaults to console warn */
@@ -128,7 +128,7 @@ function getDefaultDependencies(): Required<MediaDependencies> {
     uploadMedia: (formData: any) => leadCMSDataService.uploadMedia(formData),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     updateMedia: (formData: any) => leadCMSDataService.updateMedia(formData),
-    deleteMedia: (pathToFile: string) => leadCMSDataService.deleteMedia(pathToFile),
+    deleteMedia: (pathToFile: string, id?: number) => leadCMSDataService.deleteMedia(pathToFile, id),
     logInfo: info,
     logWarn: warn,
     logError: error,
@@ -213,6 +213,21 @@ export function getFileCategory(extension: string): "image" | "video" | "documen
 /**
  * Validate file size against limits
  */
+/**
+ * Checks a local file can be uploaded at all. The server requires every file
+ * to sit in a scope folder, so a file placed directly in the media directory
+ * is rejected here with a pointer to the fix rather than as a bare 422.
+ */
+export function validateLocalMedia(file: LocalMediaFile): { valid: boolean; message?: string } {
+  if (!file.scopeUid) {
+    return {
+      valid: false,
+      message: `is directly inside the media directory; move it into a sub-folder (e.g. other/${file.name}) — LeadCMS stores media by folder`,
+    };
+  }
+  return validateFileSize(file);
+}
+
 export function validateFileSize(file: LocalMediaFile): { valid: boolean; message?: string } {
   const category = getFileCategory(file.extension);
   const maxSize = MAX_FILE_SIZES[category];
@@ -294,7 +309,10 @@ export function scanLocalMedia(mediaDir: string, _config: LeadCMSConfig): LocalM
 
         // Parse scopeUid from path structure
         // Format: mediaDir/scopeUid/filename or mediaDir/scope/uid/filename
-        const scopeUid = path.dirname(relPath).replace(/\\/g, "/");
+        // A file directly under mediaDir has no scope; path.dirname gives "." there,
+        // which the server would store literally.
+        const dir = path.dirname(relPath).replace(/\\/g, "/");
+        const scopeUid = dir === "." ? "" : dir;
 
         const localFile: LocalMediaFile = {
           filePath: relPath.replace(/\\/g, "/"),
@@ -600,7 +618,7 @@ export async function executeMediaPush(
   for (const op of creates) {
     completedOps++;
     try {
-      const validation = validateFileSize(op.local!);
+      const validation = validateLocalMedia(op.local!);
       if (!validation.valid) {
         logErr(
           `[${completedOps}/${totalOps}] ✗ ${op.local!.scopeUid}/${op.local!.name}: ${validation.message}`
@@ -651,7 +669,7 @@ export async function executeMediaPush(
   for (const op of updates) {
     completedOps++;
     try {
-      const validation = validateFileSize(op.local!);
+      const validation = validateLocalMedia(op.local!);
       if (!validation.valid) {
         logErr(
           `[${completedOps}/${totalOps}] ✗ ${op.local!.scopeUid}/${op.local!.name}: ${validation.message}`
@@ -704,7 +722,7 @@ export async function executeMediaPush(
     completedOps++;
     try {
       const pathToFile = `${op.remote!.scopeUid}/${op.remote!.name}`;
-      await deleteMedia(pathToFile);
+      await deleteMedia(pathToFile, op.remote!.id);
       if (!quiet) logOk(`[${completedOps}/${totalOps}] ✓ Deleted ${pathToFile}`);
       result.executed.successful++;
     } catch (_err: unknown) {

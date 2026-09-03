@@ -12,22 +12,24 @@ Sync tokens are stored at a single path (`.leadcms/content/.sync-token`). When p
 
 ### 2. Timestamps Are Remote-Specific
 
-`createdAt` and `updatedAt` are server-generated values stored in YAML frontmatter / JSON content files. `publishedAt` is user-defined (not server-generated), but is still treated as server-controlled during merge — if the server has a different value than the client, the server's value is taken without generating a merge conflict.
+`createdAt` and `updatedAt` are server-generated values. They used to be stored in YAML frontmatter / JSON content files; they are now recorded per remote in `metadata.json` and never written to content files (see §2a). `publishedAt` is user-defined (not server-generated), but is still treated as server-controlled during merge — if the server has a different value than the client, the server's value is taken without generating a merge conflict.
 
 These timestamps currently serve two purposes:
 
-- **Conflict detection on push**: `updatedAt` from the local file is compared against the remote's current `updatedAt` to detect conflicts (`remoteUpdated > localUpdated`)
+- **Conflict detection on push**: the `updatedAt` recorded in the remote's `metadata.json` is compared against the remote's current `updatedAt` to detect conflicts (`remoteUpdated > localUpdated`)
 - **Merge auto-resolution**: These fields are marked as `SERVER_CONTROLLED_FIELDS` in `content-merge.ts` and always take the remote value during three-way merge
 
 When working with multiple remotes, these timestamps belong to whichever remote was last synced. If you pull from production (sets `updatedAt` to production's value), then push to develop — the conflict detection compares production's timestamp against develop's, producing false conflicts or missing real ones.
 
-### 2a. Timestamps Cause Git History Clutter
+### 2a. Timestamps Cause Git History Clutter (resolved)
 
-Even in a single-remote setup, `createdAt` and `updatedAt` changes in frontmatter generate noisy git diffs. Every pull or push that touches server-controlled timestamps modifies the content file, resulting in commits where the only meaningful diff is a timestamp change. With multiple remotes, this problem multiplies — switching between remotes would rewrite timestamps in every file, creating large, meaningless diffs that obscure real content changes in git history.
+Even in a single-remote setup, `createdAt` and `updatedAt` in frontmatter generated noisy git diffs: every pull or push that touched them modified the content file, so commits appeared whose only diff was a timestamp. With multiple remotes the problem multiplied — switching remotes rewrote timestamps in every file.
+
+This is resolved by keeping `id`, `createdAt` and `updatedAt` out of content, email template, sequence and segment files altogether. Each remote records them in its own `metadata.json`; pull and push write-back strip them; comparison ignores them on both sides (so files written by older SDK versions still compare cleanly); and rename/deletion cleanup resolves the previous slug from the metadata map, falling back to a frontmatter `id` only for those older files.
 
 ### 3. IDs Are Instance-Specific
 
-Content IDs are backend-generated integers stored in frontmatter (`id: 42`). The same content on production may have `id: 42` while on develop it has `id: 7`. The current codebase stores a single `id` per content item, meaning:
+Content IDs are backend-generated integers. They were stored in frontmatter (`id: 42`) and are now kept per remote in `metadata.json`. The same content on production may have `id: 42` while on develop it has `id: 7`; storing a single `id` in the file meant:
 
 - Pushing content pulled from production to develop uses production's ID for the `PUT` call
 - Creating content on develop, then pushing to production creates a new item (correct), but the returned production ID overwrites develop's ID in frontmatter
@@ -44,7 +46,7 @@ Analysis of ID usage per entity type:
 | **Email Templates** | `id` (integer)  | `name + language`        | **Yes, for now**          | Natural key exists (`name + language`) but API requires `{id}` in URL path.                                                                                                         |
 | **Settings**        | `name` (string) | `name`                   | **No**                    | Already uses `/api/settings/{name}` — no numeric IDs.                                                                                                                               |
 
-**Conclusion**: IDs cannot be fully eliminated without API changes (adding slug-based endpoints for content and email templates, changing deletion sync to return slugs instead of IDs). However, IDs can be **moved out of frontmatter** and into the per-remote `metadata.json`, which both solves the multi-remote problem and reduces git noise. The `metadata.json` approach effectively replaces the current `buildContentIdIndex()` filesystem scan — instead of parsing every file to extract IDs, we look them up from the remote metadata store.
+**Conclusion**: IDs cannot be fully eliminated without API changes (adding slug-based endpoints for content and email templates, changing deletion sync to return slugs instead of IDs). They have therefore been **moved out of frontmatter** into the per-remote `metadata.json`, which solves the multi-remote problem and removes the git noise. The metadata map replaces the `buildContentIdIndex()` filesystem scan as the primary lookup; the scan remains only as a fallback for files written by older SDK versions that still carry an `id`.
 
 **Future API improvement**: Adding `PUT /api/content?slug={slug}&language={lang}` and changing `deleted` to return `Array<{slug, language}>` would eliminate the need for client-side content IDs entirely. This would be a non-breaking addition to the API.
 

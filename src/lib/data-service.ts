@@ -2254,7 +2254,7 @@ class LeadCMSDataService {
   /**
    * Delete media file from LeadCMS
    */
-  async deleteMedia(pathToFile: string): Promise<void> {
+  async deleteMedia(pathToFile: string, id?: number): Promise<void> {
     this._initialize();
 
     if (this.useMock && this.mockData) {
@@ -2284,9 +2284,19 @@ class LeadCMSDataService {
         throw new Error("LeadCMS URL is not configured.");
       }
 
-      await axios.delete(`${this.baseURL}/api/media/${pathToFile}`, {
-        headers: this.getApiHeaders(),
-      });
+      // DELETE /api/media/{pathToFile} cannot address every file: a root-level
+      // file is stored under scope "." and the path route 404s for it in every
+      // encoding. The bulk endpoint deletes by id, which is unambiguous.
+      if (id !== undefined) {
+        await axios.delete(`${this.baseURL}/api/media/bulk`, {
+          headers: this.getApiHeaders(),
+          data: [id],
+        });
+      } else {
+        await axios.delete(`${this.baseURL}/api/media/${pathToFile}`, {
+          headers: this.getApiHeaders(),
+        });
+      }
 
       logger.verbose("[API] Media deleted successfully");
     } catch (_error: unknown) {

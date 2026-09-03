@@ -21,6 +21,14 @@ import { createTestConfig, createDataServiceMock } from "./test-helpers";
 // ── Temp directories ───────────────────────────────────────────────────
 const tmpRoot = path.join(os.tmpdir(), "leadcms-seq-lang-dirs");
 const sequencesDir = path.join(tmpRoot, "sequences");
+// The CLI always resolves a remote context (a synthesised "default" in single-remote
+// mode); server-managed ids live in its metadata map, so deletions need it.
+const seqRemoteContext = {
+  name: "default",
+  url: "https://test.leadcms.com",
+  isDefault: true,
+  stateDir: path.join(tmpRoot, "remotes", "default"),
+};
 
 // ── Mocks ──────────────────────────────────────────────────────────────
 jest.mock("../src/lib/config.js", () => ({
@@ -200,7 +208,7 @@ describe("pull-sequences language directory routing", () => {
     });
 
     const { pullLeadCMSSequences } = await import("../src/scripts/pull-sequences");
-    await pullLeadCMSSequences({ reset: true });
+    await pullLeadCMSSequences({ reset: true, remoteContext: seqRemoteContext });
 
     let files = await listJsonFiles(sequencesDir);
     expect(files).toContain(path.join("ru-RU", "welcome-flow.json"));
@@ -212,7 +220,7 @@ describe("pull-sequences language directory routing", () => {
       token: "tok-4b",
     });
 
-    await pullLeadCMSSequences();
+    await pullLeadCMSSequences({ remoteContext: seqRemoteContext });
 
     files = await listJsonFiles(sequencesDir);
     expect(files.find((f) => f.includes("welcome-flow.json"))).toBeUndefined();

@@ -64,8 +64,8 @@ describe("segment local file format", () => {
     expect(local).not.toHaveProperty("createdById");
     expect(local).not.toHaveProperty("contactIds");
 
-    // Should have core fields at root level
-    expect(local.id).toBe(1);
+    // Core fields at root level; id is server-managed and lives in the remote metadata map
+    expect(local.id).toBeUndefined();
     expect(local.name).toBe("Corporate Domains");
     expect(local.type).toBe("Dynamic");
 
@@ -136,8 +136,8 @@ describe("segment local file format", () => {
     expect(parsed).not.toHaveProperty("_entityType");
     expect(parsed).not.toHaveProperty("data");
 
-    // Core fields at root
-    expect(parsed.id).toBe(1);
+    // Core fields at root; server-managed id is not written to the file
+    expect(parsed.id).toBeUndefined();
     expect(parsed.name).toBe("Corporate Domains");
     expect(parsed.type).toBe("Dynamic");
 

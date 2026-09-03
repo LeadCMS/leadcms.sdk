@@ -201,6 +201,7 @@ Usage:
   leadcms push-content [options] - Push only content to LeadCMS
     --force              - Override remote changes (skip conflict check)
     --dry-run            - Show API calls without executing them (preview mode)
+    --yes, -y            - Skip the confirmation prompt and create missing content types from auto-detected defaults (non-interactive)
     --delete             - Delete remote content/media not present locally
     --id <content-id>    - Target specific content by ID
     --slug <slug>        - Target specific content by slug

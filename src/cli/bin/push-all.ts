@@ -63,6 +63,10 @@ const remoteContext = parseRemoteFlag(args);
 const force = args.includes("--force") || args.includes("-f");
 const dryRun = args.includes("--dry-run") || args.includes("-d");
 const allowDelete = args.includes("--delete");
+// Non-interactive use: answer the confirmation and content-type prompts with
+// their defaults instead of waiting on stdin. Deliberately does not imply
+// --delete or --force.
+const assumeYes = args.includes("--yes") || args.includes("-y");
 
 // Parse content-specific flags
 let targetId: string | undefined;
@@ -999,9 +1003,12 @@ async function pushAll() {
       return;
     }
 
-    const confirmed = await promptConfirm(
-      `Proceed with pushing ${totalPushChanges} change(s) to LeadCMS? (y/N): `
-    );
+    if (assumeYes) {
+      console.log(`--yes given: pushing ${totalPushChanges} change(s) without confirmation.`);
+    }
+    const confirmed =
+      assumeYes ||
+      (await promptConfirm(`Proceed with pushing ${totalPushChanges} change(s) to LeadCMS? (y/N): `));
     if (!confirmed) {
       console.log("🚫 Push cancelled.");
       return;
@@ -1025,6 +1032,7 @@ async function pushAll() {
         targetSlug,
         dryRun,
         allowDelete,
+        assumeYes,
         syncAfterPush: false,
         remoteContext,
         quiet: true,

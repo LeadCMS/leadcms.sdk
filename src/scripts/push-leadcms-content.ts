@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { getConfig } from "../lib/config.js";
 import fs from "fs/promises";
 import path from "path";
 import readline from "readline";
@@ -64,6 +65,12 @@ export interface PushOptions {
   showDelete?: boolean; // Show deletion operations in status output
   /** Suppress status display and confirmation prompt (used by push-all orchestrator). */
   quiet?: boolean;
+  /**
+   * Non-interactive mode: answer the "create missing content types" prompt with
+   * yes and create them from their auto-detected defaults without asking the
+   * per-type questions. Never implies --force or --delete.
+   */
+  assumeYes?: boolean;
   /** Optionally run a broad content/media pull after successful push. Response refresh is always used for touched records. */
   syncAfterPush?: boolean;
   /** Remote context for multi-remote support. When provided, API calls target this remote. */
@@ -817,9 +824,9 @@ async function validateContentTypes(
   localTypes: Set<string>,
   remoteTypeMap: Record<string, string>,
   localContent: LocalContentItem[],
-  options: { dryRun?: boolean; statusOnly?: boolean } = {}
+  options: { dryRun?: boolean; statusOnly?: boolean; assumeYes?: boolean } = {}
 ): Promise<void> {
-  const { dryRun = false, statusOnly = false } = options;
+  const { dryRun = false, statusOnly = false, assumeYes = false } = options;
   const missingTypes: string[] = [];
 
   for (const type of localTypes) {
@@ -877,13 +884,18 @@ async function validateContentTypes(
       process.exit(1);
     }
 
-    const createChoice = await question(
-      "\nWould you like me to create these content types automatically? (y/n) [y]: "
-    );
+    const createChoice = assumeYes
+      ? "y"
+      : await question(
+          "\nWould you like me to create these content types automatically? (y/n) [y]: "
+        );
 
     if (createChoice.trim() === "" || isYes(createChoice)) {
+      if (assumeYes) {
+        colorConsole.info("\n--yes given: creating missing content types from auto-detected defaults.");
+      }
       for (const type of missingTypes) {
-        await createContentTypeInteractive(type, localContent, dryRun);
+        await createContentTypeInteractive(type, localContent, dryRun, assumeYes);
       }
     } else {
       colorConsole.info(
@@ -903,14 +915,43 @@ function isYes(input: string): boolean {
 }
 
 /**
- * Normalize format input to 'MDX' or 'JSON' (case-insensitive)
+ * Map a content type format reported by the API onto the two local file
+ * formats. Pull uses the same rule; keeping push/status identical is what
+ * stops a type such as "MD" from being treated as JSON on one side and MDX on
+ * the other.
  */
-function normalizeFormat(input: string, fallback: "MDX" | "JSON" = "MDX"): "MDX" | "JSON" {
+export function toLocalFormat(apiFormat: string | undefined | null): "MDX" | "JSON" {
+  return apiFormat === "JSON" ? "JSON" : "MDX";
+}
+
+/**
+ * Normalize a format answer to 'MDX' or 'JSON' (case-insensitive). An empty
+ * answer takes the default; anything else that is not one of the two is
+ * rejected (null) so the caller can re-ask instead of guessing. A piped
+ * `yes` used to land here as "y" and the type was created with the wrong
+ * format.
+ */
+function normalizeFormat(input: string, fallback: "MDX" | "JSON" = "MDX"): "MDX" | "JSON" | null {
   const trimmed = input.trim().toUpperCase();
   if (trimmed === "JSON") return "JSON";
   if (trimmed === "MDX") return "MDX";
   if (trimmed === "") return fallback;
-  return fallback;
+  return null;
+}
+
+async function askFormat(typeName: string, formatDefault: "MDX" | "JSON"): Promise<"MDX" | "JSON"> {
+  const prompt = `What format should '${colorConsole.highlight(typeName)}' use? (MDX/JSON) [${formatDefault}]: `;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const answer = await question(prompt);
+    const format = normalizeFormat(answer, formatDefault);
+    if (format) return format;
+    colorConsole.warn(
+      `   Unrecognized format "${answer.trim()}". Answer MDX or JSON, or press Enter for ${formatDefault}.`
+    );
+  }
+  throw new Error(
+    `Could not read a valid format for content type '${typeName}'. Re-run interactively, or create the type first.`
+  );
 }
 
 /**
@@ -919,7 +960,8 @@ function normalizeFormat(input: string, fallback: "MDX" | "JSON" = "MDX"): "MDX"
 async function createContentTypeInteractive(
   typeName: string,
   localContent: LocalContentItem[],
-  dryRun: boolean = false
+  dryRun: boolean = false,
+  useDefaults: boolean = false
 ): Promise<void> {
   const defaults = analyzeContentTypeFromFiles(localContent, typeName);
 
@@ -933,27 +975,38 @@ async function createContentTypeInteractive(
   const commentsDefaultLabel = defaults.supportsComments ? "y" : "n";
   const seoDefaultLabel = defaults.supportsSEO ? "y" : "n";
 
-  const formatInput = await question(
-    `What format should '${colorConsole.highlight(typeName)}' use? (MDX/JSON) [${formatDefault}]: `
-  );
-  const format = normalizeFormat(formatInput, formatDefault);
+  let format: "MDX" | "JSON";
+  let supportsCoverImage: boolean;
+  let supportsComments: boolean;
+  let supportsSEO: boolean;
 
-  const coverInput = await question(
-    `Should '${colorConsole.highlight(typeName)}' support cover images? (y/n) [${coverDefaultLabel}]: `
-  );
-  const supportsCoverImage =
-    coverInput.trim() === "" ? defaults.supportsCoverImage : isYes(coverInput);
+  if (useDefaults) {
+    // Non-interactive (--yes): the auto-detected defaults are what an operator
+    // pressing Enter at every prompt would get. Never read stdin here — a piped
+    // "y" answering "MDX/JSON?" is how types ended up with the wrong format.
+    colorConsole.info("   Using auto-detected defaults (--yes)");
+    format = formatDefault;
+    supportsCoverImage = defaults.supportsCoverImage;
+    supportsComments = defaults.supportsComments;
+    supportsSEO = defaults.supportsSEO;
+  } else {
+    format = await askFormat(typeName, formatDefault);
 
-  const commentsInput = await question(
-    `Should '${colorConsole.highlight(typeName)}' support comments? (y/n) [${commentsDefaultLabel}]: `
-  );
-  const supportsComments =
-    commentsInput.trim() === "" ? defaults.supportsComments : isYes(commentsInput);
+    const coverInput = await question(
+      `Should '${colorConsole.highlight(typeName)}' support cover images? (y/n) [${coverDefaultLabel}]: `
+    );
+    supportsCoverImage = coverInput.trim() === "" ? defaults.supportsCoverImage : isYes(coverInput);
 
-  const seoInput = await question(
-    `Should '${colorConsole.highlight(typeName)}' support SEO metadata? (y/n) [${seoDefaultLabel}]: `
-  );
-  const supportsSEO = seoInput.trim() === "" ? defaults.supportsSEO : isYes(seoInput);
+    const commentsInput = await question(
+      `Should '${colorConsole.highlight(typeName)}' support comments? (y/n) [${commentsDefaultLabel}]: `
+    );
+    supportsComments = commentsInput.trim() === "" ? defaults.supportsComments : isYes(commentsInput);
+
+    const seoInput = await question(
+      `Should '${colorConsole.highlight(typeName)}' support SEO metadata? (y/n) [${seoDefaultLabel}]: `
+    );
+    supportsSEO = seoInput.trim() === "" ? defaults.supportsSEO : isYes(seoInput);
+  }
 
   const contentTypeData = {
     uid: typeName,
@@ -1526,6 +1579,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     statusFilter,
     showDetailedPreview = false,
     dryRun = false,
+    assumeYes = false,
     allowDelete = false,
     showDelete = false,
     quiet = false,
@@ -1580,7 +1634,7 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     const remoteTypeMap: Record<string, string> = {};
     if (Array.isArray(remoteTypes)) {
       remoteTypes.forEach((type) => {
-        remoteTypeMap[type.uid] = type.format;
+        remoteTypeMap[type.uid] = toLocalFormat(type.format);
       });
     } else {
       logger.verbose(
@@ -1628,7 +1682,11 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
       // Get local content types and validate them
       const localTypes = getLocalContentTypes(localContent);
       logger.verbose(`[LOCAL] Found content types: ${Array.from(localTypes).join(", ")}`);
-      await validateContentTypes(localTypes, remoteTypeMap, localContent, { dryRun, statusOnly });
+      await validateContentTypes(localTypes, remoteTypeMap, localContent, {
+        dryRun,
+        statusOnly,
+        assumeYes,
+      });
     }
 
     // Fetch remote content for comparison
@@ -1967,6 +2025,24 @@ async function executeIndividualOperations(
           colorConsole.success(
             `    ✅ Deleted: ${colorConsole.highlight(`${op.remote.type}/${op.remote.slug}`)}`
           );
+          // The remote row is gone, so its id must leave the metadata map too;
+          // otherwise a later file with the same slug is matched to a dead id
+          // and pushed as an update that 404s.
+          if (remoteCtx && op.remote.slug) {
+            try {
+              const rc = await import("../lib/remote-context.js");
+              const metaMap = await rc.readMetadataMap(remoteCtx);
+              const lang = op.remote.language || getConfig().defaultLanguage;
+              if (metaMap.content[lang]?.[op.remote.slug]) {
+                delete metaMap.content[lang][op.remote.slug];
+                if (Object.keys(metaMap.content[lang]).length === 0) delete metaMap.content[lang];
+                await rc.writeMetadataMap(remoteCtx, metaMap);
+              }
+            } catch (_metaError: unknown) {
+              const metaError = _metaError as Error;
+              console.warn(`Failed to prune metadata for deleted ${op.remote.slug}: ${metaError.message}`);
+            }
+          }
         } else {
           failed++;
           colorConsole.error(
@@ -2146,7 +2222,7 @@ export async function getContentStatusData(
   const remoteTypeMap: Record<string, string> = {};
   if (Array.isArray(remoteTypes)) {
     remoteTypes.forEach((type) => {
-      remoteTypeMap[type.uid] = type.format;
+      remoteTypeMap[type.uid] = toLocalFormat(type.format);
     });
   } else {
     logger.verbose(

@@ -121,8 +121,9 @@ describe("three-way merge - real world JSON scenario", () => {
     expect(merged.cookieBanner.policyLinkHref).toBe("/legal/privacy1"); // remote change applied
     expect(merged.author).toBe("Peter Liapin"); // remote change applied
 
-    // updatedAt should take the remote value (always accept remote timestamps)
-    expect(merged.updatedAt).toBe("2026-02-18T06:13:00.565218Z");
+    // updatedAt is server-managed and no longer written to files: the remote
+    // rendering omits it, and a stale copy in the local file is not carried forward
+    expect(merged.updatedAt).toBeUndefined();
   });
 
   it("should not produce false updatedAt conflict from timestamp precision mismatch", async () => {
@@ -150,7 +151,7 @@ describe("three-way merge - real world JSON scenario", () => {
 
     const merged = JSON.parse(result.merged);
     expect(merged.author).toBe("Peter Liapin");
-    expect(merged.updatedAt).toBe("2026-02-18T06:13:00.565218Z");
+    expect(merged.updatedAt).toBeUndefined();
     expect(merged.cookieBanner.policyLinkHref).toBe("/legal/privacy1");
   });
 });

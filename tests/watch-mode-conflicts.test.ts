@@ -72,7 +72,7 @@ describe("Watch mode: forceOverwrite prevents merge conflicts", () => {
   it("should overwrite local files when forceOverwrite is true, even with locally modified content", async () => {
     // Pull 1: initial content (V1) — establishes the local file
     harness.addContentSync([v1], [], "token-1");
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const files = await listContentFiles(contentDir);
     expect(files).toHaveLength(1);
@@ -91,7 +91,7 @@ describe("Watch mode: forceOverwrite prevents merge conflicts", () => {
     // Pull 2: V2 arrives with base=V1 and forceOverwrite=true
     // Even though local file was modified, forceOverwrite should skip merge
     harness.addContentSync([v2], [], "token-2", { "100": v1 });
-    await pullLeadCMSContent({ forceOverwrite: true });
+    await pullLeadCMSContent({ forceOverwrite: true, remoteContext: harness.remoteContext });
 
     const updatedContent = await fsPromises.readFile(
       path.join(contentDir, "watch-test.mdx"),
@@ -110,7 +110,7 @@ describe("Watch mode: forceOverwrite prevents merge conflicts", () => {
   it("should NOT merge even when local differs from base (forceOverwrite=true)", async () => {
     // Pull 1: initial content (V1)
     harness.addContentSync([v1], [], "token-1");
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     // Modify local file significantly
     const localFile = path.join(contentDir, "watch-test.mdx");
@@ -124,7 +124,7 @@ describe("Watch mode: forceOverwrite prevents merge conflicts", () => {
     // Pull 2: V2 arrives with base=V1 — in normal mode this would merge/conflict
     // With forceOverwrite, it should simply overwrite
     harness.addContentSync([v2], [], "token-2", { "100": v1 });
-    await pullLeadCMSContent({ forceOverwrite: true });
+    await pullLeadCMSContent({ forceOverwrite: true, remoteContext: harness.remoteContext });
 
     const result = await fsPromises.readFile(localFile, "utf8");
     expect(result).toContain("Updated Title");
@@ -138,7 +138,7 @@ describe("Watch mode: forceOverwrite prevents merge conflicts", () => {
   it("without forceOverwrite, locally modified content enters merge path", async () => {
     // Pull 1: initial content (V1)
     harness.addContentSync([v1], [], "token-1");
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     // Modify local file — change only the body (non-overlapping with V2 title change)
     const localFile = path.join(contentDir, "watch-test.mdx");
@@ -149,7 +149,7 @@ describe("Watch mode: forceOverwrite prevents merge conflicts", () => {
     // Pull 2: V2 arrives with base=V1 — should trigger three-way merge
     // V2 changes title+description+body, local only changed body → conflict on body
     harness.addContentSync([v2], [], "token-2", { "100": v1 });
-    await pullLeadCMSContent(); // no forceOverwrite
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext }); // no forceOverwrite
 
     const result = await fsPromises.readFile(localFile, "utf8");
     // The merge should have run — result should contain the updated title from remote
@@ -197,11 +197,11 @@ describe("Watch mode: race condition scenario", () => {
   it("race condition: second pull with stale base yields clean result with forceOverwrite", async () => {
     // Step 1: initial sync — creates local file with V1
     harness.addContentSync([v1], [], "token-1");
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     // Step 2: first "SSE-triggered" pull — overwrites V1 → V2
     harness.addContentSync([v2], [], "token-2", { "200": v1 });
-    await pullLeadCMSContent({ forceOverwrite: true });
+    await pullLeadCMSContent({ forceOverwrite: true, remoteContext: harness.remoteContext });
 
     const afterFirst = await fsPromises.readFile(path.join(contentDir, "race-test.mdx"), "utf8");
     expect(afterFirst).toContain("Version Two");
@@ -209,7 +209,7 @@ describe("Watch mode: race condition scenario", () => {
     // Step 3: second "SSE-triggered" pull (stale token → same base=V1, same remote=V2)
     // But the API might return slightly different timestamp precision
     harness.addContentSync([v2Alt], [], "token-2", { "200": v1 });
-    await pullLeadCMSContent({ forceOverwrite: true });
+    await pullLeadCMSContent({ forceOverwrite: true, remoteContext: harness.remoteContext });
 
     const afterSecond = await fsPromises.readFile(path.join(contentDir, "race-test.mdx"), "utf8");
     expect(afterSecond).toContain("Version Two");
@@ -221,16 +221,16 @@ describe("Watch mode: race condition scenario", () => {
   it("race condition WITHOUT forceOverwrite can produce conflicts from timestamp differences", async () => {
     // Step 1: initial sync
     harness.addContentSync([v1], [], "token-1");
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     // Step 2: first normal pull (simulating first SSE event)
     harness.addContentSync([v2], [], "token-2", { "200": v1 });
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     // Step 3: second normal pull with same base but different timestamp precision
     // Local file was already overwritten to V2 by step 2 → isLocallyModified detects difference
     harness.addContentSync([v2Alt], [], "token-2", { "200": v1 });
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const result = await fsPromises.readFile(path.join(contentDir, "race-test.mdx"), "utf8");
     // The content should still be V2 (either merged or overwritten)
@@ -269,7 +269,7 @@ describe("Watch mode: forceOverwrite with JSON content", () => {
   it("should overwrite JSON content with forceOverwrite, skipping structural merge", async () => {
     // Pull 1: establish V1
     harness.addContentSync([jsonV1], [], "token-1");
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     const files = await listContentFiles(contentDir);
     expect(files.some((f) => f.endsWith(".json"))).toBe(true);
@@ -283,7 +283,7 @@ describe("Watch mode: forceOverwrite with JSON content", () => {
 
     // Pull 2: V2 arrives with base=V1 and forceOverwrite
     harness.addContentSync([jsonV2], [], "token-2", { "300": jsonV1 });
-    await pullLeadCMSContent({ forceOverwrite: true });
+    await pullLeadCMSContent({ forceOverwrite: true, remoteContext: harness.remoteContext });
 
     const result = await fsPromises.readFile(jsonFile, "utf8");
     const resultParsed = JSON.parse(result);
@@ -324,7 +324,7 @@ describe("Watch mode: default (no forceOverwrite) preserves merge behavior", () 
   it("should auto-merge cleanly when local and remote change different parts", async () => {
     // Pull 1: initial V1
     harness.addContentSync([v1], [], "token-1");
-    await pullLeadCMSContent();
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext });
 
     // Local modification: only change the body (V2 changes title+description, not body)
     const localFile = path.join(contentDir, "merge-preserved.mdx");
@@ -334,7 +334,7 @@ describe("Watch mode: default (no forceOverwrite) preserves merge behavior", () 
 
     // Pull 2: V2 changes title + description but keeps the same body
     harness.addContentSync([v2], [], "token-2", { "400": v1 });
-    await pullLeadCMSContent(); // no forceOverwrite — should merge
+    await pullLeadCMSContent({ remoteContext: harness.remoteContext }); // no forceOverwrite — should merge
 
     const result = await fsPromises.readFile(localFile, "utf8");
     // Should have remote title and local body (auto-merged)

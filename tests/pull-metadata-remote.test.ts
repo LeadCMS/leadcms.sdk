@@ -488,8 +488,8 @@ language: en
 // Bug regression: Pull from non-default remote after rename must not
 // strip id/createdAt/updatedAt from the saved file (Bug 1)
 // ════════════════════════════════════════════════════════════════════════
-describe("Pull from non-default remote: id/createdAt/updatedAt preserved after rename (Bug 1)", () => {
-  it("should keep id/createdAt/updatedAt in file when item was renamed on non-default remote but default map uses old slug", async () => {
+describe("Pull from non-default remote: server-managed fields stay out of the file after rename", () => {
+  it("should not write id/createdAt/updatedAt when item was renamed on non-default remote but default map uses old slug", async () => {
     const devCtx = makeDevCtx();
     const prodCtx = makeProdCtx();
 
@@ -567,13 +567,13 @@ language: en
 
     await pullLeadCMSContent({ remoteContext: devCtx });
 
-    // File should preserve id/createdAt/updatedAt from the default (prod) metadata.
-    // Primary slug lookup fails (prod has 'old-slug', not 'new-slug'), so the
-    // ID-based fallback kicks in: findContentByRemoteId(defaultMap, 200) → 'old-slug' entry.
+    // Server-managed fields are never written to the file, whichever remote
+    // they came from; each remote keeps its own in metadata.json.
     const saved = await fs.readFile(filePath, "utf-8");
     const parsed = matter(saved);
-    expect(parsed.data.id).toBe(200);
-    expect(parsed.data.createdAt).toBeTruthy();
-    expect(parsed.data.updatedAt).toBeTruthy();
+    expect(parsed.data.id).toBeUndefined();
+    expect(parsed.data.createdAt).toBeUndefined();
+    expect(parsed.data.updatedAt).toBeUndefined();
+    expect(parsed.data.title).toBe("Renamed Article");
   });
 });
