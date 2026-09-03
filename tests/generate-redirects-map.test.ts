@@ -577,6 +577,93 @@ describe("generateRedirectsMap", () => {
     expect(lines.some((l) => l.includes('"/page/" "/dest-b"'))).toBe(true);
   });
 
+  // ── Round-tripped paths (API trims slashes) ───────────────────────
+
+  it("restores the leading slash the API strips from fromPath/toPath", async () => {
+    // The API canonicalises paths with Trim('/'), so this is what a
+    // push/pull round-trip hands back for "/versions/6-6/" → "/help-center/".
+    await writeRedirectsYaml(tmpDir, [
+      { kind: "Permanent", fromPath: "versions/6-6", toPath: "help-center" },
+    ]);
+
+    await generateRedirectsMap({ outputDir: outputDir });
+
+    const content = await fs.readFile(path.join(outputDir, "301.map"), "utf8");
+    // Without the leading slash the key never matches nginx's $uri and the
+    // target concatenates onto the host ("https://example.comhelp-center").
+    expect(content).toContain('"/versions/6-6" "/help-center";');
+    expect(content).not.toMatch(/^"versions/m);
+  });
+
+  it("leaves external targets untouched when restoring leading slashes", async () => {
+    await writeRedirectsYaml(tmpDir, [
+      { kind: "Temporary", fromPath: "old", toUrl: "https://example.com/new" },
+    ]);
+
+    await generateRedirectsMap({ outputDir: outputDir });
+
+    const content = await fs.readFile(path.join(outputDir, "302.map"), "utf8");
+    expect(content).toContain('"/old" "https://example.com/new";');
+  });
+
+  it("preserves an authored trailing slash rather than inferring one", async () => {
+    await writeRedirectsYaml(tmpDir, [{ kind: "Permanent", fromPath: "a/", toPath: "b/" }]);
+
+    await generateRedirectsMap({ outputDir: outputDir });
+
+    const content = await fs.readFile(path.join(outputDir, "301.map"), "utf8");
+    expect(content).toContain('"/a/" "/b/";');
+  });
+
+  // ── Duplicate sources (nginx refuses to start) ────────────────────
+
+  it("drops a duplicate source and warns instead of emitting a map nginx rejects", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    await writeRedirectsYaml(tmpDir, [
+      { kind: "Permanent", fromPath: "/versions/", toPath: "/help-center/" },
+      { kind: "Permanent", fromPath: "/versions/", toPath: "/versions-6-26/" },
+    ]);
+
+    await generateRedirectsMap({ outputDir: outputDir });
+
+    const content = await fs.readFile(path.join(outputDir, "301.map"), "utf8");
+    const lines = content.split("\n").filter((l) => l.includes('"/versions/"'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('"/help-center/"');
+
+    const warnings = warn.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(warnings).toContain("Duplicate 301 source");
+    expect(warnings).toContain("/versions-6-26/");
+    warn.mockRestore();
+  });
+
+  it("keeps distinct sources that only collide after slash restoration apart", async () => {
+    await writeRedirectsYaml(tmpDir, [
+      { kind: "Permanent", fromPath: "one", toPath: "/a" },
+      { kind: "Permanent", fromPath: "two", toPath: "/b" },
+    ]);
+
+    await generateRedirectsMap({ outputDir: outputDir });
+
+    const content = await fs.readFile(path.join(outputDir, "301.map"), "utf8");
+    expect(content).toContain('"/one" "/a";');
+    expect(content).toContain('"/two" "/b";');
+  });
+
+  it("warns when the same source is both a 301 and a 302", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    await writeRedirectsYaml(tmpDir, [
+      { kind: "Permanent", fromPath: "/dual", toPath: "/a" },
+      { kind: "Temporary", fromPath: "/dual", toPath: "/b" },
+    ]);
+
+    await generateRedirectsMap({ outputDir: outputDir });
+
+    const warnings = warn.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(warnings).toContain("both a 301 and a 302 source");
+    warn.mockRestore();
+  });
+
   it('trailingSlash:"strict" (default) emits only the exact resolved path', async () => {
     await writeRedirectsYaml(tmpDir, [
       { kind: "Permanent", fromPath: "/exact/", toPath: "/dest/" },

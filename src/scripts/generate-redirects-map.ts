@@ -114,6 +114,30 @@ function applyPathPattern(
     .replace("{domain}", domain);
 }
 
+/**
+ * Rebuild a site-root URL path from an InternalPath value.
+ *
+ * The API canonicalises every path-ish field by trimming slashes — see
+ * RedirectDto: `value?.Trim().Trim('/')` — so a `fromPath` authored as
+ * "/versions/6-6/" comes back from a push/pull round-trip as "versions/6-6".
+ * Slug sources get their slashes back from `pathPattern`; paths have no such
+ * pattern and used to be emitted verbatim, which broke them both ways:
+ * a map key without a leading "/" can never match nginx's $uri, and a target
+ * without one concatenates straight onto the host ("https://example.comhelp-center").
+ *
+ * Only the leading slash is restored. A path's trailing slash is authored
+ * intent — under trailingSlash:"strict" "/page" and "/page/" are deliberately
+ * distinct sources — so it is passed through untouched, even though the round
+ * trip may already have dropped it.
+ */
+function toRootPath(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+  // Absolute and protocol-relative URLs are already complete targets.
+  if (/^([a-z][a-z0-9+.-]*:)?\/\//i.test(trimmed)) return trimmed;
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
+
 // Content lookup cache: id → { language, slug } | null
 const contentCache = new Map<number, { language: string; slug: string } | null>();
 
@@ -153,7 +177,7 @@ async function resolveFrom(
   const sourceType = detectSourceType(r);
 
   if (sourceType === "InternalPath") {
-    return r.fromPath ?? null;
+    return r.fromPath != null ? toRootPath(r.fromPath) : null;
   }
 
   if (sourceType === "ContentSlug") {
@@ -191,7 +215,7 @@ async function resolveTo(
   }
 
   if (targetType === "InternalPath") {
-    return r.toPath ?? null;
+    return r.toPath != null ? toRootPath(r.toPath) : null;
   }
 
   if (targetType === "ContentSlug") {
@@ -213,6 +237,53 @@ async function resolveTo(
   }
 
   return null;
+}
+
+// ── Collision handling ─────────────────────────────────────────────────
+
+/**
+ * Keep one entry per (kind, from). An nginx `map` block rejects a repeated key
+ * outright — `[emerg] conflicting parameter "/versions/"` — so a duplicate does
+ * not degrade the redirect, it stops the server from starting at all. Dropping
+ * the later entry keeps the generated map loadable and reports what was lost,
+ * which nginx itself never does until it refuses to boot.
+ */
+function dropDuplicateSources(redirects: ResolvedRedirect[]): ResolvedRedirect[] {
+  const winners = new Map<string, ResolvedRedirect>();
+  const kept: ResolvedRedirect[] = [];
+
+  for (const r of redirects) {
+    const key = `${r.kind}\u0000${r.from}`;
+    const existing = winners.get(key);
+    if (!existing) {
+      winners.set(key, r);
+      kept.push(r);
+      continue;
+    }
+    const code = r.kind === "Permanent" ? 301 : 302;
+    if (existing.to === r.to) {
+      logger.verbose(
+        `[generate-redirects-map] Dropped exact duplicate ${code} entry for "${r.from}"`
+      );
+    } else {
+      console.warn(
+        `   ⚠️  Duplicate ${code} source ${JSON.stringify(r.from)} — keeping ${JSON.stringify(existing.to)}, dropping ${JSON.stringify(r.to)}`
+      );
+      console.warn(`       nginx refuses to start on a repeated map key; resolve this in redirects.yaml.`);
+    }
+  }
+
+  // Separate map blocks, so this is legal nginx — but both match and the 301
+  // block is consulted first, leaving the 302 permanently dead.
+  for (const r of winners.values()) {
+    if (r.kind !== "Permanent") continue;
+    if (!winners.has(`Temporary\u0000${r.from}`)) continue;
+    console.warn(
+      `   ⚠️  ${JSON.stringify(r.from)} is both a 301 and a 302 source — the 301 wins and the 302 never fires.`
+    );
+  }
+
+  return kept;
 }
 
 // ── Plain map file generation ──────────────────────────────────────────
@@ -314,20 +385,22 @@ export async function generateRedirectsMap(
     resolved.push(...extra);
   }
 
-  const permanent = resolved.filter((r) => r.kind === "Permanent");
-  const temporary = resolved.filter((r) => r.kind === "Temporary");
+  const deduped = dropDuplicateSources(resolved);
+
+  const permanent = deduped.filter((r) => r.kind === "Permanent");
+  const temporary = deduped.filter((r) => r.kind === "Temporary");
 
   console.log(
-    `   ✅ Resolved ${resolved.length} redirect(s) (${permanent.length} permanent, ${temporary.length} temporary)`
+    `   ✅ Resolved ${deduped.length} redirect(s) (${permanent.length} permanent, ${temporary.length} temporary)`
   );
 
   if (dryRun) {
     console.log(`\n   🔍 Dry run — output directory would be: ${outputDir}`);
     if (permanent.length > 0) {
-      console.log(`\n--- ${file301} ---\n${buildMapFile(resolved, "Permanent")}`);
+      console.log(`\n--- ${file301} ---\n${buildMapFile(deduped, "Permanent")}`);
     }
     if (temporary.length > 0) {
-      console.log(`\n--- ${file302} ---\n${buildMapFile(resolved, "Temporary")}`);
+      console.log(`\n--- ${file302} ---\n${buildMapFile(deduped, "Temporary")}`);
     }
     return;
   }
@@ -337,7 +410,7 @@ export async function generateRedirectsMap(
   const written: string[] = [];
 
   if (permanent.length > 0) {
-    await fs.writeFile(file301, buildMapFile(resolved, "Permanent"), "utf8");
+    await fs.writeFile(file301, buildMapFile(deduped, "Permanent"), "utf8");
     written.push(`301.map (${permanent.length} entries)`);
   } else {
     try {
@@ -349,7 +422,7 @@ export async function generateRedirectsMap(
   }
 
   if (temporary.length > 0) {
-    await fs.writeFile(file302, buildMapFile(resolved, "Temporary"), "utf8");
+    await fs.writeFile(file302, buildMapFile(deduped, "Temporary"), "utf8");
     written.push(`302.map (${temporary.length} entries)`);
   } else {
     try {
