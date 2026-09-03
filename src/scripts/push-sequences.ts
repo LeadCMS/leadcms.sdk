@@ -274,8 +274,11 @@ export async function buildSequenceStatus(
     metadataMap = await rc.readMetadataMap(remoteCtx);
   }
 
+  const matchedRemoteIds = new Set<number>();
+
   for (const { filePath, sequence } of localFiles) {
     const match = getRemoteMatch(sequence, remoteSequences, metadataMap);
+    if (match?.id != null) matchedRemoteIds.add(match.id);
 
     if (!match) {
       const remoteIds = new Set(
@@ -318,17 +321,17 @@ export async function buildSequenceStatus(
     }
   }
 
-  const localKeys = new Set(localFiles.map((f) => `${f.sequence.language}:${f.sequence.name}`));
-
+  // Only remotes that no local file claimed are untracked. Matching goes through
+  // getRemoteMatch (name+language, then the metadata map, then the local id), so a
+  // name+language key alone would report a sequence tracked via metadata — one whose
+  // language drifted, say — as both "updated locally" and "added remotely".
   for (const remote of remoteSequences) {
-    const key = `${remote.language}:${remote.name}`;
-    if (!localKeys.has(key)) {
-      if (showDelete) {
-        operations.push({ type: "delete", remote });
-        continue;
-      }
-      operations.push({ type: "create", remote, reason: "New sequence on remote" });
+    if (remote.id != null && matchedRemoteIds.has(remote.id)) continue;
+    if (showDelete) {
+      operations.push({ type: "delete", remote });
+      continue;
     }
+    operations.push({ type: "create", remote, reason: "New sequence on remote" });
   }
 
   return {
@@ -504,8 +507,11 @@ export async function pushSequences(options: PushOptions = {}): Promise<void> {
   const { segmentMap: segNameIdMap, templateMap: tplNameIdMap } = await buildNameToIdMaps();
   const { segmentMap: segIdNameMap, templateMap: tplIdNameMap } = await buildIdToNameMaps();
 
+  const matchedRemoteIds = new Set<number>();
+
   for (const { filePath, sequence } of localFiles) {
     const match = getRemoteMatch(sequence, remoteSequences, metadataMap);
+    if (match?.id != null) matchedRemoteIds.add(match.id);
 
     let payload: SequenceCreateDto;
     try {
@@ -579,11 +585,11 @@ export async function pushSequences(options: PushOptions = {}): Promise<void> {
 
   if (!allowDelete) return;
 
-  const localKeys = new Set(localFiles.map((f) => `${f.sequence.language}:${f.sequence.name}`));
-
+  // Skip every remote a local file already claimed via getRemoteMatch. Keying on
+  // name+language alone would delete a sequence that was just pushed to, whenever
+  // the match came from the metadata map rather than an exact language match.
   for (const remote of remoteSequences) {
-    const key = `${remote.language}:${remote.name}`;
-    if (localKeys.has(key)) continue;
+    if (remote.id != null && matchedRemoteIds.has(remote.id)) continue;
 
     if (dryRun) {
       if (!quiet) console.log(`🟡 [DRY RUN] Delete sequence: ${remote.name || remote.id}`);
