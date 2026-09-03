@@ -692,3 +692,113 @@ describe("pullLeadCMSRedirects", () => {
     expect(enItems.map((r) => r.fromSlug)).toContain("new-article");
   });
 });
+
+// ── pull --delete: reconcile against the remote's full state ──────────
+
+describe("pullLeadCMSRedirects --delete", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "leadcms-redirects-del-"));
+    redirectsDir = tmpDir;
+    stateDirForTest = tmpDir;
+    metadataStore.clear();
+    mockAxiosGet.mockReset();
+    mockAxiosPost.mockReset();
+    mockAxiosPost.mockResolvedValue({ status: 200, data: {} });
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  /**
+   * Local YAML holds three redirects: one still on the remote, one the remote
+   * dropped without ever announcing it in `deleted`, and one never pushed.
+   */
+  async function seedDrift(): Promise<void> {
+    const existing = buildRedirectsFile([
+      { kind: "Permanent", fromPath: "/live", toPath: "/live-target" },
+      { kind: "Permanent", fromPath: "/gone", toPath: "/gone-target" },
+      { kind: "Permanent", fromPath: "/never-pushed", toPath: "/local-only" },
+    ]);
+    await fs.writeFile(path.join(tmpDir, "redirects.yaml"), yaml.dump(existing), "utf8");
+
+    // Both /live and /gone were pushed once; /never-pushed has no remote id.
+    metadataStore.set(tmpDir, {
+      content: {},
+      redirects: { "path:/live": 1, "path:/gone": 99 },
+    });
+
+    await fs.writeFile(path.join(tmpDir, ".sync-token"), "stale-token", "utf8");
+
+    // The remote's full current state: /live only. `deleted` stays empty —
+    // that is the whole point, the removal was never announced.
+    mockAxiosGet
+      .mockResolvedValueOnce({
+        status: 200,
+        data: {
+          items: [makeDto({ id: 1, fromPath: "/live", toPath: "/live-target", toUrl: null })],
+          deleted: [],
+        },
+        headers: { "x-next-sync-token": "fresh-token" },
+      })
+      .mockResolvedValueOnce({ status: 204, data: {}, headers: {} });
+  }
+
+  async function readLocalKeys(): Promise<(string | null | undefined)[]> {
+    const raw = await fs.readFile(path.join(tmpDir, "redirects.yaml"), "utf8");
+    return flattenRedirectsFile(yaml.load(raw) as LocalRedirectsFile).map((r) => r.fromPath);
+  }
+
+  it("removes a local redirect the remote no longer has", async () => {
+    await seedDrift();
+
+    const { pullLeadCMSRedirects } = await import("../src/scripts/pull-redirects");
+    await pullLeadCMSRedirects({ allowDelete: true });
+
+    expect(await readLocalKeys()).not.toContain("/gone");
+  });
+
+  it("keeps a local redirect that was never pushed to this remote", async () => {
+    await seedDrift();
+
+    const { pullLeadCMSRedirects } = await import("../src/scripts/pull-redirects");
+    await pullLeadCMSRedirects({ allowDelete: true });
+
+    const keys = await readLocalKeys();
+    expect(keys).toContain("/never-pushed");
+    expect(keys).toContain("/live");
+  });
+
+  it("drops the pruned entry from the id-map", async () => {
+    await seedDrift();
+
+    const { pullLeadCMSRedirects } = await import("../src/scripts/pull-redirects");
+    await pullLeadCMSRedirects({ allowDelete: true });
+
+    expect(metadataStore.get(tmpDir).redirects).not.toHaveProperty("path:/gone");
+    expect(metadataStore.get(tmpDir).redirects).toHaveProperty("path:/live");
+  });
+
+  it("syncs from scratch, ignoring the stored token", async () => {
+    await seedDrift();
+
+    const { pullLeadCMSRedirects } = await import("../src/scripts/pull-redirects");
+    await pullLeadCMSRedirects({ allowDelete: true });
+
+    // A token-less request is what makes `items` the remote's full state; using
+    // the stored token would return a delta and prune everything absent from it.
+    expect(String(mockAxiosGet.mock.calls[0][0])).toContain("syncToken=");
+    expect(String(mockAxiosGet.mock.calls[0][0])).not.toContain("stale-token");
+  });
+
+  it("leaves the stale redirect alone without --delete", async () => {
+    await seedDrift();
+
+    const { pullLeadCMSRedirects } = await import("../src/scripts/pull-redirects");
+    await pullLeadCMSRedirects({});
+
+    expect(await readLocalKeys()).toContain("/gone");
+  });
+});

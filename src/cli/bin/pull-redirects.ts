@@ -14,11 +14,12 @@ const args = process.argv.slice(2);
 initVerboseFromArgs(args);
 const remoteContext = parseRemoteFlag(args);
 const reset = args.includes("--reset");
+const allowDelete = args.includes("--delete");
 
 await resolveIdentity();
 
 const spinner = startSpinner("Pulling redirects from LeadCMS…");
-pullLeadCMSRedirects({ reset, remoteContext })
+pullLeadCMSRedirects({ reset, allowDelete, remoteContext })
   .then(() => {
     spinner.stop();
     process.exit(0);

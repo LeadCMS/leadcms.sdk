@@ -195,6 +195,7 @@ Usage:
     --reset              - Delete local settings directory, then pull fresh
   leadcms pull-redirects [options] - Pull redirects from LeadCMS (auto-discovers first)
     --reset              - Delete local redirects file and sync token, then pull fresh
+    --delete             - Remove local redirects this remote no longer has
 
   Push commands:
   leadcms push [options] - Push all local changes (content + media) to LeadCMS

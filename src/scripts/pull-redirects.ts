@@ -11,6 +11,13 @@
  *   1. POST /api/redirects/discover  — trigger server auto-discovery
  *   2. GET /api/redirects/sync?syncToken=...&filter[limit]=100  — SSE-style pagination
  *   3. Merge changes, persist updated sync token
+ *
+ * The incremental sync only removes redirects the server explicitly lists in
+ * `deleted`. A redirect that left the remote before this client's first sync —
+ * suppressed while the checkout was elsewhere, or deleted beyond the change-log
+ * window — is never announced and would otherwise stay in the local YAML for
+ * good, still feeding `generate-redirects-map`. `--delete` reconciles against
+ * the remote's full current state to clear those out.
  */
 
 import "dotenv/config";
@@ -58,6 +65,12 @@ interface RedirectSyncResult {
 export interface PullRedirectsOptions {
   /** When true, delete all local redirect data and sync token before pulling. */
   reset?: boolean;
+  /**
+   * When true, sync from scratch and drop local redirects that this remote once
+   * had but no longer does. Only entries with a recorded remote id are pruned,
+   * so local-only redirects that were never pushed are kept.
+   */
+  allowDelete?: boolean;
   /** Optional remote context for multi-remote sync token isolation. */
   remoteContext?: RemoteContext;
 }
@@ -335,12 +348,43 @@ function mergeRedirects(
   return Array.from(byKey.values());
 }
 
+/**
+ * Drop local redirects that this remote no longer has.
+ *
+ * `snapshotIds` are the ids from a full (token-less) sync, i.e. everything the
+ * remote currently holds. A local entry is pruned only when the id-map says it
+ * was once on this remote and that id is gone; an entry with no recorded id has
+ * never been pushed and is left alone.
+ */
+function pruneRemoteDeleted(
+  redirects: LocalRedirect[],
+  snapshotIds: Set<number>,
+  idMap: RedirectIdMap
+): { kept: LocalRedirect[]; pruned: LocalRedirect[] } {
+  const kept: LocalRedirect[] = [];
+  const pruned: LocalRedirect[] = [];
+
+  for (const r of redirects) {
+    const key = redirectSurrogateKey(r);
+    const knownId = idMap[key];
+    if (knownId !== undefined && !snapshotIds.has(knownId)) {
+      pruned.push(r);
+      delete idMap[key];
+      continue;
+    }
+    kept.push(r);
+  }
+
+  return { kept, pruned };
+}
+
 // ── Main export ────────────────────────────────────────────────────────
 
 export async function pullLeadCMSRedirects(
   optionsOrRemoteCtx?: PullRedirectsOptions | RemoteContext
 ): Promise<void> {
   let reset: boolean | undefined;
+  let allowDelete: boolean | undefined;
   let remoteCtx: RemoteContext | undefined;
 
   if (optionsOrRemoteCtx && "name" in optionsOrRemoteCtx && "url" in optionsOrRemoteCtx) {
@@ -348,6 +392,7 @@ export async function pullLeadCMSRedirects(
   } else if (optionsOrRemoteCtx) {
     const opts = optionsOrRemoteCtx as PullRedirectsOptions;
     reset = opts.reset;
+    allowDelete = opts.allowDelete;
     remoteCtx = opts.remoteContext;
   }
 
@@ -360,25 +405,41 @@ export async function pullLeadCMSRedirects(
   // Step 1: Trigger discovery (errors are non-fatal)
   await triggerDiscover();
 
-  // Step 2: Sync
-  const lastSyncToken = await readSyncToken(remoteCtx);
+  // Step 2: Sync. --delete reconciles against everything the remote holds, so it
+  // starts from no token; `items` is then the remote's full current state.
+  const lastSyncToken = allowDelete ? undefined : await readSyncToken(remoteCtx);
   const { items, deleted, nextSyncToken } = await pullRedirectsSync(lastSyncToken);
 
   // Step 3: Merge into local file
   const metadataCtx = remoteCtx ?? resolveRemote();
   const idMap = await readIdMap(metadataCtx);
   const flatWithLang = await readLocalRedirects();
-  const merged = mergeRedirects(flatWithLang, items, deleted, idMap);
+  let merged = mergeRedirects(flatWithLang, items, deleted, idMap);
+
+  let pruned: LocalRedirect[] = [];
+  if (allowDelete) {
+    const snapshotIds = new Set(items.map((i) => i.id));
+    ({ kept: merged, pruned } = pruneRemoteDeleted(merged, snapshotIds, idMap));
+    for (const r of pruned) {
+      logger.verbose(`[PULL] Removed locally: ${redirectSurrogateKey(r)} (gone from remote)`);
+    }
+  }
 
   // Only write if something changed
-  const changed = items.length > 0 || deleted.length > 0;
+  const changed = items.length > 0 || deleted.length > 0 || pruned.length > 0;
 
   if (changed) {
     await writeLocalRedirectsFile(merged);
     await writeIdMap(idMap, metadataCtx);
+    const removed = deleted.length + pruned.length;
     console.log(
-      `   ✅ Redirects synced: ${items.length} added/updated, ${deleted.length} removed. Total: ${merged.length}`
+      `   ✅ Redirects synced: ${items.length} added/updated, ${removed} removed. Total: ${merged.length}`
     );
+    if (pruned.length > 0) {
+      console.log(
+        `      ${pruned.length} local redirect(s) no longer on the remote were removed (--delete)`
+      );
+    }
   } else {
     // Still write id-map if it doesn't exist yet (first run against existing YAML)
     await writeIdMap(idMap, metadataCtx);
