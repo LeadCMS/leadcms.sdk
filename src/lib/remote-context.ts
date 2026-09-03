@@ -158,7 +158,11 @@ function resolveApiKeyFromEnv(remoteName: string): string | undefined {
 
 // ── Path helpers ──────────────────────────────────────────────────────
 
-/** Absolute path to a sync token file for a given remote + entity type. */
+/**
+ * Location of the pre-v2 per-type token file.
+ * @deprecated Sync tokens live in metadata.json (see `readSyncToken`); this
+ * path is only read for migration and the file is removed on the next write.
+ */
 export function syncTokenPath(
   ctx: RemoteContext,
   entityType:
@@ -426,7 +430,11 @@ export interface MetadataEntry {
   updatedAt?: string;
 }
 
-/** Structure of .leadcms/remotes/{name}/metadata.json */
+/**
+ * In-memory shape of a remote's metadata: bare item maps per section.
+ * On disk (metadata.json, format version 2) each section is wrapped as
+ * `{ syncToken?, items }` next to a top-level `version` — see serializeMetadata.
+ */
 export interface MetadataMap {
   content: Record<string, Record<string, MetadataEntry>>;
   emailTemplates?: Record<string, Record<string, MetadataEntry>>;
@@ -437,91 +445,220 @@ export interface MetadataMap {
   redirects?: Record<string, number>;
 }
 
-/** Read the metadata-map for a remote. Returns empty map if file doesn't exist. */
-export async function readMetadataMap(ctx: RemoteContext): Promise<MetadataMap> {
-  try {
-    const data = await fs.readFile(metadataMapPath(ctx), "utf-8");
-    const parsed = JSON.parse(data);
-    if (!parsed.content) parsed.content = {};
-    if (!parsed.emailTemplates) parsed.emailTemplates = {};
-    if (!parsed.comments) parsed.comments = {};
-    if (!parsed.segments) parsed.segments = {};
-    if (!parsed.sequences) parsed.sequences = {};
-    // Migrate old flat sequences format to nested (language → name)
-    migrateSequencesFormat(parsed);
-    deduplicateSectionOnRead(parsed.content);
-    deduplicateSectionOnRead(parsed.emailTemplates);
-    deduplicateSectionOnRead(parsed.comments);
-    deduplicateSectionOnRead(parsed.sequences!);
-    return parsed;
-  } catch {
-    return { content: {}, emailTemplates: {}, comments: {}, segments: {}, sequences: {} };
-  }
+// ── Sync tokens ────────────────────────────────────────────────────────
+//
+// metadata.json (format version 2) is the single checkpoint for a remote:
+// each entity block carries the sync token the server handed out together
+// with the items that token vouches for, so the two can never drift apart
+// (and neither can be committed without the other). Older SDKs kept the
+// token in a separate `<type>-sync-token` file next to a bare metadata.json;
+// both are read transparently and rewritten in the v2 shape on the next
+// write, which also removes the old token files.
+
+/** Entity types that carry a sync token, named as the pull scripts name them. */
+export type SyncEntityType =
+  | "content"
+  | "media"
+  | "comments"
+  | "email-templates"
+  | "segments"
+  | "sequences"
+  | "redirects";
+
+/** Sync token per entity type. */
+export type SyncTokens = Partial<Record<SyncEntityType, string>>;
+
+/** Format version written to metadata.json. */
+export const METADATA_FORMAT_VERSION = 2;
+
+type MetadataBlockKey = keyof MetadataMap | "media";
+
+/** Block name in metadata.json for each entity type. Media has no items, only a token. */
+const SYNC_BLOCKS: Record<SyncEntityType, MetadataBlockKey> = {
+  content: "content",
+  media: "media",
+  comments: "comments",
+  "email-templates": "emailTemplates",
+  segments: "segments",
+  sequences: "sequences",
+  redirects: "redirects",
+};
+
+interface MetadataFile {
+  map: MetadataMap;
+  tokens: SyncTokens;
+  /** Pre-v2 token files found on disk; removed once the v2 file is written. */
+  legacyTokenFiles: string[];
 }
 
 /**
- * Clear a single section of the metadata map on disk.
- * Reads the file, removes the section, and writes it back.
- * Used by reset functions to clear one entity type without
- * affecting other sections.
+ * Read a remote's metadata.json in either layout, plus any pre-v2 token files.
+ * A missing or unreadable file yields an empty map.
+ */
+async function readMetadataFile(ctx: RemoteContext): Promise<MetadataFile> {
+  const map: MetadataMap = { content: {}, emailTemplates: {}, comments: {}, segments: {}, sequences: {} };
+  const tokens: SyncTokens = {};
+
+  let parsed: Record<string, unknown> | undefined;
+  try {
+    parsed = JSON.parse(await fs.readFile(metadataMapPath(ctx), "utf-8"));
+  } catch {
+    parsed = undefined;
+  }
+
+  if (parsed && typeof parsed === "object") {
+    const isV2 = typeof parsed.version === "number" && parsed.version >= 2;
+    for (const [entityType, block] of Object.entries(SYNC_BLOCKS) as [
+      SyncEntityType,
+      MetadataBlockKey,
+    ][]) {
+      const raw = parsed[block];
+      if (!raw || typeof raw !== "object") continue;
+      if (isV2) {
+        const { syncToken, items } = raw as { syncToken?: unknown; items?: unknown };
+        if (typeof syncToken === "string" && syncToken) tokens[entityType] = syncToken;
+        if (block !== "media" && items && typeof items === "object") {
+          (map as unknown as Record<string, unknown>)[block] = items;
+        }
+      } else if (block !== "media") {
+        // Legacy layout: the block is the bare item map.
+        (map as unknown as Record<string, unknown>)[block] = raw;
+      }
+    }
+  }
+
+  // Tokens written by older SDK versions live in separate files. A token
+  // already present in a v2 file wins over a stale file beside it.
+  const legacyTokenFiles: string[] = [];
+  for (const entityType of Object.keys(SYNC_BLOCKS) as SyncEntityType[]) {
+    const file = syncTokenPath(ctx, entityType);
+    try {
+      const token = (await fs.readFile(file, "utf8")).trim();
+      legacyTokenFiles.push(file);
+      if (token && !tokens[entityType]) tokens[entityType] = token;
+    } catch {
+      /* no legacy token file */
+    }
+  }
+
+  // Migrate old flat sequences format to nested (language → name)
+  migrateSequencesFormat(map);
+  deduplicateSectionOnRead(map.content);
+  deduplicateSectionOnRead(map.emailTemplates!);
+  deduplicateSectionOnRead(map.comments!);
+  deduplicateSectionOnRead(map.sequences!);
+  return { map, tokens, legacyTokenFiles };
+}
+
+/** Build the on-disk v2 document: every block is `{ syncToken?, items? }`, keys sorted. */
+function serializeMetadata(map: MetadataMap, tokens: SyncTokens): Record<string, unknown> {
+  const out: Record<string, unknown> = { version: METADATA_FORMAT_VERSION };
+  const block = (
+    entityType: SyncEntityType,
+    items: Record<string, unknown> | undefined,
+    always = false
+  ): void => {
+    const token = tokens[entityType];
+    const hasItems = items !== undefined && Object.keys(items).length > 0;
+    if (!always && !token && !hasItems) return;
+    out[SYNC_BLOCKS[entityType]] = {
+      ...(token ? { syncToken: token } : {}),
+      ...(hasItems || always ? { items: items ?? {} } : {}),
+    };
+  };
+  block("content", sortNestedMap(map.content), true);
+  block("media", undefined);
+  block("email-templates", map.emailTemplates && sortNestedMap(map.emailTemplates));
+  block("comments", map.comments && sortNestedMap(map.comments));
+  block("segments", map.segments && sortFlatMap(map.segments));
+  block("sequences", map.sequences && sortNestedMap(map.sequences));
+  block("redirects", map.redirects && sortFlatMap(map.redirects));
+  return out;
+}
+
+/** Write metadata.json atomically (temp file + rename) and drop pre-v2 token files. */
+async function persistMetadata(
+  ctx: RemoteContext,
+  map: MetadataMap,
+  tokens: SyncTokens,
+  legacyTokenFiles: string[]
+): Promise<void> {
+  await fs.mkdir(ctx.stateDir, { recursive: true });
+  const target = metadataMapPath(ctx);
+  const tmp = `${target}.${process.pid}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(serializeMetadata(map, tokens), null, 2), "utf-8");
+  await fs.rename(tmp, target);
+  for (const file of legacyTokenFiles) {
+    try {
+      await fs.unlink(file);
+    } catch {
+      /* already gone */
+    }
+  }
+}
+
+/** Read the metadata-map for a remote. Returns an empty map if the file doesn't exist. */
+export async function readMetadataMap(ctx: RemoteContext): Promise<MetadataMap> {
+  return (await readMetadataFile(ctx)).map;
+}
+
+/**
+ * Write the metadata-map for a remote, creating the directory if needed.
+ * Sync tokens are not part of the in-memory map; whatever is on disk is
+ * carried over, so a script may save its map and its token in either order.
+ */
+export async function writeMetadataMap(ctx: RemoteContext, map: MetadataMap): Promise<void> {
+  const { tokens, legacyTokenFiles } = await readMetadataFile(ctx);
+  await persistMetadata(ctx, map, tokens, legacyTokenFiles);
+}
+
+/**
+ * Clear a single section of the metadata map on disk, leaving the other
+ * sections and all sync tokens intact. Used by reset functions.
  */
 export async function clearMetadataSection(
   ctx: RemoteContext,
   section: keyof MetadataMap
 ): Promise<void> {
-  const map = await readMetadataMap(ctx);
+  const file = await readMetadataFile(ctx);
   if (section === "content") {
-    map.content = {};
+    file.map.content = {};
   } else {
-    delete map[section];
+    delete file.map[section];
   }
-  // Write directly without merge to ensure the section is actually cleared
-  await fs.mkdir(ctx.stateDir, { recursive: true });
-  const sorted: MetadataMap = {
-    content: sortNestedMap(map.content),
-    ...(map.emailTemplates && Object.keys(map.emailTemplates).length > 0
-      ? { emailTemplates: sortNestedMap(map.emailTemplates) }
-      : {}),
-    ...(map.comments && Object.keys(map.comments).length > 0
-      ? { comments: sortNestedMap(map.comments) }
-      : {}),
-    ...(map.segments && Object.keys(map.segments).length > 0
-      ? { segments: sortFlatMap(map.segments) }
-      : {}),
-    ...(map.sequences && Object.keys(map.sequences).length > 0
-      ? { sequences: sortNestedMap(map.sequences) }
-      : {}),
-    ...(map.redirects && Object.keys(map.redirects).length > 0
-      ? { redirects: sortFlatMap(map.redirects) }
-      : {}),
-  };
-  await fs.writeFile(metadataMapPath(ctx), JSON.stringify(sorted, null, 2), "utf-8");
+  await persistMetadata(ctx, file.map, file.tokens, file.legacyTokenFiles);
 }
 
-/** Write the metadata-map for a remote, creating the directory if needed.
- *  Keys are sorted alphabetically for consistency across regenerations.
- */
-export async function writeMetadataMap(ctx: RemoteContext, map: MetadataMap): Promise<void> {
-  await fs.mkdir(ctx.stateDir, { recursive: true });
-  const sorted: MetadataMap = {
-    content: sortNestedMap(map.content),
-    ...(map.emailTemplates && Object.keys(map.emailTemplates).length > 0
-      ? { emailTemplates: sortNestedMap(map.emailTemplates) }
-      : {}),
-    ...(map.comments && Object.keys(map.comments).length > 0
-      ? { comments: sortNestedMap(map.comments) }
-      : {}),
-    ...(map.segments && Object.keys(map.segments).length > 0
-      ? { segments: sortFlatMap(map.segments) }
-      : {}),
-    ...(map.sequences && Object.keys(map.sequences).length > 0
-      ? { sequences: sortNestedMap(map.sequences) }
-      : {}),
-    ...(map.redirects && Object.keys(map.redirects).length > 0
-      ? { redirects: sortFlatMap(map.redirects) }
-      : {}),
-  };
-  await fs.writeFile(metadataMapPath(ctx), JSON.stringify(sorted, null, 2), "utf-8");
+/** The sync token recorded for one entity type, if any. */
+export async function readSyncToken(
+  ctx: RemoteContext,
+  entityType: SyncEntityType
+): Promise<string | undefined> {
+  return (await readMetadataFile(ctx)).tokens[entityType];
+}
+
+/** All sync tokens recorded for a remote. */
+export async function readSyncTokens(ctx: RemoteContext): Promise<SyncTokens> {
+  return (await readMetadataFile(ctx)).tokens;
+}
+
+/** Record the sync token for one entity type. */
+export async function writeSyncToken(
+  ctx: RemoteContext,
+  entityType: SyncEntityType,
+  token: string
+): Promise<void> {
+  const file = await readMetadataFile(ctx);
+  file.tokens[entityType] = token;
+  await persistMetadata(ctx, file.map, file.tokens, file.legacyTokenFiles);
+}
+
+/** Forget the sync token for one entity type so the next pull starts from scratch. */
+export async function clearSyncToken(ctx: RemoteContext, entityType: SyncEntityType): Promise<void> {
+  const file = await readMetadataFile(ctx);
+  if (!(entityType in file.tokens) && file.legacyTokenFiles.length === 0) return;
+  delete file.tokens[entityType];
+  await persistMetadata(ctx, file.map, file.tokens, file.legacyTokenFiles);
 }
 
 /** Get metadata for a content item from the map. */

@@ -19,7 +19,7 @@ import { threeWayMerge, threeWayMergeJson, isLocallyModified } from "../lib/cont
 import { getConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
 import type { RemoteContext } from "../lib/remote-context.js";
-import { syncTokenPath } from "../lib/remote-context.js";
+import { readSyncToken as readRemoteSyncToken, writeSyncToken as writeRemoteSyncToken } from "../lib/remote-context.js";
 
 interface ScriptError extends Error {
   code?: string;
@@ -103,8 +103,7 @@ async function readSyncToken(
   remoteCtx?: RemoteContext
 ): Promise<{ token: string | undefined; migrated: boolean }> {
   if (remoteCtx) {
-    const tokenPath = syncTokenPath(remoteCtx, "content");
-    const token = await readFileOrUndefined(tokenPath);
+    const token = await readRemoteSyncToken(remoteCtx, "content");
     if (token) return { token, migrated: false };
 
     // Migration: check old single-remote path and move to per-remote path
@@ -129,9 +128,7 @@ async function readSyncToken(
 
 async function writeSyncToken(token: string, remoteCtx?: RemoteContext): Promise<void> {
   if (remoteCtx) {
-    const tokenPath = syncTokenPath(remoteCtx, "content");
-    await fs.mkdir(path.dirname(tokenPath), { recursive: true });
-    await fs.writeFile(tokenPath, token, "utf8");
+    await writeRemoteSyncToken(remoteCtx, "content", token);
     return;
   }
   await fs.mkdir(path.dirname(SYNC_TOKEN_PATH), { recursive: true });

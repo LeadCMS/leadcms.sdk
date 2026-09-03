@@ -10,7 +10,7 @@ import {
 } from "./leadcms-helpers.js";
 import { logger } from "../lib/logger.js";
 import type { RemoteContext } from "../lib/remote-context.js";
-import { syncTokenPath } from "../lib/remote-context.js";
+import { readSyncToken as readRemoteSyncToken, writeSyncToken as writeRemoteSyncToken } from "../lib/remote-context.js";
 
 interface ScriptError extends Error {
   code?: string;
@@ -94,8 +94,7 @@ async function readMediaSyncToken(
   remoteCtx?: RemoteContext
 ): Promise<{ token: string | undefined; migrated: boolean }> {
   if (remoteCtx) {
-    const tokenPath = syncTokenPath(remoteCtx, "media");
-    const token = await readFileOrUndefined(tokenPath);
+    const token = await readRemoteSyncToken(remoteCtx, "media");
     if (token) return { token, migrated: false };
 
     // Migration: check old single-remote path
@@ -120,9 +119,7 @@ async function readMediaSyncToken(
 
 async function writeMediaSyncToken(token: string, remoteCtx?: RemoteContext): Promise<void> {
   if (remoteCtx) {
-    const tokenPath = syncTokenPath(remoteCtx, "media");
-    await fs.mkdir(path.dirname(tokenPath), { recursive: true });
-    await fs.writeFile(tokenPath, token, "utf8");
+    await writeRemoteSyncToken(remoteCtx, "media", token);
     return;
   }
   await fs.mkdir(path.dirname(MEDIA_SYNC_TOKEN_PATH), { recursive: true });

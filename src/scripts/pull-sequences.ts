@@ -10,7 +10,7 @@ import path from "path";
 import axios, { AxiosResponse } from "axios";
 import { leadCMSUrl, leadCMSApiKey, SEQUENCES_DIR } from "./leadcms-helpers.js";
 import { leadCMSDataService } from "../lib/data-service.js";
-import { syncTokenPath, type RemoteContext } from "../lib/remote-context.js";
+import { readSyncToken as readRemoteSyncToken, writeSyncToken as writeRemoteSyncToken, type RemoteContext } from "../lib/remote-context.js";
 import type { MetadataMap } from "../lib/remote-context.js";
 import { getConfig } from "../lib/config.js";
 import { resetSequencesState } from "./pull-all.js";
@@ -42,17 +42,14 @@ async function readFileOrUndefined(filePath: string): Promise<string | undefined
 
 async function readSyncToken(remoteCtx?: RemoteContext): Promise<string | undefined> {
   if (remoteCtx) {
-    const tokenPath = syncTokenPath(remoteCtx, "sequences");
-    return readFileOrUndefined(tokenPath);
+    return readRemoteSyncToken(remoteCtx, "sequences");
   }
   return readFileOrUndefined(path.join(SEQUENCES_DIR, ".sync-token"));
 }
 
 async function writeSyncToken(token: string, remoteCtx?: RemoteContext): Promise<void> {
   if (remoteCtx) {
-    const tokenPath = syncTokenPath(remoteCtx, "sequences");
-    await fs.mkdir(path.dirname(tokenPath), { recursive: true });
-    await fs.writeFile(tokenPath, token, "utf8");
+    await writeRemoteSyncToken(remoteCtx, "sequences", token);
     return;
   }
   await fs.mkdir(SEQUENCES_DIR, { recursive: true });

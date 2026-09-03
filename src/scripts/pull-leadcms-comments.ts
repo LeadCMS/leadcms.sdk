@@ -22,7 +22,7 @@ interface ScriptError extends Error {
   status?: number;
 }
 
-import { syncTokenPath, type RemoteContext, type MetadataMap } from "../lib/remote-context.js";
+import { readSyncToken as readRemoteSyncToken, writeSyncToken as writeRemoteSyncToken, type RemoteContext, type MetadataMap } from "../lib/remote-context.js";
 
 // Load config to get commentsDir
 const config = getConfig();
@@ -46,13 +46,8 @@ async function readCommentSyncToken(
   remoteCtx?: RemoteContext
 ): Promise<{ token: string | undefined; migrated: boolean }> {
   if (remoteCtx) {
-    const tokenPath = syncTokenPath(remoteCtx, "comments");
-    try {
-      const token = (await fs.readFile(tokenPath, "utf8")).trim();
-      if (token) return { token, migrated: false };
-    } catch {
-      /* not found */
-    }
+    const token = await readRemoteSyncToken(remoteCtx, "comments");
+    if (token) return { token, migrated: false };
 
     // Migration: check old single-remote path and move to per-remote path
     try {
@@ -93,9 +88,7 @@ async function readCommentSyncToken(
  */
 async function writeCommentSyncToken(token: string, remoteCtx?: RemoteContext): Promise<void> {
   if (remoteCtx) {
-    const tokenPath = syncTokenPath(remoteCtx, "comments");
-    await fs.mkdir(path.dirname(tokenPath), { recursive: true });
-    await fs.writeFile(tokenPath, token, "utf8");
+    await writeRemoteSyncToken(remoteCtx, "comments", token);
     return;
   }
   await fs.mkdir(path.dirname(COMMENT_SYNC_TOKEN_PATH), { recursive: true });

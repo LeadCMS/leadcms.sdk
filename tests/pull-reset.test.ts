@@ -323,7 +323,7 @@ describe("resetContentState with remoteCtx clears content metadata", () => {
 
     await resetContentState(remoteCtx);
 
-    const metadata = JSON.parse(await fsPromises.readFile(metadataPath, "utf8"));
+    const metadata = unwrapMetadata(JSON.parse(await fsPromises.readFile(metadataPath, "utf8")));
     expect(metadata.content).toEqual({});
     expect(metadata.segments).toEqual({
       "my-segment": { id: 10, createdAt: "2026-01-01T00:00:00Z" },
@@ -359,7 +359,7 @@ describe("resetCommentsState with remoteCtx clears comments metadata", () => {
 
     await resetCommentsState(remoteCtx);
 
-    const metadata = JSON.parse(await fsPromises.readFile(metadataPath, "utf8"));
+    const metadata = unwrapMetadata(JSON.parse(await fsPromises.readFile(metadataPath, "utf8")));
     expect(metadata.comments).toBeUndefined();
     expect(metadata.content).toEqual({
       en: { "my-article": { id: 1, createdAt: "2026-01-01T00:00:00Z" } },
@@ -396,7 +396,7 @@ describe("resetEmailTemplatesState with remoteCtx clears email templates metadat
     const { resetEmailTemplatesState } = await import("../src/scripts/pull-all");
     await resetEmailTemplatesState(remoteCtx);
 
-    const metadata = JSON.parse(await fsPromises.readFile(metadataPath, "utf8"));
+    const metadata = unwrapMetadata(JSON.parse(await fsPromises.readFile(metadataPath, "utf8")));
     expect(metadata.emailTemplates).toBeUndefined();
     expect(metadata.content).toEqual({
       en: { "my-article": { id: 1, createdAt: "2026-01-01T00:00:00Z" } },
@@ -762,3 +762,20 @@ describe("Legacy sync token migration", () => {
     await expect(fsPromises.access(legacyContentSyncTokenPath)).rejects.toThrow();
   });
 });
+
+
+// metadata.json is written in format v2: `{ version: 2, <block>: { syncToken?, items } }`.
+// These assertions were written against the bare item maps, so unwrap the blocks.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function unwrapMetadata(doc: any): any {
+  if (typeof doc?.version !== "number") return doc;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const out: Record<string, any> = {};
+  for (const [block, value] of Object.entries(doc)) {
+    if (block === "version") continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const items = (value as any)?.items;
+    if (items !== undefined) out[block] = items;
+  }
+  return out;
+}

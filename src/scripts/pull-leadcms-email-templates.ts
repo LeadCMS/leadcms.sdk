@@ -15,7 +15,7 @@ import {
 } from "../lib/email-template-transformation.js";
 import { threeWayMerge, isLocallyModified } from "../lib/content-merge.js";
 import { leadCMSDataService } from "../lib/data-service.js";
-import { syncTokenPath, type RemoteContext } from "../lib/remote-context.js";
+import { readSyncToken as readRemoteSyncToken, writeSyncToken as writeRemoteSyncToken, type RemoteContext } from "../lib/remote-context.js";
 import type { MetadataMap } from "../lib/remote-context.js";
 import { getConfig } from "../lib/config.js";
 import { slugify } from "../lib/slugify.js";
@@ -122,8 +122,7 @@ async function readSyncToken(
   remoteCtx?: RemoteContext
 ): Promise<{ token: string | undefined; migrated: boolean }> {
   if (remoteCtx) {
-    const tokenPath = syncTokenPath(remoteCtx, "email-templates");
-    const token = await readFileOrUndefined(tokenPath);
+    const token = await readRemoteSyncToken(remoteCtx, "email-templates");
     if (token) return { token, migrated: false };
 
     // Migration: check old single-remote path
@@ -141,9 +140,7 @@ async function readSyncToken(
 
 async function writeSyncToken(token: string, remoteCtx?: RemoteContext): Promise<void> {
   if (remoteCtx) {
-    const tokenPath = syncTokenPath(remoteCtx, "email-templates");
-    await fs.mkdir(path.dirname(tokenPath), { recursive: true });
-    await fs.writeFile(tokenPath, token, "utf8");
+    await writeRemoteSyncToken(remoteCtx, "email-templates", token);
     return;
   }
   await fs.mkdir(path.dirname(SYNC_TOKEN_PATH), { recursive: true });

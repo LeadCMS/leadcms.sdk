@@ -22,7 +22,7 @@ import {
 } from "../lib/cms-config-types.js";
 import { getConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
-import { syncTokenPath, metadataMapPath, clearMetadataSection } from "../lib/remote-context.js";
+import { clearSyncToken, metadataMapPath, clearMetadataSection } from "../lib/remote-context.js";
 import type { RemoteContext } from "../lib/remote-context.js";
 
 interface PullAllOptions {
@@ -137,8 +137,8 @@ async function resetContentState(remoteCtx?: RemoteContext): Promise<void> {
   // Clear per-remote content sync token when remote context is provided
   if (remoteCtx) {
     try {
-      await fs.unlink(syncTokenPath(remoteCtx, "content"));
-      logger.verbose(`   ✓ Removed per-remote content sync token (${remoteCtx.name})`);
+      await clearSyncToken(remoteCtx, "content");
+      logger.verbose(`   ✓ Cleared per-remote content sync token (${remoteCtx.name})`);
     } catch {
       /* not found — ok */
     }
@@ -181,8 +181,8 @@ async function resetMediaState(remoteCtx?: RemoteContext): Promise<void> {
   // Clear per-remote media sync token
   if (remoteCtx) {
     try {
-      await fs.unlink(syncTokenPath(remoteCtx, "media"));
-      logger.verbose(`   ✓ Removed per-remote media sync token (${remoteCtx.name})`);
+      await clearSyncToken(remoteCtx, "media");
+      logger.verbose(`   ✓ Cleared per-remote media sync token (${remoteCtx.name})`);
     } catch {
       /* not found — ok */
     }
@@ -216,8 +216,8 @@ async function resetCommentsState(remoteCtx?: RemoteContext): Promise<void> {
   // Clear per-remote comments sync token
   if (remoteCtx) {
     try {
-      await fs.unlink(syncTokenPath(remoteCtx, "comments"));
-      logger.verbose(`   ✓ Removed per-remote comments sync token (${remoteCtx.name})`);
+      await clearSyncToken(remoteCtx, "comments");
+      logger.verbose(`   ✓ Cleared per-remote comments sync token (${remoteCtx.name})`);
     } catch {
       /* not found — ok */
     }
@@ -250,8 +250,8 @@ async function resetEmailTemplatesState(remoteCtx?: RemoteContext): Promise<void
   // Clear per-remote email-templates sync token
   if (remoteCtx) {
     try {
-      await fs.unlink(syncTokenPath(remoteCtx, "email-templates"));
-      logger.verbose(`   ✓ Removed per-remote email-templates sync token (${remoteCtx.name})`);
+      await clearSyncToken(remoteCtx, "email-templates");
+      logger.verbose(`   ✓ Cleared per-remote email-templates sync token (${remoteCtx.name})`);
     } catch {
       /* not found — ok */
     }
@@ -297,8 +297,8 @@ async function resetSegmentsState(remoteCtx?: RemoteContext): Promise<void> {
 
   if (remoteCtx) {
     try {
-      await fs.unlink(syncTokenPath(remoteCtx, "segments"));
-      logger.verbose(`   ✓ Removed per-remote segments sync token (${remoteCtx.name})`);
+      await clearSyncToken(remoteCtx, "segments");
+      logger.verbose(`   ✓ Cleared per-remote segments sync token (${remoteCtx.name})`);
     } catch {
       /* not found — ok */
     }
@@ -329,8 +329,8 @@ async function resetSequencesState(remoteCtx?: RemoteContext): Promise<void> {
 
   if (remoteCtx) {
     try {
-      await fs.unlink(syncTokenPath(remoteCtx, "sequences"));
-      logger.verbose(`   ✓ Removed per-remote sequences sync token (${remoteCtx.name})`);
+      await clearSyncToken(remoteCtx, "sequences");
+      logger.verbose(`   ✓ Cleared per-remote sequences sync token (${remoteCtx.name})`);
     } catch {
       /* not found — ok */
     }
@@ -361,8 +361,8 @@ export async function resetRedirectsState(remoteCtx?: RemoteContext): Promise<vo
 
   if (remoteCtx) {
     try {
-      await fs.unlink(syncTokenPath(remoteCtx, "redirects"));
-      logger.verbose(`   ✓ Removed per-remote redirects sync token (${remoteCtx.name})`);
+      await clearSyncToken(remoteCtx, "redirects");
+      logger.verbose(`   ✓ Cleared per-remote redirects sync token (${remoteCtx.name})`);
     } catch {
       /* not found — ok */
     }
@@ -396,7 +396,7 @@ async function resetLocalState(remoteCtx?: RemoteContext): Promise<void> {
   if (remoteCtx) {
     try {
       await fs.unlink(metadataMapPath(remoteCtx));
-      logger.verbose(`   ✓ Removed per-remote metadata (${remoteCtx.name})`);
+      logger.verbose(`   ✓ Cleared per-remote metadata (${remoteCtx.name})`);
     } catch {
       /* not found — ok */
     }

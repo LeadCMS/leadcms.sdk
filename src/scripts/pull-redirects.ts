@@ -20,7 +20,8 @@ import axios, { AxiosResponse } from "axios";
 import yaml from "js-yaml";
 import { leadCMSUrl, leadCMSApiKey, REDIRECTS_DIR, defaultLanguage } from "./leadcms-helpers.js";
 import {
-  syncTokenPath,
+  readSyncToken as readRemoteSyncToken,
+  writeSyncToken as writeRemoteSyncToken,
   resolveRemote,
   readMetadataMap,
   writeMetadataMap,
@@ -80,17 +81,14 @@ async function readFileOrUndefined(filePath: string): Promise<string | undefined
 
 async function readSyncToken(remoteCtx?: RemoteContext): Promise<string | undefined> {
   if (remoteCtx) {
-    const tokenPath = syncTokenPath(remoteCtx, "redirects");
-    return readFileOrUndefined(tokenPath);
+    return readRemoteSyncToken(remoteCtx, "redirects");
   }
   return readFileOrUndefined(path.join(REDIRECTS_DIR, ".sync-token"));
 }
 
 async function writeSyncToken(token: string, remoteCtx?: RemoteContext): Promise<void> {
   if (remoteCtx) {
-    const tokenPath = syncTokenPath(remoteCtx, "redirects");
-    await fs.mkdir(path.dirname(tokenPath), { recursive: true });
-    await fs.writeFile(tokenPath, token, "utf8");
+    await writeRemoteSyncToken(remoteCtx, "redirects", token);
     return;
   }
   await fs.mkdir(REDIRECTS_DIR, { recursive: true });

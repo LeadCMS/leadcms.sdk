@@ -14,7 +14,7 @@
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
-import { listRemotes, resolveRemote, metadataMapPath } from "../../lib/remote-context.js";
+import { listRemotes, resolveRemote } from "../../lib/remote-context.js";
 import { getConfig } from "../../lib/config.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";
 
@@ -216,38 +216,18 @@ function showRemoteCommand(subArgs: string[]): void {
     console.log(`  API key:  ${ctx.apiKey ? ctx.apiKey.substring(0, 8) + "..." : "not set"}`);
     console.log(`  State:    ${ctx.stateDir}`);
 
-    // Show sync token timestamps
-    const syncTokenTypes = ["content", "media", "comments", "email-templates"] as const;
-    for (const entity of syncTokenTypes) {
-      const tokenPath = path.join(ctx.stateDir, `${entity}-sync-token`);
-      try {
-        const token = fs.readFileSync(tokenPath, "utf-8").trim();
-        console.log(`  ${entity.charAt(0).toUpperCase() + entity.slice(1)} sync:  ${token}`);
-      } catch {
-        // No sync token for this entity
-      }
+    const state = readRemoteStateSync(ctx.stateDir);
+
+    // Show sync tokens
+    for (const [entity, token] of Object.entries(state.tokens)) {
+      console.log(`  ${entity.charAt(0).toUpperCase() + entity.slice(1)} sync:  ${token}`);
     }
 
     // Show metadata-map counts
-    try {
-      const metaData = JSON.parse(fs.readFileSync(metadataMapPath(ctx), "utf-8"));
-      const contentCount = Object.values(metaData.content || {}).reduce(
-        (sum: number, section: unknown) => sum + Object.keys(section || {}).length,
-        0
-      );
-      const templateCount = Object.values(metaData.emailTemplates || {}).reduce(
-        (sum: number, section: unknown) => sum + Object.keys(section || {}).length,
-        0
-      );
-      const commentCount = Object.values(metaData.comments || {}).reduce(
-        (sum: number, section: unknown) => sum + Object.keys(section || {}).length,
-        0
-      );
-      console.log(`  Content entries:      ${contentCount}`);
-      console.log(`  Email templates:      ${templateCount}`);
-      console.log(`  Comment entries:      ${commentCount}`);
-    } catch {
-      // No metadata-map
+    if (state.hasMetadata) {
+      console.log(`  Content entries:      ${countNested(state.sections.content)}`);
+      console.log(`  Email templates:      ${countNested(state.sections.emailTemplates)}`);
+      console.log(`  Comment entries:      ${countNested(state.sections.comments)}`);
     }
 
     console.log("");
@@ -331,6 +311,61 @@ function resetRemoteCommand(subArgs: string[]): void {
     console.error(`❌ ${(error as Error).message}`);
     process.exit(1);
   }
+}
+
+// ── State inspection (sync, for CLI output) ───────────────────────────
+
+interface RemoteStateSummary {
+  hasMetadata: boolean;
+  tokens: Record<string, string>;
+  sections: Record<string, unknown>;
+}
+
+/**
+ * Read a remote's metadata.json without the async API. Understands the v2
+ * layout (`{ version: 2, <block>: { syncToken, items } }`), the pre-v2 bare
+ * layout, and pre-v2 `<type>-sync-token` files.
+ */
+function readRemoteStateSync(stateDir: string): RemoteStateSummary {
+  const summary: RemoteStateSummary = { hasMetadata: false, tokens: {}, sections: {} };
+  try {
+    const doc = JSON.parse(fs.readFileSync(path.join(stateDir, "metadata.json"), "utf-8"));
+    summary.hasMetadata = true;
+    const isV2 = typeof doc.version === "number" && doc.version >= 2;
+    for (const [block, value] of Object.entries(doc)) {
+      if (block === "version" || !value || typeof value !== "object") continue;
+      if (isV2) {
+        const { syncToken, items } = value as { syncToken?: unknown; items?: unknown };
+        if (typeof syncToken === "string" && syncToken) summary.tokens[block] = syncToken;
+        if (items && typeof items === "object") summary.sections[block] = items;
+      } else {
+        summary.sections[block] = value;
+      }
+    }
+  } catch {
+    // No metadata.json
+  }
+  // Declared here, not at module level: the command dispatcher above runs at
+  // import time, before later top-level constants are initialised.
+  const entityTypes = ["content", "media", "comments", "email-templates", "segments", "sequences", "redirects"];
+  for (const entity of entityTypes) {
+    if (summary.tokens[entity]) continue;
+    try {
+      const token = fs.readFileSync(path.join(stateDir, `${entity}-sync-token`), "utf-8").trim();
+      if (token) summary.tokens[entity] = token;
+    } catch {
+      // No pre-v2 token file
+    }
+  }
+  return summary;
+}
+
+function countNested(section: unknown): number {
+  if (!section || typeof section !== "object") return 0;
+  return Object.values(section as Record<string, unknown>).reduce<number>(
+    (sum, inner) => sum + Object.keys((inner as Record<string, unknown>) || {}).length,
+    0
+  );
 }
 
 function findConfigPath(): string | null {

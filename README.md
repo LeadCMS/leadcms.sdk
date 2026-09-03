@@ -466,7 +466,7 @@ Push your local content changes to LeadCMS. This command will:
 - Detect new content, updates, conflicts, and remotely-deleted items using `updatedAt` timestamps
 - Prompt for confirmation before making changes
 - Support for creating missing content types automatically
-- Record the remote's `id`, `createdAt` and `updatedAt` in `.leadcms/remotes/<name>/metadata.json` after sync. These server-managed fields are never written into content files, so a push does not dirty files in git and one working tree can serve several remotes
+- Record the remote's sync tokens and, per item, its `id`, `createdAt` and `updatedAt` in `.leadcms/remotes/<name>/metadata.json` after sync (commit that file: it is the checkpoint the next pull continues from). These server-managed fields are never written into content files, so a push does not dirty files in git and one working tree can serve several remotes
 
 **Options:**
 

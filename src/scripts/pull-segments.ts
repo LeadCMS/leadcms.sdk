@@ -8,7 +8,7 @@ import fs from "fs/promises";
 import path from "path";
 import axios, { AxiosResponse } from "axios";
 import { leadCMSUrl, leadCMSApiKey, SEGMENTS_DIR } from "./leadcms-helpers.js";
-import { syncTokenPath, type RemoteContext } from "../lib/remote-context.js";
+import { readSyncToken as readRemoteSyncToken, writeSyncToken as writeRemoteSyncToken, type RemoteContext } from "../lib/remote-context.js";
 import type { MetadataMap } from "../lib/remote-context.js";
 import { resetSegmentsState } from "./pull-all.js";
 import { logger } from "../lib/logger.js";
@@ -33,17 +33,14 @@ async function readFileOrUndefined(filePath: string): Promise<string | undefined
 
 async function readSyncToken(remoteCtx?: RemoteContext): Promise<string | undefined> {
   if (remoteCtx) {
-    const tokenPath = syncTokenPath(remoteCtx, "segments");
-    return readFileOrUndefined(tokenPath);
+    return readRemoteSyncToken(remoteCtx, "segments");
   }
   return readFileOrUndefined(path.join(SEGMENTS_DIR, ".sync-token"));
 }
 
 async function writeSyncToken(token: string, remoteCtx?: RemoteContext): Promise<void> {
   if (remoteCtx) {
-    const tokenPath = syncTokenPath(remoteCtx, "segments");
-    await fs.mkdir(path.dirname(tokenPath), { recursive: true });
-    await fs.writeFile(tokenPath, token, "utf8");
+    await writeRemoteSyncToken(remoteCtx, "segments", token);
     return;
   }
   await fs.mkdir(SEGMENTS_DIR, { recursive: true });

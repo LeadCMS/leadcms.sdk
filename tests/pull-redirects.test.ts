@@ -35,6 +35,25 @@ jest.mock("../src/lib/remote-context.js", () => ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   syncTokenPath: (ctx: any, entityType: string) =>
     require("path").join(ctx.stateDir, `${entityType}-sync-token`),
+  // Tokens live in metadata.json in the real module; the mock keeps the
+  // pre-v2 one-file-per-type layout so the file assertions below still hold.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  readSyncToken: async (ctx: any, entityType: string) => {
+    try {
+      const fsp = require("fs/promises");
+      const p = require("path").join(ctx.stateDir, `${entityType}-sync-token`);
+      return (await fsp.readFile(p, "utf8")).trim() || undefined;
+    } catch {
+      return undefined;
+    }
+  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  writeSyncToken: async (ctx: any, entityType: string, token: string) => {
+    const fsp = require("fs/promises");
+    const p = require("path").join(ctx.stateDir, `${entityType}-sync-token`);
+    await fsp.mkdir(require("path").dirname(p), { recursive: true });
+    await fsp.writeFile(p, token, "utf8");
+  },
   resolveRemote: () => ({
     name: "default",
     url: "https://test.leadcms.com",

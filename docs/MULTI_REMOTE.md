@@ -139,16 +139,9 @@ When `remotes` is present, the flat `url` / `apiKey` fields are ignored (with a 
   comments/
   remotes/
     production/
-      content-sync-token      # Sync token for content from production
-      media-sync-token        # Sync token for media from production
-      comments-sync-token     # Sync token for comments from production
-      email-templates-sync-token
-      metadata.json           # Remote-specific IDs and timestamps for content and email templates
+      metadata.json           # Production's checkpoint: per entity block, the sync token
+                              # and the remote ids/timestamps of the items it vouches for
     develop/
-      content-sync-token
-      media-sync-token
-      comments-sync-token
-      email-templates-sync-token
       metadata.json
 public/
   media/
@@ -157,12 +150,14 @@ public/
 
 ### Sync Tokens
 
-Each remote gets its own sync token files under `.leadcms/remotes/{name}/`. Tokens are never shared across remotes.
+Each remote records its own sync tokens inside `.leadcms/remotes/{name}/metadata.json` (format version 2): every entity block is `{ "syncToken": …, "items": … }`, so the checkpoint and the items it describes can never be committed separately. Tokens are never shared across remotes.
 
-**Migration**: When upgrading from single-remote to multi-remote:
+A token is the remote's position from which the next pull continues. Without it a fresh clone must pull everything and, worse, can never learn about items deleted on the remote in the meantime, so `metadata.json` belongs in git together with the content.
 
-- Existing `.leadcms/content/.sync-token` → `.leadcms/remotes/{defaultRemote}/content-sync-token`
-- Existing `public/media/.sync-token` → `.leadcms/remotes/{defaultRemote}/media-sync-token`
+**Migration**:
+
+- SDK ≤ 3.8 kept each token in `.leadcms/remotes/{name}/<type>-sync-token` next to a bare `metadata.json`. Both are still read; the next write of any kind rewrites the file in the v2 shape and deletes the token files.
+- Single-remote projects: `.leadcms/content/.sync-token` and `public/media/.sync-token` are picked up on the first pull with a remote and recorded for the default remote.
 
 ---
 
@@ -181,35 +176,47 @@ Content identity in the LeadCMS API is by integer ID. The same piece of content 
 ### Solution: `metadata.json` per Remote
 
 ```jsonc
-// .leadcms/remotes/production/metadata.json
+// .leadcms/remotes/production/metadata.json  (format version 2)
 {
+  "version": 2,
   "content": {
-    "en": {
-      "blog/my-post": {
-        "id": 42,
-        "createdAt": "2026-01-15T10:00:00Z",
-        "updatedAt": "2026-03-01T14:30:00Z",
-      },
-      "blog/another": {
-        "id": 43,
+    "syncToken": "2026-03-01T14:30:00.000Z",   // where the next content pull continues
+    "items": {
+      "en": {
+        "blog/my-post": {
+          "id": 42,
+          "createdAt": "2026-01-15T10:00:00Z",
+          "updatedAt": "2026-03-01T14:30:00Z",
+        },
+        "blog/another": {
+          "id": 43,
+        },
       },
     },
   },
+  "media": {
+    "syncToken": "2026-03-01T12:00:00.000Z",   // media has no per-item metadata, only a checkpoint
+  },
   "emailTemplates": {
-    "en": {
-      "WelcomeEmail": {
-        "id": 5,
-        "updatedAt": "2026-03-02T09:15:00Z",
-      },
-      "WeeklyDigest": {
-        "id": 6,
+    "syncToken": "2026-03-02T09:15:00.000Z",
+    "items": {
+      "en": {
+        "WelcomeEmail": {
+          "id": 5,
+          "updatedAt": "2026-03-02T09:15:00Z",
+        },
+        "WeeklyDigest": {
+          "id": 6,
+        },
       },
     },
   },
 }
 ```
 
-For content, the nested key is `language -> slug`.
+Every block pairs the sync token with the items that token vouches for; a block is omitted when it has neither. `comments`, `segments`, `sequences` and `redirects` follow the same `{ syncToken, items }` shape.
+
+For content, the nested key under `items` is `language -> slug`.
 
 For email templates, the nested key is `language -> templateName`.
 
@@ -262,15 +269,21 @@ When multiple remotes are involved, `createdAt`/`updatedAt` belong to whichever 
 ```jsonc
 // .leadcms/remotes/production/metadata.json
 {
+  "version": 2,
   "content": {
-    "en": {
-      "blog/my-post": {
-        "createdAt": "2026-01-15T10:00:00Z",
-        "updatedAt": "2026-03-01T14:30:00Z"
-      },
-      "blog/another": {
-        "createdAt": "2026-02-01T09:00:00Z",
-        "updatedAt": "2026-02-28T16:45:00Z"
+    "syncToken": "2026-03-01T14:30:00.000Z",
+    "items": {
+      "en": {
+        "blog/my-post": {
+          "id": 42,
+          "createdAt": "2026-01-15T10:00:00Z",
+          "updatedAt": "2026-03-01T14:30:00Z"
+        },
+        "blog/another": {
+          "id": 43,
+          "createdAt": "2026-02-01T09:00:00Z",
+          "updatedAt": "2026-02-28T16:45:00Z"
+        }
       }
     }
   }
@@ -278,18 +291,23 @@ When multiple remotes are involved, `createdAt`/`updatedAt` belong to whichever 
 
 // .leadcms/remotes/develop/metadata.json
 {
+  "version": 2,
   "content": {
-    "en": {
-      "blog/my-post": {
-        "createdAt": "2026-03-05T11:00:00Z",
-        "updatedAt": "2026-03-10T09:15:00Z"
+    "syncToken": "2026-03-10T09:15:00.000Z",
+    "items": {
+      "en": {
+        "blog/my-post": {
+          "id": 7,
+          "createdAt": "2026-03-05T11:00:00Z",
+          "updatedAt": "2026-03-10T09:15:00Z"
+        }
       }
     }
   }
 }
 ```
 
-The same nested shape is used for `emailTemplates` inside `metadata.json`.
+The same `{ syncToken, items }` shape is used for `emailTemplates`, `sequences`, `segments`, `comments` and `redirects`; each remote's tokens stay with that remote's items.
 
 ### How It Works
 
@@ -609,20 +627,15 @@ async function readSyncToken(): Promise<{
 async function writeSyncToken(token: string): Promise<void>;
 
 // New: remote-aware
-async function readSyncToken(
-  ctx: RemoteContext,
-  entityType: "content" | "media" | "comments",
-): Promise<{ token: string | undefined; migrated: boolean }>;
-async function writeSyncToken(
-  ctx: RemoteContext,
-  entityType: "content" | "media" | "comments",
-  token: string,
-): Promise<void>;
+type SyncEntityType =
+  | "content" | "media" | "comments" | "email-templates" | "segments" | "sequences" | "redirects";
 
-// Token path resolution
-function syncTokenPath(ctx: RemoteContext, entityType: string): string {
-  return path.join(ctx.stateDir, `${entityType}-sync-token`);
-}
+// All four read and write .leadcms/remotes/{name}/metadata.json (format v2);
+// writes are atomic (temp file + rename) and migrate pre-v2 token files.
+async function readSyncToken(ctx: RemoteContext, entityType: SyncEntityType): Promise<string | undefined>;
+async function readSyncTokens(ctx: RemoteContext): Promise<Partial<Record<SyncEntityType, string>>>;
+async function writeSyncToken(ctx: RemoteContext, entityType: SyncEntityType, token: string): Promise<void>;
+async function clearSyncToken(ctx: RemoteContext, entityType: SyncEntityType): Promise<void>;
 ```
 
 ---
@@ -830,24 +843,14 @@ Validation rules:
 
 ## .gitignore Considerations
 
-```gitignore
-# Remote state (sync tokens, metadata, timestamps) — developer-local state
-.leadcms/remotes/
-```
+Commit `.leadcms/remotes/<name>/metadata.json` for every shared remote. It is the remote's checkpoint: the sync token from which the next pull continues and the remote ids and `updatedAt` baselines for every item. A clone without it has to pull everything from scratch, cannot detect items deleted on the remote since, and has no conflict baseline for push.
 
-OR selectively:
+Remotes that are personal to one developer (a local CMS, for example) can be ignored selectively:
 
 ```gitignore
-# Sync tokens are developer-local
-.leadcms/remotes/*/content-sync-token
-.leadcms/remotes/*/media-sync-token
-.leadcms/remotes/*/comments-sync-token
-
-# Metadata COULD be committed (shared team state)
-# .leadcms/remotes/*/metadata.json
+# A developer-local remote; shared remotes stay tracked
+.leadcms/remotes/local/
 ```
-
-Whether `metadata.json` is committed is a team decision. Committing it means new team members get the correct remote IDs and timestamp baselines without pulling first. Not committing means each developer builds their own metadata locally.
 
 ---
 

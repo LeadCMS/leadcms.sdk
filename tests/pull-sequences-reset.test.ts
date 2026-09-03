@@ -285,7 +285,7 @@ describe("resetSequencesState clears sequences metadata", () => {
     const { resetSequencesState } = await import("../src/scripts/pull-all");
     await resetSequencesState(remoteCtx);
 
-    const metadata = JSON.parse(await fsPromises.readFile(metadataPath, "utf8"));
+    const metadata = unwrapMetadata(JSON.parse(await fsPromises.readFile(metadataPath, "utf8")));
     // Sequences section should be empty or absent
     expect(metadata.sequences ?? {}).toEqual({});
     // Other sections should be preserved
@@ -331,7 +331,7 @@ describe("resetSegmentsState clears segments metadata", () => {
     const { resetSegmentsState } = await import("../src/scripts/pull-all");
     await resetSegmentsState(remoteCtx);
 
-    const metadata = JSON.parse(await fsPromises.readFile(metadataPath, "utf8"));
+    const metadata = unwrapMetadata(JSON.parse(await fsPromises.readFile(metadataPath, "utf8")));
     // Segments section should be empty
     expect(metadata.segments).toBeUndefined();
     // Other sections should be preserved
@@ -350,3 +350,20 @@ describe("resetSegmentsState clears segments metadata", () => {
     await expect(resetSegmentsState(remoteCtx)).resolves.not.toThrow();
   });
 });
+
+
+// metadata.json is written in format v2: `{ version: 2, <block>: { syncToken?, items } }`.
+// These assertions were written against the bare item maps, so unwrap the blocks.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function unwrapMetadata(doc: any): any {
+  if (typeof doc?.version !== "number") return doc;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const out: Record<string, any> = {};
+  for (const [block, value] of Object.entries(doc)) {
+    if (block === "version") continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const items = (value as any)?.items;
+    if (items !== undefined) out[block] = items;
+  }
+  return out;
+}

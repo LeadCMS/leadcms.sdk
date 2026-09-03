@@ -57,7 +57,7 @@ describe("sequential metadata writes", () => {
     await writeMetadataMap(remoteCtx, mapForContent);
 
     // Both sections should be present
-    const final = JSON.parse(await fsPromises.readFile(metadataPath, "utf8"));
+    const final = unwrapMetadata(JSON.parse(await fsPromises.readFile(metadataPath, "utf8")));
     expect(final.content?.en?.["hello-world"]).toBeDefined();
     expect(final.sequences?.en?.["welcome-sequence"]).toBeDefined();
   });
@@ -86,9 +86,26 @@ describe("sequential metadata writes", () => {
     };
     await writeMetadataMap(remoteCtx, mapC);
 
-    const final = JSON.parse(await fsPromises.readFile(metadataPath, "utf8"));
+    const final = unwrapMetadata(JSON.parse(await fsPromises.readFile(metadataPath, "utf8")));
     expect(final.sequences?.en?.["onboarding"]).toBeDefined();
     expect(final.segments?.["vip-customers"]).toBeDefined();
     expect(final.content?.en?.["about-us"]).toBeDefined();
   });
 });
+
+
+// metadata.json is written in format v2: `{ version: 2, <block>: { syncToken?, items } }`.
+// These assertions were written against the bare item maps, so unwrap the blocks.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function unwrapMetadata(doc: any): any {
+  if (typeof doc?.version !== "number") return doc;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const out: Record<string, any> = {};
+  for (const [block, value] of Object.entries(doc)) {
+    if (block === "version") continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const items = (value as any)?.items;
+    if (items !== undefined) out[block] = items;
+  }
+  return out;
+}
