@@ -9,9 +9,11 @@ import { requireAuthenticatedUser, resolveIdentity } from "../../scripts/leadcms
 import { initVerboseFromArgs } from "../../lib/logger.js";
 import { startSpinner } from "../../lib/spinner.js";
 import { parseRemoteFlag } from "./remote-flag.js";
+import { parseSiteFlag } from "./site-flag.js";
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+parseSiteFlag(args);
 parseRemoteFlag(args);
 const dryRun = args.includes("--dry-run") || args.includes("-d");
 const force = args.includes("--force") || args.includes("-f");
@@ -25,7 +27,7 @@ if (!dryRun) {
 
 // Parse scope UID
 let scopeUid: string | undefined;
-const scopeIndex = args.findIndex((arg) => arg === "--scope" || arg === "-s");
+const scopeIndex = args.findIndex((arg) => arg === "--scope");
 if (scopeIndex !== -1 && args[scopeIndex + 1]) {
   scopeUid = args[scopeIndex + 1];
 }

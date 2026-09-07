@@ -26,6 +26,7 @@ import { colorConsole, statusColors } from "../../lib/console-colors.js";
 import { defaultLanguage, leadCMSApiKey, resolveIdentity } from "../../scripts/leadcms-helpers.js";
 import { startSpinner } from "../../lib/spinner.js";
 import { parseRemoteFlag } from "./remote-flag.js";
+import { parseSiteFlag } from "./site-flag.js";
 
 import type {
   ContentOperations,
@@ -45,12 +46,13 @@ import type { RedirectStatusResult } from "../../scripts/push-redirects.js";
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+parseSiteFlag(args);
 const remoteContext = parseRemoteFlag(args);
 
 // Parse flags
 const showDelete = args.includes("--delete");
 let scopeUid: string | undefined;
-const scopeIndex = args.findIndex((arg) => arg === "--scope" || arg === "-s");
+const scopeIndex = args.findIndex((arg) => arg === "--scope");
 if (scopeIndex !== -1 && args[scopeIndex + 1]) {
   scopeUid = args[scopeIndex + 1];
 }

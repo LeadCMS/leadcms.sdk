@@ -38,6 +38,7 @@ import { initVerboseFromArgs } from "../../lib/logger.js";
 import { colorConsole, statusColors } from "../../lib/console-colors.js";
 import { startSpinner } from "../../lib/spinner.js";
 import { parseRemoteFlag } from "./remote-flag.js";
+import { parseSiteFlag } from "./site-flag.js";
 
 import type {
   ContentOperations,
@@ -57,6 +58,7 @@ import type { RedirectOperation, RedirectStatusResult } from "../../scripts/push
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+parseSiteFlag(args);
 const remoteContext = parseRemoteFlag(args);
 
 // Parse common flags
@@ -84,7 +86,7 @@ if (slugIndex !== -1 && args[slugIndex + 1]) {
 
 // Parse media-specific flags
 let scopeUid: string | undefined;
-const scopeIndex = args.findIndex((arg) => arg === "--scope" || arg === "-s");
+const scopeIndex = args.findIndex((arg) => arg === "--scope");
 if (scopeIndex !== -1 && args[scopeIndex + 1]) {
   scopeUid = args[scopeIndex + 1];
 }

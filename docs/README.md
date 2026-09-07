@@ -24,6 +24,11 @@ Complete documentation for the LeadCMS SDK - a framework-agnostic TypeScript/Jav
 
 - **[Public API Mode](./PUBLIC_API_MODE.md)** - Security-first approach and operation modes
 
+### Remotes & Sites
+
+- **[Multi-Remote](./MULTI_REMOTE.md)** - Named remotes: the same content tracked across CMS instances
+- **[Multi-Site](./MULTI_SITE.md)** - Named sites: one codebase serving several content trees
+
 ## Development
 
 - **[Development Guide](./DEVELOPMENT.md)** - Local development, testing, and debugging

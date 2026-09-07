@@ -9,9 +9,11 @@ import { requireAuthenticatedUser, resolveIdentity } from "../../scripts/leadcms
 import { initVerboseFromArgs } from "../../lib/logger.js";
 import { startSpinner } from "../../lib/spinner.js";
 import { parseRemoteFlag } from "./remote-flag.js";
+import { parseSiteFlag } from "./site-flag.js";
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+parseSiteFlag(args);
 parseRemoteFlag(args);
 
 const force = args.includes("--force") || args.includes("-f");

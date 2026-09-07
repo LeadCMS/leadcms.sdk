@@ -9,6 +9,7 @@
 import path from "path";
 import fs from "fs/promises";
 import { getConfig, type LeadCMSConfig } from "./config.js";
+import { DEFAULT_SITE_NAME, siteStateBaseDir, toEnvSegment } from "./site-context.js";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -28,13 +29,9 @@ export interface RemoteContext {
   apiKey?: string;
   /** Whether this is the default remote */
   isDefault: boolean;
-  /** Absolute path to remote state directory: .leadcms/remotes/{name}/ */
+  /** Absolute path to remote state directory: {site root}/remotes/{name}/ */
   stateDir: string;
 }
-
-// ── Internal constants ─────────────────────────────────────────────────
-
-const REMOTES_BASE_DIR = ".leadcms/remotes";
 
 // ── Resolution ─────────────────────────────────────────────────────────
 
@@ -54,20 +51,27 @@ const REMOTES_BASE_DIR = ".leadcms/remotes";
 export function resolveRemote(remoteName?: string, config?: LeadCMSConfig): RemoteContext {
   const cfg = config ?? getConfig();
 
+  // Remote state lives under the active site's root, so two sites may both
+  // call their production instance "prod" without sharing a checkpoint.
+  const stateBaseDir = siteStateBaseDir(cfg);
+  // Site-qualified API keys only exist in multi-site mode.
+  const siteName = cfg.sites && cfg.site && cfg.site !== DEFAULT_SITE_NAME ? cfg.site : undefined;
+  const forSite = siteName ? ` for site "${siteName}"` : "";
+
   // ── Single-remote mode ───────────────────────────────────────────
   if (!cfg.remotes || Object.keys(cfg.remotes).length === 0) {
     if (remoteName && remoteName !== "default") {
       throw new Error(
-        `Remote "${remoteName}" is not configured. ` +
-        `Add a "remotes" block to your leadcms config file to use named remotes.`
+        `Remote "${remoteName}" is not configured${forSite}. ` +
+          `Add a "remotes" block to your leadcms config file to use named remotes.`
       );
     }
     return {
       name: "default",
       url: (cfg.url || "").replace(/\/+$/, ""),
-      apiKey: cfg.apiKey ?? resolveApiKeyFromEnv("default"),
+      apiKey: cfg.apiKey ?? resolveApiKeyFromEnv("default", siteName),
       isDefault: true,
-      stateDir: path.resolve(REMOTES_BASE_DIR, "default"),
+      stateDir: path.join(stateBaseDir, "default"),
     };
   }
 
@@ -89,7 +93,9 @@ export function resolveRemote(remoteName?: string, config?: LeadCMSConfig): Remo
   const remote = cfg.remotes[name];
   if (!remote) {
     const available = Object.keys(cfg.remotes).join(", ");
-    throw new Error(`Remote "${name}" is not configured. Available remotes: ${available}`);
+    throw new Error(
+      `Remote "${name}" is not configured${forSite}. Available remotes: ${available}`
+    );
   }
 
   const isDefault = name === cfg.defaultRemote;
@@ -97,9 +103,9 @@ export function resolveRemote(remoteName?: string, config?: LeadCMSConfig): Remo
   return {
     name,
     url: (remote.url || "").replace(/\/+$/, ""),
-    apiKey: resolveApiKeyFromEnv(name),
+    apiKey: resolveApiKeyFromEnv(name, siteName),
     isDefault,
-    stateDir: path.resolve(REMOTES_BASE_DIR, name),
+    stateDir: path.join(stateBaseDir, name),
   };
 }
 
@@ -139,21 +145,36 @@ function resolveRemoteByUrl(cfg: LeadCMSConfig): string | undefined {
 }
 
 /**
- * Resolve the API key for a remote from environment variables.
+ * Environment variable names consulted for a remote's API key, most specific
+ * first. The site-qualified name exists only in multi-site mode.
  *
- * Resolution order:
- * 1. `LEADCMS_REMOTE_{NAME}_API_KEY` (remote-specific)
- * 2. `LEADCMS_API_KEY` (generic fallback for any remote)
+ * 1. `LEADCMS_SITE_{SITE}_REMOTE_{NAME}_API_KEY` (site-qualified)
+ * 2. `LEADCMS_REMOTE_{NAME}_API_KEY` (remote-specific)
+ * 3. `LEADCMS_API_KEY` (generic fallback for any remote)
+ */
+export function remoteApiKeyEnvNames(remoteName: string, siteName?: string): string[] {
+  const remoteSegment = toEnvSegment(remoteName);
+  const names: string[] = [];
+  if (siteName && siteName !== DEFAULT_SITE_NAME) {
+    names.push(`LEADCMS_SITE_${toEnvSegment(siteName)}_REMOTE_${remoteSegment}_API_KEY`);
+  }
+  names.push(`LEADCMS_REMOTE_${remoteSegment}_API_KEY`, "LEADCMS_API_KEY");
+  return names;
+}
+
+/**
+ * Resolve the API key for a remote from environment variables, in the order
+ * given by `remoteApiKeyEnvNames()`.
  *
  * NOTE: NEXT_PUBLIC_* prefixed keys are intentionally NOT checked here.
  * API keys must never be exposed to the browser via NEXT_PUBLIC_.
  */
-function resolveApiKeyFromEnv(remoteName: string): string | undefined {
-  const envName = remoteName.toUpperCase().replace(/-/g, "_");
-  const remoteSpecific = process.env[`LEADCMS_REMOTE_${envName}_API_KEY`];
-  if (remoteSpecific) return remoteSpecific;
-
-  return process.env.LEADCMS_API_KEY;
+function resolveApiKeyFromEnv(remoteName: string, siteName?: string): string | undefined {
+  for (const envName of remoteApiKeyEnvNames(remoteName, siteName)) {
+    const value = process.env[envName];
+    if (value) return value;
+  }
+  return undefined;
 }
 
 // ── Path helpers ──────────────────────────────────────────────────────

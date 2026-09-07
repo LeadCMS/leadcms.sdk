@@ -9,14 +9,16 @@ import { resolveIdentity } from "../../scripts/leadcms-helpers.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";
 import { startSpinner } from "../../lib/spinner.js";
 import { parseRemoteFlag } from "./remote-flag.js";
+import { parseSiteFlag } from "./site-flag.js";
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+parseSiteFlag(args);
 parseRemoteFlag(args);
 
 // Parse scope UID
 let scopeUid: string | undefined;
-const scopeIndex = args.findIndex((arg) => arg === "--scope" || arg === "-s");
+const scopeIndex = args.findIndex((arg) => arg === "--scope");
 if (scopeIndex !== -1 && args[scopeIndex + 1]) {
   scopeUid = args[scopeIndex + 1];
 }

@@ -1,6 +1,16 @@
 import fs from "fs";
 import path from "path";
 import type { RemoteConfig } from "./remote-context.js";
+import {
+  DEFAULT_SITE_NAME,
+  DEFAULT_SITE_ROOT,
+  expandSiteRoot,
+  hasSitesBlock,
+  selectSiteName,
+  validateSitesBlock,
+  type LeadCMSConfigFile,
+  type SiteConfig,
+} from "./site-context.js";
 
 export interface LeadCMSConfig {
   /** LeadCMS instance URL (single-remote mode) */
@@ -66,13 +76,33 @@ export interface LeadCMSConfig {
   remotes?: Record<string, RemoteConfig>;
   /** Default remote name (used when --remote is not specified) */
   defaultRemote?: string;
+  /**
+   * Active site name. "default" in single-site mode (no `sites` block).
+   * Set via `--site`, `configure({ site })`, `LEADCMS_SITE` or `defaultSite`.
+   */
+  site?: string;
+  /** Named sites (multi-site mode); see site-context.ts */
+  sites?: Record<string, SiteConfig>;
+  /** Default site name (used when --site is not specified) */
+  defaultSite?: string;
+}
+
+/** Options for building the effective configuration of one site. @internal */
+export interface EffectiveConfigOptions {
+  /** Explicit site to resolve; beats `configure({ site })` and `LEADCMS_SITE` */
+  site?: string;
+  /** Raw config file contents to use instead of reading the file (tests) */
+  file?: LeadCMSConfigFile;
+  /** Apply `LEADCMS_*` environment overrides (default: true) */
+  env?: boolean;
 }
 
 let globalConfig: LeadCMSConfig | null = null;
 
-// Configuration cache to avoid repeated file reads
+// Configuration cache to avoid repeated file reads. Caches the raw file;
+// site resolution happens on every call from that cached file.
 interface ConfigCache {
-  config: LeadCMSConfig;
+  config: LeadCMSConfigFile;
   timestamp: number;
   filePath: string;
 }
@@ -126,20 +156,44 @@ export function loadConfig(): LeadCMSConfig {
   return cleanConfig;
 }
 
-function buildConfig(): LeadCMSConfig {
+function buildConfig(options: EffectiveConfigOptions = {}): LeadCMSConfig {
   const cwd = process.cwd();
+  const applyEnv = options.env !== false;
 
-  // 1. Try to load from config file
-  const configFromFile = loadConfigFile(cwd);
+  // 1. Load the raw config file (cached) — top-level keys plus any `sites` block
+  const configFile: LeadCMSConfigFile = options.file ?? loadConfigFile(cwd);
 
-  // 2. Load from environment variables
-  const configFromEnv = loadConfigFromEnv();
+  // 2. Resolve the active site. Site selection happens on every call from the
+  //    cached file, so switching LEADCMS_SITE within one process takes effect
+  //    immediately.
+  const multiSite = hasSitesBlock(configFile);
+  if (multiSite) {
+    const { errors, warnings } = validateSitesBlock(configFile);
+    if (errors.length > 0) {
+      throw new Error(`LeadCMS configuration errors:\n${errors.join("\n")}`);
+    }
+    warnOnce(warnings);
+  }
+  const requestedSite = options.site || globalConfig?.site || process.env.LEADCMS_SITE || undefined;
+  const siteName = selectSiteName(configFile, requestedSite);
+  const { sites, defaultSite, ...topLevel } = configFile;
+  const site: SiteConfig | undefined = multiSite ? sites![siteName] : undefined;
+  const { root: siteRoot, ...siteKeys } = site ?? {};
 
-  // 3. Merge all sources with proper precedence
-  // Environment variables override config file (for security-sensitive data)
+  // 3. Load from environment variables
+  const configFromEnv = applyEnv ? loadConfigFromEnv() : {};
+
+  // 4. Merge all sources with proper precedence. Later entries win:
+  //    defaults ← top-level file keys ← site root expansion ← explicit site
+  //    keys ← environment variables ← programmatic configure().
+  //    Environment variables override config file (for security-sensitive data).
+  //    In single-site mode there is no expansion: DEFAULT_CONFIG already equals
+  //    the expansion of ".leadcms", so a top-level contentDir keeps winning.
   const mergedConfig = {
     ...DEFAULT_CONFIG,
-    ...configFromFile, // Config file settings
+    ...topLevel, // Config file settings
+    ...(site ? expandSiteRoot(siteRoot ?? DEFAULT_SITE_ROOT) : {}),
+    ...siteKeys, // Explicit per-site keys
     ...configFromEnv, // Environment variables override config file
     ...globalConfig, // Programmatic config takes precedence
   };
@@ -157,21 +211,60 @@ function buildConfig(): LeadCMSConfig {
     segmentsDir: mergedConfig.segmentsDir || DEFAULT_CONFIG.segmentsDir!,
     sequencesDir: mergedConfig.sequencesDir || DEFAULT_CONFIG.sequencesDir!,
     redirectsDir: mergedConfig.redirectsDir || DEFAULT_CONFIG.redirectsDir!,
-    contentRevisionFile:
-      mergedConfig.contentRevisionFile || DEFAULT_CONFIG.contentRevisionFile!,
+    contentRevisionFile: mergedConfig.contentRevisionFile || DEFAULT_CONFIG.contentRevisionFile!,
     languageDomains: mergedConfig.languageDomains,
     redirects: mergedConfig.redirects,
     enableDrafts: mergedConfig.enableDrafts || DEFAULT_CONFIG.enableDrafts!,
     preview: mergedConfig.preview, // Optional - undefined if not provided
     remotes: mergedConfig.remotes,
     defaultRemote: mergedConfig.defaultRemote,
+    site: siteName,
+    sites: multiSite ? sites : undefined,
+    defaultSite: multiSite ? defaultSite : undefined,
   };
 
   return cleanConfig;
 }
 
 /**
- * Set configuration programmatically
+ * Build the effective configuration for one site.
+ *
+ * Used by `site-context.ts` to resolve, list and describe sites. Prefer
+ * `getConfig()` / `loadLocalConfig()` everywhere else: they return the same
+ * object for the active site.
+ *
+ * @internal
+ */
+export function resolveEffectiveConfig(options: EffectiveConfigOptions = {}): LeadCMSConfig {
+  return buildConfig(options);
+}
+
+/**
+ * The raw config file as written on disk (cached), without site resolution
+ * or environment overrides. Used to enumerate sites.
+ *
+ * @internal
+ */
+export function loadRawConfigFile(): LeadCMSConfigFile {
+  return loadConfigFile(process.cwd());
+}
+
+const warnedOnce = new Set<string>();
+
+/** Print each configuration warning once per process. */
+function warnOnce(messages: string[]): void {
+  for (const message of messages) {
+    if (warnedOnce.has(message)) continue;
+    warnedOnce.add(message);
+    console.warn(`[LeadCMS] ${message}`);
+  }
+}
+
+/**
+ * Set configuration programmatically.
+ *
+ * `configure({ site: "zenith" })` selects a site at the same precedence as
+ * other programmatic config: above `LEADCMS_SITE` and `defaultSite`.
  */
 export function configure(config: Partial<LeadCMSConfig>): void {
   globalConfig = { ...globalConfig, ...config } as LeadCMSConfig;
@@ -211,7 +304,7 @@ export function getConfig(): LeadCMSConfig {
 /**
  * Load configuration from file with caching
  */
-function loadConfigFile(cwd: string = process.cwd()): Partial<LeadCMSConfig> {
+function loadConfigFile(cwd: string = process.cwd()): LeadCMSConfigFile {
   const possiblePaths = [
     path.join(cwd, "leadcms.config.js"),
     path.join(cwd, "leadcms.config.mjs"),
@@ -235,7 +328,7 @@ function loadConfigFile(cwd: string = process.cwd()): Partial<LeadCMSConfig> {
       }
 
       const ext = path.extname(configFilePath);
-      let config: LeadCMSConfig;
+      let config: LeadCMSConfigFile;
 
       if (ext === ".json" || configFilePath.endsWith(".leadcmsrc")) {
         // JSON config
@@ -379,7 +472,12 @@ function validateConfig(config: LeadCMSConfig): void {
   } else {
     // Single-remote mode — url is required
     if (!config.url) {
-      errors.push("Missing required configuration: url");
+      const siteName = config.site && config.site !== DEFAULT_SITE_NAME ? config.site : undefined;
+      errors.push(
+        siteName
+          ? `Site "${siteName}" has no "remotes" configured and no LEADCMS_URL is set`
+          : "Missing required configuration: url"
+      );
     }
 
     if (config.url && !isValidUrl(config.url)) {

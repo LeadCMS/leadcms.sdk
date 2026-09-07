@@ -29,11 +29,15 @@ COPY package*.json ./
 ARG LEADCMS_URL
 ARG LEADCMS_API_KEY
 ARG LEADCMS_DEFAULT_LANGUAGE=en
+# Multi-site projects: which site this preview serves (see `leadcms site list`).
+# Leave empty for single-site projects and for the default site.
+ARG LEADCMS_SITE
 
 # Export build args as environment variables
 ENV LEADCMS_URL=$LEADCMS_URL
 ENV LEADCMS_API_KEY=$LEADCMS_API_KEY
 ENV LEADCMS_DEFAULT_LANGUAGE=$LEADCMS_DEFAULT_LANGUAGE
+ENV LEADCMS_SITE=$LEADCMS_SITE
 
 # Support Next.js environment variables for backward compatibility
 ENV NEXT_PUBLIC_LEADCMS_URL=$LEADCMS_URL

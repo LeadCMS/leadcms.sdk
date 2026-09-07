@@ -7,9 +7,11 @@ import "dotenv/config";
 import { addContent } from "../../scripts/add-content.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";
 import { parseRemoteFlag } from "./remote-flag.js";
+import { parseSiteFlag } from "./site-flag.js";
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+parseSiteFlag(args);
 parseRemoteFlag(args);
 
 // First positional argument is the slug

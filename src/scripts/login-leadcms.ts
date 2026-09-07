@@ -5,7 +5,8 @@
 import { config as dotenvConfig } from "dotenv";
 import { getConfig } from "../lib/config.js";
 import { authenticate, saveTokenToEnv } from "../lib/auth.js";
-import { resolveRemote } from "../lib/remote-context.js";
+import { remoteApiKeyEnvNames, resolveRemote } from "../lib/remote-context.js";
+import { DEFAULT_SITE_NAME } from "../lib/site-context.js";
 import axios from "axios";
 import * as readline from "readline";
 
@@ -43,8 +44,12 @@ function parseRemoteArg(args: string[]): string | undefined {
   return name;
 }
 
-function remoteApiKeyEnvName(remoteName: string): string {
-  return `LEADCMS_REMOTE_${remoteName.toUpperCase().replace(/-/g, "_")}_API_KEY`;
+/**
+ * Env var a login should write the token to. Site-qualified in multi-site
+ * mode, so two sites that both name a remote "prod" keep separate keys.
+ */
+function remoteApiKeyEnvName(remoteName: string, siteName?: string): string {
+  return remoteApiKeyEnvNames(remoteName, siteName)[0];
 }
 
 /**
@@ -53,6 +58,7 @@ function remoteApiKeyEnvName(remoteName: string): string {
 async function main(args: string[] = []): Promise<void> {
   let leadCMSUrl: string | undefined;
   let selectedRemoteName: string | undefined;
+  let selectedSiteName: string | undefined;
   let shouldAlsoSaveGenericKey = false;
   const requestedRemote = parseRemoteArg(args);
 
@@ -63,7 +69,12 @@ async function main(args: string[] = []): Promise<void> {
       const remoteCtx = resolveRemote(requestedRemote);
       leadCMSUrl = remoteCtx.url;
       selectedRemoteName = remoteCtx.name;
-      shouldAlsoSaveGenericKey = remoteCtx.isDefault;
+      const multiSite = !!config.sites && config.site !== DEFAULT_SITE_NAME;
+      selectedSiteName = multiSite ? config.site : undefined;
+      // The generic key is the fallback for the default remote of the default site.
+      const siteIsDefault =
+        !multiSite || config.site === (config.defaultSite ?? Object.keys(config.sites ?? {})[0]);
+      shouldAlsoSaveGenericKey = remoteCtx.isDefault && siteIsDefault;
     } else {
       leadCMSUrl = config.url || process.env.LEADCMS_URL;
     }
@@ -89,7 +100,7 @@ async function main(args: string[] = []): Promise<void> {
 
     // Save to .env
     if (selectedRemoteName) {
-      const remoteEnvKey = remoteApiKeyEnvName(selectedRemoteName);
+      const remoteEnvKey = remoteApiKeyEnvName(selectedRemoteName, selectedSiteName);
       saveTokenToEnv(token, remoteEnvKey);
       if (shouldAlsoSaveGenericKey) {
         saveTokenToEnv(token, "LEADCMS_API_KEY");

@@ -28,5 +28,28 @@
       "url": "https://dev.cms.example.com"
     }
   },
-  "defaultRemote": "production"
+  "defaultRemote": "production",
+
+  "_comment_sites": "Multi-site setup (optional): one codebase, several content trees. Rename '_example_sites' to 'sites' and move 'remotes' / 'defaultRemote' into a site; top-level 'remotes' and 'url' are errors once 'sites' exists. Directory keys not set on a site derive from its 'root'.",
+  "_example_sites": {
+    "acme": {
+      "root": ".leadcms",
+      "mediaDir": "public/media",
+      "remotes": {
+        "production": { "url": "https://prod.cms.example.com" },
+        "develop": { "url": "https://dev.cms.example.com" }
+      },
+      "defaultRemote": "production"
+    },
+    "zenith": {
+      "root": "sites/zenith/.leadcms",
+      "mediaDir": "sites/zenith/public/media",
+      "defaultLanguage": "en-GB",
+      "remotes": {
+        "production": { "url": "https://cms.zenith.example.com" }
+      },
+      "defaultRemote": "production"
+    }
+  },
+  "_example_defaultSite": "acme"
 }

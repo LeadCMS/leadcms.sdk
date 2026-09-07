@@ -1,10 +1,11 @@
 import fs from "fs/promises";
 import path from "path";
 import axios, { AxiosResponse } from "axios";
-import { getConfig } from "../lib/config.js";
+import { loadLocalConfig, type LeadCMSConfig } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
 import { leadCMSDataService, type UserIdentity } from "../lib/data-service.js";
 import type { RemoteContext } from "../lib/remote-context.js";
+import type { SiteContext } from "../lib/site-context.js";
 
 interface ScriptError extends Error {
   code?: string;
@@ -34,15 +35,25 @@ interface ContentItem {
   [key: string]: any;
 }
 
-// Use the main configuration system instead of duplicating logic
-const config = getConfig();
+// Use the main configuration system instead of duplicating logic.
+// The local variant: directories, language and the active site are all that
+// module load needs. Remote validation (URL / API key) happens where a remote
+// is actually used — resolveRemote() and the data service — so local-only
+// commands (generate-redirects-map, generate-env, watch) work on a site whose
+// CMS instance is not configured yet.
+const config = loadLocalConfig();
 
 // Use configuration with environment variable fallbacks
 // These are `let` so that configureDataServiceForRemote() can update them
 // at runtime for multi-remote setups (ESM live bindings propagate to importers).
 export let leadCMSUrl = config.url;
 export let leadCMSApiKey = config.apiKey;
-export const defaultLanguage = config.defaultLanguage;
+
+// Directory and language bindings are computed once at import time for the
+// active site. They are `let` for the same reason as the URL/key above:
+// configureForSite() rebinds them when a bin script selects a site with
+// --site after this module has already been evaluated.
+export let defaultLanguage = config.defaultLanguage;
 
 /**
  * In single-language mode (no multi-language domain mapping configured),
@@ -50,17 +61,41 @@ export const defaultLanguage = config.defaultLanguage;
  * configured via `languageDomains`, which signals that `fromLanguage` /
  * `toLanguage` are meaningful and must be preserved in `redirects.yaml`.
  */
-export const singleLanguage: string | undefined =
-  !config.languageDomains || Object.keys(config.languageDomains).length <= 1
-    ? config.defaultLanguage
+export let singleLanguage: string | undefined = computeSingleLanguage(config);
+export let CONTENT_DIR = path.resolve(config.contentDir);
+export let MEDIA_DIR = path.resolve(config.mediaDir);
+export let EMAIL_TEMPLATES_DIR = path.resolve(config.emailTemplatesDir);
+export let SETTINGS_DIR = path.resolve(config.settingsDir || ".leadcms/settings");
+export let SEGMENTS_DIR = path.resolve(config.segmentsDir || ".leadcms/segments");
+export let SEQUENCES_DIR = path.resolve(config.sequencesDir || ".leadcms/sequences");
+export let REDIRECTS_DIR = path.resolve(config.redirectsDir || ".leadcms/redirects");
+
+function computeSingleLanguage(
+  cfg: Pick<LeadCMSConfig, "languageDomains" | "defaultLanguage">
+): string | undefined {
+  return !cfg.languageDomains || Object.keys(cfg.languageDomains).length <= 1
+    ? cfg.defaultLanguage
     : undefined;
-export const CONTENT_DIR = path.resolve(config.contentDir);
-export const MEDIA_DIR = path.resolve(config.mediaDir);
-export const EMAIL_TEMPLATES_DIR = path.resolve(config.emailTemplatesDir);
-export const SETTINGS_DIR = path.resolve(config.settingsDir || ".leadcms/settings");
-export const SEGMENTS_DIR = path.resolve(config.segmentsDir || ".leadcms/segments");
-export const SEQUENCES_DIR = path.resolve(config.sequencesDir || ".leadcms/sequences");
-export const REDIRECTS_DIR = path.resolve(config.redirectsDir || ".leadcms/redirects");
+}
+
+/**
+ * Point the module-level directory and language bindings at a site.
+ *
+ * Bin scripts call this from `parseSiteFlag()` after selecting a site, so
+ * that scripts importing `CONTENT_DIR` & co. directly work against the chosen
+ * site even when the flag was parsed after this module was evaluated.
+ */
+export function configureForSite(ctx: SiteContext): void {
+  defaultLanguage = ctx.defaultLanguage;
+  singleLanguage = computeSingleLanguage(ctx);
+  CONTENT_DIR = ctx.contentDir;
+  MEDIA_DIR = ctx.mediaDir;
+  EMAIL_TEMPLATES_DIR = ctx.emailTemplatesDir;
+  SETTINGS_DIR = ctx.settingsDir;
+  SEGMENTS_DIR = ctx.segmentsDir;
+  SEQUENCES_DIR = ctx.sequencesDir;
+  REDIRECTS_DIR = ctx.redirectsDir;
+}
 
 // Fetch content types dynamically from LeadCMS API to build typeMap
 // Content types are automatically detected and don't need to be configured

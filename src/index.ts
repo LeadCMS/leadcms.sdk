@@ -6,6 +6,10 @@ export * from "./lib/content-revision.js";
 export * from "./lib/comment-types.js";
 export * from "./lib/cms-config-types.js";
 
+// Multi-site support: which content tree a build or command works against
+export { getActiveSite, listSites, resolveSite, DEFAULT_SITE_NAME } from "./lib/site-context.js";
+export type { SiteContext, SiteConfig, LeadCMSConfigFile } from "./lib/site-context.js";
+
 // Settings types for programmatic use
 export type {
   SettingDetailsDto,

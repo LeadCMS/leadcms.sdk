@@ -3,7 +3,7 @@ import path from "path";
 import { buildCommentTree } from "./comment-utils.js";
 import type { StoredComment } from "./comment-types.js";
 import matter from "gray-matter";
-import { getConfig, isPreviewMode, type LeadCMSConfig } from "./config.js";
+import { isPreviewMode, loadLocalConfig, type LeadCMSConfig } from "./config.js";
 import { isValidLocaleCode } from "./locale-utils.js";
 
 interface ConfigError extends Error {
@@ -130,7 +130,11 @@ export function isContentDraft(content: CMSContent): boolean {
  */
 export function getLeadCMSConfig(): LeadCMSConfig {
   try {
-    return getConfig();
+    // Build-time reads only need the local layout (directories, languages,
+    // active site). loadLocalConfig() skips the remote validation that
+    // loadConfig() adds, so a site whose instance is not configured yet still
+    // resolves its own tree instead of falling through to the defaults below.
+    return loadLocalConfig();
   } catch {
     // If config loading fails, return minimal config with environment fallbacks
     return {

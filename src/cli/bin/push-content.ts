@@ -10,9 +10,11 @@ import { initVerboseFromArgs } from "../../lib/logger.js";
 import { startSpinner } from "../../lib/spinner.js";
 import { parsePushContentStatusArgs } from "./content-status-args.js";
 import { parseRemoteFlag } from "./remote-flag.js";
+import { parseSiteFlag } from "./site-flag.js";
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+parseSiteFlag(args);
 const remoteContext = parseRemoteFlag(args);
 const { statusOnly, statusFilter } = parsePushContentStatusArgs(args);
 const force = args.includes("--force");

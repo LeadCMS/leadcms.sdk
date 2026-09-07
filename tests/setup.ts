@@ -30,6 +30,8 @@ const getTestConfig = () => ({
 // Mock the config module to use our test fixtures
 jest.mock("../src/lib/config", () => ({
   getConfig: () => getTestConfig(),
+  // Build-time reads (getLeadCMSConfig) go through loadLocalConfig; same fixture config.
+  loadLocalConfig: () => getTestConfig(),
   loadConfig: () => getTestConfig(),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   configure: (config: any) => {

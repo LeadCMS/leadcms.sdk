@@ -30,6 +30,10 @@ const mediaDir = path.join(tmpRoot, "media");
 const harness = createSyncTestHarness({ contentDir, mediaDir });
 
 jest.mock("../src/lib/config.js", () => ({
+  // helpers/cms read the local config at import time; same mock as getConfig
+  get loadLocalConfig() {
+    return this.getConfig;
+  },
   getConfig: jest.fn(() => harness.config),
 }));
 jest.mock("axios", () => harness.axiosMock);

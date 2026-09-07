@@ -3,6 +3,7 @@ import { spawn } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
 import { readFileSync } from "fs";
+import { parseSiteArg } from "./bin/site-args.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,13 +11,19 @@ const __dirname = path.dirname(__filename);
 const command = process.argv[2];
 const commandArgs = process.argv.slice(3);
 
+// --site / -s is exported to the child as LEADCMS_SITE before it starts, so
+// modules that read the configuration at import time already see the
+// selected site. The flag stays in the arguments for the child's own parsing.
+const siteName = parseSiteArg(commandArgs);
+const childEnv = siteName ? { ...process.env, LEADCMS_SITE: siteName } : process.env;
+
 function runScript(scriptName: string, args: string[] = []) {
   // Use the new CLI bin files instead of the scripts directory
   const binDir = path.join(__dirname, "bin");
   const binPath = path.join(binDir, scriptName);
   const child = spawn("node", [binPath, ...args], {
     stdio: "inherit",
-    env: process.env,
+    env: childEnv,
   });
 
   child.on("exit", (code) => {
@@ -144,6 +151,9 @@ switch (command) {
   case "remote":
     runScript("remote.js", commandArgs);
     break;
+  case "site":
+    runScript("site.js", commandArgs);
+    break;
   case "docker":
   case "templates":
     generateDockerTemplates();
@@ -160,6 +170,7 @@ Usage:
   leadcms init           - Initialize LeadCMS configuration
   leadcms login          - Authenticate and save API token to .env file
   leadcms remote         - Manage named remotes (list/add/remove/show/set-default/reset)
+  leadcms site           - Manage named sites (list/add/remove/show/set-default)
   leadcms docker         - Generate Docker deployment templates
   leadcms add-content [slug] - Create a new content file locally via interactive wizard
 
@@ -170,6 +181,19 @@ Usage:
   leadcms remote show <name>            - Show remote details + state
   leadcms remote set-default <name>     - Set default remote
   leadcms remote reset <name>           - Clear sync state for one remote
+    --site <name>                       - Act on that site's remotes (multi-site)
+
+  Site commands (one codebase, several content trees):
+  leadcms site list [--names]           - List configured sites
+  leadcms site add <name> [options]     - Add a site (wraps a single-site config on first use)
+    --root <dir>                        - Site root (default: sites/<name>/.leadcms)
+    --media-dir <dir>                   - Media directory (default: sites/<name>/public/media)
+    --language <code>                   - Default language for the site
+    --remote <name>=<url>               - Add a remote (repeatable; first one is the default)
+    --default                           - Make it the default site
+  leadcms site remove <name>            - Remove a site from the config (files stay)
+  leadcms site set-default <name>       - Set the default site
+  leadcms site show [name]              - Show directories, remotes and sync state
 
   Pull commands:
   leadcms pull [options] - Pull all content, media, and comments from LeadCMS
@@ -283,6 +307,9 @@ Usage:
                            In multi-remote mode: defaults to defaultRemote when omitted
                            In single-remote mode: uses configured url/apiKey
                            See 'leadcms remote list' for available remotes
+  --site, -s <name>      - Work against a named site (multi-site support)
+                           Defaults to LEADCMS_SITE, then defaultSite from config
+                           See 'leadcms site list' for available sites
 
 Getting Started:
   1. Initialize configuration:
@@ -304,6 +331,11 @@ Getting Started:
      leadcms pull -r production        - Pull from production
      leadcms push -r develop --force   - Push to develop
      leadcms status -r production      - Show status vs production
+
+  5. Serve several sites from one codebase (optional):
+     leadcms site add zenith --language en-GB --remote prod=https://cms.zenith.example.com
+     leadcms pull -s zenith            - Pull zenith's content into its own tree
+     LEADCMS_SITE=zenith pnpm build    - Build the zenith site
 
 Configuration Files:
   .env (recommended, created by 'leadcms login'):
@@ -334,9 +366,25 @@ Configuration Files:
       "defaultRemote": "production"
     }
 
+  leadcms.config.json (multi-site):
+    {
+      "defaultLanguage": "en",
+      "sites": {
+        "acme":   { "root": ".leadcms", "mediaDir": "public/media",
+                    "remotes": { "prod": { "url": "https://cms.acme.example.com" } },
+                    "defaultRemote": "prod" },
+        "zenith": { "root": "sites/zenith/.leadcms", "mediaDir": "sites/zenith/public/media",
+                    "defaultLanguage": "en-GB",
+                    "remotes": { "prod": { "url": "https://cms.zenith.example.com" } },
+                    "defaultRemote": "prod" }
+      },
+      "defaultSite": "acme"
+    }
+
   Note: Environment variables take precedence over config file.
   Next.js users can use NEXT_PUBLIC_LEADCMS_URL for client-side access.
   For remote API keys, use LEADCMS_REMOTE_{NAME}_API_KEY (no NEXT_PUBLIC_).
+  In multi-site projects, LEADCMS_SITE_{SITE}_REMOTE_{NAME}_API_KEY is checked first.
 `);
     break;
 }

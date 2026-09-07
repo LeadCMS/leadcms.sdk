@@ -31,6 +31,10 @@ function saveTestContent(slug: string, id: number, language = "en") {
 
 // Mock configuration for tests - must be before imports that use getConfig at module load
 jest.mock("../src/lib/config.js", () => ({
+  // helpers/cms read the local config at import time; same mock as getConfig
+  get loadLocalConfig() {
+    return this.getConfig;
+  },
   getConfig: jest.fn(() =>
     createTestConfig({
       apiKey: "test-api-key",

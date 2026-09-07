@@ -320,6 +320,10 @@ jest.mock("../src/lib/data-service.js", () => ({
 }));
 
 jest.mock("../src/lib/config.js", () => ({
+  // helpers/cms read the local config at import time; same mock as getConfig
+  get loadLocalConfig() {
+    return this.getConfig;
+  },
   getConfig: jest.fn(() => createTestConfig()),
   loadConfig: jest.fn(() => createTestConfig()),
 }));

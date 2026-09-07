@@ -12,8 +12,10 @@ import {
   DEFAULT_CONTENT_REVISION_FILE,
   ensureContentRevisionFile,
 } from "../../lib/content-revision.js";
+import { selectSite } from "./site-args.js";
 
 const args = process.argv.slice(2);
+selectSite(args, { quiet: true });
 const flag = args.indexOf("--revision-file");
 const revisionFile =
   flag !== -1 && args[flag + 1]

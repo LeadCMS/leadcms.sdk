@@ -9,17 +9,30 @@
  *   leadcms remote show <name>       - Show details for a remote
  *   leadcms remote set-default <name>  - Set the default remote
  *   leadcms remote reset <name>      - Reset sync tokens and metadata for a remote
+ *
+ * Every subcommand accepts --site <name>; in multi-site mode it acts on that
+ * site's `remotes` block (default: the default site).
  */
 
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
-import { listRemotes, resolveRemote } from "../../lib/remote-context.js";
+import { listRemotes, remoteApiKeyEnvNames, resolveRemote } from "../../lib/remote-context.js";
 import { getConfig } from "../../lib/config.js";
+import { DEFAULT_SITE_NAME, type LeadCMSConfigFile, type SiteConfig } from "../../lib/site-context.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";
+import { selectSite, stripSiteArgs } from "./site-args.js";
+import { findConfigPath, readRawConfig, writeRawConfig } from "./config-file.js";
+import { countNested, readRemoteStateSync } from "./remote-state.js";
 
-const args = process.argv.slice(2);
-initVerboseFromArgs(args);
+const rawArgs = process.argv.slice(2);
+initVerboseFromArgs(rawArgs);
+
+// Resolve the site first: it prints the site header in multi-site mode and
+// makes every getConfig() below return that site's remotes.
+const siteCtx = selectSite(rawArgs);
+const multiSite = siteCtx.name !== DEFAULT_SITE_NAME;
+const args = stripSiteArgs(rawArgs);
 
 const subcommand = args[0];
 
@@ -63,6 +76,9 @@ Subcommands:
   set-default <name>       Set the default remote
   reset <name>             Reset sync state for a remote (clear sync tokens and metadata)
 
+Options:
+  --site, -s <name>        Act on this site's remotes (multi-site projects)
+
 Examples:
   leadcms remote list
   leadcms remote add production https://cms.example.com
@@ -70,7 +86,22 @@ Examples:
   leadcms remote set-default production
   leadcms remote show production
   leadcms remote reset develop
+  leadcms remote add prod https://cms.zenith.example.com --site zenith
 `);
+}
+
+/**
+ * The object that holds `remotes` / `defaultRemote` for the selected site:
+ * the site entry in multi-site mode, the config root otherwise.
+ */
+function remotesOwner(rawConfig: LeadCMSConfigFile): SiteConfig | LeadCMSConfigFile {
+  if (!multiSite) return rawConfig;
+  const site = rawConfig.sites?.[siteCtx.name];
+  if (!site) {
+    console.error(`❌ Site "${siteCtx.name}" is not configured in the config file.`);
+    process.exit(1);
+  }
+  return site;
 }
 
 function listRemotesCommand(): void {
@@ -133,29 +164,31 @@ function addRemoteCommand(subArgs: string[]): void {
     process.exit(1);
   }
 
-  const rawConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  const rawConfig = readRawConfig(configPath);
+  const owner = remotesOwner(rawConfig);
 
-  if (!rawConfig.remotes) {
-    rawConfig.remotes = {};
+  if (!owner.remotes) {
+    owner.remotes = {};
   }
 
-  if (rawConfig.remotes[name]) {
+  if (owner.remotes[name]) {
     console.error(`❌ Remote "${name}" already exists. Remove it first to reconfigure.`);
     process.exit(1);
   }
 
-  rawConfig.remotes[name] = { url: url.replace(/\/+$/, "") };
+  owner.remotes[name] = { url: url.replace(/\/+$/, "") };
 
   // If this is the first remote, set it as default
-  if (Object.keys(rawConfig.remotes).length === 1 && !rawConfig.defaultRemote) {
-    rawConfig.defaultRemote = name;
-    console.log(`✅ Added remote "${name}" → ${url}`);
+  const forSite = multiSite ? ` (site "${siteCtx.name}")` : "";
+  if (Object.keys(owner.remotes).length === 1 && !owner.defaultRemote) {
+    owner.defaultRemote = name;
+    console.log(`✅ Added remote "${name}" → ${url}${forSite}`);
     console.log(`   Set as default remote.`);
   } else {
-    console.log(`✅ Added remote "${name}" → ${url}`);
+    console.log(`✅ Added remote "${name}" → ${url}${forSite}`);
   }
 
-  fs.writeFileSync(configPath, JSON.stringify(rawConfig, null, 2) + "\n", "utf-8");
+  writeRawConfig(configPath, rawConfig);
 }
 
 function removeRemoteCommand(subArgs: string[]): void {
@@ -171,31 +204,32 @@ function removeRemoteCommand(subArgs: string[]): void {
     process.exit(1);
   }
 
-  const rawConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  const rawConfig = readRawConfig(configPath);
+  const owner = remotesOwner(rawConfig);
 
-  if (!rawConfig.remotes || !rawConfig.remotes[name]) {
+  if (!owner.remotes || !owner.remotes[name]) {
     console.error(`❌ Remote "${name}" is not configured.`);
     process.exit(1);
   }
 
-  delete rawConfig.remotes[name];
+  delete owner.remotes[name];
 
-  if (rawConfig.defaultRemote === name) {
-    const remaining = Object.keys(rawConfig.remotes);
-    rawConfig.defaultRemote = remaining.length > 0 ? remaining[0] : undefined;
-    if (rawConfig.defaultRemote) {
-      console.log(`   Default remote changed to "${rawConfig.defaultRemote}".`);
+  if (owner.defaultRemote === name) {
+    const remaining = Object.keys(owner.remotes);
+    owner.defaultRemote = remaining.length > 0 ? remaining[0] : undefined;
+    if (owner.defaultRemote) {
+      console.log(`   Default remote changed to "${owner.defaultRemote}".`);
     } else {
-      delete rawConfig.defaultRemote;
+      delete owner.defaultRemote;
     }
   }
 
-  if (Object.keys(rawConfig.remotes).length === 0) {
-    delete rawConfig.remotes;
-    delete rawConfig.defaultRemote;
+  if (Object.keys(owner.remotes).length === 0) {
+    delete owner.remotes;
+    delete owner.defaultRemote;
   }
 
-  fs.writeFileSync(configPath, JSON.stringify(rawConfig, null, 2) + "\n", "utf-8");
+  writeRawConfig(configPath, rawConfig);
   console.log(`✅ Removed remote "${name}".`);
 }
 
@@ -233,8 +267,8 @@ function showRemoteCommand(subArgs: string[]): void {
     console.log("");
 
     if (!ctx.apiKey) {
-      const envName = name.toUpperCase().replace(/-/g, "_");
-      console.log(`  💡 Set API key with: LEADCMS_REMOTE_${envName}_API_KEY=<key>`);
+      const envName = remoteApiKeyEnvNames(name, multiSite ? siteCtx.name : undefined)[0];
+      console.log(`  💡 Set API key with: ${envName}=<key>`);
       console.log("");
     }
   } catch (_error: unknown) {
@@ -257,17 +291,18 @@ function setDefaultCommand(subArgs: string[]): void {
     process.exit(1);
   }
 
-  const rawConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  const rawConfig = readRawConfig(configPath);
+  const owner = remotesOwner(rawConfig);
 
-  if (!rawConfig.remotes || !rawConfig.remotes[name]) {
+  if (!owner.remotes || !owner.remotes[name]) {
     console.error(
       `❌ Remote "${name}" is not configured. Add it first with: leadcms remote add ${name} <url>`
     );
     process.exit(1);
   }
 
-  rawConfig.defaultRemote = name;
-  fs.writeFileSync(configPath, JSON.stringify(rawConfig, null, 2) + "\n", "utf-8");
+  owner.defaultRemote = name;
+  writeRawConfig(configPath, rawConfig);
   console.log(`✅ Default remote set to "${name}".`);
 }
 
@@ -311,72 +346,4 @@ function resetRemoteCommand(subArgs: string[]): void {
     console.error(`❌ ${(error as Error).message}`);
     process.exit(1);
   }
-}
-
-// ── State inspection (sync, for CLI output) ───────────────────────────
-
-interface RemoteStateSummary {
-  hasMetadata: boolean;
-  tokens: Record<string, string>;
-  sections: Record<string, unknown>;
-}
-
-/**
- * Read a remote's metadata.json without the async API. Understands the v2
- * layout (`{ version: 2, <block>: { syncToken, items } }`), the pre-v2 bare
- * layout, and pre-v2 `<type>-sync-token` files.
- */
-function readRemoteStateSync(stateDir: string): RemoteStateSummary {
-  const summary: RemoteStateSummary = { hasMetadata: false, tokens: {}, sections: {} };
-  try {
-    const doc = JSON.parse(fs.readFileSync(path.join(stateDir, "metadata.json"), "utf-8"));
-    summary.hasMetadata = true;
-    const isV2 = typeof doc.version === "number" && doc.version >= 2;
-    for (const [block, value] of Object.entries(doc)) {
-      if (block === "version" || !value || typeof value !== "object") continue;
-      if (isV2) {
-        const { syncToken, items } = value as { syncToken?: unknown; items?: unknown };
-        if (typeof syncToken === "string" && syncToken) summary.tokens[block] = syncToken;
-        if (items && typeof items === "object") summary.sections[block] = items;
-      } else {
-        summary.sections[block] = value;
-      }
-    }
-  } catch {
-    // No metadata.json
-  }
-  // Declared here, not at module level: the command dispatcher above runs at
-  // import time, before later top-level constants are initialised.
-  const entityTypes = ["content", "media", "comments", "email-templates", "segments", "sequences", "redirects"];
-  for (const entity of entityTypes) {
-    if (summary.tokens[entity]) continue;
-    try {
-      const token = fs.readFileSync(path.join(stateDir, `${entity}-sync-token`), "utf-8").trim();
-      if (token) summary.tokens[entity] = token;
-    } catch {
-      // No pre-v2 token file
-    }
-  }
-  return summary;
-}
-
-function countNested(section: unknown): number {
-  if (!section || typeof section !== "object") return 0;
-  return Object.values(section as Record<string, unknown>).reduce<number>(
-    (sum, inner) => sum + Object.keys((inner as Record<string, unknown>) || {}).length,
-    0
-  );
-}
-
-function findConfigPath(): string | null {
-  const candidates = ["leadcms.config.json", "leadcms.config.js"];
-
-  for (const name of candidates) {
-    const fullPath = path.resolve(name);
-    if (fs.existsSync(fullPath)) {
-      return fullPath;
-    }
-  }
-
-  return null;
 }

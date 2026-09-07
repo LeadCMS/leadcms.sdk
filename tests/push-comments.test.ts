@@ -11,6 +11,10 @@ const commentsDir = path.join(tmpRoot, "comments");
 let dataServiceMock: any;
 
 jest.mock("../src/lib/config.js", () => ({
+  // helpers/cms read the local config at import time; same mock as getConfig
+  get loadLocalConfig() {
+    return this.getConfig;
+  },
   getConfig: jest.fn(() =>
     createTestConfig({
       commentsDir,

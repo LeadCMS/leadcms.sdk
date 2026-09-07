@@ -7,9 +7,15 @@ import "dotenv/config";
 import { watch } from "../../scripts/watch.js";
 import { loadLocalConfig } from "../../lib/config.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";
+import { selectSite } from "./site-args.js";
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+
+// Select the site before anything reads the configuration, so the watcher
+// covers that site's content directory and its remotes. This variant of the
+// site flag does not touch leadcms-helpers, for the same reason as below.
+selectSite(args);
 
 const revisionFlag = args.indexOf("--revision-file");
 const revisionFile = revisionFlag !== -1 ? args[revisionFlag + 1] : undefined;

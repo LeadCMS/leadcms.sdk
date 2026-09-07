@@ -8,9 +8,11 @@ import { pushLeadCMSContent } from "../../scripts/push-leadcms-content.js";
 import { requireAuthenticatedUser, resolveIdentity } from "../../scripts/leadcms-helpers.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";
 import { parseRemoteFlag } from "./remote-flag.js";
+import { parseSiteFlag } from "./site-flag.js";
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+parseSiteFlag(args);
 const remoteContext = parseRemoteFlag(args);
 const statusOnly = args.includes("--status");
 const force = args.includes("--force");

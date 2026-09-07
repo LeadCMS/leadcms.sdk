@@ -275,6 +275,46 @@ configure({
 - `contentDir` - Directory for downloaded content (default: ".leadcms/content")
 - `mediaDir` - Directory for media files (default: "public/media")
 - `enableDrafts` - Enable draft content support (default: false, requires API key)
+- `remotes` / `defaultRemote` - Named CMS instances of one site (see [Multi-Remote](./docs/MULTI_REMOTE.md))
+- `sites` / `defaultSite` - Named sites: one codebase, several content trees (see [Multiple sites](#multiple-sites))
+
+### Multiple sites
+
+One codebase can serve several sites: two brands of one product, regional editions, an agency template that produces a site per client. Each **site** owns its content and entity directories, its media directory, its default language, its remotes and the sync state of those remotes. Sites and remotes are orthogonal: a site answers _which content?_, a remote answers _which instance of that site?_.
+
+```json
+{
+  "defaultLanguage": "en",
+  "sites": {
+    "acme": {
+      "root": ".leadcms",
+      "mediaDir": "public/media",
+      "remotes": {
+        "prod": { "url": "https://cms.acme.example.com" },
+        "dev": { "url": "https://cms.dev.acme.example.com" }
+      },
+      "defaultRemote": "prod"
+    },
+    "zenith": {
+      "root": "sites/zenith/.leadcms",
+      "mediaDir": "sites/zenith/public/media",
+      "defaultLanguage": "en-GB",
+      "remotes": { "prod": { "url": "https://cms.zenith.example.com" } },
+      "defaultRemote": "prod"
+    }
+  },
+  "defaultSite": "acme"
+}
+```
+
+- `root` expands to `{root}/content`, `{root}/comments`, `{root}/email-templates`, `{root}/settings`, `{root}/segments`, `{root}/sequences`, `{root}/redirects`, and to the remote state base `{root}/remotes`. A `*Dir` key set on the site overrides that one directory.
+- `mediaDir` is not derived from `root`. It inherits the top-level value and must be unique per site.
+- Other top-level keys (`defaultLanguage`, `languageDomains`, `redirects`, `enableDrafts`) are defaults every site inherits. `url`, `remotes` and `defaultRemote` are rejected at the top level once `sites` exists: they belong to a site.
+- The active site is chosen by `--site <name>` / `-s <name>`, then `LEADCMS_SITE`, then `defaultSite`. Environment overrides such as `LEADCMS_CONTENT_DIR` still apply, to the selected site.
+- API keys are looked up as `LEADCMS_SITE_{SITE}_REMOTE_{REMOTE}_API_KEY`, then `LEADCMS_REMOTE_{REMOTE}_API_KEY`, then `LEADCMS_API_KEY`, so two sites may both call their production instance `prod`.
+- Without a `sites` block nothing changes: the project is one implicit site rooted at `.leadcms`, and `--site` is an error.
+
+Manage sites with `leadcms site …` (see [Site management](#site-management)) and build one site at a time with `LEADCMS_SITE` (see [Multiple sites in a build](#multiple-sites-in-a-build)). Design notes: [docs/MULTI_SITE.md](./docs/MULTI_SITE.md).
 
 ## CLI Usage
 
@@ -583,6 +623,34 @@ All status commands show records that exist only on the remote (labeled `added r
 
 Pass `--delete` to status or push commands when you want the local files to be treated as the source of truth. In that mode, remote records that do not exist locally are shown as `deleted locally:` and can be removed from LeadCMS by the matching push command.
 
+### Site management
+
+```bash
+npx leadcms site list                         # sites, their roots, languages and remotes
+npx leadcms site add zenith --language en-GB --remote prod=https://cms.zenith.example.com
+npx leadcms site show zenith                  # directories, remotes, per-remote checkpoints
+npx leadcms site set-default zenith
+npx leadcms site remove zenith                # config entry only; files stay in place
+```
+
+`site add` defaults the root to `sites/<name>/.leadcms` and the media directory to `sites/<name>/public/media`; pass `--root` and `--media-dir` to change them. On a project that has no `sites` block yet, the first `site add` wraps the current configuration into a site (name it with `--existing-name`, or answer the prompt) after asking for confirmation. Existing files and remote checkpoints under `.leadcms/` are picked up unchanged.
+
+Every pull, push, status and watch command, `generate-redirects-map`, `add-content`, `login` and the `remote` subcommands take `--site <name>` / `-s <name>`:
+
+```bash
+npx leadcms pull --site zenith                # zenith's content from zenith's default remote
+npx leadcms pull -s zenith -r dev             # … from zenith's dev remote
+npx leadcms remote add dev https://cms.dev.zenith.example.com --site zenith
+LEADCMS_SITE=zenith npx leadcms status        # same as --site zenith
+```
+
+Commands print the site next to the remote so logs are unambiguous:
+
+```
+🏷  Site: zenith            (sites/zenith/.leadcms)
+🌐 Remote: prod (default) → https://cms.zenith.example.com
+```
+
 ### Redirects management
 
 Redirects are a first-class entity in LeadCMS. Pull them from the server, edit locally as YAML, push back, and generate nginx map files for deployment.
@@ -726,6 +794,56 @@ app.get("/api/content/:slug", (req, res) => {
   res.json(content);
 });
 ```
+
+### Multiple sites in a build
+
+With a `sites` block, every build-time function (`getAllContentRoutes()`, `getCMSContentBySlugForLocale()`, `getAvailableLanguages()`, …) reads the active site's tree and languages. Select the site per build:
+
+```bash
+LEADCMS_SITE=acme   LEADCMS_REMOTE=prod pnpm build
+LEADCMS_SITE=zenith LEADCMS_REMOTE=prod pnpm build
+```
+
+`getActiveSite()` and `listSites()` expose the resolved sites to host code:
+
+```typescript
+import { getActiveSite, listSites } from "@leadcms/sdk";
+
+getActiveSite(); // { name: "zenith", isDefault: false, root, defaultLanguage: "en-GB", contentDir, mediaDir, remotes, … }
+listSites(); // every configured site; a single "default" entry without a `sites` block
+```
+
+Content references media as `/media/...` and static hosts serve `public/`, so `public/media` has to point at the active site's media directory at build time. A prebuild step does that (a symlink, or a copy where symlinks are unavailable):
+
+```js
+// scripts/link-site-media.mjs
+import { getActiveSite } from "@leadcms/sdk";
+import fs from "node:fs";
+import path from "node:path";
+
+const site = getActiveSite();
+const link = path.resolve("public/media");
+if (site.mediaDir !== link) {
+  let existing = null;
+  try {
+    existing = fs.lstatSync(link);
+  } catch {}
+  if (existing && !existing.isSymbolicLink()) {
+    // A real directory here belongs to another site; never delete it.
+    throw new Error(`${link} is a directory, not a link — give that site its own mediaDir`);
+  }
+  if (existing) fs.unlinkSync(link);
+  fs.mkdirSync(path.dirname(link), { recursive: true });
+  // Relative target: the link keeps working after a clone or a Docker COPY.
+  fs.symlinkSync(path.relative(path.dirname(link), site.mediaDir), link, "junction");
+}
+```
+
+```json
+"prebuild": "leadcms pull && leadcms generate-env && leadcms generate-redirects-map && node scripts/link-site-media.mjs"
+```
+
+If you build several sites on one machine, give every site its own media directory outside `public/` (for example `sites/<name>/public/media`), add `public/media` to `.gitignore`, and let the link step cover all of them. Builds run one site at a time: the redirect `outputDir` and the static output directory are overwritten per build, so a CI matrix runs one job per site with that site's variables. The preview Docker template passes `LEADCMS_SITE` through as a build argument.
 
 ## API Reference
 
@@ -960,6 +1078,8 @@ try {
 
 - **[Interactive Init](./docs/INTERACTIVE_INIT.md)** - Setup wizard and authentication
 - **[Public API Mode](./docs/PUBLIC_API_MODE.md)** - Security-first approach and operation modes
+- **[Multi-Remote](./docs/MULTI_REMOTE.md)** - Named remotes: the same content across production, develop and local instances
+- **[Multi-Site](./docs/MULTI_SITE.md)** - Named sites: one codebase, several content trees
 
 #### Development
 

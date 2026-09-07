@@ -10,9 +10,11 @@ import "dotenv/config";
 import { generateRedirectsMap } from "../../scripts/generate-redirects-map.js";
 import { initVerboseFromArgs } from "../../lib/logger.js";
 import { startSpinner } from "../../lib/spinner.js";
+import { parseSiteFlag } from "./site-flag.js";
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
+parseSiteFlag(args);
 
 const dryRun = args.includes("--dry-run") || args.includes("-d") || args.includes("-n");
 

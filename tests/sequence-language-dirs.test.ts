@@ -32,6 +32,10 @@ const seqRemoteContext = {
 
 // ── Mocks ──────────────────────────────────────────────────────────────
 jest.mock("../src/lib/config.js", () => ({
+  // helpers/cms read the local config at import time; same mock as getConfig
+  get loadLocalConfig() {
+    return this.getConfig;
+  },
   getConfig: jest.fn(() => createTestConfig({ sequencesDir, defaultLanguage: "en" })),
 }));
 

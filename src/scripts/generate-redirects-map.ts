@@ -36,7 +36,7 @@ import fs from "fs/promises";
 import path from "path";
 import yaml from "js-yaml";
 import { REDIRECTS_DIR, defaultLanguage } from "./leadcms-helpers.js";
-import { getConfig } from "../lib/config.js";
+import { loadLocalConfig } from "../lib/config.js";
 import { leadCMSDataService } from "../lib/data-service.js";
 import { logger } from "../lib/logger.js";
 import type { LocalRedirect, LocalRedirectsFile, RedirectKind } from "../lib/automation-types.js";
@@ -326,7 +326,8 @@ export async function generateRedirectsMap(
 ): Promise<void> {
   const { outputDir: outputDirArg, language: languageArg, dryRun = false } = options;
 
-  const config = getConfig();
+  // Local-only: reads redirects.yaml and writes the nginx maps; no remote needed.
+  const config = loadLocalConfig();
   const pathPattern = config.redirects?.pathPattern ?? "/{language}/{slug}";
   const languageDomains = config.languageDomains;
 
