@@ -1,6 +1,6 @@
 # Multi-Site Support for LeadCMS SDK
 
-**Status:** implemented in v3.10.0 (see [Implementation Notes](#implementation-notes) for where the shipped behaviour refines this design).
+**Status:** implemented in v3.10.0, redirect maps made per site in v3.11.0 (see [Implementation Notes](#implementation-notes) for where the shipped behaviour refines this design).
 **Companion doc:** [MULTI_REMOTE.md](./MULTI_REMOTE.md), which this design builds on.
 
 ## Implementation Notes
@@ -15,6 +15,7 @@ The design below was implemented as written, with these refinements:
 - **`login` saves the site-qualified key** (`LEADCMS_SITE_{S}_REMOTE_{R}_API_KEY`) in multi-site mode, and the generic `LEADCMS_API_KEY` only for the default remote of the default site. `remote show` and `site show` hint at the same variable.
 - **`site list`** marks the active site with `*` and the default site with `[default]`; `--names` prints one name per line for shell loops (open question 1).
 - **A site without remotes** still honours `LEADCMS_URL` from the environment as its single remote, with state under `{root}/remotes/default/`.
+- **Redirect maps are per site (v3.11.0, [issue #4](https://github.com/LeadCMS/leadcms.sdk/issues/4)).** The design treated `redirects.outputDir` as shared because builds run one site at a time. In practice a shared folder flips between sites on every switch, and anything that copies it (a committed copy, the preview image) can ship another site's redirects. Without an explicit `outputDir`, a named site now writes to `redirects/{site}`; an explicit value, top-level or per site, is used as written. `SiteContext.redirectsOutputDir` and `site show` report the folder, and migrating a single-site project prints the move. A site's `redirects` is now merged with the top-level one key by key (before, a site that set only `outputDir` lost the inherited `pathPattern` and `trailingSlash`). `languageDomains` keeps replace semantics: it describes the site's language set, and merging would give one brand another brand's domains and make a single-language site multi-language. When a site has no redirects at all, `generate-redirects-map` now removes stale maps from the output folder instead of leaving them. The preview Docker template generates the maps for its `LEADCMS_SITE` during the image build and again after the startup pull, rather than copying `redirects/*.map` from the build context.
 
 ## Problem Statement
 
@@ -99,7 +100,7 @@ A flat list `acme-prod`, `acme-dev`, `zenith-prod`, `zenith-dev`, each with its 
   // Top-level keys are defaults shared by every site (all optional).
   "defaultLanguage": "en",
   "enableDrafts": false,
-  "redirects": { "outputDir": "redirects", "pathPattern": "/{slug}/", "trailingSlash": "both" },
+  "redirects": { "pathPattern": "/{slug}/", "trailingSlash": "both" },
 
   "sites": {
     "acme": {
@@ -141,8 +142,8 @@ Every key below may be set per site. Unset keys inherit the top-level value, the
 | `redirectsDir`      | `{root}/redirects`                   |                                                                       |
 | `mediaDir`          | top-level `mediaDir` (`public/media`) | Must be unique per site; see validation                              |
 | `defaultLanguage`   | top-level `defaultLanguage`          |                                                                       |
-| `languageDomains`   | top-level value                      |                                                                       |
-| `redirects`         | top-level value                      | `outputDir` is usually shared: builds run one site at a time          |
+| `languageDomains`   | top-level value                      | A site's own map replaces the top-level one as a whole                |
+| `redirects`         | top-level value, merged key by key   | `outputDir` defaults to `redirects/{site}` (v3.11.0)                  |
 | `enableDrafts`      | top-level value                      |                                                                       |
 | `remotes`           | none                                 | Not inherited: a site's instances are its own                         |
 | `defaultRemote`     | none                                 | Required when `remotes` is set                                        |
@@ -360,7 +361,7 @@ LEADCMS_SITE=acme   LEADCMS_REMOTE=prod pnpm build
 LEADCMS_SITE=zenith LEADCMS_REMOTE=prod pnpm build
 ```
 
-Builds run one site at a time. The redirect `outputDir` and the static output directory are overwritten per build; a CI matrix runs one job per site with that site's variable group.
+Builds run one site at a time. The static output directory is overwritten per build; redirect maps go to `redirects/{site}` unless `redirects.outputDir` is set. A CI matrix runs one job per site with that site's variable group.
 
 ### Site Metadata Belongs in the CMS
 

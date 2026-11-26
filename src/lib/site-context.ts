@@ -32,6 +32,13 @@ export const DEFAULT_SITE_ROOT = ".leadcms";
 /** Same rule as remote names. */
 export const SITE_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
+/**
+ * Where `generate-redirects-map` writes when `redirects.outputDir` is unset.
+ * A named site gets `{this}/{site}`, so building one site never overwrites
+ * another site's maps.
+ */
+export const DEFAULT_REDIRECTS_OUTPUT_DIR = "redirects";
+
 /** Directory keys derived from a site's `root`. */
 export const SITE_DIR_KEYS = [
   "contentDir",
@@ -123,6 +130,12 @@ export interface SiteContext {
   segmentsDir: string;
   sequencesDir: string;
   redirectsDir: string;
+  /**
+   * Absolute directory `generate-redirects-map` writes `301.map` / `302.map`
+   * to: `redirects.outputDir` when set, otherwise `redirects/{site}` for a
+   * named site and `redirects` in single-site mode.
+   */
+  redirectsOutputDir: string;
   /** Absolute path under which every remote keeps its state: `{root}/remotes` */
   stateBaseDir: string;
   /** The site's remotes; empty in single-remote mode */
@@ -288,6 +301,11 @@ export function validateSitesBlock(file: LeadCMSConfigFile): SiteValidationResul
     if (cfg.root !== undefined && typeof cfg.root !== "string") {
       errors.push(`Site "${name}": "root" must be a string`);
     }
+    for (const key of ["redirects", "languageDomains"] as const) {
+      if (cfg[key] !== undefined && !isPlainObject(cfg[key])) {
+        errors.push(`Site "${name}": "${key}" must be an object`);
+      }
+    }
     if (cfg.remotes !== undefined) {
       if (!isPlainObject(cfg.remotes)) {
         errors.push(`Site "${name}": "remotes" must be an object`);
@@ -369,6 +387,25 @@ export function siteStateBaseDir(
   return path.resolve(root, "remotes");
 }
 
+/**
+ * Absolute output directory for generated redirect maps.
+ *
+ * An explicit `redirects.outputDir` (top-level or per site) is used as is.
+ * Without one, a named site writes to `redirects/{site}`: the maps are build
+ * output of one site, and a folder shared by every site would hold whichever
+ * site was generated last. Single-site mode keeps `redirects`.
+ */
+export function redirectsOutputDir(
+  cfg: Pick<LeadCMSConfig, "redirects" | "site" | "sites">
+): string {
+  const configured = cfg.redirects?.outputDir;
+  if (configured) return path.resolve(configured);
+  const multiSite = !!cfg.sites && Object.keys(cfg.sites).length > 0;
+  return multiSite && cfg.site
+    ? path.resolve(DEFAULT_REDIRECTS_OUTPUT_DIR, cfg.site)
+    : path.resolve(DEFAULT_REDIRECTS_OUTPUT_DIR);
+}
+
 /** Build a SiteContext from an effective (already merged) configuration. */
 export function siteContextFromConfig(cfg: LeadCMSConfig): SiteContext {
   const name = cfg.site ?? DEFAULT_SITE_NAME;
@@ -399,6 +436,7 @@ export function siteContextFromConfig(cfg: LeadCMSConfig): SiteContext {
     segmentsDir: path.resolve(cfg.segmentsDir),
     sequencesDir: path.resolve(cfg.sequencesDir),
     redirectsDir: path.resolve(cfg.redirectsDir),
+    redirectsOutputDir: redirectsOutputDir(cfg),
     stateBaseDir: path.join(root, "remotes"),
     remotes: cfg.remotes ?? {},
     defaultRemote: cfg.defaultRemote,

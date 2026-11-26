@@ -52,7 +52,8 @@ export interface LeadCMSConfig {
     /**
      * Output directory for generated redirect map files (relative to project root).
      * The SDK writes `{outputDir}/301.map` and `{outputDir}/302.map`.
-     * Default: "redirects"
+     * Default: "redirects", or "redirects/{site}" for a named site. The maps
+     * are build output: keep the folder out of version control.
      */
     outputDir?: string;
     /**
@@ -189,11 +190,18 @@ function buildConfig(options: EffectiveConfigOptions = {}): LeadCMSConfig {
   //    Environment variables override config file (for security-sensitive data).
   //    In single-site mode there is no expansion: DEFAULT_CONFIG already equals
   //    the expansion of ".leadcms", so a top-level contentDir keeps winning.
+  //    A site's `redirects` refines the top-level one field by field: its
+  //    keys are independent settings, and a site that only moves `outputDir`
+  //    must keep the inherited `pathPattern` and `trailingSlash`.
+  //    `languageDomains` is deliberately replaced as a whole: it lists a
+  //    site's languages, and merging would hand one brand another brand's
+  //    domains and turn a single-language site into a multi-language one.
   const mergedConfig = {
     ...DEFAULT_CONFIG,
     ...topLevel, // Config file settings
     ...(site ? expandSiteRoot(siteRoot ?? DEFAULT_SITE_ROOT) : {}),
     ...siteKeys, // Explicit per-site keys
+    ...(siteKeys.redirects ? { redirects: { ...topLevel.redirects, ...siteKeys.redirects } } : {}),
     ...configFromEnv, // Environment variables override config file
     ...globalConfig, // Programmatic config takes precedence
   };

@@ -52,21 +52,26 @@ COPY . .
 # Copy nginx configuration for development proxy
 COPY preview/nginx.conf /etc/nginx/nginx.conf
 
-# Install LeadCMS redirect maps. COPY . . already brought redirects/ into /app/redirects/.
+# Install LeadCMS redirect maps for the site this image serves (LEADCMS_SITE).
+# They are generated here from the copied redirects.yaml rather than copied from
+# the build context, where redirects/ may hold another site's or a stale run's maps.
+# Generating needs only local files. A failure here fails the build.
 # touch creates empty fallbacks so nginx starts even if a map type has no entries.
-RUN touch /etc/nginx/301.map /etc/nginx/302.map && \
-    cp /app/redirects/301.map /etc/nginx/301.map 2>/dev/null || true && \
-    cp /app/redirects/302.map /etc/nginx/302.map 2>/dev/null || true
+RUN npx leadcms generate-redirects-map --output /etc/nginx && \
+    touch /etc/nginx/301.map /etc/nginx/302.map
 
 # Copy supervisor configuration for multi-service management
 COPY preview/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Create startup script
+# Create startup script. It runs before supervisord starts nginx, so maps
+# regenerated from the freshly pulled redirects are loaded without a reload.
 RUN echo '#!/bin/sh' > /start.sh && \
-    echo '# Fetch initial LeadCMS content if configuration is available' >> /start.sh && \
+    echo '# Pull initial LeadCMS content if configuration is available' >> /start.sh && \
     echo 'if [ ! -z "$LEADCMS_URL" ] && [ ! -z "$LEADCMS_API_KEY" ]; then' >> /start.sh && \
-    echo '  echo "Fetching initial LeadCMS content..."' >> /start.sh && \
-    echo '  npx leadcms fetch || echo "Warning: Could not fetch initial content"' >> /start.sh && \
+    echo '  echo "Pulling initial LeadCMS content..."' >> /start.sh && \
+    echo '  npx leadcms pull || echo "Warning: Could not pull initial content"' >> /start.sh && \
+    echo '  npx leadcms generate-redirects-map --output /etc/nginx || echo "Warning: Could not regenerate redirect maps"' >> /start.sh && \
+    echo '  touch /etc/nginx/301.map /etc/nginx/302.map' >> /start.sh && \
     echo 'fi' >> /start.sh && \
     echo '' >> /start.sh && \
     echo '# Start supervisor to manage all services' >> /start.sh && \

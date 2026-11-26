@@ -37,6 +37,7 @@ import path from "path";
 import yaml from "js-yaml";
 import { REDIRECTS_DIR, defaultLanguage } from "./leadcms-helpers.js";
 import { loadLocalConfig } from "../lib/config.js";
+import { redirectsOutputDir } from "../lib/site-context.js";
 import { leadCMSDataService } from "../lib/data-service.js";
 import { logger } from "../lib/logger.js";
 import type { LocalRedirect, LocalRedirectsFile, RedirectKind } from "../lib/automation-types.js";
@@ -319,6 +320,15 @@ function buildMapFile(redirects: ResolvedRedirect[], kind: RedirectKind): string
   return lines.join("\n") + "\n";
 }
 
+async function removeStaleMap(file: string): Promise<void> {
+  try {
+    await fs.unlink(file);
+    logger.verbose(`[generate-redirects-map] Removed stale ${file}`);
+  } catch {
+    /* file didn't exist — nothing to do */
+  }
+}
+
 // ── Main export ────────────────────────────────────────────────────────
 
 export async function generateRedirectsMap(
@@ -339,7 +349,8 @@ export async function generateRedirectsMap(
   const effectiveFilterLanguage =
     patternHasLanguage && !languageArg ? undefined : rawFilterLanguage || undefined;
 
-  const outputDir = path.resolve(outputDirArg ?? config.redirects?.outputDir ?? "redirects");
+  // Per site unless configured: redirects/{site} for a named site.
+  const outputDir = outputDirArg ? path.resolve(outputDirArg) : redirectsOutputDir(config);
   const file301 = path.join(outputDir, "301.map");
   const file302 = path.join(outputDir, "302.map");
 
@@ -347,6 +358,12 @@ export async function generateRedirectsMap(
 
   if (locals.length === 0) {
     console.log("   ℹ️  No local redirects found — nothing to generate.");
+    // Maps left by an earlier run (or by another site sharing this folder)
+    // would otherwise keep serving redirects this site no longer has.
+    if (!dryRun) {
+      await removeStaleMap(file301);
+      await removeStaleMap(file302);
+    }
     return;
   }
 
@@ -414,24 +431,14 @@ export async function generateRedirectsMap(
     await fs.writeFile(file301, buildMapFile(deduped, "Permanent"), "utf8");
     written.push(`301.map (${permanent.length} entries)`);
   } else {
-    try {
-      await fs.unlink(file301);
-      logger.verbose(`[generate-redirects-map] Removed stale ${file301}`);
-    } catch {
-      /* file didn't exist — nothing to do */
-    }
+    await removeStaleMap(file301);
   }
 
   if (temporary.length > 0) {
     await fs.writeFile(file302, buildMapFile(deduped, "Temporary"), "utf8");
     written.push(`302.map (${temporary.length} entries)`);
   } else {
-    try {
-      await fs.unlink(file302);
-      logger.verbose(`[generate-redirects-map] Removed stale ${file302}`);
-    } catch {
-      /* file didn't exist — nothing to do */
-    }
+    await removeStaleMap(file302);
   }
 
   for (const w of written) {

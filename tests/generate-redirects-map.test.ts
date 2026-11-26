@@ -471,20 +471,89 @@ describe("generateRedirectsMap", () => {
     await expect(fs.access(path.join(tmpDir, "redirects", "301.map"))).rejects.toThrow();
   });
 
-  it("writes to default 'redirects' directory when no -o flag provided", async () => {
-    await writeRedirectsYaml(tmpDir, [{ kind: "Permanent", fromPath: "/a", toPath: "/b" }]);
+  // ── Default output directory ───────────────────────────────────────
 
-    // No outputDir → falls back to config.redirects.outputDir ?? 'redirects'
-    // Config mock returns outputDir: undefined, so resolved path will be process.cwd()/redirects
-    const defaultDir = path.resolve("redirects");
-    // We use an explicit outputDir here to avoid polluting the real CWD;
-    // the test above already verifies custom dir; this test documents the fallback chain.
-    await generateRedirectsMap({ outputDir: outputDir });
+  describe("without -o", () => {
+    let projectDir: string;
+    let savedCwd: string;
 
-    const content = await fs.readFile(path.join(outputDir, "301.map"), "utf8");
-    expect(content).toContain('"/a" "/b";');
-    // Sanity: the function wrote to outputDir, not to defaultDir
-    expect(outputDir).not.toEqual(defaultDir);
+    beforeEach(async () => {
+      // A separate project root, so the default folder never lands in the repo.
+      projectDir = await fs.mkdtemp(path.join(os.tmpdir(), "leadcms-gen-map-project-"));
+      savedCwd = process.cwd();
+      process.chdir(projectDir);
+    });
+
+    afterEach(async () => {
+      process.chdir(savedCwd);
+      await fs.rm(projectDir, { recursive: true, force: true });
+    });
+
+    const baseConfig = () => (getConfig as jest.Mock).getMockImplementation()!();
+
+    it("writes to redirects/ in single-site mode", async () => {
+      await writeRedirectsYaml(tmpDir, [{ kind: "Permanent", fromPath: "/a", toPath: "/b" }]);
+
+      await generateRedirectsMap();
+
+      const content = await fs.readFile(path.join(projectDir, "redirects", "301.map"), "utf8");
+      expect(content).toContain('"/a" "/b";');
+    });
+
+    // Issue #4: one shared folder held whichever site was generated last.
+    it("writes to redirects/{site} for a named site", async () => {
+      (getConfig as jest.Mock).mockReturnValueOnce({
+        ...baseConfig(),
+        site: "second",
+        sites: { first: { root: ".leadcms" }, second: { root: "sites/second/.leadcms" } },
+      });
+      await writeRedirectsYaml(tmpDir, [{ kind: "Permanent", fromPath: "/a", toPath: "/b" }]);
+
+      await generateRedirectsMap();
+
+      const content = await fs.readFile(
+        path.join(projectDir, "redirects", "second", "301.map"),
+        "utf8"
+      );
+      expect(content).toContain('"/a" "/b";');
+      await expect(fs.access(path.join(projectDir, "redirects", "301.map"))).rejects.toThrow();
+    });
+
+    it("uses a configured outputDir as is for a named site", async () => {
+      (getConfig as jest.Mock).mockReturnValueOnce({
+        ...baseConfig(),
+        redirects: { outputDir: "public/redirects", pathPattern: "/{language}/{slug}" },
+        site: "second",
+        sites: { first: { root: ".leadcms" }, second: { root: "sites/second/.leadcms" } },
+      });
+      await writeRedirectsYaml(tmpDir, [{ kind: "Permanent", fromPath: "/a", toPath: "/b" }]);
+
+      await generateRedirectsMap();
+
+      await expect(
+        fs.access(path.join(projectDir, "public", "redirects", "301.map"))
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  it("removes maps left by an earlier run when there are no local redirects", async () => {
+    // e.g. another site's maps in a shared folder, or this site's before its
+    // last redirect was deleted: either would keep serving redirects.
+    await fs.writeFile(path.join(outputDir, "301.map"), '"/gone" "/x";\n', "utf8");
+    await fs.writeFile(path.join(outputDir, "302.map"), '"/gone2" "/y";\n', "utf8");
+
+    await generateRedirectsMap({ outputDir });
+
+    await expect(fs.access(path.join(outputDir, "301.map"))).rejects.toThrow();
+    await expect(fs.access(path.join(outputDir, "302.map"))).rejects.toThrow();
+  });
+
+  it("keeps existing maps in dry run mode when there are no local redirects", async () => {
+    await fs.writeFile(path.join(outputDir, "301.map"), '"/kept" "/x";\n', "utf8");
+
+    await generateRedirectsMap({ outputDir, dryRun: true });
+
+    await expect(fs.access(path.join(outputDir, "301.map"))).resolves.toBeUndefined();
   });
 
   // ── trailingSlash:"both" ───────────────────────────────────────────

@@ -22,6 +22,7 @@ import {
 } from "../../lib/remote-context.js";
 import {
   DEFAULT_SITE_NAME,
+  DEFAULT_REDIRECTS_OUTPUT_DIR,
   DEFAULT_SITE_ROOT,
   SITE_DIR_KEYS,
   SITE_NAME_PATTERN,
@@ -424,6 +425,12 @@ async function migrateToSites(
     console.log(`     remotes:   none (LEADCMS_URL from the environment keeps working)`);
   }
   console.log(`     moved from top level: ${moved.length > 0 ? moved.join(", ") : "nothing"}`);
+  if (!rawConfig.redirects?.outputDir) {
+    // Named sites get their own map folder; anything reading redirects/*.map must follow.
+    console.log(
+      `     redirect maps: ${DEFAULT_REDIRECTS_OUTPUT_DIR}/${existingName}/ (was ${DEFAULT_REDIRECTS_OUTPUT_DIR}/)`
+    );
+  }
   console.log(`   Existing sync state under ${DEFAULT_SITE_ROOT}/remotes/ is picked up unchanged.`);
   console.log("");
 
@@ -558,6 +565,7 @@ function showSiteCommand(subArgs: string[]): void {
   console.log(`  Segments:         ${displayPath(ctx.segmentsDir)}`);
   console.log(`  Sequences:        ${displayPath(ctx.sequencesDir)}`);
   console.log(`  Redirects:        ${displayPath(ctx.redirectsDir)}`);
+  console.log(`  Redirect maps:    ${displayPath(ctx.redirectsOutputDir)}`);
   console.log(`  State:            ${displayPath(ctx.stateBaseDir)}`);
 
   const remoteNames = Object.keys(ctx.remotes);

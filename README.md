@@ -309,7 +309,8 @@ One codebase can serve several sites: two brands of one product, regional editio
 
 - `root` expands to `{root}/content`, `{root}/comments`, `{root}/email-templates`, `{root}/settings`, `{root}/segments`, `{root}/sequences`, `{root}/redirects`, and to the remote state base `{root}/remotes`. A `*Dir` key set on the site overrides that one directory.
 - `mediaDir` is not derived from `root`. It inherits the top-level value and must be unique per site.
-- Other top-level keys (`defaultLanguage`, `languageDomains`, `redirects`, `enableDrafts`) are defaults every site inherits. `url`, `remotes` and `defaultRemote` are rejected at the top level once `sites` exists: they belong to a site.
+- Other top-level keys (`defaultLanguage`, `languageDomains`, `redirects`, `enableDrafts`) are defaults every site inherits. A site's `redirects` is merged with the top-level one key by key, so a site that sets only `outputDir` keeps the inherited `pathPattern` and `trailingSlash`. A site's `languageDomains` replaces the top-level map as a whole. `url`, `remotes` and `defaultRemote` are rejected at the top level once `sites` exists: they belong to a site.
+- Generated redirect maps go to `redirects/<site>/` unless `redirects.outputDir` is set (see [Generate nginx redirect maps](#generate-nginx-redirect-maps)).
 - The active site is chosen by `--site <name>` / `-s <name>`, then `LEADCMS_SITE`, then `defaultSite`. Environment overrides such as `LEADCMS_CONTENT_DIR` still apply, to the selected site.
 - API keys are looked up as `LEADCMS_SITE_{SITE}_REMOTE_{REMOTE}_API_KEY`, then `LEADCMS_REMOTE_{REMOTE}_API_KEY`, then `LEADCMS_API_KEY`, so two sites may both call their production instance `prod`.
 - Without a `sites` block nothing changes: the project is one implicit site rooted at `.leadcms`, and `--site` is an error.
@@ -721,15 +722,24 @@ npx leadcms status-redirects --delete  # Also show redirect deletions
 npx leadcms generate-redirects-map
 ```
 
-Generates nginx `map` files from your local `redirects.yaml` without connecting to the remote. By default writes to `redirects/nginx.map` (or split into `301.map` / `302.map` depending on configuration).
+Generates nginx `map` files from your local `redirects.yaml` without connecting to the remote. It writes `301.map` (permanent) and `302.map` (temporary) to the output directory, and removes a map left by an earlier run when there is nothing of that kind to write.
+
+The output directory is, in order:
+
+1. `--output <dir>`
+2. `redirects.outputDir` in `leadcms.config.json` (top-level, or per site in a multi-site project)
+3. `redirects/<site>/` for a named site, so building one site never overwrites another's maps
+4. `redirects/` in a single-site project
+
+The maps are build output, regenerated from `redirects.yaml` on every build: add the folder to `.gitignore`. `leadcms site show` and `getActiveSite().redirectsOutputDir` report where the active site's maps go, for scripts that copy them into a static export or an image.
 
 **Options:**
 
-- `--output, -o <file>` — Override output file path
+- `--output, -o <dir>` — Override the output directory
 - `--language, -l <lang>` — Filter to a specific language only
-- `--dry-run, -d` — Print the map without writing the file
+- `--dry-run, -d` — Print the maps without writing them
 
-For `ContentSlug` and `ContentId` sources, the SDK resolves paths using the `redirects.pathPattern` config option (e.g., `"/blog/:slug"`).
+For `ContentSlug` and `ContentId` sources, the SDK resolves paths using the `redirects.pathPattern` config option (default `"/{language}/{slug}"`; tokens `{language}`, `{slug}`, `{domain}`).
 
 ### Watch for real-time updates
 
@@ -843,7 +853,7 @@ if (site.mediaDir !== link) {
 "prebuild": "leadcms pull && leadcms generate-env && leadcms generate-redirects-map && node scripts/link-site-media.mjs"
 ```
 
-If you build several sites on one machine, give every site its own media directory outside `public/` (for example `sites/<name>/public/media`), add `public/media` to `.gitignore`, and let the link step cover all of them. Builds run one site at a time: the redirect `outputDir` and the static output directory are overwritten per build, so a CI matrix runs one job per site with that site's variables. The preview Docker template passes `LEADCMS_SITE` through as a build argument.
+If you build several sites on one machine, give every site its own media directory outside `public/` (for example `sites/<name>/public/media`), add `public/media` to `.gitignore`, and let the link step cover all of them. Builds run one site at a time: the static output directory is overwritten per build, so a CI matrix runs one job per site with that site's variables. Redirect maps go to `redirects/<site>/` unless you set `redirects.outputDir`; keep that folder in `.gitignore`. The preview Docker template takes `LEADCMS_SITE` as a build argument and generates that site's redirect maps inside the image.
 
 ## API Reference
 

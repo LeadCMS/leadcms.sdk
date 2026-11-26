@@ -102,6 +102,8 @@ describe("leadcms site", () => {
     );
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('Added site "zenith"');
+    // An explicit outputDir keeps the maps where they were.
+    expect(result.stdout).not.toContain("redirect maps:");
 
     const written = readConfig();
     expect(written.remotes).toBeUndefined();
@@ -138,6 +140,8 @@ describe("leadcms site", () => {
     writeConfig({ url: "https://cms.example.com/", mediaDir: "static/media" });
     const result = run("site", "add", "second", "--existing-name", "first", "--yes");
     expect(result.status).toBe(0);
+    // Without an outputDir the maps move to a per-site folder; say so.
+    expect(result.stdout).toContain("redirect maps: redirects/first/ (was redirects/)");
     const written = readConfig();
     expect(written.url).toBeUndefined();
     expect(written.sites.first).toEqual({
@@ -225,6 +229,7 @@ describe("leadcms site", () => {
       expect(result.stdout).toContain(
         `State:            ${path.join("sites/zenith/.leadcms", "remotes")}`
       );
+      expect(result.stdout).toContain(`Redirect maps:    ${path.join("redirects", "zenith")}`);
       expect(result.stdout).toContain("prod (default)    https://cms.zenith.example.com");
       expect(result.stdout).toContain("LEADCMS_SITE_ZENITH_REMOTE_PROD_API_KEY=<key>");
       expect(result.stdout).toContain("none yet");

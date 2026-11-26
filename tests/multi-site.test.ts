@@ -279,6 +279,97 @@ describe("multi-site", () => {
       expect(cfg.contentRevisionFile).toBe(".leadcms/content-revision.js");
     });
 
+    // Issue #4: a site that set only outputDir lost the inherited pathPattern.
+    it("merges a site's redirects over the top-level ones field by field", () => {
+      writeConfig({
+        redirects: { pathPattern: "/{slug}/", trailingSlash: "both" },
+        sites: {
+          first: { root: ".leadcms", mediaDir: "sites/first/media" },
+          second: {
+            root: "sites/second/.leadcms",
+            mediaDir: "sites/second/media",
+            redirects: { outputDir: "redirects/second", trailingSlash: "strict" },
+          },
+        },
+        defaultSite: "first",
+      });
+      expect(config.resolveEffectiveConfig({ site: "first" }).redirects).toEqual({
+        pathPattern: "/{slug}/",
+        trailingSlash: "both",
+      });
+      expect(config.resolveEffectiveConfig({ site: "second" }).redirects).toEqual({
+        pathPattern: "/{slug}/",
+        trailingSlash: "strict",
+        outputDir: "redirects/second",
+      });
+    });
+
+    it("replaces languageDomains as a whole rather than merging them", () => {
+      writeConfig({
+        ...ACME_ZENITH,
+        languageDomains: { en: "https://acme.example.com", de: "https://acme.example.de" },
+        sites: {
+          ...ACME_ZENITH.sites,
+          zenith: {
+            ...ACME_ZENITH.sites.zenith,
+            languageDomains: { "en-GB": "https://zenith.example.co.uk" },
+          },
+        },
+      });
+      expect(config.resolveEffectiveConfig({ site: "zenith" }).languageDomains).toEqual({
+        "en-GB": "https://zenith.example.co.uk",
+      });
+      expect(config.resolveEffectiveConfig({ site: "acme" }).languageDomains).toEqual({
+        en: "https://acme.example.com",
+        de: "https://acme.example.de",
+      });
+    });
+
+    describe("redirect map output directory", () => {
+      const withoutOutputDir = {
+        ...ACME_ZENITH,
+        redirects: { pathPattern: "/{slug}/" },
+      };
+
+      it("defaults to redirects/{site} for a named site", () => {
+        writeConfig(withoutOutputDir);
+        expect(sites.resolveSite("acme").redirectsOutputDir).toBe(path.resolve("redirects/acme"));
+        expect(sites.resolveSite("zenith").redirectsOutputDir).toBe(
+          path.resolve("redirects/zenith")
+        );
+        process.env.LEADCMS_SITE = "zenith";
+        expect(sites.getActiveSite().redirectsOutputDir).toBe(path.resolve("redirects/zenith"));
+      });
+
+      it("stays redirects in single-site mode", () => {
+        writeConfig({ url: "https://cms.example.com" });
+        expect(sites.getActiveSite().redirectsOutputDir).toBe(path.resolve("redirects"));
+      });
+
+      it("uses an explicit top-level outputDir as is, shared by every site", () => {
+        writeConfig(ACME_ZENITH);
+        expect(sites.resolveSite("acme").redirectsOutputDir).toBe(path.resolve("redirects"));
+        expect(sites.resolveSite("zenith").redirectsOutputDir).toBe(path.resolve("redirects"));
+      });
+
+      it("lets a site set its own outputDir", () => {
+        writeConfig({
+          ...withoutOutputDir,
+          sites: {
+            ...ACME_ZENITH.sites,
+            zenith: { ...ACME_ZENITH.sites.zenith, redirects: { outputDir: "out-zenith/maps" } },
+          },
+        });
+        expect(sites.resolveSite("zenith").redirectsOutputDir).toBe(
+          path.resolve("out-zenith/maps")
+        );
+        expect(sites.resolveSite("acme").redirectsOutputDir).toBe(path.resolve("redirects/acme"));
+        expect(config.resolveEffectiveConfig({ site: "zenith" }).redirects.pathPattern).toBe(
+          "/{slug}/"
+        );
+      });
+    });
+
     it("inherits the top-level mediaDir when a site does not set one", () => {
       writeConfig({ mediaDir: "assets/media", sites: { solo: { root: "cms" } } });
       expect(config.loadLocalConfig().mediaDir).toBe("assets/media");
@@ -345,6 +436,18 @@ describe("multi-site", () => {
       expectError(
         { sites: { solo: { url: "https://x.example.com" } } },
         /Site "solo": "url" is not a site key; configure "remotes" instead/
+      );
+    });
+
+    it("rejects a site redirects or languageDomains that is not an object", async () => {
+      expectError(
+        { sites: { solo: { redirects: "redirects/solo" } } },
+        /Site "solo": "redirects" must be an object/
+      );
+      await reload(); // the config file is cached for 60 s
+      expectError(
+        { sites: { solo: { languageDomains: ["https://x.example.com"] } } },
+        /Site "solo": "languageDomains" must be an object/
       );
     });
 

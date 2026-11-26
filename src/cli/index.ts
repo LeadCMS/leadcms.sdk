@@ -257,7 +257,7 @@ Usage:
     --dry-run            - Show what would be pushed without making changes
     --delete             - Delete remote redirects not present locally
   leadcms generate-redirects-map [options] - Generate nginx redirect map from local redirects
-    --output, -o <dir>   - Override output directory path (default: redirects/)
+    --output, -o <dir>   - Override output directory (default: redirects/, redirects/<site>/ per named site)
     --language, -l <lang> - Filter to a specific language only
     --dry-run, -d        - Print the map without writing the file
 
