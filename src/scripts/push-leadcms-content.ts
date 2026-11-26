@@ -19,6 +19,7 @@ import { colorConsole, statusColors, diffColors } from "../lib/console-colors.js
 import { logger } from "../lib/logger.js";
 import type { RemoteContext, MetadataMap } from "../lib/remote-context.js";
 import { hasMergeConflictMarkers } from "../lib/merge-conflict-detector.js";
+import { ask } from "../lib/prompt.js";
 
 // Extended interfaces for local operations
 interface LocalContentItem extends BaseContentItem {
@@ -66,9 +67,10 @@ export interface PushOptions {
   /** Suppress status display and confirmation prompt (used by push-all orchestrator). */
   quiet?: boolean;
   /**
-   * Non-interactive mode: answer the "create missing content types" prompt with
-   * yes and create them from their auto-detected defaults without asking the
-   * per-type questions. Never implies --force or --delete.
+   * Non-interactive mode: skip the final confirmation, and answer the "create
+   * missing content types" prompt with yes, creating them from their
+   * auto-detected defaults without asking the per-type questions. Never
+   * implies --force or --delete.
    */
   assumeYes?: boolean;
   /** Optionally run a broad content/media pull after successful push. Response refresh is always used for touched records. */
@@ -193,11 +195,10 @@ function getReadlineInterface(): readline.Interface {
   return rl;
 }
 
-// Promisify readline question
+// Ask on the shared interface; rejects (and the push exits non-zero) when
+// stdin has closed instead of leaving the process to exit 0 mid-prompt.
 function question(prompt: string): Promise<string> {
-  return new Promise((resolve) => {
-    getReadlineInterface().question(prompt, resolve);
-  });
+  return ask(getReadlineInterface(), prompt, "Pass --yes (-y) to push without prompts.");
 }
 
 /**
@@ -1784,7 +1785,9 @@ async function pushMain(options: PushOptions = {}): Promise<void> {
     }
 
     // Confirm changes (skip in quiet mode — push-all handles unified confirmation)
-    if (!quiet) {
+    if (!quiet && assumeYes) {
+      console.log(`\n--yes given: pushing ${totalChanges} change(s) without confirmation.`);
+    } else if (!quiet) {
       const itemDescription = isSingleFileMode ? "file change" : "changes";
       const confirmMsg = `\nProceed with syncing ${totalChanges} ${itemDescription} to LeadCMS? (y/N): `;
       const confirmation = await question(confirmMsg);

@@ -29,6 +29,7 @@ import {
   countActionableSettingsComparisons,
   subtractRemoteCreates,
 } from "../../scripts/push-all-counts.js";
+import { ask } from "../../lib/prompt.js";
 import {
   requireAuthenticatedUser,
   defaultLanguage,
@@ -106,14 +107,14 @@ function sortByLocaleAndSlug<T>(
   });
 }
 
-function promptConfirm(msg: string): Promise<boolean> {
+async function promptConfirm(msg: string): Promise<boolean> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question(msg, (answer) => {
-      rl.close();
-      resolve(answer.toLowerCase() === "y" || answer.toLowerCase() === "yes");
-    });
-  });
+  try {
+    const answer = await ask(rl, msg, "Pass --yes (-y) to push without prompts.");
+    return answer.toLowerCase() === "y" || answer.toLowerCase() === "yes";
+  } finally {
+    rl.close();
+  }
 }
 
 // ── Rendering helpers (shared with status-all pattern) ───────────────────────

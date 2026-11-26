@@ -8,6 +8,7 @@ import { leadCMSDataService, MediaItem } from "../lib/data-service.js";
 import { loadConfig, LeadCMSConfig } from "../lib/config.js";
 import { success, error, warn, info } from "../lib/console-colors.js";
 import { logger } from "../lib/logger.js";
+import { ask } from "../lib/prompt.js";
 import type { RemoteContext } from "../lib/remote-context.js";
 import {
   pullMediaSync,
@@ -135,14 +136,13 @@ function getDefaultDependencies(): Required<MediaDependencies> {
     logSuccess: success,
     promptConfirmation: async (message: string) => {
       const readline = getReadline();
-      return new Promise((resolve) => {
-        readline.question(message, (answer) => {
-          readline.close();
-          rl = null;
-          const confirmed = answer.toLowerCase() === "y" || answer.toLowerCase() === "yes";
-          resolve(confirmed);
-        });
-      });
+      try {
+        const answer = await ask(readline, message, "Pass --force to push without the prompt.");
+        return answer.toLowerCase() === "y" || answer.toLowerCase() === "yes";
+      } finally {
+        readline.close();
+        rl = null;
+      }
     },
     downloadMediaFile: async (location: string) => {
       const baseUrl = (leadCMSDataService.getBaseUrl() || "").replace(/\/$/, "");

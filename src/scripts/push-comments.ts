@@ -11,6 +11,7 @@ import { compareVersions } from "../lib/auth.js";
 import { isValidLocaleCode } from "../lib/locale-utils.js";
 import { colorConsole, diffColors, statusColors } from "../lib/console-colors.js";
 import { logger } from "../lib/logger.js";
+import { ask } from "../lib/prompt.js";
 import { pullCommentSync, saveCommentsForEntity } from "./pull-leadcms-comments.js";
 
 import type { Comment, StoredComment } from "../lib/comment-types.js";
@@ -795,9 +796,12 @@ export async function statusComments(options: CommentStatusOptions = {}): Promis
 }
 
 async function promptForLine(rl: readline.Interface, prompt: string): Promise<string> {
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer) => resolve(answer.trim()));
-  });
+  const answer = await ask(
+    rl,
+    prompt,
+    "Set authorEmail in the new comment files to push them without prompts."
+  );
+  return answer.trim();
 }
 
 async function resolveAuthorEmails(

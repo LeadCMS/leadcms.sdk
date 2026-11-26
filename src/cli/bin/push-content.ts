@@ -20,6 +20,9 @@ const { statusOnly, statusFilter } = parsePushContentStatusArgs(args);
 const force = args.includes("--force");
 const dryRun = args.includes("--dry-run");
 const allowDelete = args.includes("--delete");
+// Non-interactive use: skip the confirmation and create missing content types
+// from their auto-detected defaults. Does not imply --delete or --force.
+const assumeYes = args.includes("--yes") || args.includes("-y");
 
 if (!statusOnly && !dryRun) {
   await requireAuthenticatedUser(remoteContext?.apiKey);
@@ -50,6 +53,7 @@ pushLeadCMSContent({
   statusFilter,
   dryRun,
   allowDelete,
+  assumeYes,
   remoteContext,
 })
   .then(() => spinner.stop())
