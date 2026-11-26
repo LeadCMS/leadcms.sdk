@@ -7,7 +7,7 @@
 import "dotenv/config";
 import { getContentStatusData } from "../../scripts/push-leadcms-content.js";
 import { buildCommentStatus } from "../../scripts/push-comments.js";
-import { statusMedia } from "../../scripts/push-media.js";
+import { formatServerName, printMediaRenameNotice, statusMedia } from "../../scripts/push-media.js";
 import {
   buildEmailTemplateStatus,
   getRemoteGroupLabel,
@@ -195,7 +195,7 @@ function renderMediaSection(result: MediaStatusResult): number {
   for (const op of creates) {
     const sizeKB = (op.local!.size / 1024).toFixed(2);
     colorConsole.log(
-      `        ${statusColors.created("added locally: ")}   ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)} ${colorConsole.gray(`(${sizeKB}KB)`)}`
+      `        ${statusColors.created("added locally: ")}   ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)}${colorConsole.yellow(formatServerName(op))} ${colorConsole.gray(`(${sizeKB}KB)`)}`
     );
   }
   for (const op of remoteCreateds) {
@@ -206,7 +206,7 @@ function renderMediaSection(result: MediaStatusResult): number {
   for (const op of updates) {
     const sizeKB = (op.local!.size / 1024).toFixed(2);
     colorConsole.log(
-      `        ${statusColors.modified("updated locally:")}   ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)} ${colorConsole.gray(`(${sizeKB}KB)`)}`
+      `        ${statusColors.modified("updated locally:")}   ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)}${colorConsole.yellow(formatServerName(op))} ${colorConsole.gray(`(${sizeKB}KB)`)}`
     );
     if (op.reason) {
       colorConsole.log(`                    ${colorConsole.gray(op.reason)}`);
@@ -223,6 +223,10 @@ function renderMediaSection(result: MediaStatusResult): number {
       `        ${statusColors.conflict("deleted remotely:")} ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)} ${colorConsole.gray(`(${sizeKB}KB)`)}`
     );
   }
+
+  printMediaRenameNotice(result.operations, "rename", (message) =>
+    colorConsole.log(colorConsole.yellow(message))
+  );
 
   return changeCount;
 }

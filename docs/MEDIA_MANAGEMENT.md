@@ -368,6 +368,48 @@ Remote: (not exists)
 Result: Create (new file)
 ```
 
+#### File Names LeadCMS Changes
+
+LeadCMS normalises the name of every uploaded file: it transliterates the name to ASCII, turns whitespace into `-`, drops every character except letters, digits, `-`, `.` and `_`, turns `_` into `-`, and lowercases the result.
+
+| Local file | Stored by LeadCMS |
+| --- | --- |
+| `icons/fire_extinguisher.svg` | `icons/fire-extinguisher.svg` |
+| `screens/Request_details.png` | `screens/request-details.png` |
+| `screens/chart@2x.png` | `screens/chart2x.png` |
+
+`status`, `status-media`, `push`, `push-media` and their `--dry-run` mark these files before anything is uploaded:
+
+```
+✨ 1 file(s) to upload:
+   + icons/fire_extinguisher.svg → fire-extinguisher.svg (1.20KB)
+
+⚠️  LeadCMS will store 1 file under the name marked →, and the local files are renamed to match.
+   Links in CMS content follow; references in site code, styles or generated files do not.
+   To keep names stable, rename them in the project first, or push with --on-media-rename skip|fail.
+```
+
+For names in other scripts, such as Cyrillic or CJK, the predicted name can differ slightly from the one LeadCMS picks, but such a file is always renamed. Renaming it to the predicted name keeps LeadCMS from changing it. With image optimisation on, LeadCMS can also change the extension (for example `.png` to `.webp`); that depends on server settings and is only known after the upload.
+
+By default the push renames each local file to the stored name after uploading it, and lists the renames at the end:
+
+```
+📛 1 media file renamed locally to the name LeadCMS stored:
+   icons/fire_extinguisher.svg → icons/fire-extinguisher.svg
+   Run `leadcms pull-content` to get the content links LeadCMS updated,
+   and update references in site code, styles or generated files yourself.
+```
+
+LeadCMS rewrites links to the file in CMS content, so run `pull-content` afterwards to bring those changes down. Paths in site code, stylesheets, or files your build generates are not rewritten. If your code refers to media by path, choose another behaviour with `--on-media-rename` (on `push-media` and `push`):
+
+| Mode | Effect |
+| --- | --- |
+| `rename` (default) | Upload, then rename the local file to the stored name. |
+| `skip` | Leave such files out of the push and list them; everything else is pushed. |
+| `fail` | Push nothing and exit with an error while any such file is pending, which suits CI. Also applies with `--dry-run`. |
+
+The lasting fix is to rename the files in the project to the stored form (and update their references), then push.
+
 #### Authentication Requirements
 
 **Pull Operations**: Public, no API key required

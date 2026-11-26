@@ -223,6 +223,7 @@ Usage:
 
   Push commands:
   leadcms push [options] - Push all local changes (content + media) to LeadCMS
+    --on-media-rename <mode> - Media files LeadCMS would rename: rename | skip | fail (see push-media)
   leadcms push-content [options] - Push only content to LeadCMS
     --force              - Override remote changes (skip conflict check)
     --dry-run            - Show API calls without executing them (preview mode)
@@ -236,6 +237,9 @@ Usage:
     --dry-run            - Show what would be changed without making changes
     --delete             - Delete remote media files not present locally
     --scope <scopeUid>   - Filter by specific scope UID (e.g., "blog", "pages/about")
+    --on-media-rename <mode> - Files whose name LeadCMS would change (marked → in status):
+                           rename (default) renames the local file after upload,
+                           skip leaves them out, fail stops before uploading anything
   leadcms push-comments [options] - Push local comment changes to LeadCMS
     --force              - Override remote comment changes when possible
     --dry-run            - Show what would be pushed without making changes

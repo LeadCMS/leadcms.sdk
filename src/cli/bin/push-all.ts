@@ -8,7 +8,16 @@ import "dotenv/config";
 import readline from "readline";
 import { getContentStatusData, pushLeadCMSContent } from "../../scripts/push-leadcms-content.js";
 import { buildCommentStatus, pushComments } from "../../scripts/push-comments.js";
-import { statusMedia, pushMedia } from "../../scripts/push-media.js";
+import {
+  formatServerName,
+  getMediaRenameOps,
+  getMediaRenames,
+  printMediaRenameNotice,
+  printMediaRenameSummary,
+  statusMedia,
+  pushMedia,
+  type MediaPushResult,
+} from "../../scripts/push-media.js";
 import {
   buildEmailTemplateStatus,
   pushEmailTemplates,
@@ -40,6 +49,7 @@ import { colorConsole, statusColors } from "../../lib/console-colors.js";
 import { startSpinner } from "../../lib/spinner.js";
 import { parseRemoteFlag } from "./remote-flag.js";
 import { parseSiteFlag } from "./site-flag.js";
+import { parseMediaRenameFlag } from "./media-rename-flag.js";
 
 import type {
   ContentOperations,
@@ -91,6 +101,7 @@ const scopeIndex = args.findIndex((arg) => arg === "--scope");
 if (scopeIndex !== -1 && args[scopeIndex + 1]) {
   scopeUid = args[scopeIndex + 1];
 }
+const mediaRenamePolicy = parseMediaRenameFlag(args);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -235,7 +246,7 @@ function renderMediaSection(result: MediaStatusResult): number {
   for (const op of creates) {
     const sizeKB = (op.local!.size / 1024).toFixed(2);
     colorConsole.log(
-      `        ${statusColors.created("added locally: ")}   ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)} ${colorConsole.gray(`(${sizeKB}KB)`)}`
+      `        ${statusColors.created("added locally: ")}   ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)}${colorConsole.yellow(formatServerName(op))} ${colorConsole.gray(`(${sizeKB}KB)`)}`
     );
   }
   for (const op of remoteCreateds) {
@@ -246,7 +257,7 @@ function renderMediaSection(result: MediaStatusResult): number {
   for (const op of updates) {
     const sizeKB = (op.local!.size / 1024).toFixed(2);
     colorConsole.log(
-      `        ${statusColors.modified("updated locally:")}   ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)} ${colorConsole.gray(`(${sizeKB}KB)`)}`
+      `        ${statusColors.modified("updated locally:")}   ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)}${colorConsole.yellow(formatServerName(op))} ${colorConsole.gray(`(${sizeKB}KB)`)}`
     );
     if (op.reason) {
       colorConsole.log(`                    ${colorConsole.gray(op.reason)}`);
@@ -263,6 +274,10 @@ function renderMediaSection(result: MediaStatusResult): number {
       `        ${statusColors.conflict("deleted remotely:")} ${op.local!.scopeUid}/${colorConsole.highlight(op.local!.name)} ${colorConsole.gray(`(${sizeKB}KB)`)}`
     );
   }
+
+  printMediaRenameNotice(result.operations, mediaRenamePolicy, (message) =>
+    colorConsole.log(colorConsole.yellow(message))
+  );
 
   return changeCount;
 }
@@ -651,8 +666,12 @@ async function pushAll() {
       ? subtractRemoteCreates(contentChanges, contentOps.remoteCreated.length)
       : 0;
 
+    // Files LeadCMS would rename: held back with --on-media-rename skip, and
+    // with fail they stop the whole push before anything is uploaded.
+    const mediaRenameCount = mediaResult ? getMediaRenameOps(mediaResult.operations).length : 0;
     const mediaPushChanges = mediaResult
-      ? subtractRemoteCreates(mediaChanges, mediaResult.summary.remoteCreateds)
+      ? subtractRemoteCreates(mediaChanges, mediaResult.summary.remoteCreateds) -
+        (mediaRenamePolicy === "skip" ? mediaRenameCount : 0)
       : 0;
 
     const commentPushChanges = countActionablePushOperations(commentOps, allowDelete);
@@ -992,6 +1011,13 @@ async function pushAll() {
 
     console.log("");
 
+    if (mediaRenamePolicy === "fail" && mediaRenameCount > 0) {
+      throw new Error(
+        `Nothing was pushed: LeadCMS would rename ${mediaRenameCount} media file(s) (marked → above). ` +
+          "Rename them in the project first, or push with --on-media-rename rename|skip."
+      );
+    }
+
     // ── Phase 4: Dry run or confirm ──────────────────────────────────────
 
     if (dryRun) {
@@ -1052,9 +1078,18 @@ async function pushAll() {
       await pushComments({ dryRun, force, allowDelete, remoteContext });
     }
 
+    let mediaPushResult: MediaPushResult | null = null;
     if (mediaPushChanges > 0) {
       colorConsole.important("  📷 Pushing media…");
-      await pushMedia({ dryRun, force, scopeUid, allowDelete, remoteContext, quiet: true });
+      mediaPushResult = await pushMedia({
+        dryRun,
+        force,
+        scopeUid,
+        allowDelete,
+        remoteContext,
+        quiet: true,
+        onRename: mediaRenamePolicy,
+      });
     }
 
     if (segmentPushChanges > 0) {
@@ -1073,6 +1108,12 @@ async function pushAll() {
     }
 
     colorConsole.success("\n✔ Push completed successfully! Local files refreshed from push responses.");
+
+    const skippedRenames =
+      mediaRenamePolicy === "skip" && mediaResult ? getMediaRenames(mediaResult.operations) : [];
+    printMediaRenameSummary({ renamed: mediaPushResult?.renamed, skippedRenames }, (message) =>
+      colorConsole.log(colorConsole.yellow(message))
+    );
   } catch (_error: unknown) {
     const error = _error as Error;
     console.error("\n❌ Push failed:", error.message);

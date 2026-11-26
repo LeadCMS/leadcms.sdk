@@ -10,6 +10,7 @@ import { initVerboseFromArgs } from "../../lib/logger.js";
 import { startSpinner } from "../../lib/spinner.js";
 import { parseRemoteFlag } from "./remote-flag.js";
 import { parseSiteFlag } from "./site-flag.js";
+import { parseMediaRenameFlag } from "./media-rename-flag.js";
 
 const args = process.argv.slice(2);
 initVerboseFromArgs(args);
@@ -18,6 +19,7 @@ parseRemoteFlag(args);
 const dryRun = args.includes("--dry-run") || args.includes("-d");
 const force = args.includes("--force") || args.includes("-f");
 const allowDelete = args.includes("--delete");
+const onRename = parseMediaRenameFlag(args);
 
 if (!dryRun) {
   await requireAuthenticatedUser();
@@ -33,7 +35,7 @@ if (scopeIndex !== -1 && args[scopeIndex + 1]) {
 }
 
 const spinner = startSpinner("Pushing media to LeadCMS…");
-pushMedia({ dryRun, force, scopeUid, allowDelete })
+pushMedia({ dryRun, force, scopeUid, allowDelete, onRename })
   .then(() => spinner.stop())
   .catch((error: unknown) => {
     spinner.fail("Media push failed");

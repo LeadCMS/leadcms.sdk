@@ -9,6 +9,7 @@ import { loadConfig, LeadCMSConfig } from "../lib/config.js";
 import { success, error, warn, info } from "../lib/console-colors.js";
 import { logger } from "../lib/logger.js";
 import { ask } from "../lib/prompt.js";
+import { predictServerMediaName } from "../lib/media-names.js";
 import type { RemoteContext } from "../lib/remote-context.js";
 import {
   pullMediaSync,
@@ -37,6 +38,28 @@ export interface MediaOperation {
   local?: LocalMediaFile;
   remote?: MediaItem;
   reason: string;
+  /**
+   * The name LeadCMS will store the file under, when it differs from the local
+   * name: the server-normalised name for a create, the remote name for an
+   * update. Pushing renames the local file to it. Unset when the name stays.
+   */
+  serverName?: string;
+}
+
+/**
+ * What to do with files LeadCMS would store under a different name:
+ *  - "rename": upload, then rename the local file to the server's name (default)
+ *  - "skip": leave them out of the push
+ *  - "fail": push nothing while any such file is pending
+ */
+export type MediaRenamePolicy = "rename" | "skip" | "fail";
+
+export const MEDIA_RENAME_POLICIES: readonly MediaRenamePolicy[] = ["rename", "skip", "fail"];
+
+/** A local media file whose name differs from the one LeadCMS stores. Paths are scope/name. */
+export interface MediaRename {
+  from: string;
+  to: string;
 }
 
 /**
@@ -68,6 +91,10 @@ export interface MediaPushResult {
     skipped: number;
   };
   errors: Array<{ operation: MediaOperation; error: string }>;
+  /** Local files renamed after the push to the name LeadCMS stored them under. */
+  renamed?: MediaRename[];
+  /** Files left out because LeadCMS would rename them (onRename: "skip"). */
+  skippedRenames?: MediaRename[];
 }
 
 /**
@@ -350,7 +377,7 @@ export async function reconcileLocalFile(
   serverResponse: MediaItem,
   mediaDir: string,
   downloadFn: (location: string) => Promise<Buffer>
-): Promise<{ changed: boolean; reason?: string }> {
+): Promise<{ changed: boolean; reason?: string; renamedTo?: string; replaced?: boolean }> {
   const nameChanged = local.name !== serverResponse.name;
   const extensionChanged = local.extension.toLowerCase() !== serverResponse.extension.toLowerCase();
   const sizeChanged = local.size !== serverResponse.size;
@@ -373,6 +400,13 @@ export async function reconcileLocalFile(
     // On case-insensitive filesystems (macOS HFS+/APFS), paths differing only
     // in case resolve to the same inode, so we must delete first, then write.
 
+    // Never overwrite a different local file that already has the server's
+    // name: `a_b.png` and `a-b.png` are both stored by LeadCMS as `a-b.png`.
+    const newPath = mediaPath(serverResponse.scopeUid, serverResponse.name);
+    if (await isDifferentExistingFile(oldFilePath, newFilePath)) {
+      throw new Error(`not renamed to ${newPath}: a different local file already has that name`);
+    }
+
     // 1. Read original content into memory if we don't need to download
     const needsDownload = sizeChanged || extensionChanged;
     let newContent: Buffer;
@@ -394,13 +428,28 @@ export async function reconcileLocalFile(
     // 3. Write new file with server's name
     await fsPromises.mkdir(path.dirname(newFilePath), { recursive: true });
     await fsPromises.writeFile(newFilePath, newContent);
+    return { changed: true, reason, renamedTo: newPath, replaced: needsDownload };
   } else if (sizeChanged) {
     // Same name, same extension, but size changed — re-download in place
     const content = await downloadFn(serverResponse.location);
     await fsPromises.writeFile(oldFilePath, content);
   }
 
-  return { changed: true, reason };
+  return { changed: true, reason, replaced: sizeChanged };
+}
+
+/** True when `target` exists and is not the same file as `source` (case-only renames are). */
+async function isDifferentExistingFile(source: string, target: string): Promise<boolean> {
+  const targetStat = await fsPromises.stat(target).catch(() => null);
+  if (!targetStat) return false;
+  const sourceStat = await fsPromises.stat(source).catch(() => null);
+  if (!sourceStat) return false;
+  return sourceStat.ino !== targetStat.ino || sourceStat.dev !== targetStat.dev;
+}
+
+/** scope/name as shown to the user; root-scope files have no leading slash. */
+function mediaPath(scopeUid: string, name: string): string {
+  return scopeUid ? `${scopeUid}/${name}` : name;
 }
 
 /**
@@ -443,20 +492,23 @@ export function matchMediaFiles(
           reason: "File was deleted from remote",
         });
       } else {
-        // New file - needs to be uploaded
+        // New file - needs to be uploaded, under the name the server normalises it to
+        const serverName = predictServerMediaName(local.name);
         operations.push({
           type: "create",
           local,
           reason: "New file not present remotely",
+          ...(serverName !== local.name ? { serverName } : {}),
         });
       }
     } else if (local.size !== remote.size) {
-      // File size changed - needs update
+      // File size changed - needs update; the server keeps the remote name
       operations.push({
         type: "update",
         local,
         remote,
         reason: `File size changed (local: ${local.size}, remote: ${remote.size})`,
+        ...(remote.name !== local.name ? { serverName: remote.name } : {}),
       });
     } else {
       // No changes detected
@@ -499,6 +551,108 @@ export function matchMediaFiles(
   return operations;
 }
 
+/** Creates and updates whose file LeadCMS will store under a different name. */
+export function getMediaRenameOps(operations: MediaOperation[]): MediaOperation[] {
+  return operations.filter(
+    (op) => (op.type === "create" || op.type === "update") && op.local && op.serverName
+  );
+}
+
+/** " → server-name" for an operation LeadCMS will rename, "" otherwise. */
+export function formatServerName(op: MediaOperation): string {
+  return op.serverName ? ` → ${op.serverName}` : "";
+}
+
+function toMediaRename(op: MediaOperation): MediaRename {
+  return {
+    from: mediaPath(op.local!.scopeUid, op.local!.name),
+    to: mediaPath(op.local!.scopeUid, op.serverName!),
+  };
+}
+
+/** The renames LeadCMS would apply to these operations, as scope/name paths. */
+export function getMediaRenames(operations: MediaOperation[]): MediaRename[] {
+  return getMediaRenameOps(operations).map(toMediaRename);
+}
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+/**
+ * Warn, before anything is uploaded, about files LeadCMS will store under a
+ * different name (the lines marked "→"), worded for what the push will do.
+ */
+export function printMediaRenameNotice(
+  operations: MediaOperation[],
+  renamePolicy: MediaRenamePolicy,
+  log: (message: string) => void
+): void {
+  const count = getMediaRenameOps(operations).length;
+  if (count === 0) return;
+  const files = plural(count, "file");
+  const them = count === 1 ? "it" : "them";
+
+  if (renamePolicy === "skip") {
+    log(`\n⚠️  ${files} will not be pushed: LeadCMS would store ${them} under the name marked →.`);
+    log(`   Rename ${them} in the project to push ${them}.`);
+  } else if (renamePolicy === "fail") {
+    log(`\n❌ LeadCMS would store ${files} under the name marked →, so nothing will be pushed.`);
+    log(`   Rename ${them} in the project first, or push with --on-media-rename rename|skip.`);
+  } else {
+    const localFiles = count === 1 ? "the local file is" : "the local files are";
+    log(
+      `\n⚠️  LeadCMS will store ${files} under the name marked →, and ${localFiles} renamed to match.`
+    );
+    log(
+      "   Links in CMS content follow; references in site code, styles or generated files do not."
+    );
+    log(
+      `   To keep names stable, rename ${them} in the project first, or push with --on-media-rename skip|fail.`
+    );
+  }
+}
+
+/** After a push: list the files renamed locally and those left out because of their name. */
+export function printMediaRenameSummary(
+  result: Pick<MediaPushResult, "renamed" | "skippedRenames">,
+  log: (message: string) => void
+): void {
+  const renamed = result.renamed ?? [];
+  const skipped = result.skippedRenames ?? [];
+
+  if (renamed.length > 0) {
+    log(`\n📛 ${plural(renamed.length, "media file")} renamed locally to the name LeadCMS stored:`);
+    for (const { from, to } of renamed) log(`   ${from} → ${to}`);
+    log("   Run `leadcms pull-content` to get the content links LeadCMS updated,");
+    log("   and update references in site code, styles or generated files yourself.");
+  }
+
+  if (skipped.length > 0) {
+    const them = skipped.length === 1 ? "it" : "them";
+    log(`\n⏭️  ${plural(skipped.length, "media file")} not pushed: LeadCMS would rename ${them}.`);
+    for (const { from, to } of skipped) log(`   ${from} → ${to}`);
+    log("   Rename them in the project (and update references), then push again.");
+  }
+}
+
+/**
+ * Error for onRename "fail". Lists the files unless the status display above
+ * already marked them.
+ */
+function mediaRenameFailure(renameOps: MediaOperation[], listFiles: boolean): Error {
+  const count = plural(renameOps.length, "media file");
+  const files = listFiles
+    ? `:\n${getMediaRenames(renameOps)
+        .map(({ from, to }) => `   ${from} → ${to}`)
+        .join("\n")}\n`
+    : " (marked → above). ";
+  return new Error(
+    `Nothing was pushed: LeadCMS would rename ${count}${files}` +
+      "Rename them in the project first, or push with --on-media-rename rename|skip."
+  );
+}
+
 /**
  * Display media status in formatted output
  */
@@ -506,7 +660,8 @@ export function displayMediaStatus(
   operations: MediaOperation[],
   dryRun: boolean = false,
   showDelete: boolean = false,
-  deps?: Partial<MediaDependencies>
+  deps?: Partial<MediaDependencies>,
+  renamePolicy: MediaRenamePolicy = "rename"
 ): void {
   const log = deps?.logInfo || info;
   const logWarning = deps?.logWarn || warn;
@@ -526,7 +681,9 @@ export function displayMediaStatus(
     log(`\n✨ ${creates.length} file(s) to upload:`);
     creates.forEach((op) => {
       const sizeKB = (op.local!.size / 1024).toFixed(2);
-      console.log(`   + ${op.local!.scopeUid}/${op.local!.name} (${sizeKB}KB)`);
+      console.log(
+        `   + ${op.local!.scopeUid}/${op.local!.name}${formatServerName(op)} (${sizeKB}KB)`
+      );
     });
   }
 
@@ -541,7 +698,9 @@ export function displayMediaStatus(
     logWarning(`\n📝 ${updates.length} file(s) to update:`);
     updates.forEach((op) => {
       const sizeKB = (op.local!.size / 1024).toFixed(2);
-      console.log(`   ↻ ${op.local!.scopeUid}/${op.local!.name} (${sizeKB}KB)`);
+      console.log(
+        `   ↻ ${op.local!.scopeUid}/${op.local!.name}${formatServerName(op)} (${sizeKB}KB)`
+      );
       console.log(`     ${op.reason}`);
     });
   }
@@ -553,6 +712,8 @@ export function displayMediaStatus(
     });
   }
 
+  printMediaRenameNotice(operations, renamePolicy, logWarning);
+
   if (skips.length > 0) {
     log(`\n✓ ${skips.length} file(s) up to date`);
   }
@@ -560,13 +721,19 @@ export function displayMediaStatus(
   console.log("\n" + "─".repeat(80));
 
   const totalOperations = creates.length + remoteCreateds.length + updates.length + deletes.length;
+  const renameCount = getMediaRenameOps(operations).length;
   if (totalOperations === 0) {
     logOk("All media files are in sync! ✨");
+  } else if (renamePolicy === "fail" && renameCount > 0) {
+    // The rename notice above already says nothing will be pushed.
+  } else if (renamePolicy === "skip" && renameCount === totalOperations) {
+    log(`\nNothing to apply: every change is held back by --on-media-rename skip.`);
   } else {
+    const applicable = totalOperations - (renamePolicy === "skip" ? renameCount : 0);
     if (dryRun) {
-      log(`\nDry run complete. Run without --dry-run to apply ${totalOperations} change(s).`);
+      log(`\nDry run complete. Run without --dry-run to apply ${applicable} change(s).`);
     } else {
-      log(`\nReady to apply ${totalOperations} change(s).`);
+      log(`\nReady to apply ${applicable} change(s).`);
     }
   }
 
@@ -596,6 +763,35 @@ export async function executeMediaPush(
     operations,
     executed: { successful: 0, failed: 0, skipped: 0 },
     errors: [],
+    renamed: [],
+  };
+
+  // Post-upload reconciliation: sync the local file with the server response,
+  // and say exactly what happened to it when the server renamed it.
+  const reconcile = async (op: MediaOperation, serverResponse: MediaItem): Promise<void> => {
+    if (!mediaDir || !serverResponse) return;
+    try {
+      const reconciled = await reconcileLocalFile(
+        op.local!,
+        serverResponse,
+        mediaDir,
+        downloadMediaFile
+      );
+      if (!reconciled.changed) return;
+      if (reconciled.renamedTo) {
+        const from = mediaPath(op.local!.scopeUid, op.local!.name);
+        result.renamed!.push({ from, to: reconciled.renamedTo });
+        if (!quiet) {
+          const replaced = reconciled.replaced ? ", replaced with the server's version" : "";
+          logOk(`  ↳ Renamed locally: ${from} → ${reconciled.renamedTo}${replaced}`);
+        }
+      } else if (!quiet) {
+        logOk(`  ↳ Reconciled: ${reconciled.reason}`);
+      }
+    } catch (_reconcileErr: unknown) {
+      const reconcileErr = _reconcileErr as Error;
+      logWarning(`  ↳ reconciliation warning for ${op.local!.name}: ${reconcileErr.message}`);
+    }
   };
 
   if (dryRun) {
@@ -638,23 +834,7 @@ export async function executeMediaPush(
       }
       result.executed.successful++;
 
-      // Post-upload reconciliation: sync local file with server response
-      if (mediaDir && serverResponse) {
-        try {
-          const reconcileResult = await reconcileLocalFile(
-            op.local!,
-            serverResponse,
-            mediaDir,
-            downloadMediaFile
-          );
-          if (reconcileResult.changed) {
-            if (!quiet) logOk(`  ↳ Reconciled: ${reconcileResult.reason}`);
-          }
-        } catch (_reconcileErr: unknown) {
-          const reconcileErr = _reconcileErr as Error;
-          logWarning(`  ↳ reconciliation warning for ${op.local!.name}: ${reconcileErr.message}`);
-        }
-      }
+      await reconcile(op, serverResponse);
     } catch (_err: unknown) {
       const err = _err as Error;
       logErr(
@@ -690,23 +870,7 @@ export async function executeMediaPush(
       }
       result.executed.successful++;
 
-      // Post-update reconciliation: sync local file with server response
-      if (mediaDir && serverResponse) {
-        try {
-          const reconcileResult = await reconcileLocalFile(
-            op.local!,
-            serverResponse,
-            mediaDir,
-            downloadMediaFile
-          );
-          if (reconcileResult.changed) {
-            if (!quiet) logOk(`  ↳ Reconciled: ${reconcileResult.reason}`);
-          }
-        } catch (_reconcileErr: unknown) {
-          const reconcileErr = _reconcileErr as Error;
-          logWarning(`  ↳ reconciliation warning for ${op.local!.name}: ${reconcileErr.message}`);
-        }
-      }
+      await reconcile(op, serverResponse);
     } catch (_err: unknown) {
       const err = _err as Error;
       logErr(
@@ -744,6 +908,7 @@ export async function executeMediaPush(
         `\n⚠️  Media push completed with errors: ${result.executed.successful} succeeded, ${result.executed.failed} failed.`
       );
     }
+    printMediaRenameSummary(result, logWarning);
     console.log("");
   }
 
@@ -884,6 +1049,8 @@ export interface PushMediaOptions {
   quiet?: boolean;
   /** Remote context for multi-remote support. When provided, API calls target this remote. */
   remoteContext?: RemoteContext;
+  /** Files LeadCMS would store under a different name: rename (default), skip or fail. */
+  onRename?: MediaRenamePolicy;
 }
 
 /**
@@ -948,10 +1115,16 @@ export async function pushMedia(
 
     // Match and determine operations
     const operations = matchMediaFiles(filteredLocal, filteredRemote, options.allowDelete || false);
+    const renamePolicy = options.onRename ?? "rename";
 
     // Display status (skip in quiet mode — push-all handles unified display)
     if (!options.quiet) {
-      displayMediaStatus(operations, options.dryRun, true, deps);
+      displayMediaStatus(operations, options.dryRun, true, deps, renamePolicy);
+    }
+
+    const renameOps = getMediaRenameOps(operations);
+    if (renamePolicy === "fail" && renameOps.length > 0) {
+      throw mediaRenameFailure(renameOps, Boolean(options.quiet));
     }
 
     if (options.dryRun) {
@@ -962,13 +1135,20 @@ export async function pushMedia(
       };
     }
 
-    const totalOps = operations.filter((op) => op.type !== "skip").length;
+    // onRename "skip": push everything except the files the server would rename
+    const held = renamePolicy === "skip" ? new Set(renameOps) : new Set<MediaOperation>();
+    const toPush = operations.filter((op) => !held.has(op));
+    const skippedRenames = renameOps.filter((op) => held.has(op)).map(toMediaRename);
+
+    const totalOps = toPush.filter((op) => op.type !== "skip").length;
 
     if (totalOps === 0) {
+      if (!options.quiet) printMediaRenameSummary({ skippedRenames }, logWarnFn);
       return {
         operations,
         executed: { successful: 0, failed: 0, skipped: operations.length },
         errors: [],
+        skippedRenames,
       };
     }
 
@@ -987,7 +1167,14 @@ export async function pushMedia(
       }
     }
 
-    return await executeMediaPush(operations, false, deps, mediaDir, Boolean(options.quiet));
+    const result = await executeMediaPush(toPush, false, deps, mediaDir, Boolean(options.quiet));
+    if (skippedRenames.length > 0) {
+      result.operations = operations;
+      result.executed.skipped += skippedRenames.length;
+      result.skippedRenames = skippedRenames;
+      if (!options.quiet) printMediaRenameSummary({ skippedRenames }, logWarnFn);
+    }
+    return result;
   } catch (_err: unknown) {
     const err = _err as Error;
     logErrFn(`Media push failed: ${err.message}`);
